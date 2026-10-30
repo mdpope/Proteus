@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import {createHash,webcrypto} from 'node:crypto';
 import {normalizeFollowState} from '../src/services/workspaces/project-follow.js';
+import {ViewResidency} from '../public/models/view-residency.js';
 
 const version='a'.repeat(64),otherVersion='b'.repeat(64),nativeVersion='c'.repeat(64);
 const positions=[{path:'root',top:640,left:0,x:0,y:.5}];
@@ -14,7 +15,7 @@ const waitFor=async condition=>{for(let attempt=0;attempt<100;attempt++){if(cond
 
 // Run the real renderer module; the DOM fixture supplies only its preview controls.
 // Native isolation and layout are exercised separately by the Electron UI tests.
-function renderer({peer,artifact,digest}={}){
+function renderer({peer,artifact,digest,savedPosition}={}){
   const calls=[],requests=[],timers=[],errors=[];
   const element=()=>({innerHTML:'',textContent:'',hidden:false,isConnected:true,append(){},getBoundingClientRect:()=>({x:1,y:2,width:400,height:300})});
   const elements=new Map(['main','peer-document-status','peer-document-body','peer-artifact-area','peer-artifact-source','peer-artifact-scripts','peer-document-links','peer-document-request','peer-document-refresh','peer-document-again'].map(id=>['#'+id,element()]));
@@ -30,14 +31,26 @@ function renderer({peer,artifact,digest}={}){
     console:{debug:(...value)=>errors.push(value.join(' '))},
     setTimeout:callback=>{timers.push(callback);return timers.length;},clearTimeout(){},setInterval(){},clearInterval(){},
     fileDatesText:()=>'',
+    viewResidency:new ViewResidency(),
+    savedArtifactPosition:()=>savedPosition,rememberArtifactPosition(){},restoreDocumentView(){},
   };
   vm.createContext(sandbox);
   const source=fs.readFileSync(new URL('../public/services/remote/remote-desktops.js',import.meta.url),'utf8').replace(/^import .*;\r?\n/gm,'').replaceAll('export ','');
   vm.runInContext(source+'\nglobalThis.documentFollow={documentViews,remoteDocumentPositionVersion,restoreRemoteDocumentPosition,applyPendingDocumentPosition,renderRemoteDocument,forgetRemoteDocument,setUI:value=>ui=value};',sandbox);
   const api=sandbox.documentFollow;
   api.setUI({state,escape:value=>String(value),toast:error=>errors.push(error)});
-  return {...api,state,calls,requests,timers,errors,elements};
+  return {...api,state,calls,requests,timers,errors,elements,residency:sandbox.viewResidency};
 }
+
+test('evicted document bytes reload with the existing exact-version grant and local reading position',async()=>{
+ for(const matching of [true,false]){
+  const content='<html><body>Approved document</body></html>',ui=renderer({savedPosition:{version:matching?version:otherVersion,positions},peer:value=>value.method==='chat.documents.status'?{status:'approved'}:{documentId:tab.documentId,version,mediaType:'text/html',content,assets:[],links:[]}});
+  ui.documentViews.set(tab.id,{requestId:'existing-request',version,enabled:false});await ui.renderRemoteDocument(tab);await waitFor(()=>ui.documentViews.get(tab.id)?.previewVersion);
+  const loaded=ui.documentViews.get(tab.id);assert.equal(loaded.enabled,false);assert.equal(ui.calls.filter(value=>value.action==='follow-scroll').length,matching?1:0);
+  ui.state.tab='other';ui.residency.drop('document:'+tab.id);assert.equal(loaded.content,undefined);assert.equal(loaded.previewHtml,undefined);assert.equal(loaded.requestId,'existing-request');assert.equal(loaded.version,version);
+  ui.state.tab=tab.id;await ui.renderRemoteDocument(tab);await waitFor(()=>loaded.content===content);assert.ok(ui.requests.every(value=>value.method!=='chat.documents.request'),'automatic content reload never issues a new approval request');assert.equal(loaded.enabled,false);
+ }
+});
 
 test('document following accepts only a bounded version identity and numeric positions',()=>{
   const value=normalizeFollowState({tabId:'document:report',documentVersion:version,positions,documentPositions:[{...positions[0],html:'secret',script:'alert(1)'}],html:'private content',cookies:'private cookie',enabled:true,approved:true,requestId:'private request'});

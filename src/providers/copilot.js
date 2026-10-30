@@ -1,3 +1,4 @@
+import {fusionJournal,fusionAvailability} from './copilot-fusion.js';
 import {subagentJournal} from '../services/chats/subagents.js';
 import {questionAttachmentTools} from '../services/chats/question-attachments.js';
 import {providerActivity} from '../shared/provider-activity.js';
@@ -90,7 +91,7 @@ export class CopilotProvider {
       if (!auth.isAuthenticated) return { available: false, error: 'Sign in with Copilot CLI, then refresh.', auth };
       const models = await this.models(client);
       return {
-        available: true, auth,
+        available: true, auth, fusion:fusionAvailability(models),
         models,
         checkedAt: new Date().toISOString()
       };
@@ -203,7 +204,7 @@ export class CopilotProvider {
     this.configurationFingerprint = fingerprint;
     run.providerHome ??= this.dataDirectory();
     const client = await this.connect(run.providerHome);
-    const models = await this.models(client);
+    const models = await this.models(client);run.fusionAvailability=fusionAvailability(models);
     if (!models.some(model => model.id === run.schedule.model)) throw new Error(`Model ${run.schedule.model} is unavailable for this Copilot account. Choose a model from the provider panel.`);
     const model = models.find(model => model.id === run.schedule.model);
     validateModelOptions(run.schedule, model);
@@ -239,10 +240,11 @@ export class CopilotProvider {
     let providerError,activitySucceeded=false;
     const capture=providerActivity({provider:'copilot',emit,update});
     const activity = toolActivity({ run, emit, update });
-    const agents=subagentJournal(run,'copilot',update);
+    const agents=subagentJournal(run,'copilot',update),fusion=fusionJournal(run,update);
     const unsubscribe = session.on(event => {
       if(agents.copilot(event)||event.agentId)return;
       capture.receive(event);
+      if(fusion(event))return;
       if (event.type === 'assistant.message_delta') stream?.(event.data.messageId, event.data.deltaContent || '');
       if (event.type === 'assistant.message') {
         const content = event.data.content || run.liveMessages?.[event.data.messageId] || '';

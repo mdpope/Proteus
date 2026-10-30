@@ -157,14 +157,31 @@ export function createTabSynchronizer({scopes,readLocal,apply,acknowledge=async(
     if((backoff.get(hostKey(scope))?.until||0)>now())return;
     const id=key(scope);let record=records.get(id);
     if(record?.busy){record.again=true;return record.busy;}
-    if(record?.conflict)return;
     if((record?.retry?.until||0)>now())return;
     if(!record){record={baseline:null,revision:0};records.set(id,record);}
     const work=async()=>{
       let wrote=false;
       let local=await snapshot(scope);
-      let remote=await hydrate(scope,await request(scope,'get',{historyLimit:200}));
+      const raw=await request(scope,'get',{historyLimit:200});
       if(records.get(id)!==record)return;
+      if(raw.revision<record.revision)throw Error('The owner returned an older tab revision. Retry synchronization.');
+      const known=new Set([...(record.baseline||[]).map(tab=>tab.id),...(record.ownerObserved||[])]),present=new Set(raw.tabs.map(tab=>tab.id));
+      const removedIds=[...known].filter(tabId=>!present.has(tabId));
+      if(removedIds.length){
+        if(pendingStorage&&(record.pending?.some(op=>removedIds.includes(op.tabId))||local.some(tab=>removedIds.includes(tab.id)&&tab.navigationPending)))pendingStorage.setItem('proteus.navigation.recovery:'+id,JSON.stringify({reason:'Owner closed or moved a tab with pending navigation',resolvedAt:new Date(now()).toISOString(),pending:record.pending||[],local:local.filter(tab=>removedIds.includes(tab.id))}));
+        await apply(scope,raw.tabs,local,{membershipOnly:true,removedIds});
+      }
+      if(record.conflict&&raw.revision===record.revision)return;
+      let remote=await hydrate(scope,raw);
+      if(records.get(id)!==record)return;
+      if(record.conflict){
+        // Navigation review quarantines that intent, not the shared container.
+        // Continue adopting canonical membership, order and unaffected metadata.
+        const protectedIds=new Set((record.pending||[]).filter(op=>op.action.startsWith('browser-')).map(op=>op.tabId));
+        const safe=remote.tabs.map(tab=>{const pending=local.find(value=>value.id===tab.id);return protectedIds.has(tab.id)&&pending?.type==='browser'?{...tab,url:pending.url,history:pending.history,navigationPending:pending.navigationPending}:tab;});
+        await apply(scope,safe,local,{preservedNavigationIds:[...protectedIds],removedIds});
+        record.revision=remote.revision;return;
+      }
       // Older owners may never have registered these saved local chat aliases.
       // Preserve them without publishing a reopening or treating absence as close.
       // Once the owner exposes an identity, ordinary synchronization owns it.

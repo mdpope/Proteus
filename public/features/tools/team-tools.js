@@ -1,3 +1,4 @@
+import {retainDocument} from '../workspaces/document-residency.js';
 import {browserLabel} from '../browser/browser-label.js';
 import {fileDatesText} from '../../shared/ui/file-dates.js';
 import {rememberView,restoreDocumentView} from '../../shared/navigation/view-position.js';
@@ -121,8 +122,9 @@ function newTeamAction(blank,action){
 async function markdown(){
   let tab=currentTab(),content=$('#team-content');if(!tab)return;const tabId=tab.id;
   content.innerHTML='<p class="note">Loading Markdown file…</p>';
-  if(!tab.markdown?.content){try{tab.markdown=await ui.api('/api/markdown',{file:tab.file||tab.markdown?.file});}catch(error){tab.markdown={file:tab.file||tab.markdown?.file,error:error.message};}}
+  if(typeof tab.markdown?.content!=='string'){try{tab.markdown=await ui.api('/api/markdown',{file:tab.file||tab.markdown?.file});}catch(error){tab.markdown={file:tab.file||tab.markdown?.file,error:error.message};}}
   if(currentTab()?.id!==tabId||!$('#team-content'))return;tab=currentTab();content=$('#team-content');
+  retainDocument(tab,()=>currentTab()?.id===tabId&&!!document.querySelector('#team-content'));
   const doc=tab.markdown;
   if(doc.error){content.innerHTML=`<h1>${ui.escape(tab.label||'Markdown file')}</h1><p class="banner">${ui.escape(doc.error)}</p><button id="team-md-retry">Retry file</button>`;$('#team-md-retry').onclick=()=>{tab.markdown=null;void markdown();};return;}
   content.innerHTML=`<div class="heading"><div><div class="eyebrow">Markdown preview</div><h1>${ui.escape(tab.label||'Markdown file')}</h1><div class="filepath">${ui.escape(doc.file)}</div><p class="note file-dates">${ui.escape(fileDatesText(doc))}</p></div></div><article class="card markdown-preview"></article><details><summary>Markdown source</summary><pre class="markdown">${ui.escape(doc.content||'')}</pre></details>`;

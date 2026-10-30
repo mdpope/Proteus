@@ -29,7 +29,8 @@ class NoticeWindow {
   if(value?.action==='dismiss'){this.dismiss(value.id);return;}
   if(typeof value?.id!=='string'||value.id.length>64||typeof value.message!=='string'||value.message.length>10000||!Array.isArray(value.actions)||value.actions.length>6||value.actions.some(label=>typeof label!=='string'||label.length>100))throw new Error('Invalid notification.');
   if(this.current?.id===value.id)return;
-  clearTimeout(this.timer);this.current={id:value.id,message:value.message,actions:value.actions};await this.ready;if(this.current?.id!==value.id)return;
+  const palette=value.palette||{};if(Object.keys(palette).some(key=>!['background','text','border'].includes(key)||!/^#[a-f0-9]{6}$/i.test(palette[key])))throw new Error('Invalid notification palette.');
+  clearTimeout(this.timer);this.current={id:value.id,message:value.message,actions:value.actions,palette};await this.ready;if(this.current?.id!==value.id)return;
   this.move();this.window.webContents.send('proteus:notice',this.current);this.syncVisibility();
   // The renderer may be background-throttled or suspended. Its toast timer is
   // not a reliable lifetime for a native overlay above the user's other apps.

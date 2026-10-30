@@ -1,4 +1,5 @@
 import {validatePalette} from '../../../public/shared/ui/palette.js';
+import {resourceDefaults} from '../../../public/models/view-residency.js';
 import { validateModelOptionShape } from '../../models/model-catalog.js';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -25,6 +26,10 @@ export function validateSettings(value) {
   if(value.preferences?.keepScreenAwake!==undefined&&typeof value.preferences.keepScreenAwake!=='boolean')throw new Error('Keep Screen Awake must be a boolean.');
   if(value.browser!==undefined&&(!value.browser||typeof value.browser!=='object'||Array.isArray(value.browser)))throw new Error('Browser preferences must be an object.');
   if(value.browser?.loadedTabLimit!==undefined&&(!Number.isInteger(value.browser.loadedTabLimit)||value.browser.loadedTabLimit<1||value.browser.loadedTabLimit>256))throw new Error('Loaded tab limit must be an integer from 1 to 256.');
+  if(value.resources!==undefined){
+    if(!value.resources||typeof value.resources!=='object'||Array.isArray(value.resources)||Object.keys(value.resources).some(key=>!Object.hasOwn(resourceDefaults,key)))throw Error('Choose valid resource preferences.');
+    for(const key of Object.keys(resourceDefaults)){const limit=value.resources[key],max=key==='inactiveMinutes'?120:32;if(limit!==undefined&&(!Number.isInteger(limit)||limit<1||limit>max))throw Error(`${key} must be an integer from 1 to ${max}.`);}
+  }
   if(value.appearance!==undefined&&(!value.appearance||typeof value.appearance!=='object'||Array.isArray(value.appearance)||(['showProviderUsage','providerUsageCollapsed','sidebarCollapsed'].some(key=>value.appearance[key]!==undefined&&typeof value.appearance[key]!=='boolean'))))throw new Error('Appearance settings must contain boolean usage preferences.');
   if(value.appearance?.palette!==undefined)validatePalette(value.appearance.palette);
   if(value.appearance?.sidebarWidth!==undefined&&(!Number.isInteger(value.appearance.sidebarWidth)||value.appearance.sidebarWidth<220||value.appearance.sidebarWidth>520))throw new Error('Sidebar width must be an integer between 220 and 520 pixels.');

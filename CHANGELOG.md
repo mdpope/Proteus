@@ -1,5 +1,18 @@
 ## 0.2.39 — October thirtieth release open
 
+- Add configurable shared chat/document memory limits and idle eviction in Resources. Reload
+  evicted transcripts to the saved message/offset; preserve drafts, approvals and terminal sessions.
+- Route actual permitted website page notifications through the common history/native mechanism,
+  preserving source text and silent intent. Add explicit device forwarding and safe retry retention;
+  server/iPhone background delivery and actual Slack acceptance remain pending after HC verification.
+- Add Emerald Canopy and white Daylight presets in Colors with durable application selection.
+- Quiet routine notices by default, deduplicate actionable requests, retire answered alerts,
+  bound banner queues and acknowledge the Needs attention list with Clear all.
+- Scope remembered Proteus conversation access approvals to the granted host/actions/resources.
+- Keep shared tab membership/order converging during a quarantined navigation conflict.
+- Restrict autoplay exceptions to deliberate video playback rather than any prior page click.
+- Surface Copilot Fusion availability and native phase/attribution receipts. This account's
+  refreshed catalog advertises no Fusion model; real Fusion execution remains unavailable.
 - Reserve one version per named release and keep repository plan, implementation and machine
   rollout records; codify main/PR/push/branch/worktree closeout and bounded retention.
 - Stage one current public package set across platforms, advertise pending targets with empty

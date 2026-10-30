@@ -1,0 +1,5 @@
+export function renderCopilotFusion(run,escape){
+ if(run.schedule?.provider!=='copilot')return '';
+ const state=run.fusion,availability=run.fusionAvailability;
+ return `<section class="card"><h2>Copilot Fusion</h2>${state?`<p>${escape(state.status)}${state.syntheticModel?' · '+escape(state.syntheticModel):''}${state.pattern?' · '+escape(state.pattern):''}</p><p class="note">${escape([state.primaryModel,state.secondaryModel].filter(Boolean).join(' · '))}</p>${state.error?`<p class="banner">${escape(state.error)}</p>`:''}<ul>${state.phases.map(phase=>`<li>${escape(phase.role||phase.phaseKind||'Phase')} · ${escape(phase.model||phase.sourceModel||'')} · ${escape(phase.status||phase.activity||'pending')}${phase.conversationScope==='review'?' · read-only review':''}</li>`).join('')}</ul>`:`<p class="note">${escape(availability?.note||'Refresh Copilot models to see the Fusion choices available to your account. Fusion routing and phases appear here when the provider reports them.')}</p>`}</section>`;
+}

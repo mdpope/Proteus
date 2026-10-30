@@ -1,3 +1,4 @@
+import {needsAttention} from './attention-state.js';
 import {previewEnabled} from '../../shared/navigation/desktop-preview.js';
 import {chatMembership} from './chat-membership.js';
 import {computerName,countRunningChats} from '../../services/remote/computer-identity.js';
@@ -37,12 +38,12 @@ function lifecycleMenu(row,anchor){
 export function recentChats(localRuns = [],includeArchived = false) {
   const rows = indexLoaded ? snapshot.items : localRuns.filter(run=>includeArchived||!run.archivedAt).map(run => ({
     ...chatMembership(run),projectId:run.projectId,projectName:run.projectName,provider:run.schedule?.provider,trigger:run.trigger,chatType:run.chatType,hostId:'local', chatId:run.id, title:run.title, titleRevision:run.titleRevision, status:run.status,
-    updatedAt:run.updatedAt || run.createdAt,lastActivityAt:run.lastActivityAt,archivedAt:run.archivedAt||null,archived:!!run.archivedAt,destinationName:computerName(context?.state?.data?.hostName), local:true,attentionRequired:run.status==='awaiting_input'||(!run.archivedAt&&['failed','interrupted'].includes(run.status)&&!run.failureReviewedAt)
+    updatedAt:run.updatedAt || run.createdAt,lastActivityAt:run.lastActivityAt,archivedAt:run.archivedAt||null,archived:!!run.archivedAt,destinationName:computerName(context?.state?.data?.hostName), local:true,attentionRequired:run.attentionRequired??needsAttention(run)
   }));
   const localById=new Map(localRuns.map(run=>[run.id,run]));
   const current=rows.map(row=>{
     const live=(row.local||row.hostId==='local')&&localById.get(row.chatId||row.id);
-    if(live)row={...row,...chatMembership(live),projectId:live.projectId,projectName:live.projectName,title:live.title,titleRevision:live.titleRevision,trigger:live.trigger,chatType:live.chatType,status:live.status,updatedAt:live.updatedAt,lastActivityAt:live.lastActivityAt===undefined?row.lastActivityAt:live.lastActivityAt,archivedAt:live.archivedAt||null,failureEventAt:live.failureEventAt||null,failureReviewedAt:live.failureReviewedAt||null,attentionRequired:live.status==='awaiting_input'||(!live.archivedAt&&['failed','interrupted'].includes(live.status)&&!live.failureReviewedAt)};
+    if(live)row={...row,...chatMembership(live),projectId:live.projectId,projectName:live.projectName,title:live.title,titleRevision:live.titleRevision,trigger:live.trigger,chatType:live.chatType,status:live.status,updatedAt:live.updatedAt,lastActivityAt:live.lastActivityAt===undefined?row.lastActivityAt:live.lastActivityAt,archivedAt:live.archivedAt||null,failureEventAt:live.failureEventAt||null,failureReviewedAt:live.failureReviewedAt||null,attentionRequired:live.attentionRequired??needsAttention(live)};
     const reviewed=reviewedRows.get(rowKey(row));
     if(reviewed){if(row.failureEventAt&&reviewed.failureEventAt&&row.failureEventAt!==reviewed.failureEventAt&&Date.parse(row.failureEventAt)>Date.parse(reviewed.failureEventAt))reviewedRows.delete(rowKey(row));else if(['failed','interrupted'].includes(row.status)&&(Date.parse(row.updatedAt||0)<=Date.parse(reviewed.updatedAt||0)||(row.failureEventAt&&row.failureEventAt===reviewed.failureEventAt)))row={...row,attentionRequired:reviewed.attentionRequired,failureReviewedAt:reviewed.failureReviewedAt};}
     const host=snapshot.hosts.find(host=>(host.id||host.hostId)===row.hostId);

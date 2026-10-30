@@ -40,11 +40,11 @@ test('a lost acknowledgement retries the exact wire command identity across sync
 });
 
 test('capacity failures back off per owner and deduplicate warnings across scopes without blocking other owners',async()=>{
- let clock=1000,failures=0,notices=0,otherReads=0;
+ let clock=1000,failures=0,notices=0,otherReads=0,healthy={revision:0,tabs:[]};
  const scopes=[scope,{...scope,id:'other-workspace'},{...scope,hostId:'healthy-owner'}];
  const sync=createTabSynchronizer({now:()=>clock,scopes:()=>scopes,readLocal:async()=>[tab],apply:async()=>{},onError:()=>notices++,request:async(owner,action)=>{
-  if(action==='get'){if(owner.hostId==='healthy-owner')otherReads++;return {revision:0,tabs:[]};}
-  if(owner.hostId==='healthy-owner')return {revision:1,tabs:[tab]};
+  if(action==='get'){if(owner.hostId==='healthy-owner'){otherReads++;return structuredClone(healthy);}return {revision:0,tabs:[]};}
+  if(owner.hostId==='healthy-owner')return structuredClone(healthy={revision:1,tabs:[tab]});
   failures++;throw Object.assign(Error('Remote command history is busy on Synthetic Mac'),{code:'JOURNAL_BUSY',details:{retryAfterMs:60_000}});
  }});
  for(let i=0;i<50;i++)await sync.all();assert.equal(failures,1);assert.equal(notices,1);assert.ok(otherReads>=50);

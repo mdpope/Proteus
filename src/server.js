@@ -28,6 +28,8 @@ import {chatMembership} from '../public/features/chats/chat-membership.js';
 import { agentName } from '../public/features/chats/agent-name.js';
 import { ProviderUsageCache } from './services/telemetry/usage.js';
 import fs from 'node:fs';
+import {AttentionStore} from './services/chats/attention-store.js';
+import {needsAttention} from '../public/features/chats/attention-state.js';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { randomBytes } from 'node:crypto';
@@ -118,6 +120,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   const mtplx=new SessionProvider(()=>new MtplxProvider({}, {context,browser}));
   const adapters = { ...(providers || (desktopPreview ? { codex, mtplx } : { copilot, codex, claude, ...(process.platform==='darwin'?{mtplx}:{}) })), ...(!desktopPreview ? {'local-process': omi.provider()} : {}) };
   const engine = new Engine(home, adapters, undefined, {permissionControls:true,recoveryBarrier:updateRecovery});
+  engine.historyCache.configure(settings.get().resources);
   const desktopControl=desktopPreview?null:new DesktopControl({active:owner=>owner==='operator'||['running','awaiting_input'].includes(engine.getRun(owner)?.status)});
   if(browser)browser.desktopControl=desktopControl;
   const performanceDiagnostics = new PerformanceDiagnostics({home});
@@ -343,6 +346,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       }
       if (url.pathname === '/api/resources' && req.method === 'GET') return json(200, service.resources ? await service.resources.list() : {supported:false,processes:[],tabs:[],observedAt:new Date().toISOString()});
       if (url.pathname === '/api/resources' && req.method === 'POST') {if(!service.resources)throw new Error('Resource controls require the desktop app.');return json(200,await service.resources.action(await body(req)));}
+      if(url.pathname==='/api/attention/clear'&&req.method==='POST')return json(200,await service.attentionStore.clearAll(await body(req)));
       if (url.pathname === '/api/chat-attention' && req.method === 'POST') {const value=await body(req,16000);if(value.action!=='review'||typeof value.id!=='string')throw new Error('Choose a chat failure to review.');return json(200,engine.reviewFailure(value.id,value.expectedFailureEventAt));}
       if(url.pathname.startsWith('/api/desktop-preview')||url.pathname.startsWith('/api/workspace-projects')) {
         if(url.pathname.startsWith('/api/desktop-preview')&&!desktopPreview)return json(404,{error:'Desktop preview is disabled.'});
@@ -374,7 +378,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       if (url.pathname === '/api/chats/index' && req.method === 'GET') {
         const info=remote.info(),lastSyncAt=new Date().toISOString();
         const includeArchived=url.searchParams.get('includeArchived')==='1',projectCatalog=preview?.read();
-        const local=engine.visibleRuns(includeArchived).slice(0,1000).map(r=>({id:r.id,chatId:r.id,hostId:info.hostId,local:true,title:r.title,titleRevision:r.titleRevision,trigger:r.trigger,chatType:r.chatType,provider:r.schedule.provider,status:r.status,createdAt:r.createdAt,updatedAt:r.updatedAt,lastActivityAt:chatActivityAt(r),archivedAt:r.archivedAt||null,archived:!!r.archivedAt,unansweredQuestionCount:(r.userQuestions||[]).filter(q=>q.status==='pending').length,attentionRequired:(r.userQuestions||[]).some(q=>q.status==='pending')||r.status==='awaiting_input'||(!r.archivedAt&&['failed','interrupted'].includes(r.status)&&!r.failureReviewedAt),failureEventAt:['failed','interrupted'].includes(r.status)?r.failureEventAt||r.updatedAt:null,failureReviewedAt:r.failureReviewedAt||null,...chatMembership(r),...(preview?preview.membership(r,projectCatalog):{}),scheduleName:r.trigger==='chat'?'':r.schedule.name,destinationName:info.label}));
+        const local=engine.visibleRuns(includeArchived).slice(0,1000).map(r=>({id:r.id,chatId:r.id,hostId:info.hostId,local:true,title:r.title,titleRevision:r.titleRevision,trigger:r.trigger,chatType:r.chatType,provider:r.schedule.provider,status:r.status,createdAt:r.createdAt,updatedAt:r.updatedAt,lastActivityAt:chatActivityAt(r),archivedAt:r.archivedAt||null,archived:!!r.archivedAt,unansweredQuestionCount:(r.userQuestions||[]).filter(q=>q.status==='pending').length,attentionRequired:needsAttention(r),failureEventAt:['failed','interrupted'].includes(r.status)?r.failureEventAt||r.updatedAt:null,failureReviewedAt:r.failureReviewedAt||null,...chatMembership(r),...(preview?preview.membership(r,projectCatalog):{}),scheduleName:r.trigger==='chat'?'':r.schedule.name,destinationName:info.label}));
         const peer=service.peers?await service.peers.index():{items:[],hosts:[],partial:false};
         const items=[...local,...peer.items.filter(item=>includeArchived||!item.archivedAt)].sort((a,b)=>String(b.updatedAt).localeCompare(String(a.updatedAt))||a.hostId.localeCompare(b.hostId)||a.chatId.localeCompare(b.chatId));
         return json(200,{items,hosts:[{id:info.hostId,name:info.label,online:true,lastSyncAt},...peer.hosts],partial:peer.partial});
@@ -448,6 +452,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
           validateModelOptions(options,model);
         }
         const saved = settings.save(value.settings, value.expectedRevision);
+        engine.historyCache.configure(saved.resources);
         if (JSON.stringify(old.workspace) !== JSON.stringify(saved.workspace)) {
           const config = context.config();
           context.mutate(config => Object.assign(config.workspaces.find(w => w.id === config.defaultWorkspaceId), saved.workspace), config.revision);
@@ -751,7 +756,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   origin = `http://127.0.0.1:${server.address().port}`;
   atomicJSON(path.join(home, 'connection.json'), { origin, token, pid: process.pid });
   const timer = timers ? setInterval(() => { void performanceDiagnostics.measure('scheduler.tick', () => engine.tick()).catch(error => engine.emit('scheduler-error', { error: error.message, at: new Date().toISOString() })); }, 1000) : null;
-  const service = { readChatAttachment, desktopControl,workspaceProjects:preview, desktopPreview:desktopPreview?preview:null, performanceDiagnostics, notify, desktopAttention:()=>[...(service.browserAttention?.()||[]),...remote.documents.list().filter(item=>!item.approvedAt).map(item=>({id:'document:'+item.requestId,kind:'document',title:item.deviceName+' requests '+item.title,requestId:item.requestId,path:item.path,at:new Date(Date.parse(item.expiresAt)-600000).toISOString()})),...service.attention()], attention:()=>[...integrations.consumers().filter(item=>['needs-auth','failed'].includes(item.connection)).map(item=>({id:'integration:'+item.id,kind:'connection',title:(item.profile.label||item.server)+' needs attention',section:'integrations',at:item.checkedAt})),...activity.notifications().items.filter(item=>!item.readAt).map(item=>({id:'notification:'+item.id,notificationId:item.id,kind:'notification',title:item.title,body:item.body,chatId:item.chatId,...(item.browserIssue?{browserIssue:item.browserIssue,silent:true}:{}),at:item.createdAt}))], browserProfiles, integrations, engine, settings, context, standup, omi, life, account, activity, workspaceFiles, attachments, buildChatSchedule, usage, catalog, catalogs, origin, token, home, url: `${origin}/?token=${token}`, async close() {
+  const service = { readChatAttachment, desktopControl,workspaceProjects:preview, desktopPreview:desktopPreview?preview:null, performanceDiagnostics, notify, desktopAttention:()=>[...(service.browserAttention?.()||[]),...remote.documents.list().filter(item=>!item.approvedAt).map(item=>({id:'document:'+item.requestId,kind:'document',title:item.deviceName+' requests '+item.title,requestId:item.requestId,path:item.path,at:new Date(Date.parse(item.expiresAt)-600000).toISOString()})),...service.attention()], attention:()=>[...integrations.consumers().filter(item=>['needs-auth','failed'].includes(item.connection)).map(item=>({id:'integration:'+item.id,kind:'connection',title:(item.profile.label||item.server)+' needs attention',section:'integrations',at:item.checkedAt})),...activity.notifications().items.filter(item=>!item.readAt).map(item=>({id:'notification:'+item.id,notificationId:item.id,kind:'notification',title:item.title,body:item.body,chatId:item.chatId,silent:item.silent===true,...(item.browserIssue?{browserIssue:item.browserIssue,silent:item.silent===true}:{}),at:item.createdAt}))], browserProfiles, integrations, engine, settings, context, standup, omi, life, account, activity, workspaceFiles, attachments, buildChatSchedule, usage, catalog, catalogs, origin, token, home, url: `${origin}/?token=${token}`, async close() {
     await stateProjection.close();await service.updates?.close();await service.chatControl?.close();await desktopControl?.close();
     activity.log('info','app.stopping','Proteus is shutting down.');clearInterval(integrationTimer);await integrations.close(); if(activityTimer)clearInterval(activityTimer); if (timer) clearInterval(timer); if (catalogTimer) clearInterval(catalogTimer); await Promise.all(Object.values(catalogs).map(c => c.pending)); await providerAuth.close(); await remote.close(); let engineCloseError; try { await engine.close(); } catch (error) { engineCloseError=error; } await attachments.close(); await copilot.close(); await codex.close(); await claude.close(); await life.close?.(); await service.browserHistory?.close(); let activityCloseError; try { await activity.close(); } catch (error) { activityCloseError=error; }
     for (const client of eventClients) client.end(); eventClients.clear();
@@ -765,6 +770,10 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
     if (engineCloseError) throw engineCloseError;
     if (activityCloseError) throw activityCloseError;
   } };
+  service.attentionStore=new AttentionStore(service);
+  const rawAttention=service.attention,rawDesktopAttention=service.desktopAttention;
+  service.attention=()=>service.attentionStore.visible(rawAttention());
+  service.desktopAttention=()=>service.attentionStore.visible(rawDesktopAttention());
   service.computerAccess=computerAccess;computerAccess.on('change',()=>{service.notify();service.remote?.changed();});
   service.browserHistory=new BrowserHistory(home,{hostId:()=>service.remote?.info().hostId});
   service.contentTabs=new ContentTabs(home,{history:service.browserHistory,profiles:()=>browserProfiles.list().items,onChange:result=>{const metadata={scope:result.scope,id:result.id,revision:result.revision};for(const client of eventClients)client.write('event: content-tabs\ndata: '+JSON.stringify(metadata)+'\n\n');notify();remote?.broadcast('tabs',metadata,result.scope==='chat'?result.id:undefined);}});

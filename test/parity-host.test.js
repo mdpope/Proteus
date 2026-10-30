@@ -33,7 +33,7 @@ test('activity records transitions once and requires schedule completion opt in'
   const store=new ActivityStore(home(t));store.attach(engine,()=> 'host');
   engine.emit('change',old);assert.equal(store.notifications().items.length,0);
   const run={id:'fresh',status:'queued',trigger:'chat',schedule:{}};engine.emit('change',run);
-  run.status='awaiting_input';run.pending={id:'q1'};engine.emit('change',run);engine.emit('change',run);
+  run.status='awaiting_input';run.pending={id:'q1'};engine.emit('change',run);assert.equal(store.notifications().items.length,0,'an untyped stale wait is not an actionable question');run.pending.type='question';engine.emit('change',run);engine.emit('change',run);
   assert.equal(store.notifications().items.length,1);
   run.status='completed';run.pending=null;engine.emit('change',run);engine.emit('change',run);
   assert.equal(store.notifications().items.length,2);
@@ -115,5 +115,5 @@ test('notifications name the chat and computer and show the latest reply as plai
  const item=store.notifications().items[0];
  assert.equal(item.title,'HOA fee schedule');assert.equal(item.hostName,'Build Mac');assert.equal(item.body,'Done Drafted the email to Craig with the fee table.');
  run.status='awaiting_input';run.pending={id:'p1',type:'permission',details:{kind:'write',fileName:'/tmp/minutes.md'}};engine.emit('change',run);
- const review=store.notifications().items.find(entry=>entry.type==='review.required');assert.equal(review.title,'Needs you · HOA fee schedule');assert.equal(review.body,'Edit file: /tmp/minutes.md');
+ const review=store.notifications().items.find(entry=>entry.type==='review.required');assert.equal(review.title,'Approval required · HOA fee schedule');assert.equal(review.body,'Edit file: /tmp/minutes.md');
 });

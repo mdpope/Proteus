@@ -1,3 +1,22 @@
+## October 30 full release implementation and staged rollout authorized
+
+The operator releases R1–R13 for implementation, build and installation on Build Mac and
+Work Mac. Keep version 0.2.39. Build/deploy applicable iOS/web/Linux/Windows work after Work Mac
+is updated and verified. Prior collection/implementation holds below are historical.
+Use the existing release branch and per-target ledger. No target is installed merely because
+a task was dispatched. Preserve active work, data, approvals and retry receipts.
+
+R12 adds a shared local/remote per-window chat/document count and idle cache policy in Resources.
+Synthetic native UI verifies transcript/DOM eviction, historical message-offset restoration across
+transport pages, draft preservation and persisted controls. Defaults are four chats, four documents
+and ten inactive minutes. Terminal sessions remain outside this cache. Both Mac preflight
+coordinators currently await destination tool approvals; no 0.2.39 installation is verified.
+R13 means actual website-generated notifications, not Slack-styled alerts. The desktop page-event
+bridge is source-verified through the common notification path, including silent intent and click
+callback; explicit device forwarding excludes owner-only references. Server/iOS/APNs changes and
+live Slack/phone acceptance remain after HC verification. Website retries expire after five minutes
+and cap at 100 pending events, preserving local history without an old reconnect push backlog.
+
 ## October 30 release open as 0.2.39 — distribution implementation
 
 The operator authorizes command-center distribution and codifying named release/version,

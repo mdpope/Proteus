@@ -621,6 +621,7 @@ export class Engine extends EventEmitter {
     if (this.stopping) this.pendingSchedulerTime = null;
   }
   async close() {
+    this.historyCache.close();
     if (this.closePromise) return this.closePromise;
     this.stopping = true;
     this.recovery.close();this.allowanceClosing=this.allowance?.close();

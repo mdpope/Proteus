@@ -1,3 +1,12 @@
+## October 30 full release and tab-memory implementation authorized
+
+R1–R12 are authorized on Build Mac and Work Mac; other platform builds/rollout follow verified
+HC installation. The new Resources settings bound chat/document content across local and paired
+hosts, with idle eviction and durable reading anchors. Synthetic Electron acceptance restores a
+historical message after cache eviction, preserves the draft and saves controls through the API.
+See [release plan](2026-10-30-release-plan.md) and [chat rendering](chat-rendering.md).
+Earlier collection holds below are historical; deployment remains separately verified.
+
 ## October 30 release process and distribution implementation authorized
 
 R11 is active implementation in the [0.2.39 named release](releases/2026-10-30/release.json).

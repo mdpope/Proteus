@@ -1,10 +1,9 @@
 # October 30 release plan
 
-**Stage: October thirtieth release is open as version 0.2.39.** Started October 29, 2026.
-R1–R10 remain request collection only. The October 30 command-center distribution and named-release
-process request (R11) explicitly authorizes its implementation and validation. No other item is
-released from its implementation hold. Publishing packages and installing on a target remain
-distinct from source implementation; the operator has not selected a new device rollout here.
+**Stage: implementation and Mac rollout authorized October 30.** The October thirtieth release
+remains version 0.2.39. R1–R13 are authorized for implementation and validation. Build/install on
+Build Mac and Work Mac first. Build and deploy applicable iOS/web/Linux/Windows work only after
+Work Mac is updated and verified. Preserve data, ongoing work and two verified recovery generations.
 
 Standing process: [named releases](release-process.md). Current record:
 [release.json](releases/2026-10-30/release.json), [implementation](releases/2026-10-30/implementation.md),
@@ -14,20 +13,65 @@ and [machine rollout](releases/2026-10-30/rollout.md).
 
 | ID | Type | Request | Status |
 | --- | --- | --- | --- |
-| R1 | Feature | Integrate Copilot Fusion using supported provider capabilities | Collected; capability discovery required |
-| R2 | Feature | Catalog Emerald Canopy and add Daylight in Engine Room → Colors, with durable theme selection | Collected; current palette cataloged below |
-| R3 | Improvement | Reduce notification volume and provide useful notification controls | Collected; quieter behavior proposed below |
-| R4 | Bug report | False or stale “Needs you” alerts with no apparent question to answer | Reported; cause unconfirmed |
-| R5 | Bug report | Duplicate notifications and repeated interruptions | Reported; cause unconfirmed |
-| R6 | Bug report | Alerts appear stuck instead of dismissing after five seconds; closing one exposes a series | Reported; expiry versus queue backlog needs reproduction |
-| R7 | Feature | Clear the entire Needs attention list with one button instead of opening each chat | Collected; bulk acknowledgement only |
-| R8 | Bug report | Browser videos autoplay despite the enabled block-video-autoplay setting | Reported October 30; cause unconfirmed |
-| R9 | Improvement | Apply Auto-approve tools and remembered approvals to Proteus actions such as proteus_chats | Collected October 30; audit invocation and owner access gates |
-| R10 | Bug | Shared workspace/project tab lists, counts and content diverge between windows, including after Close | Visible divergence in two October 30 screenshots; root cause unconfirmed |
+| R1 | Feature | Integrate Copilot Fusion using supported provider capabilities | Source integration; refreshed account advertises no Fusion model |
+| R2 | Feature | Catalog Emerald Canopy and add Daylight in Engine Room → Colors, with durable theme selection | Source implemented; two-window/restart UI verified |
+| R3 | Improvement | Reduce notification volume and provide useful notification controls | Source implemented; quiet-completion UI verified |
+| R4 | Bug report | False or stale “Needs you” alerts with no apparent question to answer | Source uses actionable request identities and deduplicates them |
+| R5 | Bug report | Duplicate notifications and repeated interruptions | Source uses actionable request identities and deduplicates them |
+| R6 | Bug report | Alerts appear stuck instead of dismissing after five seconds; closing one exposes a series | Source bounds queue/age; expiry tests pass |
+| R7 | Feature | Clear the entire Needs attention list with one button instead of opening each chat | Source implemented; actual UI preserves waits and new-event attention |
+| R8 | Bug report | Browser videos autoplay despite the enabled block-video-autoplay setting | Source implemented; real-media manual Play and unrelated-click regression pass |
+| R9 | Improvement | Apply Auto-approve tools and remembered approvals to Proteus actions such as proteus_chats | Source implemented; scope matching/revocation tested |
+| R10 | Bug | Shared workspace/project tab lists, counts and content diverge between windows, including after Close | Conflict quarantine froze owner synchronization; actual two-window Close regression passes |
 | R11 | Feature and process | Named/versioned releases, command-center updates, native first builders, current-only publication and bounded retention | Source implemented and validated; packaging/rollout not performed |
+| R12 | Performance | Configurable chat/document residency, idle eviction and exact reading-position restoration across local and paired-host tabs | Source implemented; synthetic native UI verifies historical anchor, draft preservation and saved settings |
+| R13 | Integration | Route actual website-generated notifications, including sites such as Slack, through Proteus and forward to an iPhone connected to the desktop | Desktop source/testing underway; server and iOS integration after HC verification |
 
-Existing October 29 implementation and rollout records retain their own status. This collection
-does not reauthorize those deployments or imply that every earlier pending item is in this release.
+Existing October 29 implementation and rollout records retain their own status. Current October 30
+authorization supersedes the earlier collection-only hold for the requests in this register.
+
+## R12 Tab memory and reading positions
+
+Keep lightweight tab/chat summaries for navigation; retrieve transcripts only for selected chats.
+Use one per-window chat budget across local and paired computers, rather than separate four-chat
+caches. Default to four chats and four document bodies, configurable from 1–32 in Engine Room →
+Resources. Release inactive content after ten minutes by default, configurable from 1–120 minutes;
+the idle sweep runs every thirty seconds. A selected view is protected from automatic eviction.
+
+Release transcript pages and detached conversation DOM together. Keep small tab identities, drafts,
+attachment staging, approval routing and reading anchors. Reopening reloads the durable transcript,
+pages back to the saved message and restores its viewport offset; human interaction cancels a
+pending restoration. Local documents restore as metadata without reading all files at startup.
+Paired document eviction drops bytes while retaining exact-version request/authorization metadata.
+The owner applies the same configurable inactive-history count/timeout, retains its existing
+16 MiB encoded-file cache budget, and pins executing/queued/waiting provider work and unsaved writes.
+Terminal sessions retain their existing lifetime; browsers retain their own resource policy.
+
+Synthetic source acceptance uses a 2,507-event conversation and verifies that transcript and DOM
+are evicted, older transport pages reload to the same message/offset, the unsent draft survives,
+and resource controls persist through the settings API. Installation is a separate rollout stage.
+
+## R13 Actual website notification delivery
+
+The operator requests the website's real notifications, not a new style or imitation of Slack.
+Existing page Notification events entered a local-only browser recovery record. Give those events
+the normal Proteus notification identity/history and native delivery, retain their actual title,
+body, source computer/origin and silent-sound option, and deduplicate only the same source event.
+Keep source-page click callbacks on the owner. Do not forward private page URLs, browser profiles,
+window/view IDs, activation handles, cookies or browser recovery records to the shared service.
+
+Add explicit device forwarding in Notifications. Foreground delivery uses the existing encrypted
+owner channel. Background iPhone delivery needs a registered push-capable app and the same
+authorized shared account; the server must accept the website event type and deliver it through
+the existing APNs mechanism. Implement/build/deploy server/iOS changes after HC is updated, keeping
+the earlier platform-order instruction. Retain bounded website-event retries while an older server
+rejects the new type, without blocking other event delivery. Verify an actual Slack event separately
+from synthetic page Notification fixtures; service-worker/background Web Push capture remains an
+unverified capability, not an implemented guarantee.
+
+Communication pages must remain loaded to receive live site events; the existing Persisted tab
+choice provides that exception to ordinary memory reclamation. Forwarding text does not forward
+the website's live audio stream: the phone uses its notification sound policy, including silence.
 
 ## R1 Copilot Fusion
 
@@ -67,7 +111,7 @@ Name the familiar heavy green theme **Emerald Canopy**. It remains the applicati
 Add **Daylight**, a conventional white/light theme with restrained green accents, as a built-in
 choice in the existing **Engine Room → Colors** configurator.
 
-Both names are planning names; the current runtime still calls its default palette “Proteus green.”
+Both names are implemented in release source; older installed versions call the default “Proteus green.”
 The catalog below captures the current unadjusted application palette from
 [palette.js](../public/shared/ui/palette.js). Brightness and saturation both default to zero.
 

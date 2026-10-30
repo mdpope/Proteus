@@ -263,7 +263,7 @@ test('stopping the origin during metadata refresh prevents a later dispatch effe
 test('an explicit human approval grants only the requested originating scope',async t=>{
  const f=await fixture(t),{origin,control,hostId}=f;let result;
  origin.engine.providers.copilot={status:async()=>({available:true,models:[model]}),run:async({run,emit})=>{result=await control.handle({action:'request-access',scope:{hostId,actions:['read']}},run.id);emit('assistant','Synthetic approved grant');}};
- const run=await f.create(origin,'approve synthetic scope');await until(()=>run.pending?.type==='permission');assert.equal(run.pending.details.kind,"chat-access");assert.deepEqual(run.pending.permissionChoices,[]);
+ const run=await f.create(origin,'approve synthetic scope');await until(()=>run.pending?.type==='permission');assert.equal(run.pending.details.kind,"chat-access");assert.ok(run.pending.permissionChoices.some(choice=>choice.value==='always-tool'));assert.ok(run.pending.permissionChoices.every(choice=>choice.label.includes('conversation access scope')));
  origin.engine.reply(run.id,'approve',run.pending.id);await until(()=>run.status==='completed');assert.equal(result.granted,true);assert.equal(result.grant.actor,run.id);assert.deepEqual(result.grant.actions,['read']);assert.equal(result.grant.hostId,hostId);
 });
 

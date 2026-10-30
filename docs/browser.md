@@ -19,6 +19,21 @@ cannot create a rejection/notification cycle during shutdown. Frame validation s
 first; navigation, history, tab changes and every other command remain rejected. This does not
 alter saving, checkpoint order or browser disposal.
 
+## October 30 — actual website events in Proteus notifications
+
+Page-generated Notification events from permitted origins now use the normal Proteus notification
+history/native route. Their actual title/body, origin, source host and silent-sound intent survive;
+the exact source event deduplicates. A notification click returns to its original owner tab/event.
+Local browser recovery/activation references remain private to that owner. The transient page event
+does not create a second alert alongside its persisted history entry.
+
+Notifications has an explicit device-forwarding preference. Portable website events use the existing
+encrypted owner channel and account-bound shared outbox; old-server type rejections retain bounded
+retry receipts without starving ordinary notifications. Server/APNs schema and iOS sound/routing
+acceptance follow the verified HC update. No real Slack or background push success is claimed from
+the page fixture. Worker-generated/background Web Push capture remains unverified. A loaded source
+page is required; mark a communication tab Persisted to retain it during inactivity.
+
 ## October 26 — five-second notification lifetime
 
 Desktop and web banners expire after five seconds. Native overlays enforce the same lifetime

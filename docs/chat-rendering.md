@@ -1,3 +1,25 @@
+## October 30 — configurable content residency
+
+Navigation retains lightweight chat/tab metadata; complete transcripts are not loaded for every
+tab in every workspace/computer. Engine Room → Resources configures a shared per-window local/peer
+chat limit (default four), document limit (four) and inactive timeout (ten minutes). Counts accept
+1–32, timeout 1–120 minutes. Selected views stay loaded; inactive LRU entries release transcript
+pages and conversation DOM together. A thirty-second sweep expires idle content even below the
+count limit. File restore reads metadata first; selected documents recheck current file access.
+Paired document bodies/assets release independently of their request/version/approval metadata.
+
+Small window-owned reading anchors persist separately from content. Reopening a chat pages back
+to the recorded event and restores its viewport offset; human input cancels delayed restoration.
+Drafts, attachment staging, questions, approvals and provider sessions are not evicted. Terminal
+sessions keep their existing lifetime, and browser loaded-tab protection remains independent.
+The owner also evicts inactive histories by count/time, retaining the existing 16 MiB encoded-file
+budget and pins for active work/unsaved writes. Encoded bytes are an estimate, not JS heap usage;
+these controls bound inactive content rather than promise an exact process-memory ceiling.
+
+The disposable native residency fixture verifies eviction of both data and DOM, reloading older
+pages of a 2,507-event history to the same event/offset, draft preservation and UI settings writes.
+Installed profile behavior is verified during the separate rollout.
+
 ## October 29 — compact question answers
 
 Shared desktop/web question cards place the attachment + at the left and Send answer at the

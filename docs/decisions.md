@@ -1,3 +1,17 @@
+## October 30 — shared view residency and durable reading anchors
+
+Use one renderer content budget across local/paired chats, with a separate document budget and
+one idle timeout. Small navigation metadata remains resident; loaded transcripts and detached DOM
+share the same eviction identity. Preserve reading anchors outside heavy content and page the
+durable transcript back to the actual event before considering restoration applied. Selected views
+and provider execution are protected separately: unloading a view never stops a turn or terminal.
+Document eviction retains authorization routing instead of behaving as Close or revoking a grant.
+Settings are durable per installation; updates do not reset a selected policy or theme.
+
+Navigation conflict review quarantines uncertain navigation only. Continue reading canonical
+membership/order, and apply proven closes before unrelated history hydration. Retain recovery
+intent and original retry identity; do not use a missing descriptor alone to discard an outbox.
+
 ## October 30 named releases and owner-observed update coordination
 
 A human release name maps to one reserved package version. Small repository records retain plan,

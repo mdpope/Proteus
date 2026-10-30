@@ -1,9 +1,49 @@
 # October thirtieth release implementation
 
-Version: **0.2.39**. State: implemented and source-validated; not packaged or deployed. R11 is authorized.
-R1–R10 remain held. The active implementation branch is codex/oct30-update-command-center.
-The validated R11 source pin is `34419c1047f5a269ff37f42cc826161c4fb6158a`; later record-only commits do not
+Version: **0.2.39**. State: full release source implemented; final validation/packaging underway.
+R1–R13 are authorized, with Mac rollout first and other platforms after HC is verified.
+The active branch is codex/oct30-update-command-center. The earlier R11-only source pin is
+`34419c1047f5a269ff37f42cc826161c4fb6158a`; later record-only commits do not
 change that implementation. A subsequent runtime change requires a new source/package pin.
+
+## Full release source acceptance
+
+- Fusion capability/phase/attribution projection follows the installed Copilot SDK. The refreshed
+  account offers no Fusion model; synthetic events pass, real execution is unavailable.
+- Emerald Canopy remains default. Daylight's white palette, native control scheme, shared-window
+  application and restart persistence pass the disposable Electron UI check.
+- Actionable notices use request identities; answered/deleted waits retire alerts, duplicate
+  requests deduplicate, routine completion is quiet, and banner queues/ages are bounded.
+- Needs attention Clear all acknowledges captured snapshots with stable retry identities. Native
+  UI verifies pending questions survive, new requests reappear and async list refresh keeps the button.
+- Auto-approve and remembered scopes match host/actions/resources, preserving Ask mode, revocation
+  and mandatory approval boundaries.
+- Shared membership/order continue while uncertain navigation remains quarantined. A native
+  two-window stale-receipt repro verifies owner Close and both strips converge.
+- Real synthetic video verifies initial autoplay blocking, runtime enable/disable, deliberate
+  Play, unrelated-click blocking and restart persistence.
+- Resources adds shared chat/document limits and idle expiry. A native 2,507-event fixture evicts
+  data and DOM, reloads earlier pages to the same message/offset, preserves drafts and saves controls.
+  Owner tests cover inactive eviction and active execution pins.
+- Actual page-generated website notifications now use the normal Proteus history/native event
+  path, with original text, origin/source host, silent-sound intent and click callback. The native
+  page fixture verifies two distinct events, one silent, plus exact-event deduplication. Explicit
+  forwarding uses a portable projection; owner window/profile/activation fields stay private.
+  Unsupported server types retain a bounded five-minute/100-event retry window without blocking
+  ordinary notifications. Server/APNs and iOS implementation remain after the HC verification gate;
+  real Slack and worker/background push are not verified by the page fixture.
+
+These are source/disposable-profile checks. Neither Mac has received the new artifact yet.
+The two unassigned update coordinators captured destination defaults and await destination tool
+approvals during read-only preflight. Final suite totals and package/source pins follow acceptance.
+
+Final Mac source acceptance: **1,340 tests pass, four platform skips, zero failures**.
+Static and whitespace checks pass. Disposable native checks pass for the combined theme/attention/
+navigation-conflict repro, existing multiwindow/inactive-workspace/451-entry-history acceptance,
+long-history paging and delayed/cancelled restoration, memory eviction/drafts/settings, document
+reading positions through app restart, real video autoplay/manual Play, and actual page-generated
+website events with original silence/click behavior. These are synthetic workflow results, not
+real provider Fusion, live Slack, phone APNs or installed-user-profile acceptance.
 
 ## Distribution audit
 
@@ -29,7 +69,7 @@ inventory. The currently installed command-center tool catalog predates this sou
 - A named-release record reserves version 0.2.39 once. Plan/implementation/rollout documents,
   release-closeout instructions and artifact/site/simulator retention limits are repository-owned.
 
-## Validation
+## Earlier R11-only validation
 
 Final validation: **1,324 tests passed, four platform skips, zero failures**; `npm run check`
 and `git diff --check` passed. The encrypted two-host tests exercise destination defaults,

@@ -1,13 +1,16 @@
 const {atomicRename}=require('../../src/shared/atomic-rename.cjs');
 const fs=require('node:fs');
 const path=require('node:path');
+const {positions:artifactPositions}=require('../documents/artifact-scroll.cjs');
 const MAX_BYTES=512*1024,MAX_ENTRIES=200;
 function normalizePosition(value){
   if(!Array.isArray(value)||value.length>32)throw Error('Invalid reading position.');
   return value.map(([locator,entry])=>{
     if(typeof locator!=='string'||locator.length>2048||!entry||![entry.top,entry.left].every(n=>Number.isFinite(n)&&Math.abs(n)<100_000_000))throw Error('Invalid reading position.');
     const anchor=entry.anchor;
-    return [locator,{top:entry.top,left:entry.left,follow:entry.follow===true,...(anchor&&Number.isInteger(anchor.index)&&anchor.index>=0&&anchor.index<1_000_000&&Number.isFinite(anchor.offset)&&Math.abs(anchor.offset)<10_000_000?{anchor:{index:anchor.index,offset:anchor.offset,key:typeof anchor.key==='string'?anchor.key.slice(0,256):null,text:typeof anchor.text==='string'?anchor.text.slice(0,160):null}}:{})}];
+    const artifact=entry.artifact;
+    if(artifact&&(!/^[a-f0-9]{64}$/.test(artifact.version||'')))throw Error('Invalid document position version.');
+    return [locator,{top:entry.top,left:entry.left,follow:entry.follow===true,...(artifact?{artifact:{version:artifact.version,positions:artifactPositions(artifact.positions)}}:{}),...(entry.conversation===true?{conversation:true}:{}),...(anchor&&Number.isInteger(anchor.index)&&anchor.index>=0&&anchor.index<1_000_000&&Number.isFinite(anchor.offset)&&Math.abs(anchor.offset)<10_000_000?{anchor:{index:anchor.index,offset:anchor.offset,key:typeof anchor.key==='string'?anchor.key.slice(0,256):null,text:typeof anchor.text==='string'?anchor.text.slice(0,160):null}}:{})}];
   });
 }
 class ViewPositions {
