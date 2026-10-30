@@ -21,7 +21,7 @@ import {rememberTabSelection,restoreTabSelection} from './features/workspaces/wo
 import {previewRelativeAge,previewChatActivity} from './shared/navigation/preview-navigation.js';
 import {previewApprovalChoices,previewPermissionNames} from './shared/navigation/preview-permissions.js';
 import {downloadsChanged} from './features/browser/browser-downloads.js';
-import {normalizeContentTabHistory,contentTabMetadata,acknowledgesBrowserNavigation} from './models/content-tab-descriptor.js';
+import {normalizeContentTabHistory,contentTabMetadata,acknowledgesBrowserNavigation,contentTabOrder,contentTabViews} from './models/content-tab-descriptor.js';
 import {chatLink,parseChatLink} from './features/chats/chat-links.js';
 import {computerName} from './services/remote/computer-identity.js';
 import {initWorkspaces,renderWorkspaces,renderWorkspace,openWorkspace,openWorkspaceChat,openRemoteProject,workspaceOwners,refreshWorkspaceOwners,loadWorkspaceOwnerTabs,recentWorkspaces,sendChatToWorkspace,moveChatToWorkspace,createWorkspace,deleteWorkspace} from './features/workspaces/desktop-workspaces.js';
@@ -262,7 +262,7 @@ const toast=createToast($('#toast'));
 async function api(url, data) {
   if(workspaceClosing)throw new Error('Proteus is closing.');
   const response = await fetch(url, data === undefined ? {} : { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify(data) });
-  const result = await response.json(); if (!response.ok) throw new Error(result.error || response.statusText); return result;
+  const result = await response.json(); if (!response.ok) {const error=new Error(result.error || response.statusText);if(typeof result.code==='string')error.code=result.code;throw error;} return result;
 }
 const localHistories=new Map(), historyRequests=new Map(), historyGenerations=new Map();
 function releaseChatView(tab){
@@ -906,7 +906,7 @@ const contentTabSync=createTabSynchronizer({navigation:true,pendingStorage:deskt
       if(tab.info)tab.info=info;else Object.assign(tab,{url:info.url,history:info.history,nativeTitle:info.title,navigationPending:info.navigationPending});
     }
   },
-  apply:async(scope,descriptors,captured,{discardPendingNavigation=false}={})=>{
+  apply:async(scope,descriptors,captured,{discardPendingNavigation=false,preservedIds=[]}={})=>{
     descriptors=previewContentDescriptors(scope,descriptors);
     const parent=scopeParent(scope);if(scope.scope!=='team'&&(!parent||parent.connectionPaused))return;
     applyingContentTabs++;let changed=false;
@@ -914,7 +914,9 @@ const contentTabSync=createTabSynchronizer({navigation:true,pendingStorage:deskt
       const list=scope.scope==='team'?teamState().tabs:state.tabs.filter(tab=>!tab.connectionPaused&&tab.parentId===parent.id);
       const ids=new Set(descriptors.map(tab=>tab.id));
       const descriptorId=async tab=>scope.scope==='team'?(tab.contentTabId||tab.id):(await descriptorFor(tab,parent))?.id;
-      const currentOrder=[];for(const tab of list){const id=await descriptorId(tab);if(id)currentOrder.push(id);}const orderChangedDuringRequest=currentOrder.join('\0')!==captured.map(tab=>tab.id).join('\0');
+      const preserved=new Set(preservedIds),order=ids=>contentTabOrder(ids.filter(id=>!preserved.has(id)));
+      const currentIds=[];for(const tab of list)currentIds.push(await descriptorId(tab));
+      const currentOrder=order(currentIds),orderChangedDuringRequest=currentOrder.join('\0')!==order(captured.map(tab=>tab.id)).join('\0');
       for(const tab of list.slice()){const id=await descriptorId(tab);if(!id||ids.has(id)||!captured.some(item=>item.id===id))continue;const currentDescriptor=await descriptorFor(tab,parent);if(JSON.stringify(currentDescriptor)!==JSON.stringify(captured.find(item=>item.id===id)))continue;if(tab.type==='browser'||tab.browserId)await window.desktop.browser({action:'close',id:tab.browserId||tab.id});if(tab.type==='remote-document')forgetRemoteDocument(tab.id);if(scope.scope==='team'){teamState().tabs=teamState().tabs.filter(item=>item!==tab);if(teamState().active===tab.id)teamState().active='overview';}else{state.tabs=state.tabs.filter(item=>item!==tab);if(state.tab===tab.id)state.tab=parent.id||'overview';}changed=true;}
       for(const descriptor of descriptors){let tab;for(const candidate of list){if(await descriptorId(candidate)===descriptor.id){tab=candidate;break;}}
         // A tab closed/moved after the request snapshot must not be recreated
@@ -959,7 +961,7 @@ const contentTabSync=createTabSynchronizer({navigation:true,pendingStorage:deskt
       // Native commands above yield to clicks, drags and other scope updates. Check
       // again immediately before replacement so a late user reorder cannot be undone.
       const latestOrder=[];for(const tab of full)if(scope.scope==='team'||tab.parentId===parent.id){const id=await descriptorId(tab);if(id)latestOrder.push(id);}
-      const orderChangedDuringApply=latestOrder.join('\0')!==currentOrder.filter(id=>ids.has(id)).concat(descriptors.filter(item=>!currentOrder.includes(item.id)).map(item=>item.id)).join('\0');
+      const orderChangedDuringApply=order(latestOrder).join('\0')!==order(currentOrder.filter(id=>ids.has(id)).concat(descriptors.filter(item=>!currentOrder.includes(item.id)).map(item=>item.id))).join('\0');
       if(!orderChangedDuringRequest&&!orderChangedDuringApply&&positions.some((position,index)=>full[position]!==ordered[index])){positions.forEach((position,index)=>full[position]=ordered[index]);changed=true;}
       if(changed){saveWorkspace();renderTabs();renderChatSubtabs();void refreshMountedWorkspaceTabs().catch(error=>console.debug('Tab list refresh:',error.message));if(state.page==='team'&&state.tab==='overview')renderTeamTools({preserveBrowser:true});}
     }finally{applyingContentTabs--;}
@@ -1081,7 +1083,7 @@ function replaceChatContent(html){$('#main').innerHTML=html;}
 function renderChatSubtabs(){
   const parent=selectedChatParent();if(!parent){cleanupChatEdges?.();$('#chat-subtabs')?.remove();return;}
   const previews=state.tabs.filter(tab=>tab.preview&&tab.parentId===parent.id);
-  const children=state.tabs.filter(tab=>!tab.hidden&&!tab.connectionPaused&&tab.parentId===parent.id&&!previews.some(preview=>preview.previewTabId&&(tab.contentTabId||tab.id)===preview.previewTabId));
+  const children=contentTabViews(state.tabs.filter(tab=>!tab.hidden&&!tab.connectionPaused&&tab.parentId===parent.id&&!previews.some(preview=>preview.previewTabId&&(tab.contentTabId||tab.id)===preview.previewTabId)),state.tab);
   const signature=JSON.stringify([parent.id,parent.label,parent.workspacePage,parent.projectId,state.tab,children.map(tab=>[tab.id,browserLabel(tab),tab.type,tab.info?.favicon,tab.info?.agentControlling])]);
   if($('#chat-subtabs')?.dataset.signature===signature)return;
   cleanupChatEdges?.();const previousScroll=$('#chat-subtabs .chat-subtab-list')?.scrollLeft||0;$('#chat-subtabs')?.remove();

@@ -10,6 +10,22 @@ import {normalizeContentTabDescriptor,normalizeContentTabHistory,sameContentTab,
 import {createTabSynchronizer,rebaseTabChanges,tabChanges,syncableTabURL} from '../public/models/content-tab-sync.js';
 const pendingCount=values=>[...values.keys()].filter(key=>key.startsWith('proteus.navigation.pending:')).length;
 const tab=id=>({id,type:'browser',title:id,url:'https://example.test/'+id});
+test('owner-committed native placement adopts its history and order instead of publishing another navigation seed',async()=>{
+ const scope={scope:'workspace',id:'destination'},known=tab('known'),entries=['back','selected','forward'].map(id=>({id,url:'https://example.test/'+id,title:id}));
+ const moved={...tab('moved'),url:entries[1].url,history:{entries,index:1,currentEntryId:'selected',revision:8}};
+ let remote={revision:1,tabs:[known]},local=[known];const errors=[];
+ const sync=createTabSynchronizer({navigation:true,scopes:()=>[scope],readLocal:async()=>structuredClone(local),request:async(_scope,action)=>{assert.equal(action,'get','a committed move needs no duplicate mutation or fabricated visits');return structuredClone(remote);},apply:async(_scope,tabs)=>{local=structuredClone(tabs);},onError:error=>errors.push(error)});
+ await sync.all();remote={revision:2,tabs:[known,moved]};local=[{...moved,navigationPending:false},known];
+ await sync.all();assert.deepEqual(local,remote.tabs);assert.deepEqual(local[1].history.entries,entries);assert.equal(local[1].history.currentEntryId,'selected');assert.deepEqual(errors,[]);
+});
+test('human navigation after an owner move diffs against the transferred stack, preserving pending operation identity',async()=>{
+ const scope={scope:'workspace',id:'pending-move'},known=tab('known'),a={id:'a',url:'https://example.test/a',title:'A'},b={id:'b',url:'https://example.test/b',title:'B'};
+ const moved={...tab('moved'),url:a.url,history:{entries:[a],index:0,currentEntryId:'a',revision:8}};
+ let remote={revision:1,tabs:[known]},local=[known];const sent=[],errors=[];
+ const sync=createTabSynchronizer({navigation:true,scopes:()=>[scope],readLocal:async()=>structuredClone(local),request:async(_scope,action,args)=>{if(action==='get')return structuredClone(remote);sent.push(...args.operations);remote={revision:3,tabs:[known,{...moved,url:b.url,history:{entries:[a,b],index:1,currentEntryId:'b',revision:9}}]};return structuredClone(remote);},apply:async(_scope,tabs)=>{local=structuredClone(tabs);},onError:error=>errors.push(error)});
+ await sync.all();remote={revision:2,tabs:[known,moved]};local=[{...moved,url:b.url,navigationPending:true,history:{entries:[a,b],index:1,currentEntryId:'b',revision:8}},known];
+ await sync.all();assert.equal(sent.filter(op=>op.action==='browser-navigate').length,1);assert.equal(sent.find(op=>op.action==='browser-navigate').entryId,'b');assert.equal(sent.find(op=>op.action==='browser-navigate').baseRevision,8);assert.ok(!sent.some(op=>op.action==='reorder'||op.action==='open'&&op.tab.url===''));assert.deepEqual(errors,[]);
+});
 test('legacy browser protection never hides explicit new navigation from the canonical project',async t=>{
  const host=hostStore(t),scope={scope:'project',id:'legacy-and-new'},kept=tab('known');
  host.mutate({...scope,expectedRevision:0,operations:[{action:'open',tab:kept}]});

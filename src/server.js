@@ -738,7 +738,13 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         const [file, type] = assets[url.pathname]; res.writeHead(200, { 'Content-Type': type }); res.end(fs.readFileSync(path.join(root, 'public', file))); return;
       }
       json(404, { error: 'Not found.' });
-    } catch (error) { activity.log('warning','api.failed','An application request failed validation or could not be completed.',{error}); json(400, { error: error.message }); }
+    } catch (error) {
+      activity.log('warning','api.failed','An application request failed validation or could not be completed.',{error});
+      // Native renderer synchronization needs the same typed navigation outcome
+      // as remote clients. Do not serialize arbitrary exception details/paths.
+      const navigationCode=req.url?.split('?')[0]==='/api/content-tabs'&&['NAVIGATION_CONFLICT','NAVIGATION_OPERATION_CONFLICT','NAVIGATION_TAB_CLOSED','HISTORY_PAGE_REQUIRED'].includes(error.code)?error.code:undefined;
+      json(400,{error:error.message,...(navigationCode?{code:navigationCode}:{})});
+    }
   });
   try { await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, '127.0.0.1', resolve); }); }
   catch (error) { unlock(); throw error; }

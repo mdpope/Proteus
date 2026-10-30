@@ -76,7 +76,7 @@ else {
     const {browserDestination,browserDestinations,previewChatResourcePlacement}=await import('../src/services/browser/browser-destinations.js');
     const projects=service.workspaceProjects||service.desktopPreview;
     const {remapPreviewProjectSession,resolvePreviewProject,remapPreviewBrowserPlacement}=await import('../public/features/workspaces/preview-project-placement.js');
-    const {reconcileWindowSession}=await import('../public/shared/navigation/window-session-reconcile.js');
+    const {restoreWindowContent}=await import('./windows/restore-content.js');
     const resolvePreviewPlacement=value=>projects.remapBrowserPlacement(value);
     await service.browserProfiles.refresh().catch(()=>{});
     browser = new BrowserTabs(firstWindow, service.origin,{windowRegistry:windows,newWindow:()=>createAppWindow?.(),projects:true,preview:!!desktopPreview,resolvePreviewPlacement,retainedTabs:()=>service.settings.get().browser?.loadedTabLimit??6,home:service.home,handleCallback:url=>{if(!url.startsWith('proteus-desktop://life-oauth/callback?'))return false;void service.life.callback(url).catch(error=>browser.actions.send({type:'error',message:error.message}));returnToAuthWindow();return true;},diagnostics:service.performanceDiagnostics,history:browsingHistory,agentDestination:(runId,value)=>browserDestination(service,runId,value,{preview:!!projects}),agentDestinations:runId=>browserDestinations(service,runId,{preview:!!projects}),profiles:service.browserProfiles,onSiteNotification:(item,tab)=>{service.activity.browserIssue({kind:'site-notification',windowId:tab.windowId||'main',tabId:tab.id,profileId:item.profileId,origin:item.origin,siteNotificationId:item.id,title:item.title,body:item.body});service.notify();},onLoadError:({error,url,detail,tabId,windowId})=>{const log=service.activity.log('warning','browser.load-failed',`${error}\n${url||''}`,{hostId:service.remote.info().hostId,tabId,error:detail,url});let site='this page';try{site=new URL(url).host;}catch{}const item=service.activity.browserIssue({kind:'load-error',windowId,tabId,logId:log.id,title:'Could not load '+site,body:error});service.notify();return {...log,notificationId:item.id};}});
@@ -148,7 +148,7 @@ else {
       else if(value?.action==='restore'){
         const data=windowLayouts.read();if(data.revision!==value.expectedRevision)throw Error('Window sessions changed. Refresh and retry.');const row=data.layouts.find(row=>row.id===value.id);if(!row)throw Error('This saved session is unavailable.');
         const open=windows.contexts.get(row.windowId);if(open){open.window.show();open.window.focus();return windowLayouts.list(windows);}
-        const snapshot=windowLayouts.snapshot(row.id),session=reconcileWindowSession(snapshot.session,(scope,id)=>service.contentTabs.get(scope,id));makeSession(row.windowId).save({...session,windowId:row.windowId});for(const [key,position]of snapshot.positions)viewPositions.set('window:'+row.windowId+':'+key,position);
+        const snapshot=windowLayouts.snapshot(row.id),session=await restoreWindowContent(snapshot.session,service);makeSession(row.windowId).save({...session,windowId:row.windowId});for(const [key,position]of snapshot.positions)viewPositions.set('window:'+row.windowId+':'+key,position);
         await createAppWindow({id:row.windowId,bounds:row.bounds,maximized:row.maximized});
       }else if(value?.action==='remove')windowLayouts.remove(value.id,value.expectedRevision);
       else if(value?.action!=='rename')throw Error('Choose a window-session action.');

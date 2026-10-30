@@ -1,3 +1,16 @@
+## October 30 — preserve browser stacks through shared-window synchronization
+
+Local content-tab HTTP responses preserve the existing typed navigation-conflict/closed-tab codes.
+The shared synchronizer can therefore acknowledge an already-applied title/navigation result and
+continue receiving tabs, while real divergent navigation remains a conflict. Only the known
+navigation codes cross this error boundary; arbitrary exception properties do not.
+
+Moving a native browser into a workspace/project adopts the owner's transferred stack. It must
+not seed duplicate visits, fabricate an empty navigation or publish an incidental native view
+position as a reorder. Named-window restore pages complete owner history before saving, preserving
+Back, Forward and the current entry; incomplete/changing history aborts without overwriting the
+layout. Local browser views retain independent scroll positions and dormant mirrors stay unloaded.
+
 ## October 26 — shutdown presentation cleanup
 
 After the owner starts quitting, trusted main-frame `hide` and `overlay` requests are

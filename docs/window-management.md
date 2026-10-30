@@ -1,3 +1,25 @@
+## October 30 — shared membership and order converge across window aliases
+
+Open views of the same owner workspace/project now compare logical descriptor identities rather
+than raw window-view counts. Historical chat aliases retain their IDs, drafts and saved state;
+the tab strip shows one logical tab, using this window's selected alias. Preserved unregistered
+legacy views do not masquerade as a concurrent reorder. A genuine edit during synchronization
+still wins its race and is sent through the normal revision-checked owner boundary.
+
+Named-window restore projects the current owner's complete membership and order before saving
+the new presentation. Missing descriptors become dormant local mirrors; current tombstones and
+moves are respected. Full browser history is paged through the existing owner service, including
+Forward entries and the selected entry. A changed scope/history or exceeded session budget aborts
+restore without replacing the saved layout. Remote, paused and intentionally closed roots retain
+their existing presentation and do not trigger local owner reads. Restoring metadata neither starts
+resources nor grants document/page access.
+
+Synthetic real Electron acceptance covers concurrent opens, inactive workspace additions, moves,
+closes, keyboard/owner reorders, named restore before renderer hydration and two-window restart.
+Selections, chat drafts, selected-child records, browser scroll and complete Back/Forward stacks
+remain independent where appropriate. This is source acceptance; no HC content or installation
+was changed. See [the convergence decision](decisions.md).
+
 ## October 29 — inactive project synchronization and retained-window recovery
 
 Open workspace/project roots subscribe to their owning host's canonical content even while a

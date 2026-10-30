@@ -1,3 +1,17 @@
+## October 30 — one ordered content set across local windows
+
+Workspace/project content uses the owning host's ordered logical descriptors in every open window,
+including inactive roots. Duplicate legacy chat views count once for synchronization and display;
+their private selection and draft data remain retained. Native moves already committed by the
+owner are adopted rather than replayed as new opens or browser visits. A pending human navigation
+is still diffed against the transferred stack, and uncertain mutation envelopes retain their
+original identities. Shared membership does not synchronize local window selection or scrolling.
+
+Saved-window restoration materializes current missing descriptors and applies current owner order.
+It does not resurrect owner-closed tabs or reparent a moved descriptor from a stale layout. The
+original layout and explicit retained-tab recovery remain available for historical content review.
+See [window behavior and validation](window-management.md).
+
 ## October 23 follow-up — open chats at their associated home
 
 Opening an associated chat from global lists, attention, notifications, links or creation selects

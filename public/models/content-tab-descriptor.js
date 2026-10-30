@@ -1,4 +1,19 @@
 // Portable descriptor semantics shared by the renderer and host. Runtime state is local.
+// Several window-local view IDs can represent one owner descriptor. Count that
+// identity once when comparing order with a deduplicated synchronization snapshot.
+export const contentTabOrder=ids=>[...new Set(ids.filter(Boolean))];
+export function windowContentTabId(tab){
+ if(['run','remote-run'].includes(tab.type))return 'chat:'+(tab.runId||tab.chatId||(tab.contentTabId?.startsWith('chat:')?tab.contentTabId.slice(5):tab.id.replace(/^chat:/,'')));
+ if(tab.type==='terminal')return 'terminal:'+tab.terminal?.id;
+ return tab.contentTabId||tab.id;
+}
+// Retain historical aliases in saved state, but expose one shared tab per
+// logical identity. Its selected native view remains local to this window.
+export function contentTabViews(tabs,active){
+ const views=new Map();
+ for(const tab of tabs){const id=windowContentTabId(tab);if(!views.has(id)||tab.id===active)views.set(id,tab);}
+ return [...views.values()];
+}
 export const contentTabTitle=value=>typeof value==='string'?value.replace(/[\x00-\x1f\x7f]/g,'').slice(0,200):'';
 export function safeContentTabURL(value,appOrigin){
   if(typeof value!=='string'||!value||value.length>4096)return null;

@@ -16,7 +16,7 @@ try{
  await native((main,info)=>main.getBrowser().actions.send({type:'select-tab',info}),source);await until(async()=>(await session(first)).active===source.id,'source selected');
  const opened=app.waitForEvent('window');await native(main=>main.createWindow());second=await opened;second.setDefaultTimeout(15000);second.on('pageerror',error=>errors.push(error.message));await openProject(second);
  const secondID=await second.evaluate(()=>window.desktop.windowId);assert.notEqual(firstID,secondID);
- const mirror=await until(async()=>(await session(second)).tabs.find(tab=>tab.parentId===fixture.parentId&&tab.type==='browser'&&(tab.contentTabId||tab.id)===source.id),'source mirrored to second window');
+ const mirror=await until(async()=>(await session(second))?.tabs.find(tab=>tab.parentId===fixture.parentId&&tab.type==='browser'&&(tab.contentTabId||tab.id)===source.id),'source mirrored to second window');
  assert.equal(await native((main,id)=>!!main.getBrowser().get(id).view,mirror.id),false,'a dormant mirror must not allocate a website renderer');
  await second.locator('[data-chat-subtab="'+mirror.id+'"]').click();
  await second.locator('#browser-url').fill('unfinished-address-draft.example');const secondActive=(await session(second)).active;

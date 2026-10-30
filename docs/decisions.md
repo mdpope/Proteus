@@ -1,3 +1,23 @@
+## October 30 — reconcile owner descriptors separately from window views
+
+Use one ordered logical identity set for workspace/project content, with window-local view IDs,
+selection, drafts and reading state. Historical aliases are evidence, not extra owner tabs or
+proof of concurrent reordering. Keep their saved records and choose one representative in the
+visible strip. Compare canonical identities at both asynchronous reorder guards so real late
+human edits still survive.
+
+Named restoration is an owner-service read followed by a pure presentation projection. Fetch
+full paginated history and validate all captured scope revisions before saving; materialize
+missing descriptors without loading pages, starting terminals or reading documents. Preserve
+original layouts and pending navigation branches. Tombstones/moves take precedence over stale
+membership. Existing explicit recovery remains the route for ambiguous historical tabs.
+
+Native placement can precede the next renderer GET. Adopt such owner arrivals as the diff baseline
+instead of treating transferred history as new navigation. Preserve pending operation envelopes
+and genuine navigation after the move. Retain the existing typed navigation errors across local
+HTTP so same-goal recovery works consistently with direct owner calls; do not broaden conflict
+resolution or disclose general exception details.
+
 ## October 29 — directional management uses existing task feedback
 
 Pairing already creates authority in only one direction. Reuse that protocol and the

@@ -76,6 +76,19 @@ export function rebaseTabChanges(operations,current){
   if(order){const ids=order.ids.filter(id=>live.has(id));for(const tab of current)if(live.has(tab.id)&&!ids.includes(tab.id))ids.push(tab.id);for(const id of live.keys())if(!ids.includes(id))ids.push(id);if(ids.join('\0')!==[...live.keys()].join('\0'))changes.push({action:'reorder',ids});}
   return changes;
 }
+function changesAfterOwnerUpdates(baseline,local,remote,navigation){
+  const known=new Set(baseline.map(tab=>tab.id)),present=new Set(local.map(tab=>tab.id));
+  const arrivals=new Map(remote.filter(tab=>!known.has(tab.id)&&present.has(tab.id)).map(tab=>[tab.id,tab]));
+  if(!arrivals.size)return tabChanges(baseline,local,{navigation});
+  // Native placement can reach a window before its next GET. That descriptor
+  // already exists on the owner: neither replay its history as new visits nor
+  // publish the old native view position as an intentional destination reorder.
+  const observed=local.map(tab=>arrivals.has(tab.id)&&!tab.navigationPending?arrivals.get(tab.id):tab);
+  const operations=tabChanges([...baseline,...arrivals.values()],observed,{navigation});
+  const previousOrder=baseline.filter(tab=>!arrivals.has(tab.id)).map(tab=>tab.id);
+  const localOrder=local.filter(tab=>!arrivals.has(tab.id)).map(tab=>tab.id);
+  return previousOrder.join('\0')===localOrder.join('\0')?operations.filter(op=>op.action!=='reorder'):operations;
+}
 export function createTabSynchronizer({scopes,readLocal,apply,acknowledge=async()=>{},request,onError=()=>{},navigation=false,pendingStorage,now=Date.now,preserveUntracked=()=>false}){
   const records=new Map(),navigationCache=new Map(),backoff=new Map();
   const hostKey=scope=>scope.hostId||'local';
@@ -180,7 +193,7 @@ export function createTabSynchronizer({scopes,readLocal,apply,acknowledge=async(
       if(!record.pending&&pendingStorage)try{record.pending=JSON.parse(pendingStorage.getItem(storageKey)||'null');}catch{}
       const initial=remote.revision===0?tabChanges([],local,{navigation,seed:true}):tabChanges(remote.tabs,[...remote.tabs.map(tab=>local.find(item=>item.id===tab.id&&item.navigationPending)||tab),...local.filter(tab=>tab.navigationPending&&!remote.tabs.some(item=>item.id===tab.id))],{navigation});
       const retrying=!!record.pending;
-      const operations=record.pending||(record.baseline===null?initial:tabChanges(record.baseline,local,{navigation}));
+      const operations=record.pending||(record.baseline===null?initial:changesAfterOwnerUpdates(record.baseline,local,remote.tabs,navigation));
       let captured=local;
       if(operations.length){
         // Do not publish a close computed before the user replaced/moved a tab.
@@ -240,7 +253,7 @@ export function createTabSynchronizer({scopes,readLocal,apply,acknowledge=async(
       // apply receives the captured snapshot, so it preserves additions made during I/O.
       if(records.get(id)!==record)return;
       rememberOwner(); // Mutation acknowledgements also prove owner participation.
-      await apply(scope,remote.tabs,captured);record.pendingSnapshot=null;
+      await apply(scope,remote.tabs,captured,{preservedIds:[...(record.localAliases||[])]});record.pendingSnapshot=null;
       record.baseline=structuredClone(remote.tabs);record.revision=remote.revision;record.retry=null;if(wrote)backoff.delete(hostKey(scope));
     };
     record.busy=work().catch(error=>{
@@ -283,7 +296,7 @@ export function createTabSynchronizer({scopes,readLocal,apply,acknowledge=async(
       const recoveryKey='proteus.navigation.recovery:'+id;
       pendingStorage.setItem(recoveryKey,JSON.stringify({resolvedAt:new Date(now()).toISOString(),pending:record.pending,local:local.filter(tab=>affected.has(tab.id)),baseline:remote.tabs.filter(tab=>affected.has(tab.id))}));
     }
-    await apply(scope,remote.tabs,local,{discardPendingNavigation:true});
+    await apply(scope,remote.tabs,local,{discardPendingNavigation:true,preservedIds:[...(record.localAliases||[])]});
     if(records.get(id)!==record)return;
     record.pending=null;record.conflict=false;record.again=false;record.retry=null;record.baseline=structuredClone(remote.tabs);record.revision=remote.revision;
     record.request=null;pendingStorage?.removeItem('proteus.navigation.pending:'+id);pendingStorage?.removeItem('proteus.navigation.request:'+id);
