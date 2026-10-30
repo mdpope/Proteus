@@ -1,6 +1,6 @@
 # October thirtieth release rollout
 
-Requested version: **0.2.39**. Both Mac preflights completed; no installation is verified.
+Requested version: **0.2.39**. HC installation and core live checks are verified; Build Mac is prepared.
 Target labels are non-secret roles; exact IDs, paths and detailed receipts stay outside Git.
 
 | Machine or target | Platform | Stage | Evidence and remaining work |
