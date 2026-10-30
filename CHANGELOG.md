@@ -1,4 +1,6 @@
-## Unreleased — shared workspace/project window convergence
+## 0.2.38 — release work closed
+
+The operator closed this release cycle independently of device rollout. Source and accepted private artifacts are retained; see [closeout](docs/2026-10-30-release-closeout.md).
 
 - Make every open view adopt the owner's logical tab membership and order, including inactive roots and legacy chat aliases. Keep local selection, drafts and scroll independent.
 - Restore saved windows with current missing descriptors and owner order. Preserve complete Back/Forward history through the owner service; reject changing/incomplete history without replacing the layout.

@@ -1,3 +1,13 @@
+## October 30 — prior release closed; future request collection preserved
+
+The October 27 release cycle is permanently closed by the operator. Device rollout and retained
+HC recovery review are not release-completion gates. All implemented development work is merged;
+obsolete branches/worktrees/build staging are retired with preserved evidence. See
+[closeout](2026-10-30-release-closeout.md).
+
+The [October 30 R1–R9 register](2026-10-30-release-plan.md) remains a separate collection-only
+effort. Committing its notes does not authorize implementation or another build/deployment.
+
 ## October 30 — shared-window membership/order source correction accepted
 
 The same owner workspace/project now converges by logical identity and canonical order across

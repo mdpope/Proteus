@@ -1,3 +1,15 @@
+## October 30 — October 27 release permanently closed
+
+The operator closes this release regardless of device rollout. All implemented source is merged
+into main, including the tested 0.2.38 version commit; future R1–R9 planning is committed under
+its existing implementation hold. No open PR, active local release effort, development branch
+or extra worktree remains. No more builds, installations or recovery mutations are required for
+this cycle. Historical status below is evidence, not a standing continuation request.
+
+See [terminal release closeout](2026-10-30-release-closeout.md) for accepted artifact pins,
+validation, archived transfer/checkpoint histories, disk cleanup and deferred live-data limits.
+The private 0.2.38 candidate and all user/recovery data remain preserved.
+
 ## October 30 — shared-window membership/order fix merged, deployment pending
 
 Source implementation `c985e92` reproduces and fixes live order rejection from duplicate chat
