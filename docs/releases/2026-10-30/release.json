@@ -9,8 +9,8 @@
   "implementation": "docs/releases/2026-10-30/implementation.md",
   "rollout": "docs/releases/2026-10-30/rollout.md",
   "closeout": "docs/releases/2026-10-30/closeout.md",
-  "sourceCommit": "24df95f853ef99101c66c511a1691550b7d8853c",
-  "sourceStatus": "R14 browser correction in progress; prepared 24df95f candidate must be superseded before handoff",
+  "sourceCommit": "0a2b6a425c47bd3a704ffb390a1fdcc6bf6fb864",
+  "sourceStatus": "Mac package accepted; rollout pending; original intranet network failure remains unresolved",
   "review": "https://github.com/mdpope/Proteus/pull/24",
   "relatedBranches": [
     "codex/oct30-update-command-center"
@@ -37,5 +37,12 @@
   "deploymentOrder": [
     "Build Mac and Work Mac",
     "after HC verified: iOS, web, Linux, Windows"
-  ]
+  ],
+  "macCandidate": {
+    "buildRevision": "0a2b6a425c47+src.9af8d6057aac",
+    "sourceFingerprint": "9af8d6057aac173e996a7c1fa3a485b58bed19dfad0d93b3cdb738458c071df8",
+    "packageHash": "3b100dac4cc38da2d2380560dee3b0bf866ba97e3623275dee0bb0c2111a16bb",
+    "archiveSHA256": "cdd7b0235ec15a34f86a2f504e7a2e1ac4b45319096cd7bf9d00470a61975866",
+    "archiveBytes": 231158507
+  }
 }

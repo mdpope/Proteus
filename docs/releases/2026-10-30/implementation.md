@@ -1,12 +1,44 @@
 # October thirtieth release implementation
 
-Version: **0.2.39**. State: R14 browser correction in progress; Mac handoff is held pending its acceptance.
+Version: **0.2.39**. State: R14 Mac package accepted; destination rollout pending.
 R1–R14 are authorized, with Mac rollout first and other platforms after HC is verified.
 The active branch is codex/oct30-update-command-center. The earlier R11-only source pin is
 `34419c1047f5a269ff37f42cc826161c4fb6158a`; later record-only commits do not
 change that implementation. A subsequent runtime change requires a new source/package pin.
 
-## Current Mac candidate and R14 follow-up
+## Current accepted Mac package
+
+- Source: `0a2b6a425c47bd3a704ffb390a1fdcc6bf6fb864`.
+- Build: `0a2b6a425c47+src.9af8d6057aac`; fingerprint
+  `9af8d6057aac173e996a7c1fa3a485b58bed19dfad0d93b3cdb738458c071df8`.
+- Full package/installation hash: `3b100dac4cc38da2d2380560dee3b0bf866ba97e3623275dee0bb0c2111a16bb`.
+- App archive: 231,158,507 bytes; SHA-256
+  `cdd7b0235ec15a34f86a2f504e7a2e1ac4b45319096cd7bf9d00470a61975866`.
+- Source companion: 6,272,371 bytes; SHA-256
+  `0a591b11331b10d02880d2012167f48b1279dce200b022c4aeb03d223508da39`.
+- Apple identifier/team preserved; official extraction, all 430 runtime/build-input hashes and
+  source-manifest contents pass. Five exact extracted-package UI fixtures pass, with installation
+  and archive hashes unchanged after startup. Source suite: 1,347 pass / four skips; static passes.
+
+The broad release fixture initially encountered transient state-display 503/restart timeouts.
+The unchanged package subsequently passed its complete two-window/attention/theme/restart checks
+with bounded owner diagnostics; assertions were preserved. Initial and successful evidence stays
+outside source. Other package fixtures cover real video/downloads, document restart positions,
+actual page notifications and one-click certificate/theme/profile/session behavior.
+
+Build Mac independently prepared this replacement without handoff; it remains on 0.2.33.
+HC remains on 0.2.38 and cannot yet download the private transfer using its invalid saved GitHub
+credentials; existing browser/private routes are being checked. No credential was copied or
+account changed. The accepted package/source/manifest are in an immutable private draft transfer;
+no public feed was activated. Task-created duplicate build and superseded payload retirement
+returned 1,558,646,784 observed free bytes; owner recovery data was untouched.
+
+The original intranet connection still fails in the installed and isolated signed browsers.
+Refreshing and restoring the existing macOS Local Network grant did not resolve it. Direct TCP
+and system curl reach the server; verified TLS reports its untrusted issuer. No real certificate
+was accepted. Keep this live issue open for installed restart/network-path investigation.
+
+## Superseded Mac candidate and R14 investigation history
 
 The handoff guard correction is frozen as `24df95f853ef99101c66c511a1691550b7d8853c`,
 build `24df95f853ef+src.91bfac505be7`. Its full installation hash is

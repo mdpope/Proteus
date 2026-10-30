@@ -10,13 +10,21 @@ use the saved Emerald Canopy/Daylight/custom palette and update when saved color
 Synthetic native acceptance passes custom HTTPS ports, one-click input, script-click rejection,
 profile/session boundaries, changed certificate, restart expiry and live theme changes.
 
-Both Mac read-only preflights completed. Build Mac remains installed on 0.2.33; HC remains on
-0.2.38. No 0.2.39 installation is verified. The old Build Mac 0.2.36 job and initial a79f584
-0.2.39 job were cancelled through their original owner coordinators. Corrected source 24df95f
-passes 1,343 tests/four skips and four exact-package UI fixtures; its signed installation hash is
-47ce119f69c194c68d4be15cce07ac9e190ec809e51f7600b132218f2706e288. Build Mac has prepared that
-candidate without handoff. Private HC draft-transfer assets exist, but HC has not received them.
-Hold both handoffs until R14 is validated, frozen, signed and accepted as a replacement package.
+Current accepted source is `0a2b6a425c47bd3a704ffb390a1fdcc6bf6fb864`, build
+`0a2b6a425c47+src.9af8d6057aac`, full installation hash
+`3b100dac4cc38da2d2380560dee3b0bf866ba97e3623275dee0bb0c2111a16bb`.
+Source suite 1,347 pass/four skips and static checks pass. Five exact signed/extracted-package
+UI fixtures pass, with unchanged app/archive hashes. See the implementation record for all pins.
+The broad fixture initially saw transient state-display failures; unchanged package rerun passed
+all assertions with owner diagnostics. Private receipts preserve both outcomes.
+
+Build Mac independently prepared this R14 candidate without handoff and remains on 0.2.33.
+Its superseded preparations were cancelled through their owner coordinators. HC remains on
+0.2.38: both saved GitHub credentials are invalid, so it has not received/prepared the exact
+private draft assets. An existing expected-account browser session or already documented private
+transfer route is being checked; do not copy credentials or change global logins. Two recovery
+generations and active work remain preserved. Task duplicate/superseded payload retirement freed
+1,558,646,784 observed bytes, retaining one accepted app/archive/source set plus receipts.
 
 The installed command-center input guard cancels a waiting handoff when another chat receives
 task feedback. Source 24df95f fixes this using private owner-only provenance while preserving
@@ -27,7 +35,8 @@ continues update monitoring through restart. Verify actual installation and user
 
 The reported installed-browser intranet failure is ERR_ADDRESS_UNREACHABLE for hostname and IP.
 Read-only TCP checks reach the port; verified TLS reports an untrusted issuer. macOS shows Local
-Network access enabled. Root cause and live resolution remain unverified; neither parser tests
+Network access enabled; an observed OFF/ON refresh restored that grant but did not resolve the
+failure. Root cause and live resolution remain unverified; neither parser tests
 nor synthetic TLS acceptance alone establish the reported connection fixed.
 
 R12 shared cache/history/draft tests and R13 actual page-generated notifications pass source and

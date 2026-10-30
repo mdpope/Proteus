@@ -26,7 +26,7 @@ and [machine rollout](releases/2026-10-30/rollout.md).
 | R11 | Feature and process | Named/versioned releases, command-center updates, native first builders, current-only publication and bounded retention | Source implemented and validated; packaging/rollout not performed |
 | R12 | Performance | Configurable chat/document residency, idle eviction and exact reading-position restoration across local and paired-host tabs | Source implemented; synthetic native UI verifies historical anchor, draft preservation and saved settings |
 | R13 | Integration | Route actual website-generated notifications, including sites such as Slack, through Proteus and forward to an iPhone connected to the desktop | Desktop source/testing underway; server and iOS integration after HC verification |
-| R14 | Bug | Open intranet sites on custom HTTPS ports, including single-label host:port input, and provide usable network/certificate errors | Implementation and native acceptance underway; installed browser network failure remains under investigation |
+| R14 | Bug | Open intranet sites on custom HTTPS ports, including single-label host:port input, and provide usable network/certificate errors | Source and exact-package one-click/theme tests pass; original network failure remains open |
 
 R14 distinguishes address parsing from connectivity and HTTPS trust. Explicit HTTPS addresses
 already preserve custom ports; omitted-scheme single-label host:port input needs correction.

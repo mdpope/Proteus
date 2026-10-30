@@ -1,8 +1,8 @@
 ## October 30 browser/custom-port follow-up
 
 R14 adds intranet address parsing and usable network/certificate failures to the authorized
-0.2.39 release. Hold the prepared Mac candidate while the correction receives native acceptance
-and a replacement signed package. Both preflights are complete; Build Mac remains on 0.2.33
+0.2.39 release. The replacement signed/extracted package passes five native UI fixtures and source validation.
+Build Mac prepared it; HC private delivery is blocked by invalid saved GitHub credentials. Both preflights are complete; Build Mac remains on 0.2.33
 and Work Mac on 0.2.38. Other-platform work still follows verified HC installation.
 
 ## October 30 full release and tab-memory implementation authorized
