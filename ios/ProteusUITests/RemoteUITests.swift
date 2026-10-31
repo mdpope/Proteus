@@ -88,11 +88,16 @@ final class RemoteUITests: XCTestCase {
         #if targetEnvironment(simulator)
         let app = try nativeLiveSimulatorApplication(); app.launchArguments = []; app.launch()
         openNotificationFixtureHome(app)
-        let picker = app.buttons["destination-picker"]
-        XCTAssertTrue(picker.waitForExistence(timeout: 10), "The saved owner remains selected")
-        picker.tap()
-        let manage = app.buttons["Manage computers"]
-        XCTAssertTrue(manage.waitForExistence(timeout: 5)); manage.tap()
+        let pickers = app.buttons.matching(identifier: "destination-picker")
+        XCTAssertTrue(pickers.firstMatch.waitForExistence(timeout: 10), "The saved owner remains selected")
+        let visible: (XCUIElement) -> Bool = { $0.isHittable && $0.frame.minX.isFinite && $0.frame.minY.isFinite && !$0.frame.isEmpty }
+        let picker = try XCTUnwrap(pickers.allElementsBoundByIndex.last(where: visible))
+        picker.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        let menus = app.buttons.matching(NSPredicate(format: "label == %@", "Manage computers"))
+        XCTAssertTrue(menus.firstMatch.waitForExistence(timeout: 5))
+        let manage = try XCTUnwrap(menus.allElementsBoundByIndex.last(where: visible))
+        manage.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        XCTAssertTrue(app.navigationBars["Computers"].waitForExistence(timeout: 10))
         let connected = app.staticTexts.matching(NSPredicate(format: "label == %@", "Connected")).firstMatch
         XCTAssertTrue(connected.waitForExistence(timeout: 30), "A normal cold launch reconnects using the saved pairing")
         #else
@@ -133,34 +138,6 @@ final class RemoteUITests: XCTestCase {
         XCTAssertTrue(connected.waitForExistence(timeout: 15), "Connections shows an authenticated live transport")
         #else
         throw XCTSkip("Live acceptance is restricted to simulators")
-        #endif
-    }
-
-    @MainActor func testLiveSimulatorRemoveTaskFixtures() throws {
-        guard ProcessInfo.processInfo.environment["PROTEUS_LIVE_SIMULATOR_REPAIR_FIXTURES"] == "1",
-              ProcessInfo.processInfo.environment["PROTEUS_LIVE_SIMULATOR_BUNDLE"] == "org.proteusapp.proteus.mobile",
-              let bridge = ProcessInfo.processInfo.environment["PROTEUS_LIVE_SIMULATOR_BRIDGE"], URL(string: bridge)?.host == "127.0.0.1" else {
-            throw XCTSkip("Requires explicit repair of this task's two normal-simulator fixtures")
-        }
-        #if targetEnvironment(simulator)
-        let app = try nativeLiveSimulatorApplication(); app.launchArguments = []; app.launch()
-        openNotificationFixtureHome(app)
-        let picker = app.buttons["destination-picker"]
-        XCTAssertTrue(picker.waitForExistence(timeout: 10)); picker.tap()
-        app.buttons["Manage computers"].tap()
-        for id in ["10000000-0000-4000-8000-000000000001", "10000000-0000-4000-8000-000000000002"] {
-            for _ in 0..<5 { app.swipeDown() }
-            let forget = app.buttons["forget-" + id]
-            for _ in 0..<7 where !forget.exists || !forget.isHittable { app.swipeUp() }
-            if forget.exists {
-                forget.tap()
-                let confirm = app.buttons["Forget computer"]
-                XCTAssertTrue(confirm.waitForExistence(timeout: 5)); confirm.tap()
-                XCTAssertFalse(forget.waitForExistence(timeout: 2))
-            }
-        }
-        #else
-        throw XCTSkip("Fixture repair is restricted to simulators")
         #endif
     }
 

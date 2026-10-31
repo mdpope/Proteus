@@ -7,6 +7,7 @@ const {atomic,tree,inspectPackage,compatible,copyTree,spaceBudget,readJob,writeJ
 const {copyRecovery}=require('./update-storage.cjs');
 const {verifyCandidate}=require('./update-candidate.cjs');
 const {recordFailure}=require('./update-failure.cjs');
+const {withoutCrashpadEnvironment}=require('./helper-environment.cjs');
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const alive=pid=>{try{process.kill(pid,0);return true;}catch(error){if(error.code==='ESRCH')return false;throw error;}};
 async function until(check,timeout,label){const end=Date.now()+timeout;while(!await check()){if(Date.now()>=end)throw Error('Timed out: '+label);await sleep(250);}}
@@ -19,7 +20,7 @@ function environment(home,browser,extra={},source=process.env){
  // with an unlocked wallet. Preserve existing values, never infer a backend.
  const names=['PATH','HOME','USER','LOGNAME','SHELL','LANG','LC_ALL','DISPLAY','WAYLAND_DISPLAY','XAUTHORITY','XDG_RUNTIME_DIR','DBUS_SESSION_BUS_ADDRESS','XDG_CURRENT_DESKTOP','XDG_SESSION_DESKTOP','DESKTOP_SESSION','KDE_FULL_SESSION','KDE_SESSION_VERSION','XDG_SESSION_TYPE','TMPDIR','TMP','TEMP','SystemRoot','WINDIR','ComSpec','USERPROFILE','HOMEDRIVE','HOMEPATH','LOCALAPPDATA','APPDATA','COMPUTERNAME','CLAUDE_CONFIG_DIR','PROTEUS_CLAUDE_PATH','CODEX_HOME','PROTEUS_CODEX_PATH','COPILOT_HOME','COPILOT_CLI_PATH'];
  const env=Object.fromEntries(names.filter(name=>source[name]!==undefined).map(name=>[name,source[name]]));
- return {...env,PROTEUS_HOME:home,PORT:'0',...extra,...(browser?{COPILOT_HOME:path.join(home,'copilot'),COPILOT_CLI_PATH:path.join(home,'no-copilot'),CODEX_HOME:path.join(home,'codex'),PROTEUS_CODEX_PATH:path.join(home,'no-codex'),PROTEUS_CLAUDE_PATH:path.join(home,'no-claude'),CLAUDE_CONFIG_DIR:path.join(home,'claude')}:{} )};
+ return withoutCrashpadEnvironment({...env,PROTEUS_HOME:home,PORT:'0',...extra,...(browser?{COPILOT_HOME:path.join(home,'copilot'),COPILOT_CLI_PATH:path.join(home,'no-copilot'),CODEX_HOME:path.join(home,'codex'),PROTEUS_CODEX_PATH:path.join(home,'no-codex'),PROTEUS_CLAUDE_PATH:path.join(home,'no-claude'),CLAUDE_CONFIG_DIR:path.join(home,'claude')}:{} )});
 }
 async function smoke(candidate){
  const temporary=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-update-test-')),home=path.join(temporary,'data');fs.mkdirSync(home);let app;

@@ -7,10 +7,11 @@ test identity; the targeted iPad unit/UI checks pass as well.
 
 Explicit live acceptance can select an already-installed normal/preview app with
 `PROTEUS_LIVE_SIMULATOR_BUNDLE`, while the test runner remains separate. A loopback live-owner
-bridge is still required. A distinct explicit repair opt-in can remove only the two fixed
-synthetic destinations introduced by this release's earlier normal-identity fixture mistake.
-It never resets a destination list or runs on physical devices. Normal simulator reconnection
-and physical deployment remain separate acceptance gates.
+bridge is still required. The earlier fixture-removal test did not verify the actual saved
+destination list, so it was removed. The two task-created destinations were removed through
+the actual management UI. A normal cold restart then reauthenticated to the real owner with
+the same saved selection; the earlier missing cache is not described as restored. Physical
+deployment remains a separate acceptance gate.
 
 ## October 30 shared simulator retention
 

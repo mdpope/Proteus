@@ -1,5 +1,7 @@
 ## 0.2.39 — October thirtieth release open
 
+- Keep inherited Crashpad pipes out of update-helper children so Windows readiness cannot
+  write into the immutable staged package. Preserve ordinary launch context and full integrity checks.
 - Accept website notification events on the shared service, preserve site sound choices and
   suppress duplicate, muted or stale mobile alerts. iPhone/iPad notification taps retain the
   original event ID and can open its source tab on the paired desktop.

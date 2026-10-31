@@ -1,3 +1,18 @@
+## October 30 — process-specific Crashpad state at update launch
+
+The Windows helper inherited `CHROME_CRASHPAD_PIPE_NAME` and Chromium created `debug.log` beside
+its staged executable before readiness verification. A private cwd and external logging variable
+did not prevent the mutation. A native probe omitting only the three branded Crashpad variable
+families preserved every package entry and completed arm-ready IPC; a fresh isolated baseline
+owner also passed the original helper launch. Remove those process-specific variables from helper
+children and app relaunch overrides, preserving ordinary provider/desktop context. Never ignore,
+delete or whitelist the new log to make package verification pass.
+
+The installed older owner lacks same-baseline idle-gated restart/environment controls. Its failed
+job was cancelled through the owner after the task-created maintenance checkout was relocated
+outside the installation. A normal operator Quit/Start Menu reopen is the remaining bootstrap
+step; source tests and the isolated probe are not a live restart or installation result.
+
 ## October 30 — website notification identity across mobile delivery
 
 Carry the desktop's stable notification event ID through the account server and APNs route, so

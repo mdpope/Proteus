@@ -1,3 +1,17 @@
+## October 30 — Windows helper Crashpad inheritance
+
+Helper launch strips only process-specific `CHROME_CRASHPAD_*`, `CHROMIUM_CRASHPAD_*` and
+`ELECTRON_CRASHPAD_*` context from its child environment, with a private job working directory.
+Native evidence shows an inherited pipe caused Chromium to add a root `debug.log` before arm-ready
+integrity checking. Removing that context preserves the complete package and real helper IPC.
+App relaunch cannot reintroduce those variables through overrides. Full hashing remains strict.
+
+An older installed owner cannot acquire this launch correction merely by staging a new helper.
+When it lacks a supported idle-gated same-baseline restart, preserve the cancelled attempt and
+qualified probe, prepare the normal shortcut/checkpoint/preservation comparison, and have the
+operator Quit only after work finishes and reopen normally. Verify actual launch context and
+health afterward; do not patch installed sources, edit journals or force unrelated work to stop.
+
 ## October 30 named release and command center process
 
 The standing [release process](release-process.md) unifies version reservation, repository records,

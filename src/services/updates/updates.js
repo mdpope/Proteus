@@ -12,6 +12,7 @@ import {atomicJSON} from '../../shared/files.js';
 import {packageOperation} from './update-package-worker.js';
 const require=createRequire(import.meta.url);
 const {inspectPackage,compatible,spaceBudget,readJob,writeJob,digest,recoveryPolicy}=require('../../../desktop/updates/update-package.cjs');
+const {helperEnvironment}=require('../../../desktop/updates/helper-environment.cjs');
 const active=new Set(['queued','running','awaiting_input']);
 const terminal=new Set(['complete','cancelled','attention']);
 export function pendingUpdate(home,installation){
@@ -217,7 +218,7 @@ export class Updates {
  spawnHelper(job,arm=false){
   if(this.launchHelper)return this.launchHelper(job);
   const log=fs.openSync(path.join(path.dirname(job.file),'helper.log'),'a',0o600);
-  const child=spawn(job.candidate.executable,[path.join(job.candidate.bundle,this.platform==='darwin'?'Contents/Resources/app':'resources/app','desktop/updates/update-helper.cjs'),arm?'arm':'supervise',job.file],{detached:true,stdio:['ignore',log,log,'ipc'],env:{...process.env,ELECTRON_RUN_AS_NODE:'1'}});fs.closeSync(log);child.unref();child.channel?.unref();
+  const child=spawn(job.candidate.executable,[path.join(job.candidate.bundle,this.platform==='darwin'?'Contents/Resources/app':'resources/app','desktop/updates/update-helper.cjs'),arm?'arm':'supervise',job.file],{detached:true,cwd:path.dirname(job.file),stdio:['ignore',log,log,'ipc'],env:helperEnvironment()});fs.closeSync(log);child.unref();child.channel?.unref();
   if(!arm){child.on('error',error=>{this.error='The independent helper could not start: '+error.message;});return;}
   return new Promise((resolve,reject)=>{const timer=setTimeout(()=>{child.kill();finish(Error('The independent helper did not acknowledge readiness. Proteus stayed open.'));},15000);const finish=(error)=>{clearTimeout(timer);child.removeListener('error',failed);child.removeListener('exit',exited);child.removeListener('message',ready);if(child.connected)child.disconnect();child.channel?.unref();error?reject(error):resolve();};const failed=error=>finish(error),exited=()=>finish(Error('The independent helper exited before handoff. Proteus stayed open.')),ready=message=>{if(message?.ready===job.id)finish();else finish(Error('The helper acknowledged another job.'));};child.once('error',failed);child.once('exit',exited);child.once('message',ready);});
  }
