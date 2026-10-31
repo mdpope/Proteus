@@ -102,6 +102,14 @@ before retiring prior release directories. Missing targets get empty catalogs so
 silently select a superseded version. The public current descriptor advertises the release name,
 version and available targets; signed platform manifests remain the installation trust boundary.
 
+Transfer packages with the configured deployment SSH account. Verify its documented identity and
+credential-provider options before diagnosing authentication failure. Provision the necessary
+scoped deployment access through the authorized administrator workflow when access is missing;
+do not replace that repair with browser uploads or chunked browser transfers. Delegate writes only
+to public Proteus downloads and private agent staging. Protected hosting verification can use a
+fixed read-only audit command; retain the existing bounded website updater. Keep exact account,
+key references, permission receipts and hosting commands in the private deployment workspace.
+
 After recovery verification and upload, use the server's exact public root and the distribution
 receipt to inspect and apply current-only package retention:
 

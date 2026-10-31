@@ -1,3 +1,19 @@
+## October 30 — deployed web, Windows publication and SSH access
+
+The website now serves the accepted 0.2.39 archive: 9,221 deployed files, nine complete HTTPS
+asset hashes and fourteen endpoints verify. Schema, configuration and nutrition are preserved.
+Ordinary isolated restore failed; the retained captured-state verifier passed, and deployment
+explicitly used that qualified mode. Two verified local recovery generations and one server
+generation remain, with minimum receipts and the matching recovery code companion.
+
+The operator rejects browser file uploads and authorizes proper agent deployment permissions.
+The documented SSH identity works with its explicit credential-provider option. Scoped public
+download-directory access and a fixed read-only hosting audit now verify through SSH; existing
+keys and website updater grants remain. Six private operational boundary checks pass.
+Windows public installer/archive downloads, trusted signature and current catalogs/pages verify.
+Pending targets receive empty catalogs. Both physical devices are installed with their recorded
+preservation/launch qualifications; corrective Macs, Linux/Ian and final closeout remain pending.
+
 ## October 30 — final native qualification
 
 Windows package acceptance passes on frozen application source `3422822`. Corresponding-source

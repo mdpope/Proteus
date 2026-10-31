@@ -40,7 +40,9 @@
 - Start pinned remote update coordinators using destination defaults. Return chat-specific owner
   update receipts and keep monitoring beyond the pre-restart completed model turn.
 - Preserve additional migration/test instructions in the pinned coordinator request.
-- Source implementation only; packages, website publication and machine rollout are not claimed.
+- Windows and both physical iOS devices are installed with their recorded acceptance qualifications.
+  The website is deployed and verified; the signed Windows public downloads and current descriptor
+  verify. Final corrective Macs, Linux/Ian approvals and release closeout remain pending.
 
 ## 0.2.38 — release work closed
 

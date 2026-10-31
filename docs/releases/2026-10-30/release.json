@@ -10,7 +10,7 @@
   "rollout": "docs/releases/2026-10-30/rollout.md",
   "closeout": "docs/releases/2026-10-30/closeout.md",
   "sourceCommit": "5bcbd8971cf629b37124919f3f3b9c4d6fca5574",
-  "sourceStatus": "Final Mac and Windows packages, publisher signatures and exact source companions accepted. Windows and both physical iOS devices installed with qualified preservation verified; both simulators updated; corrective Macs, Linux/Ian and public activation remain pending.",
+  "sourceStatus": "Final native packages and exact source companions accepted. Windows and both physical iOS devices installed with recorded qualifications; website deployed/verified; Windows public downloads and canonical current metadata verified over SSH. Corrective Macs, Linux/Ian approvals and closeout remain pending.",
   "review": "https://github.com/mdpope/Proteus/pull/24",
   "relatedBranches": [
     "codex/oct30-update-command-center",
@@ -60,8 +60,13 @@
     "verifiedFiles": 9221,
     "testsPassed": 105,
     "assertions": 920,
-    "deployed": false,
-    "stagedPrivately": true
+    "deployed": true,
+    "stagedPrivately": false,
+    "publicAssetsVerified": 9,
+    "endpointsPassed": 14,
+    "recoveryVerificationMode": "capture-state; ordinary isolated restore failed and remains recorded",
+    "retainedLocalRecoveryGenerations": 2,
+    "retainedServerRecoveryGenerations": 1
   },
   "maintenanceSourceCommit": "5fc79be00d4e95ee4dc1cd0ce2d79230b12c98ae",
   "platformSourceCommits": {
@@ -90,7 +95,11 @@
     "verifiedBuildInputs": 10,
     "accepted": true,
     "installed": true,
-    "published": false,
+    "published": true,
+    "publicFullArtifactHashesVerified": true,
+    "publicSignatureVerified": true,
+    "currentOnlyPublicGenerationVerified": true,
+    "supersededPublicGenerationsRetired": 7,
     "installedAcceptance": {
       "ownerHealthVerified": true,
       "independentPackageAndRegistrationVerified": true,

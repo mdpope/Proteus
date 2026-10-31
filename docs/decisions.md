@@ -1,3 +1,14 @@
+## October 30 — SSH publication access
+
+Use the existing deployment SSH identity and its documented credential-provider options for
+package transfers. The operator explicitly rejects browser file uploads and authorizes the needed
+agent access. Delegate write access to the Proteus public download subtree and private staging;
+use a fixed recent-window read-only command for protected configuration hashes and hosting-log
+aggregates. Preserve the existing bounded website updater, account keys and unrelated site access.
+Keep permission/credential routing and operational receipts in the private hosting workspace.
+Publication still requires complete public artifact hashes, publisher-signature verification,
+one current descriptor, empty pending-target catalogs and digest-bound retirement of old payloads.
+
 ## October 30 — exact native source companions
 
 Keep each accepted platform's immutable application source pin separate from later export-tool

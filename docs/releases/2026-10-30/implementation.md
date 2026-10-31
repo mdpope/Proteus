@@ -1,5 +1,36 @@
 # October thirtieth release implementation
 
+## Production website and SSH publication
+
+The accepted website release is live. All 9,221 deployed files, nine complete public HTTPS asset
+hashes and fourteen endpoints pass; runtime configuration, schema and nutrition are preserved.
+The ordinary isolated restore failed and retained its evidence/database. The existing captured-state
+verifier passed; activation explicitly used that qualification, including its separate unperformed
+live-state comparison. Two local full recovery generations and one server generation remain.
+Application/relay audit windows added no bytes; two Apache errors were expected protected-file
+denials. Journal priorities remain metadata-level evidence.
+
+The operator explicitly rejects browser uploads and authorizes fixing deployment access. The
+existing SSH identity works with its documented credential-provider option. Agent-only directory
+ACLs now cover public Proteus downloads and private staging; protected verification uses a fixed
+recent-window read-only audit command. Existing keys and website updater grants remain unchanged.
+Six private operational checks cover audit argument/content boundaries, catalog compare-and-swap,
+symlink refusal and exclusive artifact publication. Original complete Windows files transfer over
+SSH and independently pass full public hashes and the trusted publisher signature. Windows catalog,
+download pages and canonical current-release metadata pass; missing targets have empty catalogs.
+The first post-activation read arrived early and failed; its log remains separate from the later
+successful read after the completed activation receipt. Installer Authenticode remains unsigned.
+
+The canonical distribution generator supplies the named current descriptor, architecture pages
+and eleven empty pending catalogs. All 22 metadata HTTPS hashes and all 25 server distribution
+files verify with preserved hosting configuration and zero new hosting-log events. Digest-bound
+retirement removes seven superseded public directories and the two duplicate private upload
+payloads, leaving one published generation. The server has no Node runtime; its existing Python
+runtime applies the same bounded receipt/hash/plan checks without installing another toolchain.
+
+Both physical devices are installed at 0.2.39 / 2610.30.1 with the cold-preservation and first-launch
+timing qualifications in the rollout record. Corrective Macs, Linux/Ian and release closeout remain open.
+
 ## Final helper-launch correction and native qualification
 
 Mac source `5bcbd8971cf629b37124919f3f3b9c4d6fca5574` passes 1,353 Node tests/four

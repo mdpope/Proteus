@@ -1,3 +1,22 @@
+## October 30 — web and Windows publication complete over SSH
+
+The 0.2.39 website is deployed: 9,221 file hashes, nine public assets and fourteen endpoints pass,
+with configuration/schema/nutrition preserved. Ordinary restore failed; the existing isolated
+captured-state verifier passed and that qualification remains explicit. Two local recovery
+generations and one server generation remain.
+
+Windows `windows.06ac0b603ae1` is installed/healthy and publicly verified. Original full packages
+transfer through the working deployment SSH identity. Scoped directory access and a fixed read-only
+hosting audit replace browser upload workarounds; private account/key routing stays in the hosting
+workspace. All 25 distribution files and 22 public metadata hashes pass. The current descriptor names
+the October thirtieth release, missing targets have empty catalogs, and seven old public generations
+plus duplicate upload files are retired. Installer Authenticode remains unsigned.
+
+Both physical devices are installed at 0.2.39 / 2610.30.1 with documented preservation/launch timing.
+Final corrective Macs still require normal idle and post-restart verification; Linux/Ian await their
+destination approvals. Keep this release open. Do not rebuild accepted packages or repeat completed
+device/website recovery operations. Private checkpoints carry exact receipts and remaining work.
+
 ## October 30 — final native packages accepted, rollout still open
 
 Frozen Mac source `5bcbd89` has an accepted signed package and matching source, with exact-package
