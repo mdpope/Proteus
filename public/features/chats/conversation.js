@@ -12,6 +12,8 @@ import { agentName, assistantName } from './agent-name.js';
 import {viewResidency} from '../../models/view-residency.js';
 import {savedConversationPosition,trackViewPosition} from '../../shared/navigation/view-position.js';
 import { sentAttachmentPreview, openSentAttachmentPreview, openStoredAttachment } from './chat-attachments.js';
+import { fusionTurnFor, fusionAttributionHTML } from './copilot-fusion.js';
+const escapeHTML=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const views = new Map();
 const viewIn=root=>[...views.values()].find(view=>view.shell.isConnected&&(root===view.scroll||root===view.shell||root?.contains(view.scroll)));
 const eventIndex=key=>{const match=String(key||'').match(/^(?:activity-)?event-(\d+)$/);return match?Number(match[1]):null;};
@@ -275,6 +277,9 @@ export function conversation(target, run, options) {
         files.append(chip);
       }
     }else files?.remove();
+    // Fusion attribution updates in place as routing, phases and completion arrive.
+    const fusionTurn=entry.role==='assistant'?fusionTurnFor(run,entry.data?.fusion?.fusionId):null;let fusionNode=node.querySelector(':scope>.fusion-attribution-host');
+    if(fusionTurn){const html=fusionAttributionHTML(run,fusionTurn,escapeHTML);if(!fusionNode){fusionNode=document.createElement('div');fusionNode.className='fusion-attribution-host';(node.querySelector('.message-attachments')||body).after(fusionNode);}if(fusionNode.fusionHTML!==html){const open=fusionNode.querySelector('details')?.open;fusionNode.innerHTML=html;fusionNode.fusionHTML=html;if(open)fusionNode.querySelector('details').open=true;}}else fusionNode?.remove();
     const completed=entry.role==='assistant'&&!entry.streaming&&!entry.data?.reasoning&&!['reasoning','thinking','analysis'].includes(entry.data?.phase||entry.phase||entry.type)&&entry.text?.trim();
     if(completed){
       let actions=node.querySelector('.message-actions');if(!actions){actions=document.createElement('div');node.append(actions);}

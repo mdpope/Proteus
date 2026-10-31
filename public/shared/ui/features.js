@@ -139,24 +139,26 @@ function updateModelControls(id, providerId, ownerCatalog) {
   const mode=$('#'+id+'-mode'),modes=controls?.reasoningModes||[];
   if(mode){mode.dataset.supported=String(modes.length>0);mode.parentElement.hidden=!modes.length&&!mode.value;mode.innerHTML=optionList([{id:'',label:'Provider default'+(controls?.defaultReasoningMode?' · '+controls.defaultReasoningMode:'')},...modes.map(id=>({id,label:id[0].toUpperCase()+id.slice(1)}))],mode.value);mode.title='Reasoning mode · applies to the next turn';mode.setAttribute('aria-label','Reasoning mode');mode.onchange=()=>{effort.disabled=mode.value==='off';};}
   const efforts = controls?.reasoningEfforts || [];
-  effort.innerHTML = optionList([{ id: '', label: 'Provider default' + (controls?.defaultReasoningEffort ? ' · ' + controls.defaultReasoningEffort : '') }, ...efforts.map(id => ({ id, label: id }))], effort.value);
+  // Provider-advertised labels (for example Copilot Fusion tiers) replace opaque IDs.
+  const effortLabel = id => controls?.reasoningEffortLabels?.[id] || id;
+  effort.innerHTML = optionList([{ id: '', label: 'Provider default' + (controls?.defaultReasoningEffort ? ' · ' + effortLabel(controls.defaultReasoningEffort) : '') }, ...efforts.map(id => ({ id, label: effortLabel(id) }))], effort.value);
   context.innerHTML = optionList((controls?.contextTiers || [{ id: 'default' }]).map(tier => ({ id: tier.id, label: contextSize(tier) })), context.value || 'default');
   speed.innerHTML = optionList([{id:'',label:'Provider default'},...(controls?.serviceTiers || []).map(t=>({id:t.id,label:t.name || t.id}))], speed.value);
   const compact = select.closest('.composer');
   if (compact) {
     for (const option of select.options) { const item = data?.models?.find(m => m.id === option.value); if (item) option.textContent = item.name || item.id; }
-    effort.options[0].textContent = controls?.defaultReasoningEffort || 'Default';
+    effort.options[0].textContent = controls?.defaultReasoningEffort ? effortLabel(controls.defaultReasoningEffort) : 'Default';
     speed.options[0].textContent = 'Standard';
     effort.parentElement.hidden = !modelControlVisible(controls,'reasoningEffort',effort.value);
     context.parentElement.hidden = !modelControlVisible(controls,'contextTier',context.value);
     speed.parentElement.hidden = !modelControlVisible(controls,'serviceTier',speed.value);
-    for (const [input, label] of [[select, 'Model'], [effort, 'Thinking effort'], [context, 'Context size'], [speed, 'Speed / service tier']]) {
+    for (const [input, label] of [[select, 'Model'], [effort, controls?.reasoningEffortTitle || 'Thinking effort'], [context, 'Context size'], [speed, 'Speed / service tier']]) {
       input.title = label + ' · applies to your next turn. Steering keeps the running turn’s settings.'; input.setAttribute('aria-label', label);
     }
   }
   select.disabled = local; effort.disabled = local || mode?.value==='off'; context.disabled = local; speed.disabled = local;
   $('#' + id + '-capabilities').textContent = local ? 'Local rehearsal uses no model.' : [
-    !select.value ? 'Choose a model.' : !model ? 'Selected model is unavailable or the catalog has not loaded.' : !efforts.length ? (controls?.reasoningSupported === false ? 'This model does not support thinking effort.' : 'Thinking effort choices are not reported.') : '',
+    !select.value ? 'Choose a model.' : !model ? 'Selected model is unavailable or the catalog has not loaded.' : model.fusion ? 'Copilot Fusion routes each prompt across models; the effort sets how deeply. Billed per model used.'+(controls?.unavailableReasoningEfforts?.length?' Unavailable: '+controls.unavailableReasoningEfforts.map(item=>item.label+' — '+item.message).join('; '):'') : !efforts.length ? (controls?.reasoningSupported === false ? 'This model does not support thinking effort.' : 'Thinking effort choices are not reported.') : '',
     controls?.maxOutputTokens ? 'Maximum output: ' + tokenSize(controls.maxOutputTokens) + ' tokens. Context size is the prompt budget; output is separate.' : 'Context capacity is not advertised by this catalog; actual usage appears during a run.',
     provider === 'codex' ? 'Uses the executing computer’s Codex sign-in. Selected instructions and skills are supplied; editor-specific agent tool filters are not supported. MCP servers require a grant for all their selected tools.' : '',
     data?.checkedAt ? 'Catalog checked ' + new Date(data.checkedAt).toLocaleTimeString() + '. Refreshes every five minutes.' : 'Catalog has not been checked.',

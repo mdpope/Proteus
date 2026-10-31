@@ -1,3 +1,20 @@
+## Unreleased — October 31 (implemented and tested; not packaged or deployed)
+
+See the [October 31 plan](docs/2026-10-31-release-plan.md).
+
+- Add **Copilot Fusion** to Copilot chats when the account's runtime advertises Fusion routing tiers.
+  Choose Copilot Fusion and a Fusion effort (advertised names such as Standard/High/Max) in every
+  model picker. Unavailable tiers show their reasons, and unavailable accounts get a clear message.
+- Record exactly which models each Fusion turn used: planned models, every executed phase (role,
+  model, effort, status, duration, usage), per-model requests, the model that wrote the answer, and
+  turn totals. Shown under each answer on desktop, remote views, the website and iOS, with per-model
+  totals in Run details. Planned-but-unrun models are never shown as used, and drafts are never stored.
+- Upgrade `@github/copilot-sdk` to 1.0.28 on every platform.
+- Remote computers: workspace project pages and rows match the local layout; the remote new-chat
+  composer uses the same compact model controls as local (no inapplicable Context, one line); and
+  source folders list the remote workspace's folders instead of an empty box. Website project rows
+  match the desktop layout and gain New chat.
+
 ## 0.2.39 — October thirtieth release open
 
 - Include native build sources in source companions. With accepted provenance, preserve exact

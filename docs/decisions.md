@@ -2916,3 +2916,15 @@ Chats have no header bar. Their actions live on the tab that names the chat, so 
 iPhone shows only the project bar and the chat's own tab row. The single sidebar control sits at the
 start of the project/workspace bar on both iPhone and iPad and is never opened by an edge swipe.
 Project tabs swipe back to their project home before UIKit pops the project.
+
+## October 31 — Copilot Fusion is selected from advertised Auto tiers
+
+Copilot Fusion is exposed by `@github/copilot-sdk` as Auto routing tiers (`ModelList.auto.tiers`,
+`type: "fusion"` / `fusionTier`), not as an ordinary model. Proteus publishes a synthetic
+`copilot-fusion` catalog entry only from those advertised, enabled, picker-visible tiers, and reuses
+the existing effort control (`reasoningEffort` holds the opaque tier ID, labelled with the tier's
+`displayName`). Sessions run `model: "auto"` with `autoTier`. No tier IDs, model rosters or plan
+entitlements are hard-coded. Attribution is a durable per-turn journal keyed by `fusionId`, built
+only from provider events. Metadata is kept; draft and critique content is not. Planned and executed
+models stay distinct. Remote clients receive the turns referenced by their visible history window
+plus the latest turn, so payloads stay bounded.

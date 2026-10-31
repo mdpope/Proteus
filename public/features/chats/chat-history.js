@@ -13,7 +13,12 @@ export function mergeChatHistory(previous, incoming) {
   }
   const latest = pages.pop() || {eventStart:0,events:[]};
   const metadata = (incoming.eventCount || 0) >= (previous.eventCount || 0) ? incoming : previous;
-  return {...metadata, ...latest, earlier:latest.eventStart, retainedHistory:pages};
+  // Fusion attribution arrives per history window; keep turns for every retained page.
+  // Newer projections of the same turn replace older ones; the set stays bounded.
+  const turns = new Map();
+  for (const turn of [...(previous.fusionTurns || []), ...(incoming.fusionTurns || [])]) if (turn?.fusionId) { turns.delete(turn.fusionId); turns.set(turn.fusionId, turn); }
+  const fusion = turns.size ? {fusionTurns:[...turns.values()].slice(-400)} : {};
+  return {...metadata, ...fusion, ...latest, earlier:latest.eventStart, retainedHistory:pages};
 }
 
 // Presentation budget is independent of the host's transport/cache page size.
