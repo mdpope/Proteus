@@ -1,7 +1,7 @@
 import {randomUUID} from 'node:crypto';
 import {displayText} from './tool-activity.js';
 const count=value=>Number.isSafeInteger(value)&&value>=0?value:undefined;
-const labels={mtplx:'MTPLX','llama-cpp':'llama.cpp',codex:'Codex',copilot:'Copilot',claude:'Claude'};
+const labels={mtplx:'MTPLX','llama-cpp':'llama.cpp','shared-llm':'Shared models',codex:'Codex',copilot:'Copilot',claude:'Claude'};
 
 /** Capture observable provider lifecycle separately from assistant prose and
  * model replay. Raw reasoning/signatures never enter this journal. Only the

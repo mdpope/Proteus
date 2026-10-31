@@ -1,3 +1,9 @@
+## 0.2.39 - relay-based shared local models
+
+- Add opt-in llama.cpp/MTPLX sharing with per-device grants and shared-provider imports in Providers.
+- Keep chats, tools and approvals on the consumer; send only inference over the existing encrypted relay.
+- Add bounded queues, Stop propagation, durable no-replay receipts and interrupted-request recovery.
+
 ## 0.2.39 - llama.cpp provider follow-up
 
 - Add a Windows-capable llama.cpp provider with authenticated HTTPS, optional per-connection CA trust, live model controls and exact server token accounting.

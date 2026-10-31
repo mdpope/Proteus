@@ -410,3 +410,7 @@ coverage and appropriate validation before any separately authorized rollout.
 ## R15 - Windows local inference provider (authorized October 31)
 
 Implement the operator-requested llama.cpp server using the existing Qwen model, distinct Proteus provider, approved local tools and remote authenticated API access. Keep version 0.2.39 within this open release. This authorizes this PC's follow-up build/install; no unrelated rollout is implied. Acceptance includes offline regressions, real fixture tools, desktop menu/model discovery, signed package acceptance and post-install provider verification. LAN firewall administration and external-client acceptance must be recorded separately.
+
+## R16 - shared local providers through the relay (authorized October 31)
+
+Implement opt-in local llama.cpp/MTPLX sharing, per-paired-device grants and consumer imports in Providers. New Chat selects a model labelled with its serving host while its workspace/tools/history remain local. Reuse encrypted relay transport across LANs and networks; no relay-server deployment, port forwarding, API-key transfer or peer-to-peer machinery. Validate active/queued Stop, lost acknowledgements, revocation, restart interruption and bounded transport. Correct the standalone Windows API to the operator-specified primary LAN without enabling its disabled firewall. Other-machine deployment selection is pending the operator's response; current Windows implementation/update remains authorized.

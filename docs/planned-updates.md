@@ -1,3 +1,7 @@
+## October 31 - shared local model providers (R16)
+
+The operator authorizes relay-only sharing of local llama.cpp and MTPLX providers, automatic paired connection details, per-device grants and locally owned consuming chats. Implemented source includes encrypted discovery/streaming, opt-in provider imports, queueing, cancellation and no-replay recovery. Direct LAN optimization is deferred. Source desktop/relay acceptance passes; native packages and actual separate-machine rollout remain distinct. See [shared models](shared-models.md).
+
 ## October 31 - authorized llama.cpp provider
 
 The operator requests a dedicated Windows server using the existing Qwen3.8 27B quant, Proteus provider integration, remote application access and latest Proteus. This follow-up is authorized independently of prior held work. Implemented in an isolated checkout based on the installed 0.2.39 source; package/install and cross-device verification remain separate. See [setup](llama-cpp.md).

@@ -2899,3 +2899,7 @@ Project tabs swipe back to their project home before UIKit pops the project.
 ## October 31 - standalone llama.cpp transport
 
 Reuse the tested local serial tool loop for a distinct llama-cpp provider identity. Discover context and reasoning metadata from the server, and use its template/tokenizer for admission rather than a model-name table or a byte count. Keep connection credentials in private files and allow remote HTTPS with scoped CA trust. Preserve the existing GGUF and default to one server slot on an 8 GB GPU. This avoids a second model download and unsupported promises that removing LM Studio increases model throughput.
+
+## October 31 - relay-only inference sharing
+
+Reuse the existing end-to-end encrypted paired transport rather than introduce a general HTTP proxy or peer-to-peer negotiation. The serving host exposes only authenticated local-backend discovery, context admission, one-shot generation, cursor reads and cancellation. The consuming provider owns agent history and tools. Durable start identities and metadata-only receipts prevent automatic generation replay after ambiguous delivery or restart. Explicit device grants and imports remain separate from existing computer permissions; shared/remote providers cannot be exported again. Direct LAN optimization and shared image delivery are deferred.

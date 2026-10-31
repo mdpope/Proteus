@@ -19,7 +19,7 @@ export function validateSchedule(value) {
   if (!/^[a-z0-9][a-z0-9-]{0,79}$/.test(value.id || '')) throw new Error('id must be a lowercase filename-safe identifier.');
   for (const key of ['name', 'prompt', 'timezone']) if (typeof value[key] !== 'string' || !value[key].trim()) throw new Error(`${key} is required.`);
   if (typeof value.enabled !== 'boolean') throw new Error('enabled must be true or false.');
-  if (!['rehearsal', 'copilot', 'codex', 'claude', 'mtplx', 'llama-cpp', 'local-process'].includes(value.provider)) throw new Error('Choose an installed provider or local rehearsal.');
+  if (!['rehearsal', 'copilot', 'codex', 'claude', 'mtplx', 'llama-cpp', 'shared-llm', 'local-process'].includes(value.provider)) throw new Error('Choose an installed provider or local rehearsal.');
   if (!['rehearsal', 'local-process'].includes(value.provider) && (typeof value.model !== 'string' || !value.model.trim() || value.model === 'auto')) throw new Error('Choose an explicit provider model.');
   if (!value.workspace || typeof value.workspace.cwd !== 'string' || !path.isAbsolute(value.workspace.cwd)) throw new Error('workspace.cwd must be an absolute directory.');
   if (!Array.isArray(value.workspace.additionalDirectories) || value.workspace.additionalDirectories.some(p => typeof p !== 'string' || !path.isAbsolute(p))) throw new Error('workspace.additionalDirectories must be absolute paths.');

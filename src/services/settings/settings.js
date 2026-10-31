@@ -33,7 +33,7 @@ export function validateSettings(value) {
   if(value.appearance!==undefined&&(!value.appearance||typeof value.appearance!=='object'||Array.isArray(value.appearance)||(['showProviderUsage','providerUsageCollapsed','sidebarCollapsed'].some(key=>value.appearance[key]!==undefined&&typeof value.appearance[key]!=='boolean'))))throw new Error('Appearance settings must contain boolean usage preferences.');
   if(value.appearance?.palette!==undefined)validatePalette(value.appearance.palette);
   if(value.appearance?.sidebarWidth!==undefined&&(!Number.isInteger(value.appearance.sidebarWidth)||value.appearance.sidebarWidth<220||value.appearance.sidebarWidth>520))throw new Error('Sidebar width must be an integer between 220 and 520 pixels.');
-  if (!['copilot','codex','claude','llama-cpp','rehearsal'].includes(value.provider)) throw new Error('Choose a supported default provider.');
+  if (!['copilot','codex','claude','llama-cpp','shared-llm','rehearsal'].includes(value.provider)) throw new Error('Choose a supported default provider.');
   if (value.provider !== 'rehearsal' && (!value.model?.trim() || value.model === 'auto')) throw new Error('Choose an explicit default model.');
   if (value.copilotDataDirectory && (!path.isAbsolute(value.copilotDataDirectory) || !fs.statSync(value.copilotDataDirectory).isDirectory())) throw new Error('Choose an existing Copilot data folder.');
   new Intl.DateTimeFormat('en', { timeZone: value.timezone }).format();

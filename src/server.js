@@ -6,6 +6,8 @@ import {subagentPage} from './services/chats/subagents.js';
 import {publicAssets} from './shared/public-assets.js';
 import {MtplxProvider} from './providers/mtplx.js';
 import {LlamaCppProvider} from './providers/llama-cpp.js';
+import {SharedLlmProvider} from './providers/shared-llm.js';
+import {SharedInference} from './services/inference/shared-inference.js';
 import {replyWithAttachments,answerQuestionWithAttachments,questionAttachmentMediaTypes} from './services/chats/question-attachments.js';
 import {readMarkdownFile} from './shared/file-metadata.js';
 import {ensurePrivateHome} from './shared/private-paths.cjs';
@@ -119,8 +121,10 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   // MTPLX is a local Apple-silicon model server. The Mac app registers it so it is
   // available when the server is running; status reports it unavailable otherwise.
   const mtplx=new SessionProvider(()=>new MtplxProvider({}, {context,browser}));
+  let sharedInference;
+  const sharedModels=new SessionProvider(()=>new SharedLlmProvider({manager:()=>sharedInference},{context,browser}));
   const llamaCpp=new SessionProvider(()=>new LlamaCppProvider({}, {context,browser}));
-  const adapters = { ...(providers || (desktopPreview ? { codex, mtplx } : { copilot, codex, claude, 'llama-cpp':llamaCpp, ...(process.platform==='darwin'?{mtplx}:{}) })), ...(!desktopPreview ? {'local-process': omi.provider()} : {}) };
+  const adapters = { ...(providers || (desktopPreview ? { codex, mtplx } : { copilot, codex, claude, 'llama-cpp':llamaCpp, 'shared-llm':sharedModels, ...(process.platform==='darwin'?{mtplx}:{}) })), ...(!desktopPreview ? {'local-process': omi.provider()} : {}) };
   const engine = new Engine(home, adapters, undefined, {permissionControls:true,recoveryBarrier:updateRecovery});
   engine.historyCache.configure(settings.get().resources);
   const desktopControl=desktopPreview?null:new DesktopControl({active:owner=>owner==='operator'||['running','awaiting_input'].includes(engine.getRun(owner)?.status)});
@@ -289,6 +293,10 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       if (url.pathname === '/api/events' && req.method === 'GET') {
         res.writeHead(200, { 'Content-Type': 'text/event-stream', Connection: 'keep-alive' }); res.write(': connected\n\n');
         eventClients.add(res); req.on('close', () => eventClients.delete(res)); return;
+      }
+      if(url.pathname==='/api/shared-inference'){
+        if(req.method==='GET')return json(200,service.sharedInference.info());
+        if(req.method==='POST'){const value=await body(req);return json(200,value.action==='discover'?{...service.sharedInference.info(),available:await service.sharedInference.discover()}:await service.sharedInference.configure(value));}
       }
       if (url.pathname === '/api/remote' && req.method === 'GET') return json(200, remote.info());
       if(url.pathname==='/api/computer-access'){
@@ -760,7 +768,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   const timer = timers ? setInterval(() => { void performanceDiagnostics.measure('scheduler.tick', () => engine.tick()).catch(error => engine.emit('scheduler-error', { error: error.message, at: new Date().toISOString() })); }, 1000) : null;
   const service = { readChatAttachment, desktopControl,workspaceProjects:preview, desktopPreview:desktopPreview?preview:null, performanceDiagnostics, notify, desktopAttention:()=>[...(service.browserAttention?.()||[]),...remote.documents.list().filter(item=>!item.approvedAt).map(item=>({id:'document:'+item.requestId,kind:'document',title:item.deviceName+' requests '+item.title,requestId:item.requestId,path:item.path,at:new Date(Date.parse(item.expiresAt)-600000).toISOString()})),...service.attention()], attention:()=>[...integrations.consumers().filter(item=>['needs-auth','failed'].includes(item.connection)).map(item=>({id:'integration:'+item.id,kind:'connection',title:(item.profile.label||item.server)+' needs attention',section:'integrations',at:item.checkedAt})),...activity.notifications().items.filter(item=>!item.readAt).map(item=>({id:'notification:'+item.id,notificationId:item.id,kind:'notification',title:item.title,body:item.body,chatId:item.chatId,silent:item.silent===true,...(item.browserIssue?{browserIssue:item.browserIssue,silent:item.silent===true}:{}),at:item.createdAt}))], browserProfiles, integrations, engine, settings, context, standup, omi, life, account, activity, workspaceFiles, attachments, buildChatSchedule, usage, catalog, catalogs, origin, token, home, url: `${origin}/?token=${token}`, async close() {
     await stateProjection.close();await service.updates?.close();await service.chatControl?.close();await desktopControl?.close();
-    activity.log('info','app.stopping','Proteus is shutting down.');clearInterval(integrationTimer);await integrations.close(); if(activityTimer)clearInterval(activityTimer); if (timer) clearInterval(timer); if (catalogTimer) clearInterval(catalogTimer); await Promise.all(Object.values(catalogs).map(c => c.pending)); await providerAuth.close(); await remote.close(); let engineCloseError; try { await engine.close(); } catch (error) { engineCloseError=error; } await attachments.close(); await copilot.close(); await codex.close(); await claude.close(); await life.close?.(); await service.browserHistory?.close(); let activityCloseError; try { await activity.close(); } catch (error) { activityCloseError=error; }
+    activity.log('info','app.stopping','Proteus is shutting down.');clearInterval(integrationTimer);await integrations.close(); if(activityTimer)clearInterval(activityTimer); if (timer) clearInterval(timer); if (catalogTimer) clearInterval(catalogTimer); await Promise.all(Object.values(catalogs).map(c => c.pending)); await providerAuth.close(); await service.sharedInference.close(); await remote.close(); let engineCloseError; try { await engine.close(); } catch (error) { engineCloseError=error; } await attachments.close(); await copilot.close(); await codex.close(); await claude.close(); await life.close?.(); await service.browserHistory?.close(); let activityCloseError; try { await activity.close(); } catch (error) { activityCloseError=error; }
     for (const client of eventClients) client.end(); eventClients.clear();
     await new Promise(resolve => {
       server.close(resolve);
@@ -798,6 +806,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
     return result;
   };
   service.previews=new ChatPreviews(service);
+  sharedInference=service.sharedInference=new SharedInference(service);
   remote = service.remote = new RemoteHost(service); activity.attach(engine,()=>remote.info().hostId,()=>remote.info().label); activity.log('info','app.started','Proteus started.'); await remote.start();
   service.chatControl=new ChatControl(service);
   for(const adapter of Object.values(adapters))adapter.chatControl=service.chatControl;
