@@ -12,7 +12,7 @@ Target labels are non-secret roles; exact IDs, paths and detailed receipts stay 
 | Designated Windows builder | Windows x64 | Installed and health verified | Exact `windows.06ac0b603ae1` package and registration independently verify; same-chat continuation; seven runs/5,020 events preserved, selected settings/browser metadata match, two recoveries; installed certificate-details and separate session-accept fixture pass; full independent draft/credential audit remains qualified; installer Authenticode unsigned |
 | Ian's laptop | Windows | Coordinator-default setup awaiting approval | Operator selected Codex, GPT-6.1 Terra, High, normal speed; create actual update coordinator after defaults persist; consume designated builder's package |
 | Website | Web | Exact validated archive privately staged; deployment pending | Full isolated suite passes 105 tests/920 assertions; 9,221 archived file hashes verify; Webmin inspection times out; live server still needs verified one-server/current-only rotation |
-| iPhone | iOS | Cold recovery verified; relocked before installation | Baseline remains 0.2.36 / 2610.29.1; 301 protected files recovered; no install command issued after lock guard; waiting for operator unlock |
+| iPhone | iOS | Installed, preservation and launch verified | Exact 0.2.39 / 2610.30.1; full fresh cold readback verifies all 301 protected files after an observed uncontrolled first launch; all four saved destinations/selection unchanged; two verified recoveries; physical gesture/reconnect/push remains unverified |
 | iPad | iOS | Installed, preservation and launch verified | Exact 0.2.39 / 2610.30.1; a fresh full cold readback verifies all 288 protected files after an observed uncontrolled first launch, with that timing explicitly retained; all four saved destinations/selection unchanged; two verified recoveries; physical gesture/reconnect/push remains unverified |
 
 The two Macs above run the baseline accepted 0.2.39. Fresh corrective coordinators for certificate
@@ -34,8 +34,10 @@ transport/retention, Linux/Ian destination approvals and final live acceptance r
 
 iPad rotation retired only its oldest registered app/data payload after the new recovery and live
 acceptance verified: 101,385,076 logical bytes removed and 77,086,720 bytes of observed available-space
-increase. The phone keeps its two prior generations plus one verified in-flight capture while
-installation waits for unlock; no capture or installation is repeated merely to resume it.
+increase. After the operator unlocked the phone again, its existing capture was reused and the
+single installation completed. Its first pre-launch guard also observed the app running; a fresh
+full cold comparison passed with the timing qualified. Phone rotation removed 126,196,085 logical
+bytes and observed 120,053,760 bytes more available space, leaving two verified recoveries.
 
 Record actual build/signature, required migrations, test outcomes, preservation and health for
 each dispatched target. Stages are building, published, dispatched, staged, installed, live verified,
