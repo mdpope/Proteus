@@ -1,3 +1,7 @@
+## October 31 — retain the open named version for Fusion/layout rollout
+
+O14–O17 are an operator-authorized supplement to the still-open October thirtieth release, 0.2.39. A new named release requires closing the current one; no closeout has occurred. Freeze c54406cc66150c45521fd194d89c6391c44b646a and bind new platform artifacts to distinct build/hash identities. Keep prior installed/public evidence separate.
+
 ## October 30 — SSH publication access
 
 Use the existing deployment SSH identity and its documented credential-provider options for

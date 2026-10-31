@@ -9,12 +9,14 @@
   "implementation": "docs/releases/2026-10-30/implementation.md",
   "rollout": "docs/releases/2026-10-30/rollout.md",
   "closeout": "docs/releases/2026-10-30/closeout.md",
-  "sourceCommit": "5bcbd8971cf629b37124919f3f3b9c4d6fca5574",
-  "sourceStatus": "Final native packages and exact source companions accepted. Windows and both physical iOS devices installed with recorded qualifications; website deployed/verified; Windows public downloads and canonical current metadata verified over SSH. Corrective Macs, Linux/Ian approvals and closeout remain pending.",
+  "sourceCommit": "c54406cc66150c45521fd194d89c6391c44b646a",
+  "sourceStatus": "October 31 O14\u2013O17 authorized within still-open 0.2.39. Exact source verified on origin; native validation/builds in progress. No package or installation for this pin accepted yet.",
   "review": "https://github.com/mdpope/Proteus/pull/24",
   "relatedBranches": [
     "codex/oct30-update-command-center",
-    "codex/oct30-certificate-followup"
+    "codex/oct30-certificate-followup",
+    "claude/oct31-copilot-fusion",
+    "codex/oct31-release-deployment"
   ],
   "scope": {
     "implementing": [
@@ -31,7 +33,11 @@
       "R11",
       "R12",
       "R13",
-      "R14"
+      "R14",
+      "O14",
+      "O15",
+      "O16",
+      "O17"
     ],
     "held": []
   },
@@ -120,8 +126,36 @@
     "physicalBaselineVersion": "0.2.36",
     "physicalBaselineBuild": "2610.29.1",
     "physicalTargets": {
-      "iphone": {"stage": "installed; full cold preservation, destinations and launch verified", "installedVersion": "0.2.39", "build": "2610.30.1", "firstLaunchUncontrolled": true, "protectedFilesVerifiedAfterUncontrolledLaunch": 301, "savedDestinationsPreserved": 4, "retainedRecoveryGenerations": 2, "physicalReconnectOrPushVerified": false},
-      "ipad": {"stage": "installed; full cold preservation, destinations and launch verified", "installedVersion": "0.2.39", "build": "2610.30.1", "firstLaunchUncontrolled": true, "protectedFilesVerifiedAfterUncontrolledLaunch": 288, "savedDestinationsPreserved": 4, "retainedRecoveryGenerations": 2, "physicalReconnectOrPushVerified": false}
+      "iphone": {
+        "stage": "installed; full cold preservation, destinations and launch verified",
+        "installedVersion": "0.2.39",
+        "build": "2610.30.1",
+        "firstLaunchUncontrolled": true,
+        "protectedFilesVerifiedAfterUncontrolledLaunch": 301,
+        "savedDestinationsPreserved": 4,
+        "retainedRecoveryGenerations": 2,
+        "physicalReconnectOrPushVerified": false
+      },
+      "ipad": {
+        "stage": "installed; full cold preservation, destinations and launch verified",
+        "installedVersion": "0.2.39",
+        "build": "2610.30.1",
+        "firstLaunchUncontrolled": true,
+        "protectedFilesVerifiedAfterUncontrolledLaunch": 288,
+        "savedDestinationsPreserved": 4,
+        "retainedRecoveryGenerations": 2,
+        "physicalReconnectOrPushVerified": false
+      }
     }
+  },
+  "supplementalPlans": [
+    "docs/2026-10-31-release-plan.md"
+  ],
+  "requestedPlatformSourceCommits": {
+    "darwin-arm64": "c54406cc66150c45521fd194d89c6391c44b646a",
+    "linux-x64": "c54406cc66150c45521fd194d89c6391c44b646a",
+    "win32-x64": "c54406cc66150c45521fd194d89c6391c44b646a",
+    "web": "c54406cc66150c45521fd194d89c6391c44b646a",
+    "ios": "c54406cc66150c45521fd194d89c6391c44b646a"
   }
 }
