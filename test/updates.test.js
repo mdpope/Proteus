@@ -18,10 +18,24 @@ test('helper readiness releases IPC before handoff while the independent helper 
  const root=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-helper-ipc-')),home=path.join(root,'data'),bundle=path.join(root,'candidate'),helper=path.join(bundle,'resources/app/desktop/updates/update-helper.cjs'),job=path.join(root,'job.json');
  fs.mkdirSync(home);fs.mkdirSync(path.dirname(helper),{recursive:true});
  fs.writeFileSync(helper,`const fs=require('node:fs');const file=process.argv[3];fs.writeFileSync(file+'.pid',String(process.pid));fs.writeFileSync(file+'.environment',JSON.stringify({cwd:process.cwd(),pipes:Object.keys(process.env).filter(key=>/crashpad/i.test(key)),provider:process.env.CODEX_HOME,node:process.env.ELECTRON_RUN_AS_NODE}));process.on('disconnect',()=>fs.writeFileSync(file+'.detached','yes'));process.send({ready:'synthetic-helper'});setInterval(()=>{},1000);`);
- let helperPid,parent;
- t.after(()=>{parent?.kill('SIGKILL');try{helperPid||=Number(fs.readFileSync(job+'.pid','utf8'));if(helperPid)process.kill(helperPid,'SIGTERM');}catch{}fs.rmSync(root,{recursive:true,force:true});});
+ let helperPid,parent,parentClosed=Promise.resolve();
+ t.after(async()=>{
+  if(parent&&parent.exitCode===null&&parent.signalCode===null)parent.kill('SIGKILL');
+  await parentClosed;
+  if(!helperPid&&fs.existsSync(job+'.pid'))helperPid=Number(fs.readFileSync(job+'.pid','utf8'));
+  if(helperPid){
+   try{process.kill(helperPid,'SIGTERM');}catch(error){if(error.code!=='ESRCH')throw error;}
+   const deadline=Date.now()+5000;
+   while(true){
+    try{process.kill(helperPid,0);}catch(error){if(error.code==='ESRCH')break;throw error;}
+    assert.ok(Date.now()<deadline,'the owned helper must exit before its fixture is removed');
+    await new Promise(resolve=>setTimeout(resolve,25));
+   }
+  }
+  fs.rmSync(root,{recursive:true,force:true,maxRetries:10,retryDelay:50});
+ });
  const script=`import {Updates} from ${JSON.stringify(new URL('../src/services/updates/updates.js',import.meta.url).href)};const u=new Updates({home:${JSON.stringify(home)},engine:{}},{platform:'linux'});await u.spawnHelper({id:'synthetic-helper',file:${JSON.stringify(job)},candidate:{bundle:${JSON.stringify(bundle)},executable:process.execPath}},true);await new Promise(r=>setTimeout(r,200));u.close();`;
- parent=spawn(process.execPath,['--input-type=module','-e',script],{stdio:['ignore','pipe','pipe'],env:{...process.env,CHROME_CRASHPAD_PIPE_NAME:'synthetic-pipe',ELECTRON_CRASHPAD_PIPE_NAME:'synthetic-pipe',CODEX_HOME:'/synthetic/preserved-codex'}});let errors='';parent.stderr.on('data',chunk=>errors+=chunk);
+ parent=spawn(process.execPath,['--input-type=module','-e',script],{stdio:['ignore','pipe','pipe'],env:{...process.env,CHROME_CRASHPAD_PIPE_NAME:'synthetic-pipe',ELECTRON_CRASHPAD_PIPE_NAME:'synthetic-pipe',CODEX_HOME:'/synthetic/preserved-codex'}});parentClosed=new Promise(resolve=>parent.once('close',resolve));let errors='';parent.stderr.on('data',chunk=>errors+=chunk);
  const code=await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error('Helper IPC kept the parent alive')),4000);parent.once('error',reject);parent.once('exit',code=>{clearTimeout(timer);resolve(code);});});
  helperPid=Number(fs.readFileSync(job+'.pid','utf8'));assert.equal(code,0,errors);assert.equal(fs.readFileSync(job+'.detached','utf8'),'yes');assert.deepEqual(JSON.parse(fs.readFileSync(job+'.environment','utf8')),{cwd:root,pipes:[],provider:'/synthetic/preserved-codex',node:'1'});assert.doesNotThrow(()=>process.kill(helperPid,0),'helper remains independent after the host closes');
 });

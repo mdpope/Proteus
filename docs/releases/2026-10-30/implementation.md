@@ -1,5 +1,26 @@
 # October thirtieth release implementation
 
+## Final helper-launch correction and native qualification
+
+Mac source `5bcbd8971cf629b37124919f3f3b9c4d6fca5574` passes 1,353 Node tests/four
+skips and static checks. Its signed, officially extracted package and corresponding source
+verify; the exact-package TLS and original notice-color fixtures pass without changing its bytes.
+Both installed Macs remain on the earlier healthy 0.2.39 pending this final corrective rollout.
+
+The Windows native builder twice exposed a cleanup race in the helper IPC fixture: removal
+started after signalling the helper but before its exit. Cleanup now awaits the parent pipes and
+the helper's confirmed exit before bounded removal. All readiness, environment and independent
+helper assertions remain. Focused updater validation passes 32 tests and static checks pass;
+Windows must qualify the corrected test source before another package can be accepted. Both
+failed build records remain preserved. The old failed live update is cancelled, not installed.
+
+The separate simulator identity passes 157 phone unit tests and the website-notification route UI
+fixture, with targeted iPad checks passing. The normal phone was reconnected to the real owner;
+its cold reconnect and saved selection verify. Previously reset cache is not described as restored.
+The physical 0.2.39 / 2610.30.1 build verifies against the existing paid certificate/profile and
+unchanged keychain entitlements; both physical devices require unlocking before preflight.
+The accepted website archive is staged privately, but production remains unchanged.
+
 ## Corrective cross-platform follow-up
 
 Frozen desktop source `df8f070265eb0631f0bb89159432846964bd85ef` adds certificate-information

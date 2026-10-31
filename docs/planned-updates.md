@@ -1,3 +1,17 @@
+## October 30 — final native qualification
+
+The signed Mac candidate from `5bcbd89` passes official extraction/source verification and
+exact-package TLS/original notification-color fixtures. Its full Node suite passes 1,353 tests
+with four skips. Native Windows qualification exposed a helper-fixture cleanup race twice;
+cleanup now waits for confirmed process exit before removing the fixture, retaining every
+readiness assertion. Focused updater tests (32) and static checks pass; native requalification
+and actual installation remain required. No changed-package integrity check is bypassed.
+
+Isolated phone tests (157 units plus notification-route UI) and targeted iPad checks pass.
+The normal phone cold reconnect to the real owner is verified after guided pairing repair;
+the earlier lost cache is not claimed restored. The signed physical build is ready, awaiting
+unlocked devices. The website archive is privately staged; production remains unchanged.
+
 ## October 30 — web/mobile notification delivery follow-up
 
 The operator authorizes all intended desktops, Ian's laptop, website and iPhone/iPad. Website
