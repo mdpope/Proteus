@@ -14,6 +14,12 @@ helper assertions remain. Focused updater validation passes 32 tests and static 
 Windows must qualify the corrected test source before another package can be accepted. Both
 failed build records remain preserved. The old failed live update is cancelled, not installed.
 
+Native requalification confirms the cleanup fix passes. A separate failure then exposed two
+parallel lazy Electron binary downloads after dependency installation. The distribution runner
+now prepares Electron serially before starting the full source suite, verifies the exact pinned
+version/architecture and records that phase. It preserves dependency pins and uses each build's
+existing private source directory; no shared cache or live installation is repaired in place.
+
 The separate simulator identity passes 157 phone unit tests and the website-notification route UI
 fixture, with targeted iPad checks passing. The normal phone was reconnected to the real owner;
 its cold reconnect and saved selection verify. Previously reset cache is not described as restored.

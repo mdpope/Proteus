@@ -1,5 +1,7 @@
 ## 0.2.39 — October thirtieth release open
 
+- Prepare the pinned Electron binary serially before Windows source tests, avoiding competing
+  lazy installers. Wait for fixture helpers to exit before removing their native test directories.
 - Keep inherited Crashpad pipes out of update-helper children so Windows readiness cannot
   write into the immutable staged package. Preserve ordinary launch context and full integrity checks.
 - Accept website notification events on the shared service, preserve site sound choices and

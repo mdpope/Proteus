@@ -6,6 +6,9 @@ with four skips. Native Windows qualification exposed a helper-fixture cleanup r
 cleanup now waits for confirmed process exit before removing the fixture, retaining every
 readiness assertion. Focused updater tests (32) and static checks pass; native requalification
 and actual installation remain required. No changed-package integrity check is bypassed.
+The corrected cleanup passes on Windows; a separate native run exposed concurrent Electron
+lazy installers. The release runner now verifies its pinned binary serially before parallel tests.
+Native package acceptance remains pending, with all failed attempts retained as evidence.
 
 Isolated phone tests (157 units plus notification-route UI) and targeted iPad checks pass.
 The normal phone cold reconnect to the real owner is verified after guided pairing repair;

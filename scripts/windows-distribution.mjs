@@ -45,6 +45,7 @@ export async function buildWindowsDistribution(argv){
   const npmCmd=values['npm-cli']||path.join(path.dirname(execFileSync(path.join(process.env.SystemRoot,'System32','where.exe'),['npm.cmd'],{encoding:'utf8',windowsHide:true}).trim().split(/\r?\n/)[0]),'node_modules','npm','bin','npm-cli.js');
   if(!path.isAbsolute(npmCmd)||!fs.statSync(npmCmd).isFile())throw Error('A local Node/npm build toolchain is required on the designated builder.');
   if(!values['dependencies-ready'])await run('dependencies',process.execPath,[npmCmd,'ci']);
+  await run('electron-runtime',process.execPath,['scripts/prepare-electron.mjs']);
   await run('source-tests',process.execPath,[npmCmd,'test']);
   await run('static-checks',process.execPath,[npmCmd,'run','check']);
   await run('package',process.execPath,[npmCmd,'run','package:windows']);
