@@ -1,5 +1,12 @@
 ## October 31 Fusion/layout deployment — in progress
 
+The designated Windows owner now reports a completed exact-source build,
+`windows.1075380c0a1b`, with source/static, extracted-package, integrity and trusted publisher
+verification passing. Exact receipt details and independent artifact transfer remain pending a
+destination command approval. This build is **not published, staged or installed**. The unchanged
+installer recipe can reuse its prior qualification under `windows-distribution.md`; any actual
+replacement still requires separate installed-byte, preservation and health verification.
+
 The operator authorized all intended destinations from frozen commit `c54406cc66150c45521fd194d89c6391c44b646a` on `claude/oct31-copilot-fusion`. The existing October thirtieth release remains open as **0.2.39**: additional changes and native retries receive new build/hash identities, not a new named release or version. O14–O17 supplement its scope. Previous installed/public packages remain historical evidence, not acceptance of this source.
 
 Both superseded Mac `5bc` preparations were cancelled through their original owner coordinators before replacement, with recoveries preserved; both installed baselines remain `0a2b6a425c47+src.9af8d6057aac`. Fresh Windows/Linux native-build coordinators are dispatched; neither dispatch proves a build or installation. This Mac is locked, so Apple signing checks await operator unlock. Ian requires persisted coordinator defaults through the operator UI. All publication waits for exact-package acceptance. Source-reported base failures remain failed until reproduced and resolved or explicitly qualified under the required gates. Real Fusion remains unavailable/unverified on this account.
