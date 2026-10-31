@@ -1,3 +1,17 @@
+## October 30 — isolated native tests and normal-app repair
+
+`apple-build.mjs test` builds `org.proteusapp.proteus.mobile-tests` and verifies that identity before
+installing fixtures. Normal app builds retain their existing identity. On the shared iPhone,
+157 native unit tests and the website-notification offline-route UI test pass under the separate
+test identity; the targeted iPad unit/UI checks pass as well.
+
+Explicit live acceptance can select an already-installed normal/preview app with
+`PROTEUS_LIVE_SIMULATOR_BUNDLE`, while the test runner remains separate. A loopback live-owner
+bridge is still required. A distinct explicit repair opt-in can remove only the two fixed
+synthetic destinations introduced by this release's earlier normal-identity fixture mistake.
+It never resets a destination list or runs on physical devices. Normal simulator reconnection
+and physical deployment remain separate acceptance gates.
+
 ## October 30 shared simulator retention
 
 Use the existing shared compatible iPhone/iPad simulator pool for Proteus and Mnemosyne.

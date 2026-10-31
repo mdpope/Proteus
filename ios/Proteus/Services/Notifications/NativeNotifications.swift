@@ -130,6 +130,9 @@ import Security
         let payload = notification.request.content.userInfo
         let host = payload["hostId"] as? String ?? "", chat = payload["chatId"] as? String ?? "", schedule = payload["scheduleId"] as? String ?? "", type = payload["type"] as? String ?? ""
         let eventID = payload["notificationId"] as? String ?? ""
+        let content = notification.request.content
+        let playSound = content.sound != nil
+        let text = [[content.subtitle, content.title].filter { !$0.isEmpty && $0 != "Proteus" }.joined(separator: " · "), content.body].filter { !$0.isEmpty && $0 != "There is an update in Proteus. Open Notifications to review." }.joined(separator: " — ")
         DispatchQueue.main.async {
             // Account push and the live encrypted host connection can report
             // the same event. Whichever arrives first owns its foreground alert.
@@ -138,9 +141,7 @@ import Security
             self.fixtureStatus = "Foreground delivered"
             #endif
             // Use the pushed alert's own text; fall back to the generic label for older servers.
-            let content = notification.request.content
-            let text = [[content.subtitle, content.title].filter { !$0.isEmpty && $0 != "Proteus" }.joined(separator: " · "), content.body].filter { !$0.isEmpty && $0 != "There is an update in Proteus. Open Notifications to review." }.joined(separator: " — ")
-            self.presentBanner(text.isEmpty ? Self.safeBody(type) : String(text.prefix(500)), destination: NotificationRoute.from(["hostId": host, "chatId": chat, "scheduleId": schedule, "type": type, "notificationId": eventID])); completionHandler(content.sound == nil ? [] : [.sound]) }
+            self.presentBanner(text.isEmpty ? Self.safeBody(type) : String(text.prefix(500)), destination: NotificationRoute.from(["hostId": host, "chatId": chat, "scheduleId": schedule, "type": type, "notificationId": eventID])); completionHandler(playSound ? [.sound] : []) }
     }
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
         let payload = response.notification.request.content.userInfo

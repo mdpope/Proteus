@@ -69,6 +69,16 @@ private let nativeFixtureRelayOrigin = ProcessInfo.processInfo.environment["PROT
     XCTAssertTrue(pair.waitForExistence(timeout: 5)); pair.tap()
 }
 
+/// Live acceptance may target an already-installed normal/preview app while the
+/// runner and synthetic fixtures retain their separate test identity.
+@MainActor private func nativeLiveSimulatorApplication() throws -> XCUIApplication {
+    guard let bundle = ProcessInfo.processInfo.environment["PROTEUS_LIVE_SIMULATOR_BUNDLE"] else { return XCUIApplication() }
+    guard ["org.proteusapp.proteus.mobile", "org.proteusapp.review.proteus.iphone-preview", "org.proteusapp.review.proteus.ipad-preview"].contains(bundle) else {
+        throw XCTSkip("Live simulator acceptance requires a known explicitly selected Proteus app")
+    }
+    return XCUIApplication(bundleIdentifier: bundle)
+}
+
 final class RemoteUITests: XCTestCase {
     @MainActor func testLiveSimulatorSavedOwnerReconnect() throws {
         guard let bridge = ProcessInfo.processInfo.environment["PROTEUS_LIVE_SIMULATOR_BRIDGE"],
@@ -76,7 +86,7 @@ final class RemoteUITests: XCTestCase {
             throw XCTSkip("Requires explicit live simulator acceptance")
         }
         #if targetEnvironment(simulator)
-        let app = XCUIApplication(); app.launchArguments = []; app.launch()
+        let app = try nativeLiveSimulatorApplication(); app.launchArguments = []; app.launch()
         openNotificationFixtureHome(app)
         let picker = app.buttons["destination-picker"]
         XCTAssertTrue(picker.waitForExistence(timeout: 10), "The saved owner remains selected")
@@ -98,7 +108,7 @@ final class RemoteUITests: XCTestCase {
             throw XCTSkip("Requires an explicitly authorized loopback live-owner pairing bridge")
         }
         #if targetEnvironment(simulator)
-        let app = XCUIApplication()
+        let app = try nativeLiveSimulatorApplication()
         app.launchArguments = []
         app.launch()
         // The bridge creates one invitation through the selected running owner's
@@ -123,6 +133,34 @@ final class RemoteUITests: XCTestCase {
         XCTAssertTrue(connected.waitForExistence(timeout: 15), "Connections shows an authenticated live transport")
         #else
         throw XCTSkip("Live acceptance is restricted to simulators")
+        #endif
+    }
+
+    @MainActor func testLiveSimulatorRemoveTaskFixtures() throws {
+        guard ProcessInfo.processInfo.environment["PROTEUS_LIVE_SIMULATOR_REPAIR_FIXTURES"] == "1",
+              ProcessInfo.processInfo.environment["PROTEUS_LIVE_SIMULATOR_BUNDLE"] == "org.proteusapp.proteus.mobile",
+              let bridge = ProcessInfo.processInfo.environment["PROTEUS_LIVE_SIMULATOR_BRIDGE"], URL(string: bridge)?.host == "127.0.0.1" else {
+            throw XCTSkip("Requires explicit repair of this task's two normal-simulator fixtures")
+        }
+        #if targetEnvironment(simulator)
+        let app = try nativeLiveSimulatorApplication(); app.launchArguments = []; app.launch()
+        openNotificationFixtureHome(app)
+        let picker = app.buttons["destination-picker"]
+        XCTAssertTrue(picker.waitForExistence(timeout: 10)); picker.tap()
+        app.buttons["Manage computers"].tap()
+        for id in ["10000000-0000-4000-8000-000000000001", "10000000-0000-4000-8000-000000000002"] {
+            for _ in 0..<5 { app.swipeDown() }
+            let forget = app.buttons["forget-" + id]
+            for _ in 0..<7 where !forget.exists || !forget.isHittable { app.swipeUp() }
+            if forget.exists {
+                forget.tap()
+                let confirm = app.buttons["Forget computer"]
+                XCTAssertTrue(confirm.waitForExistence(timeout: 5)); confirm.tap()
+                XCTAssertFalse(forget.waitForExistence(timeout: 2))
+            }
+        }
+        #else
+        throw XCTSkip("Fixture repair is restricted to simulators")
         #endif
     }
 
