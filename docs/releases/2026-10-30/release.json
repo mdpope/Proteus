@@ -45,5 +45,15 @@
     "packageHash": "352bf0ed4537437c4f73f9573edbce6e788e321fa03976f4521ad42eb5b965f9",
     "archiveSHA256": "bde4060ebcc4a8613542d46ad5cfd30058ce8364964c85f611ed40c46667637d",
     "archiveBytes": 231159117
+  },
+  "webCandidate": {
+    "sourceCommit": "9dcde2b1988eba95d6ea250b60508527fe696c51",
+    "buildId": "9dcde2b",
+    "release": "20261031T000434Z",
+    "archiveSHA256": "a86b77732fb477db410f3ce83b25009f6d74d076c54defe8d1581ec309fb3ccd",
+    "verifiedFiles": 9221,
+    "testsPassed": 105,
+    "assertions": 920,
+    "deployed": false
   }
 }

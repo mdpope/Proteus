@@ -15,6 +15,10 @@ Suppressed events remain history without push, and stale website alerts expire a
 The targeted website API suite passes 16 tests/207 assertions; two iPhone unit checks and an offline
 notification-route UI fixture pass. These are synthetic checks, not live Slack/APNs/phone delivery.
 
+The full isolated website suite subsequently passes 105 tests/920 assertions with ephemeral
+application/OAuth test keys. Website source `9dcde2b1988eba95d6ea250b60508527fe696c51` builds
+the 0.2.39 candidate; all 9,221 archived file hashes verify. Production remains unchanged.
+
 The native test launcher initially reused the normal iPhone simulator identity, resetting its saved
 destinations. No physical device was changed. A separate test identity and pre-install identity guard
 are implemented; native revalidation and simulator reconnection are pending the unlocked Mac.
