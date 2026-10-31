@@ -1,5 +1,7 @@
 ## 0.2.39 — October thirtieth release open
 
+- Include native build sources in source companions. With accepted provenance, preserve exact
+  native line endings and recorded generated inputs while rejecting changed inputs and secrets.
 - Prepare the pinned Electron binary serially before Windows source tests, avoiding competing
   lazy installers. Wait for fixture helpers to exit before removing their native test directories.
 - Keep inherited Crashpad pipes out of update-helper children so Windows readiness cannot

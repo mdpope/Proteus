@@ -369,7 +369,13 @@ for delegated work; do not make a particular model a permanent deployment depend
    where applicable. Freeze runtime inputs after packaging; runtime changes require a new build
    and artifact identity. Never rebuild independently on the destination and call it the same
    tested artifact.
-2. Produce the corresponding source with `scripts/package-source.mjs`. Verify that the source
+2. Produce the corresponding source with `scripts/package-source.mjs`. For a native accepted
+   package, pass `--root <exact-build-checkout> --provenance <accepted-build-source.json>
+   --output <new-private-directory>` to the reviewed exporter. It includes native build sources,
+   preserves native line endings, and binds any recorded generated inputs to accepted hashes.
+   A Mac-exported archive is not an exact substitute for a Windows build's source companion.
+   Use an external maintenance checkout for a newer exporter; do not modify the frozen native
+   source or accepted package. Verify that the source
    matches every runtime hash in the bundle's `build-source.json`, including relevant uncommitted
    changes. Version alone is insufficient: record build revision, source fingerprint, runtime
    file count and SHA-256 archive/manifest hashes.

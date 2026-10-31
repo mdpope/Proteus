@@ -1,5 +1,13 @@
 ## October 30 — final native qualification
 
+Windows package acceptance passes on frozen application source `3422822`. Corresponding-source
+verification then found that a Mac-exported archive cannot reproduce its CRLF bytes or generated
+terminal guardian, and omitted native C# build source. The source exporter now includes `native/`
+and accepts an explicit accepted-package provenance to bind generated inputs and preserve their
+exact bytes. Changed inputs, unsafe paths and environment secrets remain excluded or rejected.
+Exporting a companion does not rebuild or change the accepted application. Native export remains
+a separate verification step; public activation and live device installation are still pending.
+
 The signed Mac candidate from `5bcbd89` passes official extraction/source verification and
 exact-package TLS/original notification-color fixtures. Its full Node suite passes 1,353 tests
 with four skips. Native Windows qualification exposed a helper-fixture cleanup race twice;

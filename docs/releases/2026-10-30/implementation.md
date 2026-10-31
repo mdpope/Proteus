@@ -27,6 +27,15 @@ publisher-envelope verification. The installer remains Authenticode unsigned. No
 restart, preparation or installation is inferred. The existing trusted publisher also signs the
 accepted Mac envelope; local signature verification and exact payload equality pass independently.
 
+The command center independently downloads and hashes the three private Windows assets, then
+checks corresponding source. The Mac export differs from 435 native inputs only by CRLF and
+omits the generated guardian plus its C# input. The native checkout matches all 432 runtime files
+and 10 build inputs. Source export now includes native build source and, with explicit accepted
+provenance, includes only the recorded generated inputs with exact hashes. Three focused tests
+cover inclusion, rejection of changed output and rejection of secrets. The full local suite passes
+1,356 tests/four skips and static checks pass. Native export remains separately required; the
+accepted Windows binary is unchanged.
+
 The separate simulator identity passes 157 phone unit tests and the website-notification route UI
 fixture, with targeted iPad checks passing. The normal phone was reconnected to the real owner;
 its cold reconnect and saved selection verify. Previously reset cache is not described as restored.

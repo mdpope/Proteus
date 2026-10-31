@@ -19,8 +19,10 @@ Repeating the same open operation returns the same version. Builds, retries and 
 platform packages do not increment it. A different named release requires closing the current one.
 Changes to an already signed package produce a distinct build/hash within the open version.
 
-The October thirtieth release is **0.2.39**. Its original feature/bug list R1–R10 remains held;
-the release-process and distribution work R11 is explicitly authorized for implementation.
+The October thirtieth release is **0.2.39**. The operator subsequently authorized R1–R14 and
+all intended platform rollouts after Work Mac's verified installation. Earlier collection holds are
+historical. The release remains open until the final corrective packages, publication and device
+acceptance are reconciled in its implementation and rollout records.
 
 Every release keeps these repository records:
 
