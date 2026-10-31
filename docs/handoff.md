@@ -1,3 +1,22 @@
+## October 30 — final native packages accepted, rollout still open
+
+Frozen Mac source `5bcbd89` has an accepted signed package and matching source, with exact-package
+TLS/original notice-color fixtures and unchanged hashes. Its public envelope now independently
+verifies against the trusted publisher and accepted payload. Both installed Macs still run the
+earlier healthy 0.2.39; final corrective coordinators await their normal destination approvals.
+
+Frozen Windows source `3422822` adds serial pinned Electron preparation before parallel tests.
+Native acceptance passes that step, 1,351 tests/six skips, static checks, official extraction,
+synthetic packaged UI/PTY/restart checks, integrity preservation and publisher verification.
+The installer is Authenticode unsigned. The live owner remains 0.2.36, awaiting a normal human
+restart before staging/handoff. Prior integrity and failed build evidence remains preserved.
+
+The signed physical iOS 0.2.39/2610.30.1 candidate verifies with existing paid identities, but both
+devices require unlocking. Both shared simulators are updated with saved selection preservation;
+normal phone authenticated cold reconnect is independently verified. Opt-in menu-touch automation
+still fails separately. Website production and current-only public package activation remain pending.
+See the release implementation/rollout records and private command-center checkpoint for exact pins.
+
 ## October 30 release — R14 browser follow-up and Mac rollout
 
 The operator authorizes R1–R14 implementation and installation on Build Mac and Work Mac,

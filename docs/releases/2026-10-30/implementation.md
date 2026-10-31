@@ -20,6 +20,13 @@ now prepares Electron serially before starting the full source suite, verifies t
 version/architecture and records that phase. It preserves dependency pins and uses each build's
 existing private source directory; no shared cache or live installation is repaired in place.
 
+Windows source `3422822711a0872b1b74ffff5125b4eddb3fd1c3` subsequently passes that serial
+bootstrap, all 1,351 native tests/six skips, static checks and the complete native package gates:
+official extraction, synthetic UI/PTY/restart acceptance, unchanged package after startup and
+publisher-envelope verification. The installer remains Authenticode unsigned. No live Windows
+restart, preparation or installation is inferred. The existing trusted publisher also signs the
+accepted Mac envelope; local signature verification and exact payload equality pass independently.
+
 The separate simulator identity passes 157 phone unit tests and the website-notification route UI
 fixture, with targeted iPad checks passing. The normal phone was reconnected to the real owner;
 its cold reconnect and saved selection verify. Previously reset cache is not described as restored.
