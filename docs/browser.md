@@ -50,8 +50,14 @@ does not create a second alert alongside its persisted history entry.
 
 Notifications has an explicit device-forwarding preference. Portable website events use the existing
 encrypted owner channel and account-bound shared outbox; old-server type rejections retain bounded
-retry receipts without starving ordinary notifications. Server/APNs schema and iOS sound/routing
-acceptance follow the verified HC update. No real Slack or background push success is claimed from
+retry receipts without starving ordinary notifications. The shared service now validates the website
+event type and safe origin, keeps site sound intent and deduplicates replayed events. Suppressed
+events remain history without push; stale website push jobs expire after five minutes. Native
+iPhone/iPad routes retain the original event ID across APNs and encrypted-host delivery, display
+site text/origin in history, and activate the original tab through the paired owner's authenticated
+operation. Offline or missing targets lead back to Notifications with a useful explanation.
+Targeted API and simulator tests pass; deployment and physical iPhone delivery remain pending.
+No real Slack or background push success is claimed from
 the page fixture. Worker-generated/background Web Push capture remains unverified. A loaded source
 page is required; mark a communication tab Persisted to retain it during inactivity.
 

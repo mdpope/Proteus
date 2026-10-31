@@ -93,7 +93,7 @@ class AppApiController extends Controller
             'team-lists' => ['name' => 'required|string|max:100', 'instructions' => 'sometimes|nullable|string|max:4000', 'timezone' => ['sometimes', Rule::in(timezone_identifiers_list())], 'members' => 'present|array|max:200', 'members.*' => 'array:id,name,mode', 'members.*.id' => 'required|string|max:100|distinct', 'members.*.name' => 'required|string|max:100', 'members.*.mode' => 'required|in:fixed,random', 'links' => 'sometimes|array|max:50', 'links.*' => 'array:id,title,url', 'links.*.id' => 'required|string|max:100|distinct', 'links.*.title' => 'required|string|max:100', 'links.*.url' => 'required|string|max:2048'],
             'links' => ['title' => 'required|string|max:100', 'url' => 'required|string|max:2048'],
             'history' => ['visitedAt' => ['sometimes', 'string', 'max:40', 'date', 'regex:/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/'], 'deviceId' => 'sometimes|nullable|uuid', 'deviceName' => ['sometimes', 'nullable', 'string', 'max:100', 'regex:/\A[^\x00-\x1f\x7f]*\z/u'], 'eventId' => 'sometimes|nullable|uuid', 'url' => 'required|string|max:2048', 'title' => 'sometimes|string|max:160', 'source' => 'required|in:desktop,mobile,web', 'hostId' => 'sometimes|nullable|uuid'],
-            'notifications' => ['eventId' => 'required|uuid', 'type' => 'required|in:chat.completed,approval.required,review.required,schedule.completed,device.added,device.reconnected', 'hostId' => 'sometimes|nullable|uuid', 'chatId' => 'sometimes|nullable|string|max:100|regex:/^[a-zA-Z0-9_-]+$/', 'scheduleId' => 'sometimes|nullable|string|max:100|regex:/^[a-zA-Z0-9_-]+$/', 'downtimeSeconds' => 'sometimes|nullable|integer|between:0,31536000', 'title' => ['sometimes', 'nullable', 'string', 'max:160', 'regex:/\A[^\x00-\x1f\x7f]*\z/u'], 'body' => ['sometimes', 'nullable', 'string', 'max:500', 'regex:/\A[^\x00-\x1f\x7f]*\z/u'], 'hostName' => ['sometimes', 'nullable', 'string', 'max:80', 'regex:/\A[^\x00-\x1f\x7f]*\z/u']],
+            'notifications' => ['eventId' => 'required|uuid', 'type' => 'required|in:chat.completed,approval.required,review.required,schedule.completed,device.added,device.reconnected,website.notification', 'origin' => 'required_if:type,website.notification|prohibited_unless:type,website.notification|string|max:2048', 'sound' => 'sometimes|boolean', 'silent' => 'sometimes|boolean', 'hostId' => 'sometimes|nullable|uuid', 'chatId' => 'sometimes|nullable|string|max:100|regex:/^[a-zA-Z0-9_-]+$/', 'scheduleId' => 'sometimes|nullable|string|max:100|regex:/^[a-zA-Z0-9_-]+$/', 'downtimeSeconds' => 'sometimes|nullable|integer|between:0,31536000', 'title' => ['sometimes', 'nullable', 'string', 'max:160', 'regex:/\A[^\x00-\x1f\x7f]*\z/u'], 'body' => ['sometimes', 'nullable', 'string', 'max:500', 'regex:/\A[^\x00-\x1f\x7f]*\z/u'], 'hostName' => ['sometimes', 'nullable', 'string', 'max:80', 'regex:/\A[^\x00-\x1f\x7f]*\z/u']],
             'logs' => ['eventId' => 'required|uuid', 'code' => 'required|in:connected,disconnected,reconnected,command_failed,push_failed,permission_denied,run_started,run_completed,run_failed,device_added,device_revoked,chat.queued,chat.running,chat.awaiting_input,chat.completed,chat.failed,chat.cancelled,chat.interrupted,transport.online,transport.offline,transport.device_added,browser.open,browser.unload,app.started,app.stopping,api.failed', 'level' => 'required|in:info,warning,error', 'source' => 'sometimes|in:desktop,mobile,web,server', 'hostId' => 'sometimes|nullable|uuid'],
             default => abort(404),
         };
@@ -101,6 +101,10 @@ class AppApiController extends Controller
             $rules['expectedRevision'] = 'required|integer|min:1';
         }
         $value = $request->validate($rules);
+        if ($kind === 'notifications' && $value['type'] === 'website.notification') {
+            $parts = parse_url($value['origin']);
+            abort_unless($parts && ! preg_match('/[\x00-\x20\x7f]/', $value['origin']) && filter_var($value['origin'], FILTER_VALIDATE_URL) && in_array($parts['scheme'] ?? '', ['https', 'http']) && isset($parts['host']) && ! isset($parts['user']) && ! isset($parts['pass']) && ! isset($parts['query']) && ! isset($parts['fragment']) && empty($parts['path']), 422, 'Use a website origin without a path or credentials.');
+        }
         if ($kind === 'browser-profiles') {
             foreach (array_merge($value['settings']['exceptions'] ?? [], array_column($value['settings']['notifications'] ?? [], 'origin')) as $origin) {
                 $parts = parse_url($origin);
@@ -119,7 +123,7 @@ class AppApiController extends Controller
             $value['read'] = false;
             // The desktop's chat title wins; the generic label covers older desktops.
             $value['title'] = filled($value['title'] ?? null) ? $value['title'] : match ($value['type']) {
-                'chat.completed' => 'Chat completed', 'approval.required' => 'Approval required', 'review.required' => 'Review required', 'schedule.completed' => 'Schedule completed', 'device.added' => 'Device added', 'device.reconnected' => 'Computer reconnected',
+                'chat.completed' => 'Chat completed', 'approval.required' => 'Approval required', 'review.required' => 'Review required', 'schedule.completed' => 'Schedule completed', 'device.added' => 'Device added', 'device.reconnected' => 'Computer reconnected', 'website.notification' => 'Website notification',
             };
         }
         if ($kind === 'logs') {
@@ -136,7 +140,7 @@ class AppApiController extends Controller
                 }
             }
             $result = $this->records->save($request->user(), $kind, $value, $id, $revision);
-            if ($kind === 'notifications' && ($value['type'] !== 'schedule.completed' || $this->records->preferences($request->user())['scheduleCompletionNotifications'])) {
+            if ($kind === 'notifications' && ! ($value['silent'] ?? false) && ($value['type'] !== 'schedule.completed' || $this->records->preferences($request->user())['scheduleCompletionNotifications'])) {
                 $this->push->enqueue($request->user(), $result);
             }
 

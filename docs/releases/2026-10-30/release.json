@@ -9,8 +9,8 @@
   "implementation": "docs/releases/2026-10-30/implementation.md",
   "rollout": "docs/releases/2026-10-30/rollout.md",
   "closeout": "docs/releases/2026-10-30/closeout.md",
-  "sourceCommit": "0a2b6a425c47bd3a704ffb390a1fdcc6bf6fb864",
-  "sourceStatus": "Mac package accepted; rollout pending; original intranet network failure remains unresolved",
+  "sourceCommit": "df8f070265eb0631f0bb89159432846964bd85ef",
+  "sourceStatus": "Corrective Mac package accepted; Windows package accepted and handed off; web/mobile source validated with native test-isolation revalidation and deployment pending",
   "review": "https://github.com/mdpope/Proteus/pull/24",
   "relatedBranches": [
     "codex/oct30-update-command-center",
@@ -40,10 +40,10 @@
     "after HC verified: iOS, web, Linux, Windows"
   ],
   "macCandidate": {
-    "buildRevision": "0a2b6a425c47+src.9af8d6057aac",
-    "sourceFingerprint": "9af8d6057aac173e996a7c1fa3a485b58bed19dfad0d93b3cdb738458c071df8",
-    "packageHash": "3b100dac4cc38da2d2380560dee3b0bf866ba97e3623275dee0bb0c2111a16bb",
-    "archiveSHA256": "cdd7b0235ec15a34f86a2f504e7a2e1ac4b45319096cd7bf9d00470a61975866",
-    "archiveBytes": 231158507
+    "buildRevision": "df8f070265eb+src.b6f9e913457e",
+    "sourceFingerprint": "b6f9e913457e525ba5fd89cb74e1878e3012bfeef52d15643bf7715d2c67ea5a",
+    "packageHash": "352bf0ed4537437c4f73f9573edbce6e788e321fa03976f4521ad42eb5b965f9",
+    "archiveSHA256": "bde4060ebcc4a8613542d46ad5cfd30058ce8364964c85f611ed40c46667637d",
+    "archiveBytes": 231159117
   }
 }

@@ -1,5 +1,32 @@
 # October thirtieth release implementation
 
+## Corrective cross-platform follow-up
+
+Frozen desktop source `df8f070265eb0631f0bb89159432846964bd85ef` adds certificate-information
+disclosure and restores original notice colors. Its accepted Mac package passes the two targeted
+exact-package TLS/notice fixtures; earlier five-fixture acceptance belongs to the baseline build.
+The designated Windows builder completed this exact source after a verified Node-only repair and
+handed off its accepted candidate. Installed Windows health remains pending. Linux, Ian and the
+new Mac corrective coordinators await their normal destination approvals.
+
+The shared website service and iOS source now carry website notification events with safe origins,
+original sound intent, stable event deduplication and authenticated source-desktop activation.
+Suppressed events remain history without push, and stale website alerts expire after five minutes.
+The targeted website API suite passes 16 tests/207 assertions; two iPhone unit checks and an offline
+notification-route UI fixture pass. These are synthetic checks, not live Slack/APNs/phone delivery.
+
+The native test launcher initially reused the normal iPhone simulator identity, resetting its saved
+destinations. No physical device was changed. A separate test identity and pre-install identity guard
+are implemented; native revalidation and simulator reconnection are pending the unlocked Mac.
+This limitation is not an accepted preservation result.
+
+Full Node validation passes 1,352 tests with four skips using a short canonical temporary path;
+static checks pass. The initial default-temp run's five path-alias/socket-length failures remain in
+private evidence; all affected tests pass with the canonical temporary path. Full publication pins
+can now be verified against all packaged runtime/build inputs before signing an older Mac envelope.
+
+## Earlier R14 acceptance checkpoint
+
 Version: **0.2.39**. State: R14 Mac package accepted; destination rollout pending.
 R1–R14 are authorized, with Mac rollout first and other platforms after HC is verified.
 The active branch is codex/oct30-update-command-center. The earlier R11-only source pin is

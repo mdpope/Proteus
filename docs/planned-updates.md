@@ -1,3 +1,20 @@
+## October 30 — web/mobile notification delivery follow-up
+
+The operator authorizes all intended desktops, Ian's laptop, website and iPhone/iPad. Website
+events now pass shared-service validation with safe origins, sound intent, event deduplication
+and no private owner activation metadata. Native routes retain event identity and open the source
+desktop tab through its authenticated owner; suppressed/stale events do not produce new alerts.
+Targeted web and simulator tests pass; live server/APNs/physical-device acceptance remains pending.
+The simulator launcher now selects a separate test application identity before fixture installation;
+its new installation guard still needs native revalidation. The earlier normal-identity fixture
+reset the iPhone simulator's saved destinations; recovery/reconnection remains outstanding. No
+physical app/data was changed. Apple work awaits an unlocked command-center Mac.
+
+Windows completed an accepted build of frozen `df8f070` after the reviewed Node-only repair and
+handed off to its idle barrier. Actual installed identity is pending. Both Macs run the earlier
+accepted 0.2.39; their certificate/color correction coordinators and Linux/Ian tasks await normal
+destination approvals. Exact receipts stay outside Git; the release remains open.
+
 ## October 30 browser/custom-port follow-up
 
 The Windows first builder found a removed provider-runtime path. A reviewed source CLI now

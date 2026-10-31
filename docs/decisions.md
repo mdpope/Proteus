@@ -1,3 +1,16 @@
+## October 30 — website notification identity across mobile delivery
+
+Carry the desktop's stable notification event ID through the account server and APNs route, so
+the encrypted host stream and push collapse into one alert. Keep origin/text/sound portable;
+window/profile/tab activation references stay on their owning desktop. Mobile activation invokes
+that paired owner's existing notification operation, never an arbitrary URL. Global alert suppression
+differs from the website's no-sound choice: the former suppresses alert delivery while the latter
+preserves a visible notification without audio. Website alerts expire after five minutes.
+
+Native test fixtures must install under a separate app identity. Build-for-testing verifies that
+identity before installing; normal app/device updates retain their existing identifiers. The test
+isolation correction follows an observed iPhone simulator fixture reset; physical data is unaffected.
+
 ## October 30 — stale Windows builder runtime reference
 
 A provider update can remove the hash directory captured by the designated builder. Repair this

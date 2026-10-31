@@ -1,5 +1,10 @@
 ## 0.2.39 — October thirtieth release open
 
+- Accept website notification events on the shared service, preserve site sound choices and
+  suppress duplicate, muted or stale mobile alerts. iPhone/iPad notification taps retain the
+  original event ID and can open its source tab on the paired desktop.
+- Bind full publication source commits by verifying every packaged runtime/build input.
+  Keep simulator test installs under a separate application identity.
 - Show observed certificate information directly on bad-certificate pages, independently of
   one-click acceptance. Restore the original notification colors; error pages follow the app theme.
 - Add a digest-guarded Windows builder refresh for a removed provider Node runtime, preserving

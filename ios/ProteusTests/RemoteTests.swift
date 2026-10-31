@@ -2607,6 +2607,25 @@ extension RemoteTests {
         XCTAssertEqual(NativeNotifications.notificationBody(.object(["title": .string("Task complete"), "body": .string("Synthetic result")])), "Task complete — Synthetic result")
         XCTAssertEqual(NativeNotifications.notificationBody(.object(["type": .string("chat.completed")])), "A chat finished.")
     }
+    @MainActor func testWebsiteNotificationRetainsOwnerEventRouteAndHonorsAlertPreferences() {
+        let host = "10000000-0000-4000-8000-000000000001", event = "20000000-0000-4000-8000-000000000002"
+        let route = NativeNotifications.NotificationRoute.from(["hostId": host, "type": "website.notification", "notificationId": event, "tabId": "private-owner-tab"])
+        XCTAssertEqual(route.hostID, host)
+        XCTAssertEqual(route.notificationID, event)
+        XCTAssertEqual(route.chatID, "")
+        XCTAssertEqual(NativeNotifications.NotificationRoute.from(["notificationId": "invalid\nroute"]).notificationID, "")
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        var item: [String: JSON] = ["type": .string("website.notification"), "createdAt": .string(ISO8601DateFormatter().string(from: now)), "sound": .bool(false)]
+        XCTAssertTrue(NativeNotifications.shouldAlert(.object(item), now: now))
+        XCTAssertFalse(NativeNotifications.shouldPlaySound(.object(item)))
+        XCTAssertFalse(NativeNotifications.shouldAlert(.object(item), now: now.addingTimeInterval(301)))
+        item["silent"] = .bool(true)
+        XCTAssertFalse(NativeNotifications.shouldAlert(.object(item), now: now))
+        item["silent"] = .bool(false); item["readAt"] = .string("read")
+        XCTAssertFalse(NativeNotifications.shouldAlert(.object(item), now: now))
+        XCTAssertFalse(NativeNotifications.shouldAlert(.object(["type": .string("website.notification")]), now: now))
+        XCTAssertTrue(NativeNotifications.shouldPlaySound(.object([:])))
+    }
     func testLargeNativeTextUsesExactLineAndUTF8Budgets() {
         XCTAssertFalse(nativeTextAttachmentRequired(Array(repeating: "x", count: 200).joined(separator: "\r\n")))
         XCTAssertTrue(nativeTextAttachmentRequired(Array(repeating: "x", count: 201).joined(separator: "\r\n")))

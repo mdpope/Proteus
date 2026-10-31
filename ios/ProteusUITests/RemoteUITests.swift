@@ -1299,6 +1299,19 @@ final class RemoteUITests: XCTestCase {
         XCTAssertTrue(changelog.waitForExistence(timeout: 8))
         XCTAssertTrue(changelog.label.contains("Earlier prototype milestones"), "Home must show release history from the bundled canonical changelog")
     }
+    @MainActor func testWebsiteNotificationTapKeepsSourceHostAndShowsOfflineRecovery() {
+        let app = nativeFixtureApplication()
+        app.launchArguments = ["--reset-pairing", "--synthetic-destinations", "--synthetic-notification-fixtures", "--synthetic-notification-controls"]
+        app.launch()
+        openNotificationFixtureHome(app)
+        for _ in 0..<5 where !app.buttons["Tap website notification"].exists { app.swipeUp() }
+        XCTAssertTrue(app.buttons["Tap website notification"].waitForExistence(timeout: 12))
+        app.buttons["Tap website notification"].tap()
+        XCTAssertTrue(app.alerts["Proteus"].waitForExistence(timeout: 12))
+        XCTAssertTrue(app.alerts.staticTexts["Reconnect Alpha Mac to open the website notification on that computer."].exists)
+        app.alerts.buttons["OK"].tap()
+        XCTAssertTrue(app.staticTexts["Notifications"].waitForExistence(timeout: 10))
+    }
     @MainActor func testNotificationTapRoutesForegroundColdStartBackgroundAndUnavailableTargets() {
         let app = nativeFixtureApplication()
         app.launchArguments = ["--reset-pairing", "--synthetic-destinations", "--synthetic-notification-fixtures", "--synthetic-notification-controls"]

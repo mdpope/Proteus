@@ -29,9 +29,12 @@ class PushDelivery
         }
     }
 
-    /** Returns accepted, expired, unavailable, or failed; provider acceptance is not device delivery. */
+    /** Returns accepted, obsolete, expired, unavailable, or failed; provider acceptance is not device delivery. */
     public function deliver(array $subscription, array $notification = []): string
     {
+        if (($notification['silent'] ?? false) || (($notification['type'] ?? '') === 'website.notification' && time() - (strtotime($notification['createdAt'] ?? '') ?: 0) > 300)) {
+            return 'obsolete';
+        }
         $platform = $subscription['platform'];
         if (! ($this->status()[$platform] ?? false)) {
             return 'unavailable';
@@ -64,7 +67,11 @@ class PushDelivery
                 if ($computer !== '') {
                     $alert['subtitle'] = $computer;
                 }
-                $payload = ['aps' => ['alert' => $alert, 'sound' => 'default', 'thread-id' => $route['chatId'] ?? 'proteus']];
+                $aps = ['alert' => $alert, 'thread-id' => $route['chatId'] ?? 'proteus'];
+                if (($notification['sound'] ?? true) !== false) {
+                    $aps['sound'] = 'default';
+                }
+                $payload = ['aps' => $aps];
                 if (is_string($eventId)) {
                     $route['notificationId'] = $eventId;
                 }

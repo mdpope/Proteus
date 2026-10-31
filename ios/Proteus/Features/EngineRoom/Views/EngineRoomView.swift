@@ -99,7 +99,27 @@ struct EngineRoomView: View {
         }
     }
     private func historyRows(_ items: [JSON], sharedHistory: Bool) -> some View {
-        ForEach(items, id: \.self) { item in VStack(alignment: .leading, spacing: 4) { Text(NativeNotifications.safeBody(item["type"].string)); if let date = ProviderAllowance.date(item["createdAt"].string) { Text(nativeTimestamp(date, timezone: shared.snapshot["preferences"]["timezone"].string)).font(.caption).foregroundStyle(.secondary) }; if item["readAt"] == .null && !item["read"].bool { Button("Mark read") { let remote = destinations.selected; Task { if sharedHistory { _ = await shared.mutate(life, path: "/notifications/" + item["id"].string, method: "PATCH", body: .object(["read": .bool(true)])) } else { _ = try? await remote?.request("notifications.read", ["id": item["id"]]); await load() } } }.font(.caption) } } }
+        ForEach(items, id: \.self) { item in
+            VStack(alignment: .leading, spacing: 4) {
+                Text(NativeNotifications.notificationBody(item))
+                if item["type"].string == "website.notification", !item["origin"].string.isEmpty { Text(item["origin"].string).font(.caption).foregroundStyle(.secondary) }
+                if let date = ProviderAllowance.date(item["createdAt"].string) { Text(nativeTimestamp(date, timezone: shared.snapshot["preferences"]["timezone"].string)).font(.caption).foregroundStyle(.secondary) }
+                if item["type"].string == "website.notification" {
+                    Button("Open on computer") {
+                        notifications.receivedTap(["hostId": sharedHistory ? item["hostId"].string : destinations.selectedID ?? "", "type": "website.notification", "notificationId": sharedHistory ? item["eventId"].string : item["id"].string])
+                    }.font(.caption)
+                }
+                if item["readAt"] == .null && !item["read"].bool {
+                    Button("Mark read") {
+                        let remote = destinations.selected
+                        Task {
+                            if sharedHistory { _ = await shared.mutate(life, path: "/notifications/" + item["id"].string, method: "PATCH", body: .object(["read": .bool(true)])) }
+                            else { _ = try? await remote?.request("notifications.read", ["id": item["id"]]); await load() }
+                        }
+                    }.font(.caption)
+                }
+            }
+        }
     }
     private var logs: some View {
         NativeList {

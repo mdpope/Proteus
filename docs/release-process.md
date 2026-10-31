@@ -78,6 +78,11 @@ Each target retains one current package generation. Windows' installer and updat
 different required delivery formats, not extra historical generations. Keep no old versions,
 duplicate upload archives, source checkouts or build intermediates on the public server.
 
+The signed envelope carries the complete source commit used by exact-version resolution. For
+older Mac provenance with only a short Git revision, `sign-desktop-release.mjs --source-commit`
+accepts the full pin only after checking every recorded runtime/build input against that immutable
+Git tree. A matching prefix alone is insufficient; dirty or changed source fails publication.
+
 ```sh
 node scripts/stage-desktop-distribution.mjs /absolute/new-public-staging \
   /absolute/mac-signed-release /absolute/linux-signed-release /absolute/windows-signed-release

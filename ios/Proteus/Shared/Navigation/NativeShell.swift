@@ -1009,6 +1009,15 @@ struct NativeShell: View {
         do { try destinations.select(route.hostID) }
         catch { notificationFallback("This computer’s saved connection is unavailable. Check Manage computers."); return }
         guard let remote = destinations.remote(for: route.hostID) else { notificationFallback(); return }
+        if route.type == "website.notification" {
+            guard !route.notificationID.isEmpty else { notificationFallback("This website notification has no activation reference."); return }
+            guard remote.connected else { notificationFallback("Reconnect \(destinations.selectedLabel) to open the website notification on that computer."); return }
+            do {
+                _ = try await remote.request("notifications.open", ["id": .string(route.notificationID)])
+                notificationFallback()
+            } catch { notificationFallback("The website notification could not be opened on \(destinations.selectedLabel). It may no longer be available.") }
+            return
+        }
         if route.type == "schedule.completed", !route.scheduleID.isEmpty {
             if !remote.state["schedules"].array.contains(where: { $0["id"].string == route.scheduleID }), remote.connected { await remote.refresh() }
             guard remote.state["schedules"].array.contains(where: { $0["id"].string == route.scheduleID }) else {
@@ -1242,6 +1251,7 @@ struct NativeHome: View {
                             NativeNotificationProbe()
                             Button("Show in-app notification fixture") { NativeNotifications.shared.presentBanner("A chat finished.", destination: .init(hostID: "10000000-0000-4000-8000-000000000001", chatID: "notification-chat", scheduleID: "", type: "chat.completed")) }
                             Button("Tap chat notification") { NativeNotifications.shared.receivedTap(["hostId": "10000000-0000-4000-8000-000000000001", "chatId": "notification-chat", "type": "chat.completed"]) }
+                            Button("Tap website notification") { NativeNotifications.shared.receivedTap(["hostId": "10000000-0000-4000-8000-000000000001", "type": "website.notification", "notificationId": "20000000-0000-4000-8000-000000000002"]) }
                             Button("Tap schedule notification") { NativeNotifications.shared.receivedTap(["hostId": "10000000-0000-4000-8000-000000000001", "scheduleId": "notification-schedule", "type": "schedule.completed"]) }
                             Button("Tap unavailable notification") { NativeNotifications.shared.receivedTap(["hostId": "10000000-0000-4000-8000-000000000001", "chatId": "missing-chat", "type": "chat.completed"]) }
                             Button("Schedule iOS notification fixture") { Task { do { try await NativeNotifications.shared.scheduleFixtureTap() } catch { NativeNotifications.shared.fixtureStatus = error.localizedDescription; destinations.error = error.localizedDescription } } }
