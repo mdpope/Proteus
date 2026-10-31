@@ -1,9 +1,16 @@
 ## October 31 Fusion/layout deployment — in progress
 
+HC readiness is complete: installed baseline remains `0a2b6a425c47+src.9af8d6057aac`,
+the superseded preparation is cancelled, two recovery generations verify and approximately
+518 GiB is available. Exact-source catalog resolution returns `build-required`. No build,
+preparation or installation occurred there; Mac unlock/signing and delivery checks remain.
+
 The designated Windows owner now reports a completed exact-source build,
 `windows.1075380c0a1b`, with source/static, extracted-package, integrity and trusted publisher
 verification passing. Exact receipt details and independent artifact transfer remain pending a
-destination command approval. This build is **not published, staged or installed**. The unchanged
+destination command approval. The coordinator reports that shell access to the preserved original
+source-test log was denied, so individual native counts and case coverage are not independently
+confirmed. Private transfer has not occurred. This build is **not published, staged or installed**. The unchanged
 installer recipe can reuse its prior qualification under `windows-distribution.md`; any actual
 replacement still requires separate installed-byte, preservation and health verification.
 
