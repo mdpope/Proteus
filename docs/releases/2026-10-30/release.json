@@ -10,7 +10,7 @@
   "rollout": "docs/releases/2026-10-30/rollout.md",
   "closeout": "docs/releases/2026-10-30/closeout.md",
   "sourceCommit": "5bcbd8971cf629b37124919f3f3b9c4d6fca5574",
-  "sourceStatus": "Final Mac and Windows packages, publisher signatures and exact source companions accepted. Both simulators updated; corrective desktop candidates handed off to normal idle barriers; physical recoveries in progress and public activation pending.",
+  "sourceStatus": "Final Mac and Windows packages, publisher signatures and exact source companions accepted. Windows installed and health verified; both simulators updated; corrective Mac handoffs, physical acceptance and public activation remain pending.",
   "review": "https://github.com/mdpope/Proteus/pull/24",
   "relatedBranches": [
     "codex/oct30-update-command-center",
@@ -89,8 +89,17 @@
     "verifiedRuntimeFiles": 432,
     "verifiedBuildInputs": 10,
     "accepted": true,
-    "installed": false,
-    "published": false
+    "installed": true,
+    "published": false,
+    "installedAcceptance": {
+      "ownerHealthVerified": true,
+      "independentPackageAndRegistrationVerified": true,
+      "retainedRecoveryGenerations": 2,
+      "preservedRuns": 7,
+      "preservedEvents": 5020,
+      "certificateDetailsAndSessionAcceptFixture": "passed in installed application",
+      "qualification": "Selected settings and browser metadata match; full independent draft and credential-context audit remains outstanding. Installer Authenticode unsigned."
+    }
   },
   "iosCandidate": {
     "sourceCommit": "5bcbd8971cf629b37124919f3f3b9c4d6fca5574",
@@ -100,6 +109,10 @@
     "signedCandidateVerified": true,
     "physicalInstallationPending": true,
     "physicalBaselineVersion": "0.2.36",
-    "physicalBaselineBuild": "2610.29.1"
+    "physicalBaselineBuild": "2610.29.1",
+    "physicalTargets": {
+      "iphone": {"stage": "recovery verified; awaiting unlock before installation", "installedVersion": "0.2.36"},
+      "ipad": {"stage": "installed; full cold preservation, destinations and launch verified", "installedVersion": "0.2.39", "build": "2610.30.1", "firstLaunchUncontrolled": true, "protectedFilesVerifiedAfterUncontrolledLaunch": 288, "savedDestinationsPreserved": 4, "retainedRecoveryGenerations": 2, "physicalReconnectOrPushVerified": false}
+    }
   }
 }

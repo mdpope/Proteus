@@ -9,10 +9,11 @@ Target labels are non-secret roles; exact IDs, paths and detailed receipts stay 
 | Build Mac command center | macOS arm64 | Baseline installed; corrective candidate handed off | Baseline 0.2.39 health and 63 runs/43,665 events verified; two recoveries; exact final `5bcbd89` package passes signing and owner startup, awaiting normal idle and post-restart verification; Proxmox still unreachable |
 | Work Mac | macOS arm64 | Baseline installed; corrective candidate handed off | Baseline 0.2.39 health and 577 runs/45,004 events verified; two recoveries; exact final `5bcbd89` package/source verified and awaiting normal idle; live lifecycle/shared-close/site delivery remain separate |
 | Linux laptop | Linux | Awaiting destination approval | Corrected frozen desktop source supplied; exact catalog/build readiness still pending |
-| Designated Windows builder | Windows x64 | Final package accepted and handed off; installed 0.2.36 | Frozen source `3422822` passes serial Electron binary check, 1,351 native tests/six skips, static and exact-package gates; normal human reopening verified selected settings and both recoveries; candidate passes owner preflight and awaits idle; installer Authenticode unsigned |
+| Designated Windows builder | Windows x64 | Installed and health verified | Exact `windows.06ac0b603ae1` package and registration independently verify; same-chat continuation; seven runs/5,020 events preserved, selected settings/browser metadata match, two recoveries; installed certificate-details and separate session-accept fixture pass; full independent draft/credential audit remains qualified; installer Authenticode unsigned |
 | Ian's laptop | Windows | Coordinator-default setup awaiting approval | Operator selected Codex, GPT-6.1 Terra, High, normal speed; create actual update coordinator after defaults persist; consume designated builder's package |
 | Website | Web | Exact validated archive privately staged; deployment pending | Full isolated suite passes 105 tests/920 assertions; 9,221 archived file hashes verify; Webmin inspection times out; live server still needs verified one-server/current-only rotation |
-| iPhone and iPad | iOS | Unlocked readiness passed; cold recoveries capturing | Actual baseline is 0.2.36 / 2610.29.1; current recovery registries and exact baseline app verified; same paid profile/certificate and unchanged keychain entitlements; install and pre-launch preservation checks pending; simulator acceptance remains separate |
+| iPhone | iOS | Cold recovery verified; relocked before installation | Baseline remains 0.2.36 / 2610.29.1; 301 protected files recovered; no install command issued after lock guard; waiting for operator unlock |
+| iPad | iOS | Installed, preservation and launch verified | Exact 0.2.39 / 2610.30.1; a fresh full cold readback verifies all 288 protected files after an observed uncontrolled first launch, with that timing explicitly retained; all four saved destinations/selection unchanged; two verified recoveries; physical gesture/reconnect/push remains unverified |
 
 The two Macs above run the baseline accepted 0.2.39. Fresh corrective coordinators for certificate
 information and original notification colors have verified and handed off the new candidate from
@@ -30,6 +31,11 @@ That transfer and independent command-center downloads are now verified, includi
 native source companion containing all 432 runtime and 10 build inputs. Both public download
 catalog/page payloads are prepared with one current generation, but are not activated. Hosting
 transport/retention, Linux/Ian destination approvals and final live acceptance remain outstanding.
+
+iPad rotation retired only its oldest registered app/data payload after the new recovery and live
+acceptance verified: 101,385,076 logical bytes removed and 77,086,720 bytes of observed available-space
+increase. The phone keeps its two prior generations plus one verified in-flight capture while
+installation waits for unlock; no capture or installation is repeated merely to resume it.
 
 Record actual build/signature, required migrations, test outcomes, preservation and health for
 each dispatched target. Stages are building, published, dispatched, staged, installed, live verified,
