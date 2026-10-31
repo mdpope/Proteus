@@ -34,7 +34,12 @@ and 10 build inputs. Source export now includes native build source and, with ex
 provenance, includes only the recorded generated inputs with exact hashes. Three focused tests
 cover inclusion, rejection of changed output and rejection of secrets. The full local suite passes
 1,356 tests/four skips and static checks pass. Native export remains separately required; the
-accepted Windows binary is unchanged.
+accepted Windows binary is unchanged. Native export then passes on Windows and is independently
+verified by the command center: all 1,463 source files, 432 runtime inputs and 10 build inputs
+match. The generated guardian is bound to its accepted binary hash; the other inputs match the
+frozen Git source exactly or with their declared native line endings. The companion is privately
+available with the original three unchanged artifacts; public activation and live installation
+remain pending.
 
 The separate simulator identity passes 157 phone unit tests and the website-notification route UI
 fixture, with targeted iPad checks passing. The normal phone was reconnected to the real owner;

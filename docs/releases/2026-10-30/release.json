@@ -9,8 +9,8 @@
   "implementation": "docs/releases/2026-10-30/implementation.md",
   "rollout": "docs/releases/2026-10-30/rollout.md",
   "closeout": "docs/releases/2026-10-30/closeout.md",
-  "sourceCommit": "df8f070265eb0631f0bb89159432846964bd85ef",
-  "sourceStatus": "Corrective Mac package accepted; Windows package accepted and handed off; web/mobile source validated with native test-isolation revalidation and deployment pending",
+  "sourceCommit": "5bcbd8971cf629b37124919f3f3b9c4d6fca5574",
+  "sourceStatus": "Final Mac and Windows packages, publisher signatures and exact source companions accepted. Both simulators updated; corrective desktop candidates handed off to normal idle barriers; physical recoveries in progress and public activation pending.",
   "review": "https://github.com/mdpope/Proteus/pull/24",
   "relatedBranches": [
     "codex/oct30-update-command-center",
@@ -40,11 +40,17 @@
     "after HC verified: iOS, web, Linux, Windows"
   ],
   "macCandidate": {
-    "buildRevision": "df8f070265eb+src.b6f9e913457e",
-    "sourceFingerprint": "b6f9e913457e525ba5fd89cb74e1878e3012bfeef52d15643bf7715d2c67ea5a",
-    "packageHash": "352bf0ed4537437c4f73f9573edbce6e788e321fa03976f4521ad42eb5b965f9",
-    "archiveSHA256": "bde4060ebcc4a8613542d46ad5cfd30058ce8364964c85f611ed40c46667637d",
-    "archiveBytes": 231159117
+    "buildRevision": "5bcbd8971cf6+src.abc618a4bf50",
+    "sourceFingerprint": "abc618a4bf50a8a5a38aec8f8d3563766a7d81f036b3a10d2a62e9a18de77271",
+    "packageHash": "1fe235274a93c6e46d93031e9103b2bd6e35ecda6ab27e9734cbfdbb834a98e2",
+    "archiveSHA256": "65ad7e407f1d5cc970315a50e9b5e7f86c5b4102e7daa350744c2230f7c37b54",
+    "archiveBytes": 231159709,
+    "sourceCommit": "5bcbd8971cf629b37124919f3f3b9c4d6fca5574",
+    "manifestSHA256": "43ec9ffdff81dddbdce1e8fabdde3b85eef11c49cd830412f55f7a4c615d1108",
+    "sourceArchiveSHA256": "9ed0a810cd6f86ce39033ca6874f15678d1dd8715227cf7040621fc3cc2c5525",
+    "accepted": true,
+    "installed": false,
+    "published": false
   },
   "webCandidate": {
     "sourceCommit": "9dcde2b1988eba95d6ea250b60508527fe696c51",
@@ -54,6 +60,46 @@
     "verifiedFiles": 9221,
     "testsPassed": 105,
     "assertions": 920,
-    "deployed": false
+    "deployed": false,
+    "stagedPrivately": true
+  },
+  "maintenanceSourceCommit": "5fc79be00d4e95ee4dc1cd0ce2d79230b12c98ae",
+  "platformSourceCommits": {
+    "darwin-arm64": "5bcbd8971cf629b37124919f3f3b9c4d6fca5574",
+    "win32-x64": "3422822711a0872b1b74ffff5125b4eddb3fd1c3",
+    "web": "9dcde2b1988eba95d6ea250b60508527fe696c51",
+    "ios": "5bcbd8971cf629b37124919f3f3b9c4d6fca5574"
+  },
+  "windowsCandidate": {
+    "sourceCommit": "3422822711a0872b1b74ffff5125b4eddb3fd1c3",
+    "buildRevision": "windows.06ac0b603ae1",
+    "sourceFingerprint": "06ac0b603ae168c8e5d4e8127306e79d6b0a43dcd104fb11d1ae613f01724c2f",
+    "packageHash": "2be3f97744498d81365b5c1265b06aaeb5debf3ad3e1b662abae03259bc27086",
+    "archiveSHA256": "59e932bf2f6cbf2f85f657bf39c06aef5cb636a7f5de2819b26c4ad2ad25591c",
+    "archiveBytes": 395825510,
+    "installerSHA256": "afa4b02740c11ab5307b856a734f4b2b9b01ffcdd86d54fe41b587e5a55183d6",
+    "installerBytes": 153634934,
+    "authenticode": "unsigned",
+    "manifestSHA256": "931f56f3d25cc9ea93d17983a83bea0a02bc68ca1b9fb17770082c0de960d0c1",
+    "nativeTestsPassed": 1351,
+    "nativeTestsSkipped": 6,
+    "sourceArchiveSHA256": "754ff40f4c15786ba1f418b1bc963e792196f15504418622c4b94f397bcad3b9",
+    "sourceArchiveBytes": 6318822,
+    "verifiedSourceFiles": 1463,
+    "verifiedRuntimeFiles": 432,
+    "verifiedBuildInputs": 10,
+    "accepted": true,
+    "installed": false,
+    "published": false
+  },
+  "iosCandidate": {
+    "sourceCommit": "5bcbd8971cf629b37124919f3f3b9c4d6fca5574",
+    "version": "0.2.39",
+    "build": "2610.30.1",
+    "artifactHash": "cb252738215f9f6d28894cafd28692f500ec7f5f44c8d6254a6bfdb49b285302",
+    "signedCandidateVerified": true,
+    "physicalInstallationPending": true,
+    "physicalBaselineVersion": "0.2.36",
+    "physicalBaselineBuild": "2610.29.1"
   }
 }

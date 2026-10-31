@@ -1,3 +1,13 @@
+## October 30 — exact native source companions
+
+Keep each accepted platform's immutable application source pin separate from later export-tool
+maintenance. A Windows checkout may have native CRLF bytes and a generated terminal guardian;
+a Mac Git archive is insufficient proof of exact correspondence. Include native build sources
+and, only with explicit accepted provenance, the recorded generated inputs. Verify every input
+before and after export, preserve its bytes and reject environment secrets and unsafe paths.
+The exporter can run from a separate maintenance checkout against the frozen native source;
+neither the application nor its recorded identity is rebuilt or rewritten to repair a companion.
+
 ## October 30 — process-specific Crashpad state at update launch
 
 The Windows helper inherited `CHROME_CRASHPAD_PIPE_NAME` and Chromium created `debug.log` beside

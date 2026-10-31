@@ -6,25 +6,30 @@ Target labels are non-secret roles; exact IDs, paths and detailed receipts stay 
 
 | Machine or target | Platform | Stage | Evidence and remaining work |
 | --- | --- | --- | --- |
-| Build Mac command center | macOS arm64 | Installed and core preservation verified | Exact 0.2.39 build/hash and owner health verified; 63 runs/43,665 events preserved; core settings/permissions/pairings byte-identical; two verified recoveries; Proxmox still unreachable |
-| Work Mac | macOS arm64 | Installed and core live checks verified | Exact 0.2.39 build/hash/Apple identity and owner health verified; 577 runs/45,004 events preserved; saved settings byte-identical; two verified recoveries; live lifecycle/shared-close/site delivery still unverified |
+| Build Mac command center | macOS arm64 | Baseline installed; corrective candidate handed off | Baseline 0.2.39 health and 63 runs/43,665 events verified; two recoveries; exact final `5bcbd89` package passes signing and owner startup, awaiting normal idle and post-restart verification; Proxmox still unreachable |
+| Work Mac | macOS arm64 | Baseline installed; corrective candidate handed off | Baseline 0.2.39 health and 577 runs/45,004 events verified; two recoveries; exact final `5bcbd89` package/source verified and awaiting normal idle; live lifecycle/shared-close/site delivery remain separate |
 | Linux laptop | Linux | Awaiting destination approval | Corrected frozen desktop source supplied; exact catalog/build readiness still pending |
-| Designated Windows builder | Windows x64 | Final package accepted; installed 0.2.36 | Frozen source `3422822` passes serial Electron binary check, 1,351 native tests/six skips, static checks, official extraction, packaged UI/PTY/restart fixtures, unchanged package and publisher signature; installer Authenticode unsigned; normal human restart still pending |
+| Designated Windows builder | Windows x64 | Final package accepted and handed off; installed 0.2.36 | Frozen source `3422822` passes serial Electron binary check, 1,351 native tests/six skips, static and exact-package gates; normal human reopening verified selected settings and both recoveries; candidate passes owner preflight and awaits idle; installer Authenticode unsigned |
 | Ian's laptop | Windows | Coordinator-default setup awaiting approval | Operator selected Codex, GPT-6.1 Terra, High, normal speed; create actual update coordinator after defaults persist; consume designated builder's package |
 | Website | Web | Exact validated archive privately staged; deployment pending | Full isolated suite passes 105 tests/920 assertions; 9,221 archived file hashes verify; Webmin inspection times out; live server still needs verified one-server/current-only rotation |
-| iPhone and iPad | iOS | Signed physical candidate ready; devices locked | Existing paid profile/certificate and unchanged keychain entitlements verify; 157 isolated phone unit tests and notification UI pass, targeted iPad checks pass; normal phone reconnects to the real owner; physical installation waits for unlocked devices |
+| iPhone and iPad | iOS | Unlocked readiness passed; cold recoveries capturing | Actual baseline is 0.2.36 / 2610.29.1; current recovery registries and exact baseline app verified; same paid profile/certificate and unchanged keychain entitlements; install and pre-launch preservation checks pending; simulator acceptance remains separate |
 
 The two Macs above run the baseline accepted 0.2.39. Fresh corrective coordinators for certificate
-information and original notification colors await their normal destination approvals; their new
-candidate from frozen Mac source `5bcbd89` is accepted locally and privately transferred, but
-is not yet installed. Build Mac also reports an older attention job requiring owner reconciliation.
+information and original notification colors have verified and handed off the new candidate from
+frozen Mac source `5bcbd89`; installation is not yet verified. Build Mac's historical attention
+record remains preserved and blocks maintenance. The ordinary preparation gate independently
+accepted the candidate after both current recoveries verified; no maintenance bypass or journal edit occurred.
 The website/browser transport and opt-in native menu-gesture checks remain qualified; they do not
 invalidate the independently observed normal-phone authenticated cold reconnect. The named release stays open.
 
 The final Mac publication envelope is signed by the existing trusted publisher and independently
 verifies against the exact accepted payload on the command center. Public activation remains pending.
-The accepted Windows artifacts are transferring through a private draft for consumer delivery;
+The accepted Windows artifacts are verified in a private draft for consumer delivery;
 private transfer, publication, installation and live acceptance are separate stages.
+That transfer and independent command-center downloads are now verified, including an exact
+native source companion containing all 432 runtime and 10 build inputs. Both public download
+catalog/page payloads are prepared with one current generation, but are not activated. Hosting
+transport/retention, Linux/Ian destination approvals and final live acceptance remain outstanding.
 
 Record actual build/signature, required migrations, test outcomes, preservation and health for
 each dispatched target. Stages are building, published, dispatched, staged, installed, live verified,
