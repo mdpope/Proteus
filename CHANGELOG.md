@@ -1,3 +1,7 @@
+## Windows startup troubleshooting
+
+- Document native inherited profile grants that can make taskbar startup fail while a sandboxed direct launch succeeds. Preserve strict private-storage validation.
+
 ## 0.2.38 — release work closed
 
 The operator closed this release cycle independently of device rollout. Source and accepted private artifacts are retained; see [closeout](docs/2026-10-30-release-closeout.md).
