@@ -69,7 +69,7 @@ test('blocked worker leaves owner responsive, bounds queued snapshots, and clone
     assert.equal(Atomics.load(gate, 0), 1);
     Atomics.store(gate, 0, 2); Atomics.notify(gate, 0);
     assert.equal(JSON.parse(await result).version, 'captured');
-  } finally { await client.close(); }
+  } finally { Atomics.store(gate, 0, 2); Atomics.notify(gate, 0); await client.close(); }
 });
 
 test('timeout and worker crash reject pending work, terminate, and permit a clean later worker', async () => {
