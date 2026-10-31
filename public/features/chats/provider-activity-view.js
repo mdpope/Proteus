@@ -1,5 +1,5 @@
 import {bindRuntimeTimer,toolDuration,formatDuration} from './runtime.js';
-const names={mtplx:'MTPLX',codex:'Codex',claude:'Claude',copilot:'Copilot'};
+const names={mtplx:'MTPLX','llama-cpp':'llama.cpp',codex:'Codex',claude:'Claude',copilot:'Copilot'};
 const fields={inputTokens:'Input tokens',uncachedInputTokens:'Uncached input tokens',outputTokens:'Output tokens',cachedInputTokens:'Cached input tokens',cacheWriteInputTokens:'Cache-write input tokens',reasoningTokens:'Reasoning tokens',totalTokens:'Total tokens'};
 export function providerActivityState(activity,run,verified=true){
  const live=activity.status==='running'&&['running','awaiting_input'].includes(run.status)&&verified;

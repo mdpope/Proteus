@@ -1,7 +1,7 @@
 import {computerName} from '../../services/remote/computer-identity.js';
 import {mountAttachmentPicker,prepareLocalAttachments,clearAttachments} from '../chats/chat-attachments.js';
 export const providerLabel=id=>({codex:'Codex',copilot:'Copilot',claude:'Claude'}[id]||id);
-export function internetProviders(data){return Object.keys(data.providerStatuses||{}).filter(id=>id!=='rehearsal'&&id!=='local-process'&&id!=='mtplx');}
+export function internetProviders(data){return Object.keys(data.providerStatuses||{}).filter(id=>id!=='rehearsal'&&id!=='local-process'&&id!=='mtplx'&&id!=='llama-cpp');}
 export function searchDefaultsFields(id,catalog,value={},escape=String){
   const models=catalog?.models||[],model=models.find(m=>m.id===value.model),controls=model?.controls||{};
   const select=(key,label,choices,current)=>`<label>${label}<select data-search-option="${key}" data-provider="${escape(id)}">${choices.map(([v,t])=>`<option value="${escape(v)}" ${v===(current||'')?'selected':''}>${escape(t)}</option>`).join('')}</select></label>`;

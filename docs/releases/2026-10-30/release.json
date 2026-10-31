@@ -14,7 +14,8 @@
   "review": "https://github.com/mdpope/Proteus/pull/24",
   "relatedBranches": [
     "codex/oct30-update-command-center",
-    "codex/oct30-certificate-followup"
+    "codex/oct30-certificate-followup",
+    "codex/windows-llama-provider"
   ],
   "scope": {
     "implementing": [
@@ -31,7 +32,8 @@
       "R11",
       "R12",
       "R13",
-      "R14"
+      "R14",
+      "R15"
     ],
     "held": []
   },

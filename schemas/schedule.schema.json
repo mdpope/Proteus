@@ -46,6 +46,7 @@
         "rehearsal",
         "claude",
         "mtplx",
+        "llama-cpp",
         "local-process"
       ]
     },

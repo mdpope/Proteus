@@ -406,3 +406,7 @@ implementation. No runtime settings, provider packages or application behavior c
 collection for R1–R10. R11 follows its explicit implementation authorization. Record the final
 scope, version, required platform
 coverage and appropriate validation before any separately authorized rollout.
+
+## R15 - Windows local inference provider (authorized October 31)
+
+Implement the operator-requested llama.cpp server using the existing Qwen model, distinct Proteus provider, approved local tools and remote authenticated API access. Keep version 0.2.39 within this open release. This authorizes this PC's follow-up build/install; no unrelated rollout is implied. Acceptance includes offline regressions, real fixture tools, desktop menu/model discovery, signed package acceptance and post-install provider verification. LAN firewall administration and external-client acceptance must be recorded separately.

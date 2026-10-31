@@ -1,3 +1,7 @@
+## October 31 - authorized llama.cpp provider
+
+The operator requests a dedicated Windows server using the existing Qwen3.8 27B quant, Proteus provider integration, remote application access and latest Proteus. This follow-up is authorized independently of prior held work. Implemented in an isolated checkout based on the installed 0.2.39 source; package/install and cross-device verification remain separate. See [setup](llama-cpp.md).
+
 ## October 30 — final native qualification
 
 The signed Mac candidate from `5bcbd89` passes official extraction/source verification and

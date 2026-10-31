@@ -1,3 +1,8 @@
+## 0.2.39 - llama.cpp provider follow-up
+
+- Add a Windows-capable llama.cpp provider with authenticated HTTPS, optional per-connection CA trust, live model controls and exact server token accounting.
+- Reuse local tool approvals, selected MCPs, cancellation, usage and delivered-history recovery; expose the provider in Providers and New Chat.
+
 ## 0.2.39 — October thirtieth release open
 
 - Prepare the pinned Electron binary serially before Windows source tests, avoiding competing

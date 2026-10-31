@@ -5,6 +5,7 @@ import { permissionDisplaySchedule } from './services/state/state-projection.js'
 import {subagentPage} from './services/chats/subagents.js';
 import {publicAssets} from './shared/public-assets.js';
 import {MtplxProvider} from './providers/mtplx.js';
+import {LlamaCppProvider} from './providers/llama-cpp.js';
 import {replyWithAttachments,answerQuestionWithAttachments,questionAttachmentMediaTypes} from './services/chats/question-attachments.js';
 import {readMarkdownFile} from './shared/file-metadata.js';
 import {ensurePrivateHome} from './shared/private-paths.cjs';
@@ -118,7 +119,8 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   // MTPLX is a local Apple-silicon model server. The Mac app registers it so it is
   // available when the server is running; status reports it unavailable otherwise.
   const mtplx=new SessionProvider(()=>new MtplxProvider({}, {context,browser}));
-  const adapters = { ...(providers || (desktopPreview ? { codex, mtplx } : { copilot, codex, claude, ...(process.platform==='darwin'?{mtplx}:{}) })), ...(!desktopPreview ? {'local-process': omi.provider()} : {}) };
+  const llamaCpp=new SessionProvider(()=>new LlamaCppProvider({}, {context,browser}));
+  const adapters = { ...(providers || (desktopPreview ? { codex, mtplx } : { copilot, codex, claude, 'llama-cpp':llamaCpp, ...(process.platform==='darwin'?{mtplx}:{}) })), ...(!desktopPreview ? {'local-process': omi.provider()} : {}) };
   const engine = new Engine(home, adapters, undefined, {permissionControls:true,recoveryBarrier:updateRecovery});
   engine.historyCache.configure(settings.get().resources);
   const desktopControl=desktopPreview?null:new DesktopControl({active:owner=>owner==='operator'||['running','awaiting_input'].includes(engine.getRun(owner)?.status)});

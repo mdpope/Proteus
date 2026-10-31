@@ -1,3 +1,9 @@
+## Windows llama.cpp provider
+
+The llama-cpp provider uses the existing local serial tool loop, selected-source/MCP boundaries, ordinary approvals, cancellation and persisted delivered history. It discovers loaded model identity/context and reasoning efforts from /v1/models and /props. Template/tokenizer endpoints account for current sources, tool schemas and complete old turns before admission; unknown limits fail explicitly. The server owns inference scheduling. There is no cloud fallback or claimed subscription allowance.
+
+See [llama.cpp setup](llama-cpp.md) for authenticated HTTPS and remote clients.
+
 ## October 26 — Linux Codex executable discovery
 
 Linux honors `PROTEUS_CODEX_PATH`, then executable PATH entries, followed by the desktop bundle at

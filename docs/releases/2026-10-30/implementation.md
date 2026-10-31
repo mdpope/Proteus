@@ -275,3 +275,9 @@ Use the [standing process](../../release-process.md). Freeze the final source co
 validation; native builders fetch that exact repository commit. Package/sign/test on the matching
 OS. Return package identities before adding a target to the current public set. Consumer machines
 wait for matching published bytes. Source availability is not a package acceptance receipt.
+
+## R15 - llama.cpp provider
+
+Implemented authenticated transport, live metadata, exact template/token accounting and visible provider selection. Focused tests and first full source suite pass (1,357 pass, six skips); static checks pass. Real TLS two-round Qwen fixture tool/read/answer passes with observed usage and cached-input tokens. Final source/UI/package checks remain pending at this checkpoint. Existing vision weights are preserved; initial server is text/tool only.
+
+R15 final desktop acceptance passes the Providers card, real TLS discovery, New Chat model selection and all 17 real host-tool schemas at 32K context. The deployment profile uses 18 GPU layers, Q8 K/V cache, 12/16 threads and MTP. Focused suite: 25 pass. Latest completed full suite: 1,359 pass / six skip; final native builder repeats required checks against the frozen source. Standalone short-prompt speed is 5.30 tokens/s at the initial 8K/20-layer profile, not a proven gain over LM Studio.

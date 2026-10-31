@@ -24,3 +24,9 @@ invalidate the independently observed normal-phone authenticated cold reconnect.
 Record actual build/signature, required migrations, test outcomes, preservation and health for
 each dispatched target. Stages are building, published, dispatched, staged, installed, live verified,
 blocked or deferred. A task/model completion is not installed/live-verified acceptance.
+
+## R15 - Windows inference host follow-up
+
+The PC already runs published 0.2.39, build windows.06ac0b603ae1. Installed official llama.cpp b12019 CUDA 12.4 with published archive digests verified; reused existing Qwen Q4_K_M. API-key-protected HTTPS and a current-user login task are configured. A live synthetic tool read and answer passes. The subnet-scoped firewall change was denied without administrator rights; remote reachability is unverified. The new Proteus provider is source-only pending exact-package acceptance and supervised installation. No other desktop was updated.
+
+Full desktop tool admission required increasing context to 32K; Q8 cache / 18 GPU layers measured 5,987 MiB dedicated inference VRAM. Windows Task Scheduler failed to launch the user action (retained error codes); it is disabled and replaced with a current-user Startup shortcut to the hidden server script. Startup verification and post-install acceptance are tracked privately. Firewall administrator approval remains pending.
