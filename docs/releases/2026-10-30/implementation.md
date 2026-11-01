@@ -1,3 +1,7 @@
+## Frozen combined application source
+
+Build/deploy only `08db24856fe401db9ac39ed4283b7054568555ea`, the validated merge of the Fusion/layout branch and R15/R16. Both source commits are verified ancestors. This following documentation commit records the immutable application pin; do not build from the moving branch tip. Version remains **0.2.39**. New packages and installed/live checks remain required. iPad is deferred by the operator; iPhone and all intended desktops/web remain in scope. Final closeout must merge/push validated related work into main and retire merged clean release branches/worktrees without erasing unrelated changes.
+
 ## Combined source validation and final closeout scope
 
 All implementation from the October31 Fusion/layout branch is included with R15/R16. Combined source checks pass1,382 tests/four skips/zero failures, static checks, Fusion attribution browser UI, isolated remote composer and remote project rows. The configured llama.cpp/shared-model live UI fixtures are reserved for the designated Windows host; this Mac has no connection configuration. Their Mac test launches now use a disposable mock Keychain and portable output paths, without altering runtime behavior or assertions.

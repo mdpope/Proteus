@@ -9,8 +9,8 @@
   "implementation": "docs/releases/2026-10-30/implementation.md",
   "rollout": "docs/releases/2026-10-30/rollout.md",
   "closeout": "docs/releases/2026-10-30/closeout.md",
-  "sourceCommit": null,
-  "sourceStatus": "Operator approved combining c54406cc Fusion/layout and269f32f R15/R16. Both feature sets assembled; validation and a new full frozen pin are required before new native packages and handoffs.",
+  "sourceCommit": "08db24856fe401db9ac39ed4283b7054568555ea",
+  "sourceStatus": "Combined Fusion/layout O14\u2013O17 and R15/R16 source frozen and pushed. 1382 tests/four skips, static and targeted UI checks pass. Build each native target from this exact pin; earlier c544/269 packages do not accept the combined source.",
   "review": "https://github.com/mdpope/Proteus/pull/24",
   "relatedBranches": [
     "codex/oct30-update-command-center",
@@ -152,11 +152,11 @@
     "docs/2026-10-31-release-plan.md"
   ],
   "requestedPlatformSourceCommits": {
-    "darwin-arm64": "c54406cc66150c45521fd194d89c6391c44b646a",
-    "linux-x64": "c54406cc66150c45521fd194d89c6391c44b646a",
-    "win32-x64": "c54406cc66150c45521fd194d89c6391c44b646a",
-    "web": "c54406cc66150c45521fd194d89c6391c44b646a",
-    "ios": "c54406cc66150c45521fd194d89c6391c44b646a"
+    "darwin-arm64": "08db24856fe401db9ac39ed4283b7054568555ea",
+    "linux-x64": "08db24856fe401db9ac39ed4283b7054568555ea",
+    "win32-x64": "08db24856fe401db9ac39ed4283b7054568555ea",
+    "web": "08db24856fe401db9ac39ed4283b7054568555ea",
+    "ios": "08db24856fe401db9ac39ed4283b7054568555ea"
   },
   "previousCandidates": {
     "macCandidate": {
@@ -225,12 +225,9 @@
     }
   },
   "deploymentHold": {
-    "reason": "Combined source validation, frozen pin and exact native packages required",
+    "reason": "Await exact combined native packages and independent acceptance",
     "operatorCombinationApproved": true,
-    "sources": [
-      "c54406cc66150c45521fd194d89c6391c44b646a",
-      "269f32f1b9f66cdcb042396f95532632ec5da937"
-    ]
+    "sourceCommit": "08db24856fe401db9ac39ed4283b7054568555ea"
   },
   "linuxCandidate": {
     "sourceCommit": "c54406cc66150c45521fd194d89c6391c44b646a",
@@ -267,7 +264,7 @@
     "c54406cc66150c45521fd194d89c6391c44b646a",
     "269f32f1b9f66cdcb042396f95532632ec5da937"
   ],
-  "pendingSourceFreeze": true,
+  "pendingSourceFreeze": false,
   "combinedValidation": {
     "nodePassed": 1382,
     "nodeSkipped": 4,
