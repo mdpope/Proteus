@@ -304,7 +304,7 @@
     "installed": true,
     "published": false,
     "publisherSignatureVerified": false,
-    "personalMacState": "prepared; handoff withheld during command-center device work",
+    "personalMacState": "handoff accepted; waiting for normal idle: command-center turn, one attached unshared terminal and another chat browser turn",
     "hcState": "installed and independently verified healthy; settings/preferences/pairings byte-identical and 46 drafts preserved against verified native-update recovery",
     "hcInstalled": true,
     "personalMacInstalled": false,

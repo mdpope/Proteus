@@ -1,3 +1,9 @@
+## Build Mac handoff accepted; release remains open
+
+Build Mac has handed the exact accepted combined candidate to its supervisor. It remains on the earlier baseline until normal idle and verified replacement. Its attached unshared Default shell and another chat browser turn are protected; neither was interrupted. The command center is ending its turn so its own active run stops blocking the barrier. The task-owned sleep assertion was stopped and was not the user terminal.
+
+Work Mac and the website are verified complete. Windows remains reconnecting, Linux awaits designated signing, Ian awaits the same accepted Windows package, and the iPhone requires unlock before revalidating the retained 304-file capture and installing. iPad is deferred. Draft PR 26 contains the combined source; PR 24 and all related branch/worktree cleanup remain for verified final rollout. PR 25 documents a separate Windows profile diagnosis and needs preserving/reconciliation at closeout.
+
 ## Verified Work Mac and website combined deployment
 
 Work Mac runs the exact accepted 08db build and package hash, with owner health verified and two retained recovery generations. Saved settings, provider/model selections, browser/site/notification preferences and encrypted pairing records are byte-identical to the verified pre-update recovery; all 46 drafts match. Expected project records and logical tabs remain. Legitimate scan timestamps, tab touches and completion notification turnover are classified. This establishes native-update preservation; the earlier manual baseline restart had incomplete before-inventory. The completed one-shot launchd registration is removed, with all receipts retained.
