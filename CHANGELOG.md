@@ -1,5 +1,8 @@
 ## Nov 1 — 0.2.40 (in progress)
 
+- Reconcile a reviewed post-install recovery-checksum failure through the owner maintenance
+  boundary, preserving its original journal and failure evidence before eligible cleanup.
+
 - Inspect recovery SQLite history through verified disposable copies; never connect to frozen
   originals, since read-only connections can still create sidecars and break recovery checksums.
 

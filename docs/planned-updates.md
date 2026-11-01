@@ -1,5 +1,10 @@
 ## November 1 — 0.2.40 rollout authorized
 
+Post-install checksum attention now has a separately verified reconciliation receipt and a bounded
+older-client maintenance adapter. No journal rewrite, continuation replay or checksum waiver is
+used. Source validation and actual HC application/rotation are separate gates; the installed
+`11ca09b` binary does not gain this API until a later accepted package. See the reconciliation doc.
+
 Recovery verification now has a copy-only SQLite inspection helper and preservation regressions.
 This is release-operation tooling after the frozen `11ca09b` application pin, not a relabelled
 native package. A Windows post-install diagnostic created two extra SQLite sidecars; exact

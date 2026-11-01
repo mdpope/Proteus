@@ -1,3 +1,13 @@
+## November 1 — reconcile repaired recovery attention without rewriting history
+
+A verified installation can fail its later recovery-retirement step. A separate owner-created
+resolution receipt binds the exact original attention journal, installed identity, surviving
+owner, preservation evidence and every fully verified recovery. The journal remains byte-identical;
+its error and undelivered continuation are not relabelled as success. Fresh digest-bound maintenance
+may then rotate eligible generations. The existing source-owned maintenance adapter supplies this
+same bounded operation for older clients; it never patches a signed app or directly invokes helper
+retirement to bypass verification. Unsupported failure types still need inspection.
+
 ## November 1 — frozen recovery databases are queried only through copies
 
 SQLite read-only connections may create WAL/SHM next to a frozen database. Recovery verification

@@ -61,14 +61,15 @@ function stagingStatus(job,{alive=processAlive}={}){
  let helper=job.helperPid;
  try{const value=Number(fs.readFileSync(job.file+'.helper-lock','utf8'));if(!Number.isSafeInteger(value)||value<1)return {directory,eligible:false,reason:'Unresolved helper lock'};if(alive(value))return {directory,eligible:false,reason:'Helper is running'};}catch(error){if(error.code!=='ENOENT')throw error;}
  if(alive(helper))return {directory,eligible:false,reason:'Helper is running'};
- if(!['cancelled','complete'].includes(job.phase))return {directory,eligible:false,reason:'Update or recovery is unresolved'};
+ const resolution=job.phase==='attention'?require('./attention-reconciliation.cjs').readAttentionResolution(job):null;
+ if(!['cancelled','complete'].includes(job.phase)&&!resolution)return {directory,eligible:false,reason:'Update or recovery is unresolved'};
  if(job.failedBeforeReplacement)return {directory,eligible:false,reason:'Failed pre-install recovery requires inspection'};
- if(job.phase==='complete'&&job.recovery){
+ if((job.phase==='complete'||resolution)&&job.recovery){
   const inventory=recoveryPolicy(job.recoveryPolicy,job),row=inventory.generations.find(row=>row.directory===job.recovery);
   if(!row||!row.verified)return {directory,eligible:false,reason:'Recovery generation is not registered'};
   if(fileDigest(row.receiptFile)!==row.receiptHash)throw Error('Recovery receipt changed; staging was preserved.');
  }
- return {directory,eligible:true,reason:job.phase==='cancelled'?'Cancelled before replacement':'Verified completed update'};
+ return {directory,eligible:true,reason:resolution?'Verified attention reconciliation':job.phase==='cancelled'?'Cancelled before replacement':'Verified completed update'};
 }
 function retireStaging(file,options={}){
  const job=readJob(file),status=stagingStatus(job,options);
@@ -76,7 +77,8 @@ function retireStaging(file,options={}){
  const sizes=allocation(status.directory),before=fs.statfsSync(path.dirname(file));
  fs.rmSync(status.directory,{recursive:true,force:true});
  const after=fs.statfsSync(path.dirname(file)),receipt={at:new Date().toISOString(),...sizes,freeSpaceChange:Number(after.bavail)*Number(after.bsize)-Number(before.bavail)*Number(before.bsize)};
- writeJob(file,{stagingRetirement:receipt});return {...status,retired:true,...receipt};
+ if(job.phase==='attention')atomic(path.join(path.dirname(file),'attention-staging-retirement.json'),{...receipt,jobHash:fileDigest(file)});
+ else writeJob(file,{stagingRetirement:receipt});return {...status,retired:true,...receipt};
 }
 function inventoryStorage(root,{home,installation,retire=false,artifactRoots=[]}={}){
  if(!Array.isArray(artifactRoots)||artifactRoots.length>32||artifactRoots.some(value=>typeof value!=='string'||!path.isAbsolute(value)))throw Error('Specify at most 32 absolute artifact roots for dry-run accounting.');

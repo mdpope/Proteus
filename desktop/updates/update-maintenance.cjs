@@ -100,8 +100,9 @@ function maintenancePlan(root,options={},dependencies={}){
   try{
    const file=path.join(jobsRoot,name,'job.json');ordinaryPath(file);const job=readJob(file);
    if(job.home!==owner.home||job.installation!==owner.installation)throw Error('Update journal belongs to another installation.');
-   jobs.push(job);
-   if(!['complete','cancelled'].includes(job.phase))issues.push({kind:'active-update',id:job.id,phase:job.phase,error:'Finish or cancel the current update before maintenance.'});
+   const resolution=job.phase==='attention'?require('./attention-reconciliation.cjs').readAttentionResolution(job,owner):null;
+   jobs.push({...job,attentionResolutionHash:resolution?.receiptHash||null});
+   if(!['complete','cancelled'].includes(job.phase)&&!resolution)issues.push({kind:'active-update',id:job.id,phase:job.phase,error:'Finish or reconcile the current update before maintenance.'});
   }catch(error){issues.push({kind:'journal',id:name,error:error.message});}
  }
  for(const scan of roots){
@@ -124,7 +125,7 @@ function maintenancePlan(root,options={},dependencies={}){
  // Preserve the newest two complete generations. Unresolved generations never
  // become eligible merely because maintenance found their files.
  const ordered=verified.slice().sort((a,b)=>b.at.localeCompare(a.at)),retire=ordered.slice(2).filter(row=>row.eligible===true).map(row=>row.id);
- const state={owner,policyHash,roots,missing,verified,discovered,retire,retirements,issues,jobs:jobs.map(job=>({id:job.id,revision:job.revision,phase:job.phase})),staging:storage?.jobs||[]};
+ const state={owner,policyHash,roots,missing,verified,discovered,retire,retirements,issues,jobs:jobs.map(job=>({id:job.id,revision:job.revision,phase:job.phase,...(job.phase==='attention'?{attentionResolution:job.attentionResolutionHash}:{})})),staging:storage?.jobs||[]};
  const planDigest=digest(JSON.stringify(state));
  return {schemaVersion:1,...state,planDigest,paths:{installation:owner.installation,home:owner.home,browserHome:owner.browserHome||null,updates:root,recoveries:path.join(root,'recoveries')},storage,canApply:!!policy&&!issues.length};
 }

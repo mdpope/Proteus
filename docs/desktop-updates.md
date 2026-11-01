@@ -491,6 +491,11 @@ Distinguish evidence captured at a stated time from current opaque cache inspect
 
 ## Two generation backup retention
 
+For an installed, health-verified update whose repaired recovery still leaves an `attention`
+maintenance hold, use [post-install reconciliation](2026-11-01-attention-reconciliation.md).
+The owner writes separate verification evidence and preserves the original journal/error;
+ordinary digest-bound maintenance remains a separate operation after every recovery re-verifies.
+
 Treat verified recovery trees as frozen opaque files. A SQLite connection to an original
 recovery database is forbidden even with `readOnly: true`: SQLite can create or change WAL/SHM
 files beside it and invalidate the recovery receipt. For semantic queries, use
