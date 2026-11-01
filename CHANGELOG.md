@@ -7,7 +7,7 @@
 - Prevent stale project views/outboxes from reviving closed tabs; retain owner close revisions and allow reviewed explicit reopen. Isolate unavailable document sources so other tabs keep syncing.
 - Require explicit shared Close intent; preserve chat children across alias changes, parent closure and restart without ending their terminal sessions.
 - Keep browser bounds current when its content area changes without a window resize or tab switch.
-- Bound background integration work, avoid repeated global scans, skip dormant sessions before context hashing, and retain fresh configuration/session validation.
+- Bound background integration work, avoid repeated global scans, skip dormant sessions before context hashing, and retain fresh configuration/session validation. Move background fsync/replacement off the input loop while ordering concurrent manual saves and draining writes at Close.
 - Local source/UI validation only at this checkpoint; package acceptance and affected-HC observation remain separate.
 
 # HC handoff — November 1 responsiveness diagnosis

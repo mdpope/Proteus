@@ -335,6 +335,12 @@ function openTab(tab, afterId=null) {
   if(tab.type==='run'&&!tab.parentId&&!tab.hostId){const run=state.data?.runs?.find(run=>run.id===(tab.runId||tab.id));if(run&&previewEnabled(state)&&openPreviewChat(run))return;if(run?.workspaceId&&!previewEnabled(state))return void sendChatToWorkspace({...run,local:true});}
   if(tab.parentId&&!state.tabs.some(parent=>parent.id===tab.parentId&&['run','remote-run','workspace'].includes(parent.type)))delete tab.parentId;
   if(tab.parentId){const parent=state.tabs.find(item=>item.id===tab.parentId);if(parent?.type==='workspace'){parent.hidden=false;parent.navigationClosed=false;}}
+  if(tab.type==='markdown'){
+    const file=tab.markdown?.file||tab.file;
+    const same=file&&state.tabs.find(item=>item.type==='markdown'&&item.parentId===tab.parentId&&(!tab.contentTabId||item.contentTabId===tab.contentTabId)&&(item.markdown?.file||item.file)===file);
+    if(same)tab.id=same.id;
+    else if(state.tabs.some(item=>item.id===tab.id))tab.id='document-view:'+crypto.randomUUID();
+  }
   const existing = state.tabs.find(item => item.id === tab.id);
   if(['run','remote-run','markdown'].includes(tab.type)){
     const interaction=tabInteractionEpoch;
@@ -958,7 +964,7 @@ const contentTabSync=createTabSynchronizer({navigation:true,explicitCloseOnly:tr
           else{try{
             const document=await api('/api/content-tabs',{action:'document',scope:scope.scope,id:scope.id,documentId:descriptor.documentId,metadataOnly:true});
             if(!['main','team'].includes(scope.scope)&&!state.tabs.includes(parent))return;
-            tab={id:'markdown:'+document.file,type:'markdown',parentId:parent.id,markdown:document,label:descriptor.title};
+            tab={id:'document-view:'+(parent.id||scope.scope+':'+scope.id)+':'+descriptor.documentId,type:'markdown',parentId:parent.id,markdown:document,label:descriptor.title};
           }catch(error){
             // An unavailable source is still an owner tab, never a failed scope.
             tab={id:'unavailable:'+descriptor.id,type:'unavailable',parentId:parent.id,label:descriptor.title,unavailableDescriptor:descriptor,unavailableReason:error.message};

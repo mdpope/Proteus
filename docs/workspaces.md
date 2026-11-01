@@ -7,6 +7,9 @@ chat aliases must rematerialize retained children from the owner. Only explicit 
 an owner management operation removes membership. Legacy deletion outboxes require review;
 their uncertain receipt identity remains intact.
 
+Document views are container-scoped. Opening or restoring the same file in a project and one
+of its chats retains separate view IDs and parents; it cannot reparent the other view by path.
+
 ## October 30 — one ordered content set across local windows
 
 Workspace/project content uses the owning host's ordered logical descriptors in every open window,

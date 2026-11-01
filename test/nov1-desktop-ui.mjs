@@ -3,13 +3,15 @@ import {_electron as electron} from 'playwright';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {sidebarFixture} from './preview-sidebar-fixture.mjs';
+import {versionLabel} from '../public/shared/ui/release-label.js';
+const metadata=JSON.parse(fs.readFileSync(new URL('../package.json',import.meta.url)));
 const fixture=await sidebarFixture();let app;
 const until=async(fn,label)=>{for(let i=0;i<100;i++){if(await fn())return;await new Promise(resolve=>setTimeout(resolve,100));}throw Error('Timed out: '+label);};
 try{
  app=await electron.launch({...(process.env.PROTEUS_UI_EXECUTABLE?{executablePath:process.env.PROTEUS_UI_EXECUTABLE}:{}),args:[...(process.env.PROTEUS_UI_EXECUTABLE?[]:[process.env.PROTEUS_TEST_APP_ROOT||'.']),'--use-mock-keychain'],env:{...process.env,PROTEUS_DESKTOP_PREVIEW:'1',PROTEUS_PREVIEW_HOME:fixture.locations.root,CODEX_HOME:fixture.auth,PORT:'0'}});
  const page=await app.firstWindow();await page.locator('#topbar-home').waitFor();
  await page.locator('[data-page=home]').click();await page.locator('#home-screen').waitFor();
- assert.match(await page.locator('.home-build strong').textContent(),/0\.2\.39 · Oct 30/);
+ assert.equal(await page.locator('.home-build strong').textContent(),versionLabel(metadata));
  const tab=await page.evaluate(value=>window.desktop.browser({action:'create',...value}),{parentId:fixture.parentId,url:fixture.origin+'/geometry'});
  await page.locator('[data-preview-workspace-expand="'+fixture.studio.id+'"]').click();await page.locator('[data-preview-project="'+fixture.project.id+'"]').first().click();
  await until(()=>page.locator('[data-chat-subtab="'+tab.id+'"]').count(),'new browser view');await page.locator('[data-chat-subtab="'+tab.id+'"]').click();

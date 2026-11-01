@@ -215,6 +215,9 @@ Implemented locally:
   queue deletes membership. Legacy pending deletion envelopes are quarantined for review with
   their original request bytes/receipt intact. This also closes the remount race exposed by
   the first packaged chat-child restart test; that superseded candidate is not accepted.
+- Document materialization gives each parent/container its own view identity. A repeat restart
+  test exposed a global file-path ID collision between project and chat views of the same file;
+  the regression now requires both identities/parents to remain present together.
 
 Acceptance includes missing documents at the front of the owner list, first-baseline failure,
 navigation quarantine, delayed opens, stale reopen, native Close, two-window independent
@@ -260,10 +263,10 @@ N2 routine state-projection optimization remains deferred; it is independent of 
 repeated-scan background algorithm and needs a separate measured invalidation design.
 No broad inventory cache or weaker source/identity validation was introduced.
 
-Final source verification including explicit-only closure and asynchronous persistence: 1,402
-Node passes, four skips, no failures, and static checks pass. A subsequent focused failure-path
-test also verifies rejected replacement leaves old bytes and fails Close; the six-test background
-suite passes. Exact-package results and artifact/source pins
+Final source verification including explicit-only closure, container-scoped document views and
+asynchronous persistence: 1,403 Node passes, four skips, no failures, and static checks pass.
+The failure-path regression verifies rejected replacement leaves old bytes and fails Close.
+Exact-package results and artifact/source pins
 are recorded in the private acceptance receipt.
 The extended real Electron multiwindow fixture and chat Close/reopen/restart fixture pass.
 The original default macOS temporary path exposed
