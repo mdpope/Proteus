@@ -491,6 +491,21 @@ Distinguish evidence captured at a stated time from current opaque cache inspect
 
 ## Two generation backup retention
 
+Treat verified recovery trees as frozen opaque files. A SQLite connection to an original
+recovery database is forbidden even with `readOnly: true`: SQLite can create or change WAL/SHM
+files beside it and invalidate the recovery receipt. For semantic queries, use
+`scripts/recovery-sqlite-read-copy.mjs` to copy the database and its existing WAL/SHM/journal into
+a private disposable directory, verify copied contents and unchanged originals, query only the
+copy, then remove that copy. Never checkpoint the original or regenerate a receipt to accept a
+changed tree. Hash/stat inspection alone does not open SQLite.
+
+If verification introduced auxiliary files, prove in memory that excluding only those exact new
+rows reproduces the original root hash, count and bytes. Preserve the receipt, failed attempt
+and file identities. A separately authorized repair may quarantine those proven extra files
+under exclusive access with exact native metadata and hash checks, then require the original
+tree and owner recovery verification to pass. Do not remove original receipt-covered sidecars.
+Use native timestamp integers consistently; cross-runtime formatted times can round differently.
+
 For website delivery, apply the same ceiling to inactive code and local package/build copies.
 Count failed/incomplete extraction directories. Block another build when prior package copies
 remain unresolved; keep the accepted current/previous code, resolve a temporary third after live

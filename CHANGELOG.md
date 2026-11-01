@@ -1,5 +1,8 @@
 ## Nov 1 — 0.2.40 (in progress)
 
+- Inspect recovery SQLite history through verified disposable copies; never connect to frozen
+  originals, since read-only connections can still create sidecars and break recovery checksums.
+
 - Sync the iOS project sidebar from canonical tab membership and order; retain explicit offline
   actions and retry identities without resurrecting closed chats or replaying inferred deletions.
 - Preserve notification occurrence time, suppress stale/read alerts and expire native banner

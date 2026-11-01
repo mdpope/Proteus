@@ -1,5 +1,11 @@
 ## November 1 — 0.2.40 rollout authorized
 
+Recovery verification now has a copy-only SQLite inspection helper and preservation regressions.
+This is release-operation tooling after the frozen `11ca09b` application pin, not a relabelled
+native package. A Windows post-install diagnostic created two extra SQLite sidecars; exact
+in-memory exclusion restored the original checksum. Guarded quarantine and full owner verification
+remain distinct from the successful installation; preserve incident and repair receipts.
+
 The native Linux gate additionally reproduced N11: an older membership-only response could delete
 a newly opened local terminal. The corrected shared renderer removes only owner-confirmed IDs.
 A deterministic real Electron overlap fails on the prior source and passes with the fix, including

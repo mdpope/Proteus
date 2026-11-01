@@ -1,3 +1,12 @@
+## November 1 — frozen recovery databases are queried only through copies
+
+SQLite read-only connections may create WAL/SHM next to a frozen database. Recovery verification
+therefore copies the database and its existing sidecars into a private disposable directory,
+checks opaque hashes before/after and queries only that copy. Original receipts stay unchanged.
+Proven verification-created extras require a separate bounded quarantine operation with exact
+native file identities, preserved evidence and full owner re-verification. This release-operation
+tooling does not change the accepted `11ca09b` application package or its corresponding source.
+
 ## November 1 — closing identity outlives window presentation
 
 Membership-only application is a partial owner observation, not a complete replacement of the
