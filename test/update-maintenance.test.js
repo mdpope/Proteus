@@ -40,6 +40,7 @@ function attentionFixture(t){
 }
 test('post-install reconciliation preserves the original journal, policy and recoveries, then permits verified two-generation maintenance',t=>{
  const f=attentionFixture(t),jobBefore=fs.readFileSync(f.latest.file),policyBefore=fs.readFileSync(f.policyFile),dataBefore=tree(f.options.home);
+ const staging=path.join(path.dirname(f.latest.file),'candidate');fs.mkdirSync(staging);fs.writeFileSync(path.join(staging,'synthetic-unused-candidate'),'SYNTHETIC ONLY');
  assert.equal(maintenance.maintenancePlan(f.root,f.options,f.dependencies).canApply,false);
  const plan=attention.attentionPlan(f.root,f.options,f.dependencies);
  assert.equal(plan.canApply,true);assert.equal(plan.uiResponsivenessVerified,false);
@@ -53,6 +54,7 @@ test('post-install reconciliation preserves the original journal, policy and rec
  assert.equal(maintenancePlan.canApply,true,JSON.stringify(maintenancePlan.issues));assert.deepEqual(maintenancePlan.retire,[f.old.id]);
  const result=maintenance.applyMaintenance(f.root,{...f.options,planDigest:maintenancePlan.planDigest},f.dependencies);
  assert.deepEqual(result.retired,[f.old.id]);assert.deepEqual(new Set(result.retained),new Set([f.middle.id,f.latest.id]));
+ assert.equal(fs.existsSync(staging),false);const stagingReceipt=JSON.parse(fs.readFileSync(path.join(path.dirname(f.latest.file),'attention-staging-retirement.json')));assert.equal(stagingReceipt.jobHash,digest(jobBefore));
  assert.deepEqual(fs.readFileSync(f.latest.file),jobBefore);assert.equal(tree(f.options.home).hash,dataBefore.hash);
 });
 test('reconciliation cannot bless pre-install failure, unreviewed attention, stale health, changed app, active helper or missing owner',t=>{
