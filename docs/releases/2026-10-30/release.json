@@ -319,7 +319,7 @@
     "artifactHash": "19c064e771fd0d68ebff6c7555873415cfd3a578ec9b4ade5456d0e756b8c90b",
     "signedAndFrozen": true,
     "iphone": "Installed 2610.31.2; all 304 protected file hashes matched before first launch, four destinations and selection preserved; launch verified; two recovery generations retained. Physical gestures, reconnect and push delivery not verified.",
-    "ipad": "Operator resumed deferred rollout by unlocking iPad; same signed 2610.31.2 package frozen, preflight passed and recovery capture in progress; not installed."
+    "ipad": "Recovery capture stopped safely after 191 files: app reopened and 34 copied files changed. No installation; partial retained pending cold-state reconciliation, operator asked to keep Proteus closed."
   },
   "combinedWebCandidate": {
     "sourceCommit": "08db24856fe401db9ac39ed4283b7054568555ea",
@@ -364,7 +364,7 @@
     "published": false,
     "qualification": "isolated real provider/multiwindow/PTY/restart, actual six-value kwallet6 synthetic continuity, update/rollback/pre-install failure pass; production credentials/live installation not tested"
   },
-  "combinedWindowsBuildState": "Interrupted during packaging after 1380 passed and six skipped tests; no accepted artifact. Stopped operation cancelled through owner. Canonical Windows owner online; public npm restoration, same-baseline installer registration repair and graceful owner refresh plans await review.",
+  "combinedWindowsBuildState": "Packaging interruption cancelled; no accepted combined Windows artifact. Public npm restoration verified complete with unchanged builder policy. Signed same-baseline proof and official extraction pass; registration repair and owner restart are prepared, not executed.",
   "combinedProviderReadiness": {
     "hcCodexAvailable": true,
     "hcCodexModels": 8,

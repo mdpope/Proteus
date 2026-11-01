@@ -1,3 +1,7 @@
+## Latest pending gates
+
+The iPad capture stopped before installation after the app reopened and changed 34 copied files; its partial and both verified predecessors remain. Resume only after a stable cold-state reconciliation in the same generation. Windows public npm restoration is verified complete with unchanged builder policy; signed baseline extraction passes. Installer registration repair and owner refresh remain unexecuted plans. Native signing lookup awaits destination command approval.
+
 ## Current rollout reconciliation
 
 Work Mac and the combined website are installed and independently verified. The iPhone now runs signed 2610.31.2 from the frozen combined source: all 304 protected files matched before first launch, the four destinations and selection matched, launch passed and exactly two recovery generations remain. Physical notification delivery and gestures remain unverified.
