@@ -319,7 +319,21 @@
     "artifactHash": "19c064e771fd0d68ebff6c7555873415cfd3a578ec9b4ade5456d0e756b8c90b",
     "signedAndFrozen": true,
     "iphone": "Installed 2610.31.2; all 304 protected file hashes matched before first launch, four destinations and selection preserved; launch verified; two recovery generations retained. Physical gestures, reconnect and push delivery not verified.",
-    "ipad": "Recovery capture stopped safely after 191 files: app reopened and 34 copied files changed. No installation; partial retained pending cold-state reconciliation, operator asked to keep Proteus closed."
+    "ipad": "Installed and launch verified: 2610.31.2; all 266 protected hashes matched before first launch, four saved destinations and selection preserved; exactly two verified recovery generations. Earlier changed-source partial reconciled in same generation, failure payload compacted with original manifests retained. Physical gestures/reconnect/push remain unverified.",
+    "ipadInstalled": true,
+    "iphoneInstalled": true,
+    "ipadProtectedFilesPreservedBeforeLaunch": 266,
+    "ipadDestinationCount": 4,
+    "ipadRecoveryGenerations": 2,
+    "ipadRecoveryRetirement": {
+      "logicalBytesRemoved": 101640612,
+      "observedFreeSpaceChange": 61169664
+    },
+    "ipadFailedCaptureCompaction": {
+      "logicalBytesRemoved": 57592578,
+      "observedFreeSpaceChange": 69918720,
+      "originalManifestsRetained": true
+    }
   },
   "combinedWebCandidate": {
     "sourceCommit": "08db24856fe401db9ac39ed4283b7054568555ea",

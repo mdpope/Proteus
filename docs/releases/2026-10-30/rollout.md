@@ -1,3 +1,11 @@
+## iPad combined update verified
+
+The iPad now runs signed 0.2.39 / 2610.31.2 from the exact combined source. All 266 protected file hashes matched before first launch; four saved destinations and selection matched, and launch was verified. The earlier app-restart capture failure remains recorded. A stable cold-state reconciliation reused 156 unchanged copies in the same generation, retained changed-copy evidence, and completed the current capture without a second full backup.
+
+Exactly two verified iPad recovery generations remain. Oldest-recovery retirement removed 101,640,612 logical bytes and observed 61,169,664 additional available bytes. After verified completion, the obsolete 35-file failure subset was compacted to original manifests/receipts: 57,592,578 logical bytes removed, with 69,918,720 observed available bytes. Physical gestures, reconnect and push delivery remain unverified. The iPhone's completed update was not repeated.
+
+Build Mac remains prepared and held. Windows' ordinary-user repair helper is armed awaiting the operator's normal Quit; no installer repair or reopen is claimed yet. Linux signing and the Windows/Ian rollout remain pending. The release stays open. Earlier progress sections below are historical.
+
 ## Latest pending gates
 
 The iPad capture stopped before installation after the app reopened and changed 34 copied files; its partial and both verified predecessors remain. Resume only after a stable cold-state reconciliation in the same generation. Windows public npm restoration is verified complete with unchanged builder policy; signed baseline extraction passes. Installer registration repair and owner refresh remain unexecuted plans. Native signing lookup awaits destination command approval.
