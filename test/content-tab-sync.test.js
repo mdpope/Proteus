@@ -7,7 +7,7 @@ import path from 'node:path';
 import {createRequire} from 'node:module';
 import {ContentTabs,contentTab} from '../src/services/workspaces/content-tabs.js';
 import {normalizeContentTabDescriptor,normalizeContentTabHistory,sameContentTab,acknowledgesBrowserNavigation} from '../public/models/content-tab-descriptor.js';
-import {createTabSynchronizer,rebaseTabChanges,tabChanges,syncableTabURL} from '../public/models/content-tab-sync.js';
+import {createTabSynchronizer,rebaseTabChanges,tabChanges,syncableTabURL,shouldRemoveCapturedTab} from '../public/models/content-tab-sync.js';
 const pendingCount=values=>[...values.keys()].filter(key=>key.startsWith('proteus.navigation.pending:')).length;
 const tab=id=>({id,type:'browser',title:id,url:'https://example.test/'+id});
 test('owner-committed native placement adopts its history and order instead of publishing another navigation seed',async()=>{
@@ -326,4 +326,23 @@ test('an older pending acknowledgement preserves a newer local replacement until
  const apply=async(_scope,tabs,captured)=>{const capturedIds=new Set(captured.map(t=>t.id)),ids=new Set(tabs.map(t=>t.id));local=local.filter(t=>ids.has(t.id)||!capturedIds.has(t.id));for(const t of tabs)if(!local.some(v=>v.id===t.id)&&!capturedIds.has(t.id))local.push(t);};
  const sync=createTabSynchronizer({now:()=>clock,scopes:()=>[scope],readLocal:async()=>structuredClone(local),apply,request:async(_scope,action,args)=>{if(action==='get')return structuredClone(remote);if(fail){fail=false;throw Error('synthetic acknowledgement lost');}for(const op of args.operations){if(op.action==='open')remote.tabs.push(op.tab);if(op.action==='close')remote.tabs=remote.tabs.filter(t=>t.id!==op.id);if(op.action==='reorder')remote.tabs=op.ids.map(id=>remote.tabs.find(t=>t.id===id));}remote.revision++;return structuredClone(remote);}});
  await sync.all();local.push(tab('b'));fail=true;await sync.all();local=[tab('a'),tab('c')];clock=1000;await sync.all();assert.deepEqual(local.map(t=>t.id),['a','c']);await sync.all();assert.deepEqual(remote.tabs.map(t=>t.id),['a','c']);
+});
+
+
+test('membership-only owner removal preserves a newly opened local terminal until it can publish',async t=>{
+ const host=hostStore(t),scope={scope:'main',id:'main'},browser=tab('old-browser'),terminal={id:'terminal:new',type:'terminal',title:'New terminal',terminalId:'new'};
+ host.mutate({...scope,expectedRevision:0,operations:[{action:'open',tab:browser}]});
+ let local=[browser],selected=browser.id,initialMembership,errors=[];
+ const sync=createTabSynchronizer({scopes:()=>[scope],readLocal:async()=>structuredClone(local),request:async(_scope,action,args)=>action==='get'?host.get(scope.scope,scope.id):host.mutate({...scope,...args}),apply:async(_scope,owner,captured,options={})=>{
+  const ids=new Set(owner.map(x=>x.id)),capturedIds=new Set(captured.map(x=>x.id));
+  local=local.filter(item=>{const remove=shouldRemoveCapturedTab(item.id,ids,capturedIds,options);if(remove&&selected===item.id)selected='overview';return !remove;});
+  if(options.membershipOnly){initialMembership={ids:local.map(x=>x.id),selected,removedIds:options.removedIds};return;}
+  for(const item of owner)if(!local.some(x=>x.id===item.id))local.push(structuredClone(item));
+ },onError:error=>errors.push(error)});
+ await sync.all();
+ host.mutate({...scope,expectedRevision:host.get(scope.scope,scope.id).revision,operations:[{action:'close',id:browser.id}]});
+ local.push(terminal);selected=terminal.id;await sync.all();
+ assert.deepEqual(initialMembership,{ids:[terminal.id],selected:terminal.id,removedIds:[browser.id]});
+ assert.ok(local.some(x=>x.id===terminal.id));assert.equal(selected,terminal.id);
+ assert.ok(host.get(scope.scope,scope.id).tabs.some(x=>x.id===terminal.id),'new terminal reaches owner');assert.deepEqual(errors,[]);
 });
