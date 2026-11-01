@@ -1,3 +1,11 @@
+# November 1 — profiled desktop responsiveness correction
+
+The [November 1 release plan](2026-11-01-release-plan.md) records the confirmed background
+integration scan/microtask starvation mechanism, live CPU evidence, synthetic reproduction,
+required scoped/batched correction and personal-Mac acceptance gates. N1 is the release blocker;
+N2 is a separately measured state-projection target. Diagnosis/probe only: production code and
+installed apps are unchanged. Preserve the current 0.2.39 merged baseline and other release holds.
+
 ## October 31 — combined release validation
 
 Fusion/layout O14–O17 and shared local model R15/R16 are combined at the operator’s instruction. Source validation and a new immutable pin precede package builds and owner handoffs; version remains0.2.39. Linux multiwindow acceptance passed with an external adapter for the current documented close/recover behavior, retaining the original stale-fixture failures. iPad is deferred; iPhone remains an intended target.

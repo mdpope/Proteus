@@ -1,3 +1,9 @@
+# Planned — November 1 responsiveness correction
+
+- Profiled recurring desktop stalls and documented the required integration-health batching,
+  scoped verification and event-loop yielding in the [release plan](docs/2026-11-01-release-plan.md).
+  Added a provider-free synthetic profiling probe. The production fix is not implemented.
+
 ## 0.2.39 — October thirtieth release, combined October 31 candidate
 
 Combines the [October 31 Fusion/layout plan](docs/2026-10-31-release-plan.md) and R15/R16 from the [open release plan](docs/2026-10-30-release-plan.md). Source validation and new native package acceptance precede deployment.

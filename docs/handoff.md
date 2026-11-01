@@ -1,3 +1,12 @@
+## November 1 — HC responsiveness diagnosis ready for personal-Mac implementation
+
+Read the [November 1 release plan](2026-11-01-release-plan.md). A targeted live CPU sample and
+synthetic inspector profile identify repeated global integration scans in a timer's promise chain.
+The 600-chat synthetic case performs 1,201 scans and starves timers; a one-pass yielding control
+removes that amplification. The committed probe uses synthetic data only. Production correction,
+regressions, signed package and two-interval HC acceptance remain required. Baseline is merged
+0.2.39 source `08db248`, not the older main checkout. No installed state was changed.
+
 ## October 30 — web and Windows publication complete over SSH
 
 The 0.2.39 website is deployed: 9,221 file hashes, nine public assets and fourteen endpoints pass,
