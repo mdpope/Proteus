@@ -11,7 +11,7 @@
   "closeout": "docs/releases/2026-10-30/closeout.md",
   "sourceCommit": "08db24856fe401db9ac39ed4283b7054568555ea",
   "sourceStatus": "Combined Fusion/layout O14\u2013O17 and R15/R16 source frozen and pushed. 1382 tests/four skips, static and targeted UI checks pass. Build each native target from this exact pin; earlier c544/269 packages do not accept the combined source.",
-  "review": "https://github.com/mdpope/Proteus/pull/24",
+  "review": "https://github.com/mdpope/Proteus/pull/26",
   "relatedBranches": [
     "codex/oct30-update-command-center",
     "codex/oct30-certificate-followup",
@@ -301,11 +301,18 @@
     "accepted": true,
     "packagedUI": "isolated signing/startup/catalog/UI/PTY/restart pass; unchanged full package hash",
     "allSourceGitBlobsVerified": true,
-    "installed": false,
+    "installed": true,
     "published": false,
     "publisherSignatureVerified": false,
     "personalMacState": "prepared; handoff withheld during command-center device work",
-    "hcState": "waiting for ordinary idle; unrelated browser operation remains active"
+    "hcState": "installed and independently verified healthy; settings/preferences/pairings byte-identical and 46 drafts preserved against verified native-update recovery",
+    "hcInstalled": true,
+    "personalMacInstalled": false,
+    "hcHealthVerifiedAt": "2026-11-01T01:26:09.042Z",
+    "hcRecoveryGenerations": 2,
+    "hcRunPreservationCount": 590,
+    "hcEventPreservationCount": 47207,
+    "hcIndependentPreservationQualification": "Native-update interval compared with verified recovery; earlier manual baseline restart lacks complete pre-inventory"
   },
   "combinedMobileCandidate": {
     "sourceCommit": "08db24856fe401db9ac39ed4283b7054568555ea",
@@ -332,7 +339,14 @@
     "endpointsPassed": 14,
     "recoveryVerificationMode": "ordinary restore failed; isolated capture-state passed; its liveStateComparison not performed",
     "retainedLocalRecoveryGenerations": 2,
-    "serverRetentionState": "temporary second generation pending verified exact cleanup; SSH key unavailable while Mac locked"
+    "serverRetentionState": "complete: one verified server recovery and current/matching recovery code",
+    "retainedServerRecoveryGenerations": 1,
+    "serverRetirementLogicalBytes": 641572234,
+    "serverRetirementObservedFreeSpaceChange": 666124288,
+    "retainedLocalCodeArchives": 2,
+    "localRetirementLogicalBytes": 46789200,
+    "localRetirementObservedFreeSpaceChange": 73072640,
+    "logQualification": "Two expected Apache protected-environment denials. Bounded MariaDB samples before and after match pre-existing mysql.column_stats definition mismatch; journals truncated, no database repair. Other audit limits remain."
   },
   "combinedLinuxCandidate": {
     "sourceCommit": "08db24856fe401db9ac39ed4283b7054568555ea",
@@ -352,5 +366,24 @@
     "published": false,
     "qualification": "isolated real provider/multiwindow/PTY/restart, actual six-value kwallet6 synthetic continuity, update/rollback/pre-install failure pass; production credentials/live installation not tested"
   },
-  "combinedWindowsBuildState": "designated owner build started; host temporarily reconnecting, final build and actual package acceptance unresolved; no duplicate build or installation"
+  "combinedWindowsBuildState": "designated owner build started; host temporarily reconnecting, final build and actual package acceptance unresolved; no duplicate build or installation",
+  "combinedProviderReadiness": {
+    "hcCodexAvailable": true,
+    "hcCodexModels": 8,
+    "hcCopilotAvailable": true,
+    "hcCopilotModels": 15,
+    "fusionAdvertised": false,
+    "realFusionTurnVerified": false,
+    "sharedRemoteModelWorkflowVerified": false
+  },
+  "supersededIosArtifactRetirement": {
+    "retiredBuild": "2610.31.1",
+    "retainedBuild": "2610.31.2",
+    "logicalBytesRemoved": 205809522,
+    "observedFreeSpaceChange": 206594048,
+    "liveDeviceDataTouched": false,
+    "simulatorDataTouched": false
+  },
+  "previousReview": "https://github.com/mdpope/Proteus/pull/24",
+  "reviewStatus": "draft; merge and close superseded release work only after verified authorized rollout, with iPad explicitly deferred"
 }

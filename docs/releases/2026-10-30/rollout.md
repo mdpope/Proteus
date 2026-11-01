@@ -1,3 +1,13 @@
+## Verified Work Mac and website combined deployment
+
+Work Mac runs the exact accepted 08db build and package hash, with owner health verified and two retained recovery generations. Saved settings, provider/model selections, browser/site/notification preferences and encrypted pairing records are byte-identical to the verified pre-update recovery; all 46 drafts match. Expected project records and logical tabs remain. Legitimate scan timestamps, tab touches and completion notification turnover are classified. This establishes native-update preservation; the earlier manual baseline restart had incomplete before-inventory. The completed one-shot launchd registration is removed, with all receipts retained.
+
+Parent-authorized metadata reads confirm Codex (eight models) and Copilot (15 models) available on HC. Fusion tiers are not advertised; no real Fusion or shared remote-model turn is claimed. The source fixture results remain separate.
+
+The combined website is fully verified with final retention complete: two local recoveries/code archives, one server recovery and current/matching recovery code. The two Apache errors are expected protected-environment denials. Bounded database-journal samples before and after deployment match the documented pre-existing mysql.column_stats mismatch; no database repair was performed. Counts and recovery qualifications are in the private deployment record.
+
+Build Mac is prepared; Linux awaits designated signing; Windows remains reconnecting and Ian awaits those exact accepted bytes. The iPhone retains all 304 capture files and awaits passcode unlock before cold revalidation/install. iPad remains deferred. Old uninstalled mobile build 2610.31.1 and derived outputs were retired after verifying 2610.31.2 and preserving minimum logs; no live device or simulator data changed. The release remains open until actual rollout and final main/branch closeout.
+
 ## Current combined rollout: website live, native gates pending
 
 Combined website release 20261101T010326Z is live from exact 08db248: all 9,221 deployed/local file hashes, nine HTTPS assets and fourteen endpoint checks pass. The 105 PHP tests/920 assertions pass. Ordinary restore failed and isolated captured-state verification passed, with its live comparison explicitly not performed. Two local recoveries verify; temporary server retention cleanup awaits the Mac's existing SSH key becoming available after unlock.
