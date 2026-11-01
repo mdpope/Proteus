@@ -1,3 +1,7 @@
+## October 31 — combined release validation
+
+Fusion/layout O14–O17 and shared local model R15/R16 are combined at the operator’s instruction. Source validation and a new immutable pin precede package builds and owner handoffs; version remains0.2.39. Linux multiwindow acceptance passed with an external adapter for the current documented close/recover behavior, retaining the original stale-fixture failures. iPad is deferred; iPhone remains an intended target.
+
 # October 31 deployment operation
 
 The open October thirtieth release remains 0.2.39 with c54406cc as its application source. A separately validated maintenance helper supports exact-byte cross-platform publisher signing. Native build, transfer, publication, installation and live verification remain separate ledger states. Linux close-window acceptance is unresolved; do not substitute a runtime source patch or mark that gate passed from synthetic tests.
@@ -17,6 +21,14 @@ keys and website updater grants remain. Six private operational boundary checks 
 Windows public installer/archive downloads, trusted signature and current catalogs/pages verify.
 Pending targets receive empty catalogs. Both physical devices are installed with their recorded
 preservation/launch qualifications; corrective Macs, Linux/Ian and final closeout remain pending.
+
+## October 31 - shared local model providers (R16)
+
+The operator authorizes relay-only sharing of local llama.cpp and MTPLX providers, automatic paired connection details, per-device grants and locally owned consuming chats. Implemented source includes encrypted discovery/streaming, opt-in provider imports, queueing, cancellation and no-replay recovery. Direct LAN optimization is deferred. Source desktop/relay acceptance passes; native packages and actual separate-machine rollout remain distinct. See [shared models](shared-models.md).
+
+## October 31 - authorized llama.cpp provider
+
+The operator requests a dedicated Windows server using the existing Qwen3.8 27B quant, Proteus provider integration, remote application access and latest Proteus. This follow-up is authorized independently of prior held work. Implemented in an isolated checkout based on the installed 0.2.39 source; package/install and cross-device verification remain separate. See [setup](llama-cpp.md).
 
 ## October 30 — final native qualification
 

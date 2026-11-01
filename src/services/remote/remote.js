@@ -41,7 +41,7 @@ export const runSummary = r => ({lastActivityAt:chatActivityAt(r),...pick(r,['id
 const entryKeys = ['id', 'name', 'description', 'kind', 'path', 'sources', 'roots', 'mode', 'scope', 'warnings', 'unsupportedAgentFields', 'error', 'missing', 'characters', 'transport', 'integrationStatus'];
 const remoteEntry = entry => ({ ...pick(entry, entryKeys), ...(entry.agent ? { userInvocable: entry.agent.userInvocable } : {}) });
 const remoteProjects = service => { const value=service.workspaceProjects.get(service.engine);return {...value,sourceEntries:value.sourceEntries.map(remoteEntry)}; };
-const mutationMethods = new Set(['computer.access.update','chat.retry-without-agents','projects.update','sources.update','browser.live.instruct','browser.history.record','browser.history.delete','browser.history.settings','tabs.mutate','tabs.manage','workspace.delete','chat.start', 'chat.answer-question', 'chat.reply', 'chat.resume', 'chat.recover', 'chat.cancel', 'chat.send', 'chat.steer-queued','chat.edit-queued','chat.remove-queued', 'chat.review', 'chat.archive', 'chat.move', 'chat.delete', 'chat.rename', 'chat.promote', 'chat.documents.request', 'chat.attachments.begin', 'chat.attachments.chunk', 'chat.attachments.finish', 'chat.attachments.authorize', 'schedule.run', 'schedule.save', 'context.update', 'context.refresh', 'context.mode', 'context.favorite', 'context.addFolders', 'chat.context', 'chat.permissions', 'mcp.login','integrations.check','integrations.recover', 'notifications.read','notifications.open', 'attention.clear', 'resources.action', 'connection.revoke']);
+const mutationMethods = new Set(['inference.start','inference.cancel','computer.access.update','chat.retry-without-agents','projects.update','sources.update','browser.live.instruct','browser.history.record','browser.history.delete','browser.history.settings','tabs.mutate','tabs.manage','workspace.delete','chat.start', 'chat.answer-question', 'chat.reply', 'chat.resume', 'chat.recover', 'chat.cancel', 'chat.send', 'chat.steer-queued','chat.edit-queued','chat.remove-queued', 'chat.review', 'chat.archive', 'chat.move', 'chat.delete', 'chat.rename', 'chat.promote', 'chat.documents.request', 'chat.attachments.begin', 'chat.attachments.chunk', 'chat.attachments.finish', 'chat.attachments.authorize', 'schedule.run', 'schedule.save', 'context.update', 'context.refresh', 'context.mode', 'context.favorite', 'context.addFolders', 'chat.context', 'chat.permissions', 'mcp.login','integrations.check','integrations.recover', 'notifications.read','notifications.open', 'attention.clear', 'resources.action', 'connection.revoke']);
 const canonical = value => Array.isArray(value) ? value.map(canonical) : value && typeof value === 'object' ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value;
 export const ownerChatControls = (run,engine) => ({steering:typeof engine.providers[run.schedule.provider]?.steer==='function',recovery:!!engine.recovery,...(engine.recovery?{scheduledRecovery:true,activeTimeContinuationProviders:activeTimeProviders}:{}),...(engine.allowance?{allowanceContinuation:true}:{}),steeringMediaTypes:engine.providers[run.schedule.provider]?.acceptedSteeringMediaTypes||[]});
 // Fusion attribution for the visible history window plus the latest turn. Each
@@ -85,7 +85,7 @@ export function remoteState(service) {
     runningChatCount: countRunningChats(visibleRuns),
     attentionCount: visibleRuns.filter(needsAttention).length,
     context: { ...pick(context, ['revision', 'refreshedAt', 'rootStatus', 'defaultWorkspaceId', 'workspaces', 'universalFolders', 'libraryFolders', 'documents','modes','favorites', 'errors']), entries: context.entries.map(remoteEntry) },
-    defaults: pick(defaults, ['provider', 'model', 'reasoningMode', 'reasoningEffort', 'contextTier', 'serviceTier', 'timezone', 'internetSearches']), providerStatus: service.catalog?.value || null, providerStatuses: Object.fromEntries(Object.entries(service.catalogs || {}).map(([id, catalog]) => [id, catalog.value])),questionAttachmentMediaTypes:Object.fromEntries(['copilot','codex','claude'].map(id=>[id,questionAttachmentMediaTypes.filter(type=>service.engine.providers[id]?.acceptedMediaTypes?.includes(type))])),attachmentMediaTypes:Object.fromEntries(['copilot','codex','claude'].map(id=>[id,service.engine.providers[id]?.acceptedMediaTypes||[]])),mcpStatusProviders:['copilot','codex','claude'].filter(id=>typeof service.engine.providers[id]?.mcpStatus==='function'),mcpLoginProviders:['copilot','codex','claude'].filter(id=>typeof service.engine.providers[id]?.mcpLogin==='function'),capabilities:[...(service.computerAccess?['computer.access.v1']:[]),...(service.projectFollow?['tabs.follow.v1']:[]),'chat.subagents.v1','chat.agent-control.v1','chat.update-coordinator.v1','chat.update-release.v1','attention.ack.v1','chat.pages.v1','host.platform.v1',...(service.workspaceProjects?['projects.v1','projects.move.v1','source-library.v1']:[]),'chat.paths.v1','chat.export.v1','chat.previews.v1','content-tabs.v1','chat.index.v1','chat.queue-edit.v1','integrations.health.v1','chat.review.v1','chat.lifecycle.v1','chat.rename.v1','chat.retry-without-agents.v1','chat.attachments.view.v1','chat.internet.v1','workspaces.v1',...(service.engine.permissions?.preserveInheritedDefaults?['chat.permissions.shared.v1']:[]),'chat.permissions.folders.v1','chat.permissions.chat.v1','chat.permissions.pending.v1','chat.documents.v1','chat.attachments.v1','chat.question-attachments.v1','notifications.v1',...(service.openWebsiteNotification?['website.notifications.v1']:[]),'authenticated-revocation.v1','connection-self-revoke.v1',...(service.browserHistory?['browser.history.v1','browser.navigation.v1']:[]),...(service.liveBrowser?['browser.live.v1']:[]),...(service.resources?['resources.v1']:[])],protocol: 1 };
+    defaults: pick(defaults, ['provider', 'model', 'reasoningMode', 'reasoningEffort', 'contextTier', 'serviceTier', 'timezone', 'internetSearches']), providerStatus: service.catalog?.value || null, providerStatuses: Object.fromEntries(Object.entries(service.catalogs || {}).map(([id, catalog]) => [id, catalog.value])),questionAttachmentMediaTypes:Object.fromEntries(['copilot','codex','claude'].map(id=>[id,questionAttachmentMediaTypes.filter(type=>service.engine.providers[id]?.acceptedMediaTypes?.includes(type))])),attachmentMediaTypes:Object.fromEntries(['copilot','codex','claude'].map(id=>[id,service.engine.providers[id]?.acceptedMediaTypes||[]])),mcpStatusProviders:['copilot','codex','claude'].filter(id=>typeof service.engine.providers[id]?.mcpStatus==='function'),mcpLoginProviders:['copilot','codex','claude'].filter(id=>typeof service.engine.providers[id]?.mcpLogin==='function'),capabilities:[...(service.sharedInference?['inference.shared.v1']:[]),...(service.computerAccess?['computer.access.v1']:[]),...(service.projectFollow?['tabs.follow.v1']:[]),'chat.subagents.v1','chat.agent-control.v1','chat.update-coordinator.v1','chat.update-release.v1','attention.ack.v1','chat.pages.v1','host.platform.v1',...(service.workspaceProjects?['projects.v1','projects.move.v1','source-library.v1']:[]),'chat.paths.v1','chat.export.v1','chat.previews.v1','content-tabs.v1','chat.index.v1','chat.queue-edit.v1','integrations.health.v1','chat.review.v1','chat.lifecycle.v1','chat.rename.v1','chat.retry-without-agents.v1','chat.attachments.view.v1','chat.internet.v1','workspaces.v1',...(service.engine.permissions?.preserveInheritedDefaults?['chat.permissions.shared.v1']:[]),'chat.permissions.folders.v1','chat.permissions.chat.v1','chat.permissions.pending.v1','chat.documents.v1','chat.attachments.v1','chat.question-attachments.v1','notifications.v1',...(service.openWebsiteNotification?['website.notifications.v1']:[]),'authenticated-revocation.v1','connection-self-revoke.v1',...(service.browserHistory?['browser.history.v1','browser.navigation.v1']:[]),...(service.liveBrowser?['browser.live.v1']:[]),...(service.resources?['resources.v1']:[])],protocol: 1 };
   });
 }
 function validateRelayURL(value) {
@@ -156,7 +156,7 @@ export class RemoteHost {
     ws.on('error', error => { if (this.socket === ws) this.error = /Unexpected server response: (401|403)\b/.test(error.message) ? 'The relay rejected this computer’s registration. Check its relay registration token or whether this computer is already connected elsewhere. To connect to another computer, use that computer’s pairing code; incoming access here is not required.' : error.message; });
     ws.on('close', () => {
       if (this.socket !== ws) return;
-      for(const id of this.peers.keys())this.service.projectFollow?.removeActor(id);this.peers.clear(); this.status = 'offline';this.config.offlineSince ||= new Date().toISOString();this.save();this.service.activity?.log('warning','transport.offline','Connection to the relay was interrupted.',{hostId:this.config.hostId});
+      for(const id of this.peers.keys()){this.service.projectFollow?.removeActor(id);this.service.sharedInference?.jobs.disconnect(id);}this.peers.clear(); this.status = 'offline';this.config.offlineSince ||= new Date().toISOString();this.save();this.service.activity?.log('warning','transport.offline','Connection to the relay was interrupted.',{hostId:this.config.hostId});
       clearTimeout(this.stableConnectionTimer);
       if (!this.closed && this.config.enabled) {const delay=Math.min(30000,1000*2**Math.min(this.reconnectAttempt||0,5))*(.75+Math.random()*.5);this.reconnectAttempt=(this.reconnectAttempt||0)+1;this.reconnect = setTimeout(() => this.connect(), delay);}
     });
@@ -166,7 +166,7 @@ export class RemoteHost {
         if (message.type === 'connect') {
           const peer = { id: message.clientId, challenge: secret(), incoming: 0, outgoing: 0, joined: Date.now() };
           this.peers.set(peer.id, peer); this.raw(peer, { type: 'challenge', challenge: peer.challenge });
-        } else if (message.type === 'disconnect') {this.service.projectFollow?.removeActor(message.clientId);this.peers.delete(message.clientId);}
+        } else if (message.type === 'disconnect') {this.service.projectFollow?.removeActor(message.clientId);this.service.sharedInference?.jobs.disconnect(message.clientId);this.peers.delete(message.clientId);}
         else { const peer = this.peers.get(message.clientId); if (peer) void this.receive(peer, message.packet).catch(() => { this.service.projectFollow?.removeActor(peer.id);this.peers.delete(peer.id); this.raw(peer, { type: 'rejected' }); }); }
       } catch { /* Reject malformed routing frames without taking the host down. */ }
     });
@@ -188,6 +188,7 @@ export class RemoteHost {
     return { code, browserURL: `https://proteus.example/remote#pair=${Buffer.from(JSON.stringify(capsule)).toString('base64url')}`, expiresAt, qr: await QRCode.toDataURL(code, { margin: 2, width: 360, errorCorrectionLevel: 'M' }) };
   }
   revoke(id) {
+    this.service.sharedInference?.jobs.revoke(id);
     this.documents.revokeDevice(id);
     this.attachmentConsents.revokeDevice(id);
     void this.service.attachments.revokeDevice(id);
@@ -255,6 +256,7 @@ export class RemoteHost {
   }
   requireCommandGrants(peer, method, args) {
     if (!this.config.devices.some(device => device.id === peer.device?.id)) throw new Error('Unknown paired device.');
+    if(method.startsWith('inference.')&&method!=='inference.catalog'){if(!this.service.sharedInference)throw Error('Shared inference is unavailable.');this.service.sharedInference.authorize(peer.device.id,args.providerId);}
     if (method === 'resources.list' || method === 'resources.action') this.requireResourceAccess(peer);
     if(method==='computer.access.update')this.requireResourceAccess(peer);
     if (method.startsWith('browser.live.')) this.requireBrowserAccess(peer);
@@ -264,6 +266,7 @@ export class RemoteHost {
   async command(peer, message) {
     const { method, args = {} } = message;
     this.requireCommandGrants(peer, method, args);
+    if(method==='inference.start'&&message.id!==args.id)throw Error('Inference start identity must match its durable command identity.');
     if (!mutationMethods.has(method)) return this.execute(peer, method, args);
     if (this.closed) throw new Error('Remote host is closing.');
     this.commandCounts ??= {}; this.commandCounts[method] = (this.commandCounts[method] || 0) + 1;
@@ -319,6 +322,7 @@ export class RemoteHost {
     const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Host request failed.'); return data;
   }
   async execute(peer, method, args) {
+    if(method.startsWith('inference.')){if(!this.service.sharedInference)throw Error('Shared inference is unavailable.');return this.service.sharedInference.handle(peer,method,args);}
     const engine = this.service.engine;
     if(method==='computer.access.get')return this.service.computerAccess.get();
     if(method==='computer.access.update'){this.requireResourceAccess(peer);return this.service.computerAccess.set(args);}
@@ -580,7 +584,7 @@ export class RemoteHost {
   }
   async stop() {
     clearTimeout(this.reconnect);clearTimeout(this.stableConnectionTimer); this.invite = null;this.documents.clear();
-    const socket = this.socket; this.socket = null; socket?.terminate(); for(const id of this.peers.keys())this.service.projectFollow?.removeActor(id);this.peers.clear();
+    const socket = this.socket; this.socket = null; socket?.terminate(); for(const id of this.peers.keys()){this.service.projectFollow?.removeActor(id);this.service.sharedInference?.jobs.disconnect(id);}this.peers.clear();
     if (this.relay) { await this.relay.close(); this.relay = null; }
     this.status = 'disabled';
   }

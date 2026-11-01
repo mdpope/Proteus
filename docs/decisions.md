@@ -1,3 +1,7 @@
+## October 31 — combine Fusion/layout with R15/R16
+
+The operator approved combining c54406cc66150c45521fd194d89c6391c44b646a and269f32f1b9f66cdcb042396f95532632ec5da937. Keep both feature sets, reserve no new version while the named0.2.39 release remains open, and validate a new full source pin before rebuilding. Cancel only superseded preparations through their original coordinators; preserve active work and all evidence. Earlier source pins below describe accepted intermediate artifacts, not acceptance of the combined source. iPad deployment is explicitly deferred.
+
 ## October 31 — preserve cross-platform publisher payload bytes
 
 The existing release signer reconstructs metadata for its host and cannot sign another native
@@ -2941,3 +2945,11 @@ entitlements are hard-coded. Attribution is a durable per-turn journal keyed by 
 only from provider events. Metadata is kept; draft and critique content is not. Planned and executed
 models stay distinct. Remote clients receive the turns referenced by their visible history window
 plus the latest turn, so payloads stay bounded.
+
+## October 31 - standalone llama.cpp transport
+
+Reuse the tested local serial tool loop for a distinct llama-cpp provider identity. Discover context and reasoning metadata from the server, and use its template/tokenizer for admission rather than a model-name table or a byte count. Keep connection credentials in private files and allow remote HTTPS with scoped CA trust. Preserve the existing GGUF and default to one server slot on an 8 GB GPU. This avoids a second model download and unsupported promises that removing LM Studio increases model throughput.
+
+## October 31 - relay-only inference sharing
+
+Reuse the existing end-to-end encrypted paired transport rather than introduce a general HTTP proxy or peer-to-peer negotiation. The serving host exposes only authenticated local-backend discovery, context admission, one-shot generation, cursor reads and cancellation. The consuming provider owns agent history and tools. Durable start identities and metadata-only receipts prevent automatic generation replay after ambiguous delivery or restart. Explicit device grants and imports remain separate from existing computer permissions; shared/remote providers cannot be exported again. Direct LAN optimization and shared image delivery are deferred.

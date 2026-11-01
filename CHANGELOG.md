@@ -1,10 +1,8 @@
-# Release operations — October 31
+## 0.2.39 — October thirtieth release, combined October 31 candidate
 
-- Preserve exact accepted native release payload bytes when signing on another platform; verify the pinned source, payload hash and existing publisher trust before writing an envelope. This maintenance helper does not change the frozen application build.
+Combines the [October 31 Fusion/layout plan](docs/2026-10-31-release-plan.md) and R15/R16 from the [open release plan](docs/2026-10-30-release-plan.md). Source validation and new native package acceptance precede deployment.
 
-## Unreleased — October 31 (implemented and tested; not packaged or deployed)
-
-See the [October 31 plan](docs/2026-10-31-release-plan.md).
+- Preserve exact accepted native payload bytes when signing on another platform, checking the full source pin, payload hash and existing publisher trust.
 
 - Add **Copilot Fusion** to Copilot chats when the account's runtime advertises Fusion routing tiers.
   Choose Copilot Fusion and a Fusion effort (advertised names such as Standard/High/Max) in every
@@ -18,6 +16,17 @@ See the [October 31 plan](docs/2026-10-31-release-plan.md).
   composer uses the same compact model controls as local (no inapplicable Context, one line); and
   source folders list the remote workspace's folders instead of an empty box. Website project rows
   match the desktop layout and gain New chat.
+
+### Relay-based shared local models
+
+- Add opt-in llama.cpp/MTPLX sharing with per-device grants and shared-provider imports in Providers.
+- Keep chats, tools and approvals on the consumer; send only inference over the existing encrypted relay.
+- Add bounded queues, Stop propagation, durable no-replay receipts and interrupted-request recovery.
+
+### llama.cpp provider
+
+- Add a Windows-capable llama.cpp provider with authenticated HTTPS, optional per-connection CA trust, live model controls and exact server token accounting.
+- Reuse local tool approvals, selected MCPs, cancellation, usage and delivered-history recovery; expose the provider in Providers and New Chat.
 
 ## 0.2.39 — October thirtieth release open
 
