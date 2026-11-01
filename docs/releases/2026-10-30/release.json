@@ -278,5 +278,51 @@
   "operatorDeferredTargets": {
     "ipad": "Operator explicitly deferred this physical device; keep its installed app and two recovery generations unchanged."
   },
-  "closeoutRequested": true
+  "closeoutRequested": true,
+  "combinedMacCandidate": {
+    "sourceCommit": "08db24856fe401db9ac39ed4283b7054568555ea",
+    "buildRevision": "08db24856fe4+src.4f3b8836cb76",
+    "sourceFingerprint": "4f3b8836cb7625e0f7b420fed424c4e5783d73fab6e3e6b76ae4d92dee75f0b6",
+    "packageHash": "d24e4511450dcf8a989eb4565b796039d28a18db6e807424c5dc9dc4b79665d6",
+    "installationHash": "d24e4511450dcf8a989eb4565b796039d28a18db6e807424c5dc9dc4b79665d6",
+    "artifact": {
+      "bytes": 246575592,
+      "unpackedBytes": 650008659,
+      "sha256": "eba82170540f70a65e8f56bf70228652645f9d46bc821af0f2482b6490639820"
+    },
+    "sourceArtifact": {
+      "filename": "Proteus-0.2.39-source.tar.gz",
+      "bytes": 6375987,
+      "sha256": "b028d9b2eecca14d9bfb5fb603c3201f04c84b8e7bfa08a19732f14a0e56c4d1"
+    },
+    "officialExtraction": true,
+    "runtimeFiles": 436,
+    "sourceFiles": 1479,
+    "accepted": true,
+    "packagedUI": "isolated signing/startup/catalog/UI/PTY/restart pass; unchanged full package hash",
+    "allSourceGitBlobsVerified": true,
+    "installed": false,
+    "published": false,
+    "publisherSignatureVerified": false
+  },
+  "combinedMobileCandidate": {
+    "sourceCommit": "08db24856fe401db9ac39ed4283b7054568555ea",
+    "version": "0.2.39",
+    "build": "2610.31.2",
+    "artifactHash": "19c064e771fd0d68ebff6c7555873415cfd3a578ec9b4ade5456d0e756b8c90b",
+    "signedAndFrozen": true,
+    "iphone": "preflight passed; recovery capture in progress; not installed",
+    "ipad": "explicitly deferred by operator"
+  },
+  "combinedWebCandidate": {
+    "sourceCommit": "08db24856fe401db9ac39ed4283b7054568555ea",
+    "buildId": "08db24856fe4",
+    "release": "20261101T010326Z",
+    "archiveSHA256": "b57f864429b99964a35a4abd96ee41b5bbf49ef89c68713ebca0ae4ffc7b5ea5",
+    "verifiedFiles": 9221,
+    "sourceTestsPassed": 105,
+    "assertions": 920,
+    "deployed": false,
+    "deploymentState": "owner SSH workflow in progress; prior c544 website remains live until verified activation"
+  }
 }

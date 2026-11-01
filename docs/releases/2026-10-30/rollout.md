@@ -1,3 +1,9 @@
+## Combined native artifacts — rollout in progress
+
+The exact 08db248 Mac package is accepted: signed build `08db24856fe4+src.4f3b8836cb76`, full package hash `d24e4511450dcf8a989eb4565b796039d28a18db6e807424c5dc9dc4b79665d6`. Official extraction, native isolated startup/catalog/UI/PTY/restart and all 1,479 corresponding-source Git blobs pass. HC is authorized to verify and hand off through normal idle; Build Mac is prepare-only while command-center device work runs. Neither is claimed installed. Two native builders are validating the same combined pin; Windows is temporarily reconnecting.
+
+The signed/frozen iPhone 2610.31.2 passes preflight; its single resumable recovery capture is in progress, before installation. iPad is deferred. The rebuilt website has 9,221 files and passes 105 tests/920 assertions; the SSH supervisor deployment is in progress. Prior live c544 website remains the known verified baseline until the new activation is reconciled. No release closeout is justified yet.
+
 ## Frozen combined application source
 
 Build/deploy only `08db24856fe401db9ac39ed4283b7054568555ea`, the validated merge of the Fusion/layout branch and R15/R16. Both source commits are verified ancestors. This following documentation commit records the immutable application pin; do not build from the moving branch tip. Version remains **0.2.39**. New packages and installed/live checks remain required. iPad is deferred by the operator; iPhone and all intended desktops/web remain in scope. Final closeout must merge/push validated related work into main and retire merged clean release branches/worktrees without erasing unrelated changes.
@@ -12,7 +18,7 @@ The operator requests merging/synchronizing/pushing validated related release wo
 
 The operator explicitly approved combining c54406cc Fusion/layout and269f32f R15/R16 before further desktop deployment. The version remains0.2.39; the assembled candidate requires validation and a new full frozen pin. Prior candidate evidence below is historical and does not accept this merge. Windows original R16 preparation was cancelled through its original coordinator before replacement. iPad rollout is deferred by the operator; iPhone remains intended.
 
-## Current October 31 deployment hold and verified outcomes
+## Historical c544 source-choice hold and outcomes
 
 The operator's exact application pin remains `c54406cc`; no new version is reserved. A separate
 authorized R15/R16 rollout uses `269f32f`, with shared-model features absent from c544, while that
