@@ -337,3 +337,33 @@ iOS build succeeds and the existing shared iPhone simulator passes 31 NativePari
 including the new owner-advertised local-provider case. A first focused run selected zero tests
 and is not counted as a test pass. Web assets build and five Home/remote-workspace feature tests
 pass (37 assertions); Pint passes. No physical mobile device or website is deployed.
+
+## Frozen local acceptance — rollout held
+
+Application source `4d8664119b77`, build `4d8664119b77+src.60439644d974`, fingerprint
+`60439644d9743368fc13a8c439bf9543c4f629e018e4c738ff7c0976eb917ec5`.
+All 439 shipped runtime files match both source and provenance after acceptance. The local
+ad-hoc bundle signature and original vendor signatures verify; this is not publisher/notarized
+distribution acceptance. Later test/documentation commits do not change these application bytes.
+
+Exact-package tests pass: two-window membership/order/URL/history convergence, independent local
+selection/scroll/drafts, 451-entry history with Forward, missing-source isolation, Close tombstones,
+window close/named restore/restart, three fresh chat Close/reopen/restart trials retaining both
+project/chat views of the same file, browser geometry without a tab switch, Team refresh without
+remount, synthetic cookie persistence and bundled-runtime model discovery. The earlier immediate
+reopen assertion could observe the pre-acknowledgment view; the final fixture waits for canonical
+reopen acknowledgment and stable selection before asserting both document parents after restart.
+
+The final packaged synthetic monitor performs 1,800 probes with three inventories: max/p95 timer
+gap 30.46 / 6.57 ms, maximum typing/API latency 259 ms, elapsed 17.34 seconds and heap delta
+29,647,436 bytes. The `maxPersistMs` test field measures synchronous persistence-call/enqueue
+cost (3.02 ms), not asynchronous filesystem completion time. Timing is environment-dependent.
+
+Two isolated instances of the frozen binary also pass encrypted remote follow in both directions:
+selection, URL/history, sustained nested scrolling, user/navigation cancellation, independent
+cookies, inactive-scope isolation and catch-up. This is distinct from independent local windows.
+
+No live user-data backup, installation, website/mobile deployment or wider rollout occurred.
+The affected HC two-five-minute-interval observation, native Windows/Linux acceptance, publication,
+remaining collected bugs and final release/source/backup closeout remain pending under the hold.
+Private artifact/test/cleanup receipts and device roles remain outside Git.
