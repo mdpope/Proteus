@@ -301,8 +301,8 @@
     "allSourceGitBlobsVerified": true,
     "installed": true,
     "published": false,
-    "publisherSignatureVerified": false,
-    "personalMacState": "First attempt failed before replacement during recovery verification; failure evidence retained. A separate normal preparation of the same package succeeded and remains held before handoff during iPad work.",
+    "publisherSignatureVerified": true,
+    "personalMacState": "Same accepted candidate prepared and held; both physical updates finished. Fresh verification confirms exact staged hash, two recoveries and approximately 6.1 GiB available before public distribution staging.",
     "hcState": "installed and independently verified healthy; settings/preferences/pairings byte-identical and 46 drafts preserved against verified native-update recovery",
     "hcInstalled": true,
     "personalMacInstalled": false,
@@ -310,7 +310,8 @@
     "hcRecoveryGenerations": 2,
     "hcRunPreservationCount": 590,
     "hcEventPreservationCount": 47207,
-    "hcIndependentPreservationQualification": "Native-update interval compared with verified recovery; earlier manual baseline restart lacks complete pre-inventory"
+    "hcIndependentPreservationQualification": "Native-update interval compared with verified recovery; earlier manual baseline restart lacks complete pre-inventory",
+    "signedManifestSHA256": "f309edda2e4588a22906bf33e7d0eaf1f4b476371851123a650fa376a59122f3"
   },
   "combinedMobileCandidate": {
     "sourceCommit": "08db24856fe401db9ac39ed4283b7054568555ea",
@@ -373,12 +374,19 @@
     "sourceGitBlobsVerified": 1494,
     "verifiedRuntimeFiles": 436,
     "verifiedBuildInputs": 8,
-    "signed": false,
-    "installed": false,
+    "signed": true,
+    "installed": true,
     "published": false,
-    "qualification": "isolated real provider/multiwindow/PTY/restart, actual six-value kwallet6 synthetic continuity, update/rollback/pre-install failure pass; production credentials/live installation not tested"
+    "qualification": "Installed hash and owner health verified; settings/context/permissions/projects/encrypted peers/credential metadata/terminal and browser history hashes match recovery, both drafts preserved. Actual six desktop values/backend/credential continuity, outgoing peer connectivity and Wayland presentation remain unverified; service availability and isolated kwallet6 tests are separate evidence.",
+    "signedManifestSHA256": "92641af76d5c1b67bd04b187d76aee8c34e7ceef3c876613c36e2f123c1ec23f",
+    "deploymentState": "Owner complete/updated/health verified and independent installed package hash matched; remaining live peer/backend/window checks qualified.",
+    "healthVerifiedAt": "2026-11-01T03:19:32.214Z",
+    "runPreservationCount": 9,
+    "eventPreservationCount": 3809,
+    "retainedRecoveryGenerations": 2,
+    "separateMigrationOutcomeRecorded": false
   },
-  "combinedWindowsBuildState": "Packaging interruption cancelled; no accepted combined Windows artifact. Public npm restoration verified complete with unchanged builder policy. Signed same-baseline proof and official extraction pass; registration repair and owner restart are prepared, not executed.",
+  "combinedWindowsBuildState": "Public npm restored; signed baseline extraction verified. First helper expired without installer/launch. Corrected receipt-writer tests pass; one-hour human-quit helper armed and independently alive, no installer execution or Shell launch yet. Combined Windows artifact is still absent.",
   "combinedProviderReadiness": {
     "hcCodexAvailable": true,
     "hcCodexModels": 8,

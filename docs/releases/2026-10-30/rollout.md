@@ -1,3 +1,9 @@
+## Linux combined installation verified
+
+Linux runs 0.2.39 / linux.5ca48726d340 from frozen 08db248. Independent installed package inspection matches the accepted hash, and the owner reports complete/updated with verified health and same-chat continuation. Nine runs and 3,809 events were preserved; exactly two verified recoveries remain. No separate migration result is recorded. Live outgoing peer connectivity, six-value/backend continuity, terminal history and restored window presentation retain their stated limits pending bounded read-only checks.
+
+Mac and Linux envelopes are signed and independently trusted-verified. Public distribution is staged locally, not activated. Windows baseline repair is not yet performed. Earlier sections below retain their historical states.
+
 ## iPad combined update verified
 
 The iPad now runs signed 0.2.39 / 2610.31.2 from the exact combined source. All 266 protected file hashes matched before first launch; four saved destinations and selection matched, and launch was verified. The earlier app-restart capture failure remains recorded. A stable cold-state reconciliation reused 156 unchanged copies in the same generation, retained changed-copy evidence, and completed the current capture without a second full backup.

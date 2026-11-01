@@ -1,3 +1,9 @@
+## Signed native distribution and Linux installed outcome
+
+The exact accepted Mac and Linux payloads are signed with the existing trusted publisher key; independent controller verification passed. Linux is installed on linux.5ca48726d340 with accepted package hash and owner health verified, same-chat continuation and two verified recoveries. Saved configuration, encrypted peer records, histories and drafts match the verified recovery. Actual protected-storage selection, outgoing peer access and Wayland presentation retain explicit verification limits. No separate migration outcome is recorded. Mac/Linux public files are staged only; no new public activation is claimed.
+
+Windows public npm restoration and signed baseline extraction pass. A corrected human-quit repair helper is armed; it has not performed an installer repair or reopened the application. Build Mac remains prepared pending normal idle handoff.
+
 ## iPad combined update verified
 
 The iPad now runs signed 0.2.39 / 2610.31.2 from the exact combined source. All 266 protected file hashes matched before first launch; four saved destinations and selection matched, and launch was verified. The earlier app-restart capture failure remains recorded. A stable cold-state reconciliation reused 156 unchanged copies in the same generation, retained changed-copy evidence, and completed the current capture without a second full backup.
