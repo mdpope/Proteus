@@ -2,6 +2,13 @@
 import {safeContentTabURL,sameContentTab,mergeContentTabMetadata} from './content-tab-descriptor.js';
 import {applyNavigationDelta} from '../shared/navigation/navigation-history.js';
 export function syncableTabURL(value){return value?safeContentTabURL(value):'';}
+// A membership-only pass may remove only identities confirmed absent by the owner.
+// Newly captured local opens must survive until the subsequent mutation pass.
+export function shouldRemoveCapturedTab(id,ownerIds,capturedIds,{membershipOnly=false,removedIds=[],preservedIds=[]}={}){
+  if(!id||ownerIds.has(id)||!capturedIds.has(id))return false;
+  if(membershipOnly&&!removedIds.includes(id))return false;
+  return !preservedIds.includes(id)||removedIds.includes(id);
+}
 export function tabChanges(before,after,{navigation=false,seed=false}={}){
   const prior=new Map(before.map(tab=>[tab.id,tab])),next=new Map(after.map(tab=>[tab.id,tab])),operations=[];
   const seedNavigation=tab=>{

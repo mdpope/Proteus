@@ -44,7 +44,7 @@ import { renderAgentTerminal } from './features/tools/agent-terminal.js';
 import {usageSidebar,usageDetails} from './features/settings/provider-usage-view.js';
 import { bindDesktopBrowserRecents } from './features/browser/browser-recents.js';
 import { mountHome } from './shared/ui/home.js';
-import { createTabSynchronizer, syncableTabURL } from './models/content-tab-sync.js';
+import { createTabSynchronizer, syncableTabURL, shouldRemoveCapturedTab } from './models/content-tab-sync.js';
 import { createProjectFollower, acceptsProjectPresentation, sharedScrollPosition, restoreSharedScroll } from './features/workspaces/project-follow.js';
 import { browserTabIcon } from './features/browser/browser-icons.js';
 import { setMessageActionsContext, stopMessageSpeech } from './features/chats/message-actions.js';
@@ -952,7 +952,8 @@ const contentTabSync=createTabSynchronizer({navigation:true,explicitCloseOnly:tr
       const preserved=new Set(preservedIds),order=ids=>contentTabOrder(ids.filter(id=>!preserved.has(id)));
       const currentIds=[];for(const tab of list)currentIds.push(await descriptorId(tab));
       const currentOrder=order(currentIds),orderChangedDuringRequest=currentOrder.join('\0')!==order(captured.map(tab=>tab.id)).join('\0');
-      for(const tab of list.slice()){const id=await descriptorId(tab);if(!id||ids.has(id)||!captured.some(item=>item.id===id))continue;const currentDescriptor=await descriptorFor(tab,parent);if(preserved.has(id)&&!removedIds.includes(id))continue;if(scope.scope!=='team'&&tab.parentId!==parent.id)continue;if(['run','remote-run'].includes(tab.type))await releaseChatChildViews(tab);if(tab.type==='browser'||tab.browserId)await window.desktop.browser({action:'close',presentationOnly:true,id:tab.browserId||tab.id});if(tab.type==='remote-document')forgetRemoteDocument(tab.id);if(scope.scope==='team'){teamState().tabs=teamState().tabs.filter(item=>item!==tab);if(teamState().active===tab.id)teamState().active='overview';}else{state.tabs=state.tabs.filter(item=>item!==tab);if(state.tab===tab.id)state.tab=parent.id||'overview';}changed=true;}
+      const capturedIds=new Set(captured.map(item=>item.id));
+      for(const tab of list.slice()){const id=await descriptorId(tab);if(!shouldRemoveCapturedTab(id,ids,capturedIds,{membershipOnly,removedIds,preservedIds}))continue;const currentDescriptor=await descriptorFor(tab,parent);if(scope.scope!=='team'&&tab.parentId!==parent.id)continue;if(['run','remote-run'].includes(tab.type))await releaseChatChildViews(tab);if(tab.type==='browser'||tab.browserId)await window.desktop.browser({action:'close',presentationOnly:true,id:tab.browserId||tab.id});if(tab.type==='remote-document')forgetRemoteDocument(tab.id);if(scope.scope==='team'){teamState().tabs=teamState().tabs.filter(item=>item!==tab);if(teamState().active===tab.id)teamState().active='overview';}else{state.tabs=state.tabs.filter(item=>item!==tab);if(state.tab===tab.id)state.tab=parent.id||'overview';}changed=true;}
       if(!membershipOnly)for(const descriptor of descriptors){let tab;for(const candidate of list){if(await descriptorId(candidate)===descriptor.id){tab=candidate;break;}}
         // A tab closed/moved after the request snapshot must not be recreated
         // from that older owner response. Its close is published on the next pass.
