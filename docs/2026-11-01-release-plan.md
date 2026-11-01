@@ -1,4 +1,4 @@
-# November 1 release plan — desktop responsiveness
+# Nov 1 release plan — navigation, responsiveness and distribution
 
 **Stage: local implementation and testing authorized; wider rollout held.** The operator
 authorized local builds on October 31, including this exact Work Mac handoff, project/window
@@ -211,6 +211,10 @@ Implemented locally:
   ending terminal sessions; reopening and restarting restore those same child identities.
   Native child Close resolves the current window's chat alias before interpreting project
   prefixes, and never mutates another owner's scope.
+- Missing local views never imply shared deletion or reorder. Only the durable explicit Close
+  queue deletes membership. Legacy pending deletion envelopes are quarantined for review with
+  their original request bytes/receipt intact. This also closes the remount race exposed by
+  the first packaged chat-child restart test; that superseded candidate is not accepted.
 
 Acceptance includes missing documents at the front of the owner list, first-baseline failure,
 navigation quarantine, delayed opens, stale reopen, native Close, two-window independent
@@ -247,7 +251,9 @@ N2 routine state-projection optimization remains deferred; it is independent of 
 repeated-scan background algorithm and needs a separate measured invalidation design.
 No broad inventory cache or weaker source/identity validation was introduced.
 
-Final source verification: 1,398 Node passes, four skips, no failures, and static checks pass.
+Final source verification including the explicit-only closure refinement: 1,400 Node passes,
+four skips, no failures, and static checks pass. Exact-package results and artifact/source pins
+are recorded in the private acceptance receipt.
 The extended real Electron multiwindow fixture and chat Close/reopen/restart fixture pass.
 The original default macOS temporary path exposed
 symlink/Unix-socket fixture failures; the complete successful run uses canonical `/private/tmp`.
@@ -260,6 +266,17 @@ runtime, disk and contention; structural and responsiveness assertions are separ
 The packaged artifact must run this same rehearsal and restart checks before acceptance.
 Affected-HC observation over two five-minute intervals remains a post-install gate under the
 rollout hold.
+
+The superseded local Mac artifact used application commit `0aa63b6cf907` and source fingerprint
+`cb568287dc4f5190a4cdd587bed18d3404882c948a8e92be74c3d804e47e275b`,
+with local ad-hoc signing; publisher/notarized distribution is not claimed. Its packaged
+instrumented responsiveness rehearsal passes with three scans /
+1,800 probes, max/p95 timer gaps 37.89 / 16.46 ms, maximum typing/API latency 221 ms, and peak
+synchronous registry write / consumer projection 20.45 / 3.04 ms. Elapsed time is 13.71 seconds;
+heap delta 60,972,576 bytes is not a leak measurement. An earlier exact-package attempt recorded
+a 336.16 ms maximum timer gap (p95 16.50 ms) and failed its 100 ms gate. Its cause is unconfirmed;
+the failure receipt is retained alongside the instrumented pass. Do not infer a guaranteed
+production latency ceiling from a passing synthetic run. The affected-device soak remains open.
 
 
 ## N5 — coordinated distribution and stronger preservation

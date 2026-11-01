@@ -5,15 +5,17 @@
 - Show owner-advertised local/shared model providers in native chat/schedule pickers and project actual adapter capabilities to remote clients.
 
 - Prevent stale project views/outboxes from reviving closed tabs; retain owner close revisions and allow reviewed explicit reopen. Isolate unavailable document sources so other tabs keep syncing.
+- Require explicit shared Close intent; preserve chat children across alias changes, parent closure and restart without ending their terminal sessions.
 - Keep browser bounds current when its content area changes without a window resize or tab switch.
 - Bound background integration work, avoid repeated global scans, skip dormant sessions before context hashing, and retain fresh configuration/session validation.
 - Local source/UI validation only at this checkpoint; package acceptance and affected-HC observation remain separate.
 
-# Planned — November 1 responsiveness correction
+# HC handoff — November 1 responsiveness diagnosis
 
 - Profiled recurring desktop stalls and documented the required integration-health batching,
   scoped verification and event-loop yielding in the [release plan](docs/2026-11-01-release-plan.md).
-  Added a provider-free synthetic profiling probe. The production fix is not implemented.
+  Added a provider-free synthetic profiling probe. This records the diagnosis preceding the
+  local implementation above; deployment and affected-device observation remain held.
 
 ## 0.2.39 — October thirtieth release, combined October 31 candidate
 

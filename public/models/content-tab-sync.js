@@ -89,8 +89,11 @@ function changesAfterOwnerUpdates(baseline,local,remote,navigation){
   const localOrder=local.filter(tab=>!arrivals.has(tab.id)).map(tab=>tab.id);
   return previousOrder.join('\0')===localOrder.join('\0')?operations.filter(op=>op.action!=='reorder'):operations;
 }
-export function createTabSynchronizer({scopes,readLocal,apply,acknowledge=async()=>{},request,onError=()=>{},navigation=false,pendingStorage,now=Date.now,preserveUntracked=()=>false}){
+export function createTabSynchronizer({scopes,readLocal,apply,acknowledge=async()=>{},request,onError=()=>{},navigation=false,explicitCloseOnly=false,pendingStorage,now=Date.now,preserveUntracked=()=>false}){
   const records=new Map(),navigationCache=new Map(),backoff=new Map();
+  // A view can disappear while its parent remounts or an alias changes. Only a
+  // durable human Close can delete membership; incomplete views cannot reorder it.
+  const viewChanges=(before,after,operations)=>!explicitCloseOnly?operations:operations.filter(op=>op.action!=='close'&&(op.action!=='reorder'||before.every(tab=>after.some(row=>row.id===tab.id))));
   const hostKey=scope=>scope.hostId||'local';
   const key=scope=>JSON.stringify([scope.hostId||'',scope.scope,scope.id]);
   async function hydrate(scope,remote){
@@ -149,7 +152,7 @@ export function createTabSynchronizer({scopes,readLocal,apply,acknowledge=async(
     if(!baseline||record.busy||record.pending||record.conflict||!pendingStorage)return false;
     const local=(await snapshot(scope)).filter(tab=>!record.localAliases?.has(tab.id));
     if(records.get(id)!==record||record.baseline!==baseline||record.busy||record.pending||record.conflict)return false;
-    const operations=tabChanges(baseline,local,{navigation});if(!operations.length)return false;
+    const operations=viewChanges(baseline,local,tabChanges(baseline,local,{navigation}));if(!operations.length)return false;
     pendingStorage.setItem('proteus.navigation.pending:'+id,JSON.stringify(operations));
     record.pending=operations;record.pendingSnapshot=structuredClone(local);return true;
   }
@@ -199,7 +202,8 @@ export function createTabSynchronizer({scopes,readLocal,apply,acknowledge=async(
         const quarantined=new Set((record.pending||[]).map(op=>op.tabId||op.tab?.id).filter(Boolean));
         const membershipKey='proteus.navigation.membership:'+id;
         let envelope=JSON.parse(pendingStorage?.getItem(membershipKey)||'null');
-        const changes=changesAfterOwnerUpdates(record.baseline||remote.tabs,local.filter(tab=>!record.localAliases?.has(tab.id)),remote.tabs,navigation)
+        const observed=local.filter(tab=>!record.localAliases?.has(tab.id));
+        const changes=viewChanges(record.baseline||remote.tabs,observed,changesAfterOwnerUpdates(record.baseline||remote.tabs,observed,remote.tabs,navigation))
           .filter(op=>!op.action.startsWith('browser-')&&(op.action!=='open'||!quarantined.has(op.tab.id)))
           .map(op=>op.action==='open'&&!remote.tabs.some(tab=>tab.id===op.tab.id)?{...op,tab:local.find(tab=>tab.id===op.tab.id)||op.tab}:op)
           .filter(op=>op.action!=='open'||!Object.hasOwn(remote.closed||{},op.tab.id));
@@ -246,9 +250,10 @@ export function createTabSynchronizer({scopes,readLocal,apply,acknowledge=async(
       const storageKey='proteus.navigation.pending:'+id;
       const requestKey='proteus.navigation.request:'+id;
       if(!record.pending&&pendingStorage)try{record.pending=JSON.parse(pendingStorage.getItem(storageKey)||'null');}catch{}
+      if(explicitCloseOnly&&record.pending?.some(op=>op.action==='close'))throw Object.assign(Error('A retained legacy Close needs navigation review. Its original receipt was preserved.'),{code:'NAVIGATION_CONFLICT'});
       const initial=remote.revision===0?tabChanges([],local,{navigation,seed:true}):tabChanges(remote.tabs,[...remote.tabs.map(tab=>local.find(item=>item.id===tab.id&&item.navigationPending)||tab),...local.filter(tab=>tab.navigationPending&&!remote.tabs.some(item=>item.id===tab.id))],{navigation});
       const retrying=!!record.pending;
-      const operations=record.pending||(record.baseline===null?initial:changesAfterOwnerUpdates(record.baseline,local,remote.tabs,navigation));
+      const operations=record.pending||viewChanges(record.baseline||[],local,record.baseline===null?initial:changesAfterOwnerUpdates(record.baseline,local,remote.tabs,navigation));
       let captured=local;
       if(operations.length){
         // Do not publish a close computed before the user replaced/moved a tab.

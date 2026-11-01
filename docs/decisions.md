@@ -2,6 +2,10 @@
 
 Retain compact owner close/move revisions without time expiry: forgetting a close after thirty days would allow an old window or offline client to revive the same identity. Bound records at 16,384 per scope and the existing store byte limit, rejecting writes intact rather than silently evicting authority. Explicit reopen must match the closing revision; a later close wins. Window disposal and mirror cleanup are presentation-only. Document-source failure becomes a retained unavailable view rather than aborting shared membership reconciliation. Background integration monitoring uses run-scoped fresh validation and real event-loop yields rather than a broader cross-turn context cache.
 
+Do not infer shared deletion or order from incomplete local views. Explicit durable Close intent
+is the deletion boundary; retained legacy deletion envelopes are reviewed without rewriting
+uncertain receipts. This prevents alias/parent remounts from deleting saved child resources.
+
 ## October 31 — combine Fusion/layout with R15/R16
 
 The operator approved combining c54406cc66150c45521fd194d89c6391c44b646a and269f32f1b9f66cdcb042396f95532632ec5da937. Keep both feature sets, reserve no new version while the named0.2.39 release remains open, and validate a new full source pin before rebuilding. Cancel only superseded preparations through their original coordinators; preserve active work and all evidence. Earlier source pins below describe accepted intermediate artifacts, not acceptance of the combined source. iPad deployment is explicitly deferred.

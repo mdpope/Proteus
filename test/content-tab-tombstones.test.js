@@ -68,3 +68,24 @@ test('Close before owner registration prevents a delayed first open from revivin
  await close({id:'another-not-yet-registered',parentId:'project:local:'+scope.id});
  assert.ok(owner.get(scope.scope,scope.id).closed['another-not-yet-registered']);
 });
+
+test('transient missing views cannot close or reorder owner children; explicit Close still wins',async t=>{
+ const {owner,mutate}=fixture(t),other={...tab,id:'other-child'};mutate([{action:'open',tab:other}]);
+ let local=structuredClone(owner.get(scope.scope,scope.id).tabs);
+ const sync=createTabSynchronizer({explicitCloseOnly:true,pendingStorage:storage(),scopes:()=>[scope],readLocal:async()=>structuredClone(local),apply:async(_scope,tabs,_captured,options={})=>{if(!options.membershipOnly)local=structuredClone(tabs);},request:async(_scope,action,args)=>action==='get'?owner.get(scope.scope,scope.id):owner.mutate({...scope,...args})});
+ await sync.sync(scope);local=[other];await sync.checkpoint(scope);await sync.sync(scope);
+ assert.deepEqual(owner.get(scope.scope,scope.id).tabs.map(row=>row.id),[tab.id,other.id]);
+ assert.deepEqual(local.map(row=>row.id),[tab.id,other.id]);
+ sync.close(scope,tab.id);local=[other];await sync.sync(scope);
+ assert.deepEqual(owner.get(scope.scope,scope.id).tabs.map(row=>row.id),[other.id]);
+});
+
+test('legacy deletion outbox is reviewed without changing its uncertain request identity',async t=>{
+ const {owner}=fixture(t),saved=storage(),key=JSON.stringify(['',scope.scope,scope.id]);
+ const pending=JSON.stringify([{action:'close',id:tab.id}]),receipt=JSON.stringify({id:'retained-receipt',issuedAt:'2026-10-31T00:00:00Z',signature:'unchanged'});
+ saved.setItem('proteus.navigation.pending:'+key,pending);saved.setItem('proteus.navigation.request:'+key,receipt);
+ const sync=createTabSynchronizer({explicitCloseOnly:true,pendingStorage:saved,scopes:()=>[scope],readLocal:async()=>[],apply:async()=>{},request:async(_scope,action,args)=>action==='get'?owner.get(scope.scope,scope.id):owner.mutate({...scope,...args})});
+ await sync.sync(scope);assert.ok(sync.hasConflict(scope));assert.equal(owner.get(scope.scope,scope.id).tabs.length,1);
+ assert.equal(saved.getItem('proteus.navigation.pending:'+key),pending);assert.equal(saved.getItem('proteus.navigation.request:'+key),receipt);
+ sync.close(scope,tab.id);await sync.sync(scope);assert.equal(owner.get(scope.scope,scope.id).tabs.length,0);
+});
