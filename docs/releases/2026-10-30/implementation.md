@@ -1,5 +1,24 @@
 ## October 31 validation and website candidate
 
+The signed Mac package is accepted as `c54406cc6615+src.7f7328984d32`; fingerprint
+`7f7328984d324df6fa3c5da31a941348db4e222b469318663e3ba72428362b02`, full package hash
+`a49bc36b729920307da6168c3c6ff1e0d89c4bab75af966d5d86c1cfa54505ef`. Official extraction,
+1,466 source entries, all runtime/build inputs against Git, preserved vendor signatures, isolated
+smoke and packaged UI/PTY/restart checks pass with unchanged package bytes. HC independently
+verified these pins and handed off; installation awaits its idle barrier. The physical iOS Release
+build succeeds as 0.2.39 / 2610.31.1; it has not been installed.
+
+Website `20261031T082825Z` is deployed and audited: all 9,221 files, nine complete public asset
+hashes and fourteen endpoints pass; schema/configuration/nutrition remain preserved. The original
+activation SSH response was lost; status confirmed completion and the same durable request
+recovered the receipt without repeating activation. Ordinary restore failed; captured-state
+verification passed and was explicitly used. Local retention leaves two verified recovery
+generations; final server recovery retention still needs reconciliation.
+
+Cross-platform publication requires an exact-byte signer because the existing signer reconstructs
+its host target. The isolated deployment branch adds and tests that release-operation helper;
+the frozen c54406cc application source and accepted native artifacts remain unchanged.
+
 The exact unchanged source passes **1,359 Node tests, four skips, zero failures** with canonical
 short `TMPDIR=/private/tmp`; static checks pass. Default long/aliased macOS temporary paths
 reproduce the six reported failures, all cleared without changing source or assertions. Original

@@ -1,5 +1,17 @@
 # Named releases and distribution
 
+## Signing an accepted payload on the publisher host
+
+When a native builder and publisher use different platforms, preserve the exact accepted payload
+bytes, including its target and dates. `scripts/sign-desktop-payload.mjs` accepts absolute
+`--payload`, `--key` and new `--out` paths, the payload's `--sha256` and full `--source-commit`.
+It checks the byte hash and source pin, uses the existing private Ed25519 key outside the source
+checkout, and runs the normal updater verifier with the native target and bundled publisher trust
+before writing an exclusive envelope. The CLI cannot select another trust store. Do not use this
+helper as evidence of native acceptance: retain the builder's package/source receipts separately.
+A release-operation helper can have a later maintenance commit without changing the frozen
+application/source-companion pin or rebuilding accepted application bytes.
+
 This is the standing Proteus release process. A release has a human name, one reserved application
 version, repository documents and a per-machine rollout ledger. The coordinating Mac owns the
 release; each destination owns its installation, data, credentials, migrations and acceptance.

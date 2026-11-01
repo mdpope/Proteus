@@ -1,3 +1,12 @@
+## October 31 — preserve cross-platform publisher payload bytes
+
+The existing release signer reconstructs metadata for its host and cannot sign another native
+target's already accepted payload unchanged. A separate release-operation helper binds exact
+payload bytes/hash/full source pin, preserves dates and target, verifies the trusted publisher
+and normal manifest constraints, and refuses output replacement. Its tests use ephemeral keys;
+the CLI cannot override publisher trust. This maintenance tooling does not change the frozen
+c54406cc application or native source companion; signing is separate from native acceptance.
+
 ## October 31 — retain the open named version for Fusion/layout rollout
 
 O14–O17 are an operator-authorized supplement to the still-open October thirtieth release, 0.2.39. A new named release requires closing the current one; no closeout has occurred. Freeze c54406cc66150c45521fd194d89c6391c44b646a and bind new platform artifacts to distinct build/hash identities. Keep prior installed/public evidence separate.

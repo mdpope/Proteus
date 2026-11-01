@@ -1813,3 +1813,7 @@ Known unfinished work and distribution limitations are tracked in `docs/planned-
 ## Unreleased — quieter extension connection notices
 
 - Show a native-helper connection warning, including iCloud Passwords, only once per extension per app launch across browser profiles and windows. Retries continue without repeating or reviving the banner; restarting Proteus permits one new warning.
+# Release operations — October 31
+
+- Preserve exact accepted native release payload bytes when signing on another platform; verify the pinned source, payload hash and existing publisher trust before writing an envelope. This maintenance helper does not change the frozen application build.
+

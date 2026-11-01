@@ -5,6 +5,14 @@ the superseded preparation is cancelled, two recovery generations verify and app
 518 GiB is available. Exact-source catalog resolution returns `build-required`. No build,
 preparation or installation occurred there; Mac unlock/signing and delivery checks remain.
 
+Linux is blocked before validation: the frozen commit is absent locally and the existing Git
+route cannot resolve GitHub in the restricted session. Its installed 0.2.36 remains healthy;
+two verified recoveries are retained, no payload was retired and free-space change is zero.
+Historical build directories remain unmodified pending role/process verification and scoped
+filesystem access. The coordinator has been asked to use supported narrow approval for the
+existing authenticated Git route and isolated build location, without changing network settings,
+credentials or the source pin. No native package or installation exists for this source yet.
+
 The designated Windows owner now reports a completed exact-source build,
 `windows.1075380c0a1b`, with source/static, extracted-package, integrity and trusted publisher
 verification passing. Exact receipt details and independent artifact transfer remain pending a
