@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import {atomicRename} from './atomic-rename.cjs';
+import {atomicRename,atomicRenameAsync} from './atomic-rename.cjs';
 
 export function applicationHome({ platform = process.platform, home = os.homedir(), env = process.env } = {}) {
   if (env.PROTEUS_HOME) return env.PROTEUS_HOME;
@@ -35,6 +35,20 @@ export function atomicJSON(file, value) {
   } finally {
     if (fd !== undefined) try { fs.closeSync(fd); } catch {}
     if(created)try { fs.unlinkSync(temp); } catch {} // Cleanup must never mask the original save failure.
+  }
+}
+// Snapshot bytes before yielding; callers serialize writes to the same file.
+export async function atomicJSONAsync(file,value){
+  const contents=JSON.stringify(value,null,2)+'\n',temp=`${file}.${randomUUID()}.tmp`;
+  let handle,created=false;
+  try{
+    await fs.promises.mkdir(path.dirname(file),{recursive:true,mode:0o700});
+    handle=await fs.promises.open(temp,'wx',0o600);created=true;
+    await handle.writeFile(contents);await handle.sync();await handle.close();handle=undefined;
+    await atomicRenameAsync(temp,file);return Buffer.byteLength(contents);
+  }finally{
+    if(handle)try{await handle.close();}catch{}
+    if(created)try{await fs.promises.unlink(temp);}catch{}
   }
 }
 export function jsonFiles(dir) {

@@ -718,7 +718,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         const value=await body(req);
         if(value.action==='favorite'){const workspace=context.config().workspaces.find(row=>context.get(row.id).entries.some(entry=>entry.id===value.id));if(!workspace)throw Error('This source is no longer in the source library.');context.favorite(value.id,value.enabled,value.expectedRevision,workspace.id);notify();return json(200,integrations.snapshot());}
         if(value.action==='refresh-sources'){await context.refreshAsync({});notify();return json(200,integrations.snapshot());}
-        if(value.action==='save')return json(200,integrations.save(value.id,value.profile,value.expectedRevision));
+        if(value.action==='save')return json(200,await integrations.save(value.id,value.profile,value.expectedRevision));
         if(['check','recover'].includes(value.action))return json(200,await integrations.check(value.id,{recover:value.action==='recover'}));
         throw new Error('Unknown integration action.');
       }

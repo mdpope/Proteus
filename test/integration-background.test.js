@@ -18,6 +18,27 @@ function fixture(t,dormant=600,live=32){
  return {health,runs,byId,provider,engine,diagnostics,counts:()=>({scans,selections,calls})};
 }
 
+test('slow background replacement yields; concurrent manual state stays ordered and close drains it',async t=>{
+ const f=fixture(t,0,1),run=f.runs[0],row=f.health.consumers(run.id)[0];
+ const rename=fs.promises.rename;let release,entered=false,closed=false;
+ const gate=new Promise(resolve=>release=resolve);
+ fs.promises.rename=async(from,to)=>{if(to===f.health.file&&!entered){entered=true;await gate;}return rename.call(fs.promises,from,to);};
+ t.after(()=>{fs.promises.rename=rename;release();});
+ const background=f.health.persist({background:true});
+ for(let i=0;!entered&&i<200;i++)await new Promise(resolve=>setTimeout(resolve,10));
+ assert.ok(entered,'write reaches async replacement while the owner loop continues');
+ const saved=f.health.save(row.id,{contexts:[{label:'Synthetic manual context'}]},f.health.snapshot().revision);
+ assert.equal(typeof saved.then,'function');
+ const observed=f.health.observe(run,[{name:'one',status:'connected'}]);
+ const closing=f.health.close().then(()=>{closed=true;});await new Promise(setImmediate);assert.equal(closed,false);
+ release();await Promise.all([background,saved,observed,closing]);
+ const durable=JSON.parse(fs.readFileSync(f.health.file));
+ assert.equal(durable.profiles[row.id].contexts[0].label,'Synthetic manual context');
+ assert.equal(durable.observations[row.id].connection,'connected');
+ assert.equal(fs.statSync(f.health.file).mode&0o777,0o600);
+ assert.ok(!fs.readdirSync(path.dirname(f.health.file)).some(name=>name.endsWith('.tmp')));
+});
+
 test('600 dormant runs and live probes use one inventory and yield during actual work',async t=>{
  const f=fixture(t);let turns=0,done=false;
  const sentinel=()=>{if(!done){turns++;setImmediate(sentinel);}};setImmediate(sentinel);
@@ -28,6 +49,18 @@ test('600 dormant runs and live probes use one inventory and yield during actual
  assert.ok(report.phases.some(row=>row.name==='integrations.tick'&&row.kind==='async'));
  assert.ok(report.phases.some(row=>row.name==='integrations.batch'&&row.kind==='sync'));
  assert.doesNotMatch(JSON.stringify(report),/synthetic-|padding|session|command/);
+});
+
+test('failed async replacement preserves durable state, removes staging and fails Close',async t=>{
+ const f=fixture(t,0,1);f.health.persist();const before=fs.readFileSync(f.health.file);
+ const rename=fs.promises.rename;fs.promises.rename=async(from,to)=>{if(to===f.health.file)throw Object.assign(Error('Synthetic disk denial'),{code:'EACCES'});return rename.call(fs.promises,from,to);};
+ try{
+  f.health.data.profiles.synthetic={label:'Not committed'};
+  await assert.rejects(f.health.persist({background:true}),/Synthetic disk denial/);
+  assert.deepEqual(fs.readFileSync(f.health.file),before);
+  assert.ok(!fs.readdirSync(path.dirname(f.health.file)).some(name=>name.endsWith('.tmp')));
+  await assert.rejects(f.health.close(),/Synthetic disk denial/);
+ }finally{fs.promises.rename=rename;}
 });
 
 test('configuration/session changes during a probe discard results and close drains coalesced work',async t=>{

@@ -247,12 +247,23 @@ turn. Recovery caps/backoff, provider holds, active turns, session loss, close/d
 coalescing remain enforced. Whole-tick async timings, synchronous candidate timings and bounded
 fixed aggregate counters are available in performance diagnostics.
 
+Packaged acceptance also exposed a separate synchronous persistence stall: one integration
+registry write took 315.07 ms of a 319.25 ms timer gap while consumer projection stayed below
+one millisecond. Background writes now use asynchronous restrictive-temp-file/fsync/atomic
+replacement with asynchronous Windows sharing-violation retries. Concurrent manual producers
+join the same ordered snapshot queue, the save API awaits durability, and shutdown drains writes
+and reports an outstanding failure. A delayed-replacement regression proves input-loop progress,
+manual/background ordering, permissions and Close/drain behavior. Manual-only writes retain their
+existing immediate durability when no asynchronous writer is active.
+
 N2 routine state-projection optimization remains deferred; it is independent of the fixed
 repeated-scan background algorithm and needs a separate measured invalidation design.
 No broad inventory cache or weaker source/identity validation was introduced.
 
-Final source verification including the explicit-only closure refinement: 1,400 Node passes,
-four skips, no failures, and static checks pass. Exact-package results and artifact/source pins
+Final source verification including explicit-only closure and asynchronous persistence: 1,402
+Node passes, four skips, no failures, and static checks pass. A subsequent focused failure-path
+test also verifies rejected replacement leaves old bytes and fails Close; the six-test background
+suite passes. Exact-package results and artifact/source pins
 are recorded in the private acceptance receipt.
 The extended real Electron multiwindow fixture and chat Close/reopen/restart fixture pass.
 The original default macOS temporary path exposed

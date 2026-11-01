@@ -1,7 +1,7 @@
 import path from 'node:path';
 import {performance} from 'node:perf_hooks';
 import {createHash} from 'node:crypto';
-import {atomicJSON, readJSON} from '../../shared/files.js';
+import {atomicJSON, atomicJSONAsync, readJSON} from '../../shared/files.js';
 import {revision} from '../scheduling/schedules.js';
 
 const hash=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -91,10 +91,19 @@ export class IntegrationHealth {
     if(!profile||typeof profile!=='object'||!Array.isArray(profile.contexts)||profile.contexts.length>100)throw new Error('Provide at most 100 resource contexts.');
     const contexts=profile.contexts.map(c=>{if(!c||!text(c.label))throw new Error('Each context needs a label.');return {id:hash([text(c.label),text(c.tenant),text(c.subscription),text(c.organization),text(c.site)]),...Object.fromEntries(['label','tenant','subscription','organization','site'].map(k=>[k,text(c[k])]))};});
     if(new Set(contexts.map(c=>c.id)).size!==contexts.length)throw new Error('Resource contexts must be distinct.');
-    this.data.profiles[id]={label:text(profile.label),expectedAccount:text(profile.expectedAccount),contexts};this.persist();return this.snapshot();
+    this.data.profiles[id]={label:text(profile.label),expectedAccount:text(profile.expectedAccount),contexts};const saved=this.persist();return saved?.then?saved.then(()=>this.snapshot()):this.snapshot();
   }
-  persist(){atomicJSON(this.file,this.data);this.onChange();}
-  observe(run,servers,source='runtime') {
+  persist({background=false}={}){
+    if(!background&&!this.writing){atomicJSON(this.file,this.data);this.writeError=null;this.onChange();return;}
+    // Never let an older async snapshot replace a newer manual save. Once a
+    // write is in flight, every producer joins the same ordered durable queue.
+    const snapshot=structuredClone(this.data),previous=this.writing||Promise.resolve();
+    const operation=previous.catch(()=>{}).then(()=>atomicJSONAsync(this.file,snapshot)).then(()=>{this.onChange();});
+    this.writing=operation;
+    operation.then(()=>{if(this.writing===operation){this.writing=null;this.writeError=null;}},error=>{this.writeError=error;if(this.writing===operation)this.writing=null;});
+    return operation;
+  }
+  observe(run,servers,source='runtime',{background=false}={}) {
     const rows=this.consumers(run.id);let changed=false;
     for(const server of servers) {
       const row=rows.find(r=>r.server===server.name);if(!row)continue;
@@ -113,7 +122,7 @@ export class IntegrationHealth {
       if(old.connection!==connection||old.authentication!==authentication)entry.timeline=[...(old.timeline||[]),{at,connection,authentication,source}].slice(-20);
       this.data.observations[row.id]=entry;changed=true;
     }
-    if(changed)this.persist();
+    if(changed)return this.persist({background});
   }
   capture(run){if(!run?.mcpConnections)return;const servers=Object.entries(run.mcpConnections).filter(([,s])=>s.observedAt).map(([name,s])=>({name,...s}));if(!servers.length)return;const rows=this.consumers(run.id);if(servers.some(s=>{const row=rows.find(r=>r.server===s.name);return row&&(!row.checkedAt||Date.parse(s.observedAt)>Date.parse(row.checkedAt));}))this.observe(run,servers,'session-event');}
   async withProvider(providerId, callback) {
@@ -146,7 +155,7 @@ export class IntegrationHealth {
       // Status APIs can report several servers. Bind each observation to the
       // configuration actually checked, never to a newly selected replacement.
       const servers=(result.servers||[]).filter(server=>{const before=target.rows.find(row=>row.server===server.name);return before&&verified.rows.some(row=>row.id===before.id);});
-      this.observe(run,servers,recover?'recovery':'verification');
+      await this.observe(run,servers,recover?'recovery':'verification',{background});
       return background?{consumer:this.consumers(row.runId).find(r=>r.id===id)}:this.snapshot(runId);
     });
   }
@@ -185,7 +194,7 @@ export class IntegrationHealth {
               const observation=this.data.observations[row.id];if(!observation)continue;
               observation.recoveryAttempts=attempts+1;
               try{await this.check(row.id,{recover:true,background:true,runId:row.runId});}
-              finally{observation.nextCheckAt=new Date(this.now()+300000*2**attempts).toISOString();this.persist();}
+              finally{observation.nextCheckAt=new Date(this.now()+300000*2**attempts).toISOString();await this.persist({background:true});}
             }
           }catch{counts.rejected++;/* Passive checks never start a provider or sign-in. */}
         }
@@ -206,5 +215,5 @@ export class IntegrationHealth {
     }
     throw new Error('Unknown integration action.');
   }
-  async close(){this.closed=true;await Promise.allSettled([...this.pending.values(),this.ticking]);this.identities.clear();}
+  async close(){this.closed=true;await Promise.allSettled([...this.pending.values(),this.ticking]);await this.writing;if(this.writeError)throw this.writeError;this.identities.clear();}
 }
