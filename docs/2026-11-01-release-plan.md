@@ -1,15 +1,37 @@
 # Nov 1 release plan — navigation, responsiveness and distribution
 
-**Stage: local implementation and testing authorized; wider rollout held.** The operator
-authorized local builds on October 31, including this exact Work Mac handoff, project/window
-synchronization and browser surface sizing. More bugs may be added before distribution.
-No installation, public publication or destination update is authorized by this checkpoint.
+**Stage: 0.2.40 reserved; all-platform build and rollout authorized.** The operator lifted the
+initial local-only hold and requested Work Mac verification and desktop/web/iOS rollout. Retain
+the earlier accepted local checkpoint as historical evidence; it does not include the new iPad,
+extension and update-authorization corrections below. Freeze and verify a new source/package pin
+before deployment. Installation and live preservation remain separate acceptance gates.
 
-The isolated continuation starts from the installed combined source `08db248` plus HC handoff
-`5f55c75`. The existing October thirtieth 0.2.39 release record is still open, so this checkpoint
-does not close that release, reserve another version or relabel an accepted package.
-The first local review build retains 0.2.39 with distinct source provenance. Assign the next
-version through the named-release tool after the existing closeout is reconciled.
+The isolated continuation starts from combined source `08db248` plus HC handoff `5f55c75`.
+The unfinished October thirtieth record was explicitly superseded by Nov 1, with its outstanding
+work carried forward rather than represented as deployed. The named-release tool reserved
+**Nov 1 / 0.2.40**. Do not relabel previously accepted 0.2.39 packages.
+
+## Added acceptance gates
+
+- **N8 — iOS organizational tab sync and notifications:** render canonical owner tab membership
+  and order rather than project chat history. Persist explicit open/close/reorder intents and the
+  exact in-flight retry envelope before sending; rebase after reconnect without resurrecting an
+  independently closed tab. Quarantine old inferred deletions with their original receipt. Refresh
+  known scopes offscreen. Test offline/restart/concurrent-close and selected-chat ghost removal.
+  Suppress stale/read/resolved notifications at upload, server push and native foreground delivery;
+  preserve original occurrence time and bounded persistent deduplication. Banner bursts expire in
+  one five-second window without replaying a queue. Physical-device installation remains required.
+- **N9 — extension authentication and autofill:** bind extension tabs/popups to concrete native
+  windows rather than the active-window proxy; keep active selection per window. Implement sender
+  current-window and last-focused query filtering plus extension-created authentication windows,
+  graceful close and return to the original popup. Exercise synthetic authentication and form fill
+  across two windows/profiles. A synthetic pass does not establish real Bitwarden vault acceptance.
+- **N10 — unattended update authorization:** persist an owner-specific update/preflight grant in
+  user-started updater chats. Both direct and remote starts use destination Engine Room defaults.
+  Grant owner update operations and narrowly scoped read-only preflight across restart; unrelated
+  shell, website access, chat dispatch and desktop input retain ordinary permissions. Existing
+  pending tool requests are not approved by another agent. Bootstrap old owners with their already
+  authorized updater boundary, then verify the new behavior on the installed build.
 
 ## Baseline and integration
 

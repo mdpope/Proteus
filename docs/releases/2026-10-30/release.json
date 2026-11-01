@@ -3,7 +3,7 @@
   "id": "2026-10-30",
   "name": "October thirtieth release",
   "version": "0.2.39",
-  "status": "open",
+  "status": "closed",
   "openedOn": "2026-10-30",
   "plan": "docs/2026-10-30-release-plan.md",
   "implementation": "docs/releases/2026-10-30/implementation.md",
@@ -281,5 +281,8 @@
   "operatorDeferredTargets": {
     "ipad": "Operator explicitly deferred this physical device; keep its installed app and two recovery generations unchanged."
   },
-  "closeoutRequested": true
+  "closeoutRequested": true,
+  "closedOn": "2026-11-01",
+  "closeReason": "Superseded by the authorized Nov 1 all-platform rollout; incomplete acceptance carries forward explicitly.",
+  "supersededBy": "2026-11-01"
 }

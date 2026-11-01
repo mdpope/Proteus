@@ -1,4 +1,12 @@
-## November 1 expanded scope — source/local review only
+## November 1 — 0.2.40 rollout authorized
+
+The operator lifted the hold and included desktop/web/iOS deployment. N8–N10 add canonical iPad
+tab membership, durable offline transactions, age-aware deduplicated notifications, extension
+window/authentication/autofill and persisted owner-scoped updater preflight permission. Native
+focused tests pass 44 cases; package, actual device and production acceptance remain required.
+The initial local checkpoint below is historical. Do not treat remote preflight as installation.
+
+## November 1 expanded scope — historical source/local review
 
 Distribution roles are private; [N5–N7](2026-11-01-release-plan.md) add captured-default build chats, automatic canonical navigation preservation, short release dates and native shared/local-provider choices. Installation still uses receiving-device updater defaults. All-target rollout/automatic release closeout are standing policy; Nov 1 remains held for more bugs.
 

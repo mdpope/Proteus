@@ -1,5 +1,6 @@
 import { isActiveExecutionLimit } from './providers/execution-policy.js';
 import {taskFeedbackDelivery} from './services/chats/task-feedback-kind.js';
+import {updateCoordinatorPermission} from './services/updates/update-permissions.js';
 import {providerAttachmentInputs} from './services/chats/attachment-input.js';
 import {DelegationService} from './services/chats/delegation.js';
 import {captureUserQuestions,answerUserQuestion,recoverUserQuestions,askBackgroundQuestion} from './services/chats/user-questions.js';
@@ -187,8 +188,8 @@ export class Engine extends EventEmitter {
     // An update coordinator exists only because a person started that update (Updates
     // page or an explicit update dispatch). Its own update tool needs no second prompt.
     // Protected requests and every other tool keep their normal approval path.
-    if(request?.kind==='custom-tool'&&request.toolName==='proteus_update'&&run.schedule.purpose==='update'&&run.schedule.updateAuthorization?.tool==='proteus_update'&&!request.managedApprovalRequired&&!request.requestSandboxBypass)
-      return {source:'update',allowed:true,reason:'User-started update coordinator',mode:profile.mode};
+    const update=updateCoordinatorPermission(run,request);
+    if(update)return {source:'update',...update,mode:profile.mode};
     return { source: profile.source, ...this.permissions.decide(run.schedule, request, profile) };
   }
   renameChat(id, title, expectedTitleRevision) {

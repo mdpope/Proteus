@@ -253,6 +253,20 @@ class AppApiTest extends TestCase
         }
     }
 
+    public function test_delayed_chat_upload_preserves_event_age_and_does_not_replay_push(): void
+    {
+        Http::preventStrayRequests();
+        Passport::actingAs($this->owner(), ['app:read', 'app:write']);
+        $occurred = now()->subDays(2)->toIso8601String();
+        $event = ['id' => (string) Str::uuid(), 'hostId' => (string) Str::uuid(), 'type' => 'chat.completed', 'createdAt' => $occurred];
+        $saved = $this->postJson('/api/v1/app/notifications', $event)->assertCreated()->assertJsonPath('occurredAt', $occurred)->json();
+        $push = app(PushDelivery::class);
+        $this->assertSame('obsolete', $push->deliver(['platform' => 'apns'], $saved));
+        $this->assertSame('obsolete', $push->deliver(['platform' => 'apns'], ['type' => 'approval.requested', 'createdAt' => now()->subMinutes(6)->toIso8601String()]));
+        $this->assertSame('obsolete', $push->deliver(['platform' => 'apns'], ['type' => 'chat.completed', 'createdAt' => now()->toIso8601String(), 'readAt' => now()->toIso8601String()]));
+        Http::assertNothingSent();
+    }
+
     public function test_push_outbox_drops_deleted_notifications_without_revoking_the_phone(): void
     {
         Http::preventStrayRequests();

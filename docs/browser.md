@@ -1,3 +1,12 @@
+## Nov 1 — extension window and authentication lifecycle
+
+Extension adapter records hold concrete native windows, never the window-selection proxy. Action
+popups resolve currentWindow to their captured parent; lastFocusedWindow filters the actual profile
+window. Every browser window retains its own active tab. Extension-created authentication windows
+use that profile/session and support graceful close, returning to the original action popup. Normal
+host activation does not replay a stale extension selection. Synthetic multiwindow authentication,
+autofill, profile isolation and install/disable/update checks pass; actual vault acceptance is separate.
+
 ## November 1 — browser surface geometry and native Close
 
 Observe the mounted browser content area as well as the outer workspace so nested layout changes update native view bounds without a tab switch. Native browser Close commits owner membership before destroying its view. Closing a window and passive mirror reconciliation preserve the owner tab. URL/history synchronization continues to share content while local scrolling stays independent. These corrections are in the local Nov 1 candidate; no installed-device acceptance is claimed.

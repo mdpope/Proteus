@@ -1,6 +1,6 @@
 {
   "name": "proteus",
-  "version": "0.2.39",
+  "version": "0.2.40",
   "buildRevision": "source",
   "private": true,
   "description": "A local control room for scheduled AI work and resumable conversations.",
@@ -68,6 +68,6 @@
   },
   "updatesProtocol": 1,
   "dataCompatibility": 1,
-  "releaseDate": "2026-10-30",
-  "releaseName": "Oct 30"
+  "releaseDate": "2026-11-01",
+  "releaseName": "Nov 1"
 }

@@ -501,18 +501,15 @@ enum NativeWorkspaceNavigation {
     /// moments ago may not have reached the owner yet. Keep the selected chat instead
     /// of dropping its tab until the next refresh confirms it.
     @MainActor static func adoptOwnerChats(_ descriptors: [JSON], navigationKey: String, remote: RemoteStore) {
-        var owner = deduplicated(descriptors.filter { $0["type"].string == "chat" }.map { $0["chatId"].string })
-        let selected = remote.draft(navigationKey)["selected"].string
-        if selected.hasPrefix("chat:"), !owner.contains(String(selected.dropFirst(5))) { owner.append(String(selected.dropFirst(5))) }
-        setChats(owner, navigationKey: navigationKey, remote: remote)
+        let owner = deduplicated(descriptors.filter { $0["type"].string == "chat" }.map { $0["chatId"].string })
+        var value = remote.draft(navigationKey).object
+        value["chats"] = .array(owner.map(JSON.string))
+        let selected = value["selected"]?.string ?? ""
+        if selected.hasPrefix("chat:"), !owner.contains(String(selected.dropFirst(5))) { value["selected"] = .string("workspace") }
+        remote.setDraft(navigationKey, .object(value))
     }
-    /// Revision-checked owner mutation for one workspace/project tab list.
     @MainActor static func mutate(_ operations: [JSON], kind: String, id: String, scope: String, remote: RemoteStore, shared: SharedAppStore) {
-        Task { do {
-            let snapshot = try await remote.request("tabs.get", ["scope": .string(kind), "id": .string(id)])
-            _ = try await remote.request("tabs.mutate", ["scope": .string(kind), "id": .string(id), "expectedRevision": snapshot["revision"], "operations": .array(operations)])
-            await shared.refreshContentTabs(scope: scope, remote: remote, kind: kind, id: id)
-        } catch { remote.error = error.localizedDescription } }
+        shared.queueContentOperations(operations, scope: scope, remote: remote, kind: kind, id: id)
     }
     /// Ordered children shown in the project tab strip and sidebar: chats, browsers,
     /// and host-owned terminals/documents, following the owner's saved order.
@@ -531,7 +528,7 @@ enum NativeWorkspaceNavigation {
             return x < y
         }.map(\.element).filter { !hidden.contains($0["sortId"].string) && !hiddenBrowsers.contains($0["id"].string) }
     }
-    @MainActor static func openChat(_ chatID: String, workspaceID: String, projectID: String? = nil, remote: RemoteStore) {
+    @MainActor static func openChat(_ chatID: String, workspaceID: String, projectID: String? = nil, remote: RemoteStore, shared: SharedAppStore) {
         let membership = remote.projectCatalog.membership(for: remote.chats[chatID] ?? remote.state["runs"].array.first { $0["id"].string == chatID } ?? .null)
         let resolved = projectID ?? (remote.supportsProjects && membership["workspaceId"].string == workspaceID ? membership["projectId"].string : "")
         let kind = resolved.isEmpty ? "workspace" : "project", ownerID = resolved.isEmpty ? workspaceID : resolved
@@ -541,12 +538,8 @@ enum NativeWorkspaceNavigation {
         value["chats"] = .array(deduplicated((value["chats"]?.array.map(\.string) ?? []) + [chatID]).map(JSON.string))
         value["selected"] = .string("chat:" + chatID)
         remote.setDraft(key, .object(value))
-        Task { do {
-            let snapshot = try await remote.request("tabs.get", ["scope": .string(kind), "id": .string(ownerID)])
-            if !snapshot["tabs"].array.contains(where: { $0["type"].string == "chat" && $0["chatId"].string == chatID }) {
-                _ = try await remote.request("tabs.mutate", ["scope": .string(kind), "id": .string(ownerID), "expectedRevision": snapshot["revision"], "operations": .array([.object(["action": .string("open"), "tab": .object(["id": .string("chat:" + chatID), "type": .string("chat"), "chatId": .string(chatID), "title": .string("Chat")])])])])
-            }
-        } catch { remote.error = error.localizedDescription } }
+        let scope = kind + ":" + (remote.connection?.hostId ?? "") + ":" + ownerID
+        shared.queueContentOperations([.object(["action": .string("open"), "explicitReopen": .bool(true), "tab": .object(["id": .string("chat:" + chatID), "type": .string("chat"), "chatId": .string(chatID), "title": run(chatID, remote: remote)["title"]])])], scope: scope, remote: remote, kind: kind, id: ownerID)
     }
 }
 
@@ -747,12 +740,12 @@ struct NativeWorkspaceContentView: View {
             let selected = tab["type"].string == "chat" ? "chat:" + tab["chatId"].string : tab["type"].string == "browser" ? (shared.tabs(in: "project:" + hostID + ":" + id).first { ($0.contentTabId ?? $0.id) == tab["id"].string }?.id ?? "remote:" + tab["id"].string) : "remote:" + tab["id"].string
             var saved = store.draft("project-navigation:" + id).object; saved["selected"] = .string(selected); store.setDraft("project-navigation:" + id, .object(saved)); onOpenProject(id); return
         }
-        if tab["type"].string == "chat" { NativeWorkspaceNavigation.openChat(tab["chatId"].string, workspaceID: workspaceID, projectID: projectID, remote: store) }
+        if tab["type"].string == "chat" { NativeWorkspaceNavigation.openChat(tab["chatId"].string, workspaceID: workspaceID, projectID: projectID, remote: store, shared: shared) }
         else if tab["type"].string == "browser", let browser = shared.tabs(in: scope).first(where: { ($0.contentTabId ?? $0.id) == tab["id"].string }) { shared.select(browser.id, in: scope); selected = browser.id }
         else { selected = "remote:" + tab["id"].string }
     }
     private func openChat(_ id: String) {
-        NativeWorkspaceNavigation.openChat(id, workspaceID: workspaceID, projectID: projectID, remote: store)
+        NativeWorkspaceNavigation.openChat(id, workspaceID: workspaceID, projectID: projectID, remote: store, shared: shared)
     }
     private func closeChat(_ id: String) { NativeWorkspaceNavigation.closeChat(id, navigationKey: navigationKey, remote: store); mutateTabs([.object(["action": .string("close"), "id": .string("chat:" + id)])]) }
     private func mutateTabs(_ operations: [JSON]) { NativeWorkspaceNavigation.mutate(operations, kind: scopeKind, id: scopeID, scope: scope, remote: store, shared: shared) }

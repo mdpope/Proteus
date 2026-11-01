@@ -675,3 +675,12 @@ See [Windows desktop](windows-app.md) for the authenticated signed-manifest dist
 The signing recipe uses a package-hash-based public release ID, independently of punctuation in the full signed build revision. Archive app contents at the extraction root, so the official extractor inspects `Contents/Resources/app` directly on Mac. Verify the exact finished archive through `extractRelease` before asking the protected publisher to sign. A generic tar extraction or signature alone does not establish updater compatibility. Preserve rejected private drafts as superseded evidence; never activate them.
 
 Mac 0.2.30 and this 0.2.31 candidate accept the corrected common static feed. Windows 0.2.29 accepts its own static Windows feed but rejects a Mac static manifest by target/distribution policy; that does not invalidate its cryptographic publisher trust. Older unsupported consumers require the documented helper-capable baseline, with an actionable upgrade rather than relaxed trust or redirected credentials.
+## Nov 1 — persisted updater preflight authorization
+
+A user-started update coordinator persists its local owner identity and versioned scoped permission
+alongside the existing update grant. Restart preserves authorization for owner update operations,
+tab inventory, browser placement inventory, local metadata/own-chat reads and read-only desktop
+capability/own-process observation. It does not authorize shell, website contents, chat dispatch,
+foreign owners or desktop input. Protected approval requests remain human decisions. Older grants
+retain their original update-only scope; bootstrap them through the updater boundary. Both direct
+Update and remote initiation still capture receiving-device Engine Room defaults.

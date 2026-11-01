@@ -171,7 +171,12 @@ export class ActivityStore extends EventEmitter {
         if (!current || current.accountId !== identity.accountId || current.workspaceId !== identity.workspaceId || current.origin !== identity.origin) break;
         const lifetime=row.item.type==='website.notification'?5*60000:7*86400000;
         if (row.accountId !== current.accountId || row.workspaceId !== current.workspaceId || row.origin !== current.origin || this.clock().getTime() - Date.parse(row.item.createdAt) > lifetime) { this.data.outbox.shift(); this.save(); continue; }
-        try { await this.publish(row.item, current,row.kind||'notifications'); } catch (error) {
+        const saved=(row.kind||'notifications')==='notifications'?this.data.notifications.find(item=>item.id===row.item.id):null;
+        const historical=(row.kind||'notifications')==='notifications'&&(saved?.readAt||saved?.resolvedAt||this.clock().getTime()-Date.parse(row.item.createdAt)>300000);
+        // Preserve history, but delayed upload must not turn an old/resolved
+        // event into a fresh alert on another device.
+        const item=historical?{...row.item,silent:true}:row.item;
+        try { await this.publish(item, current,row.kind||'notifications'); } catch (error) {
           // Older servers do not accept website events yet. Keep those bounded
           // retry receipts until the coordinated web rollout, while allowing
           // ordinary notifications behind them to continue.

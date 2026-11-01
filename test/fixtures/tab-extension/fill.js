@@ -1,0 +1,2 @@
+// Disposable test form only; no real vault, account or credential is read.
+chrome.runtime.onMessage.addListener(message=>{if(message.type!=='synthetic-fill')return;for(const [id,value] of [['username','synthetic-user'],['password','SYNTHETIC-ONLY-PASSWORD']]){const field=document.getElementById(id);if(field){field.value=value;field.dispatchEvent(new Event('input',{bubbles:true}));field.dispatchEvent(new Event('change',{bubbles:true}));}}});

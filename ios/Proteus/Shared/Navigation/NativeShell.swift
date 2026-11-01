@@ -604,7 +604,7 @@ struct NativeShell: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ProteusChatWorkspaceMoved"))) { notification in
             guard let host = notification.userInfo?["hostID"] as? String, let chat = notification.userInfo?["chatID"] as? String, let workspace = notification.userInfo?["workspaceID"] as? String, let remote = destinations.remote(for: host), let profile = remote.state["context"]["workspaces"].array.first(where: { $0["id"].string == workspace }) else { return }
-            NativeWorkspaceNavigation.openChat(chat, workspaceID: workspace, remote: remote)
+            NativeWorkspaceNavigation.openChat(chat, workspaceID: workspace, remote: remote, shared: shared)
             openWorkspace(NativeWorkspaceIdentity(hostID: host, hostName: remote.displayName, profile: profile))
         }
         .onChange(of: destinations.deletedChat) { _, event in
@@ -669,10 +669,11 @@ struct NativeShell: View {
             await notifications.syncSubscription()
             while !Task.isCancelled {
                 for destination in destinations.destinations {
+                    if let remote = destinations.remote(for: destination.id), remote.connected { await shared.refreshKnownContentTabs(remote) }
                     if let remote = destinations.remote(for: destination.id), remote.connected, let activity = try? await remote.request("notifications.list") { notifications.observe(activity["items"].array, hostID: destination.id) }
                 }
                 shared.pruneBrowsers()
-                do { try await Task.sleep(for: .seconds(30)) } catch { return }
+                do { try await Task.sleep(for: .seconds(5)) } catch { return }
             }
         }
     }
@@ -1055,7 +1056,7 @@ struct NativeShell: View {
         let workspaceID = membership["workspaceId"].string.isEmpty ? NativeWorkspaceIdentity.workspaceID(run) : membership["workspaceId"].string
         guard !workspaceID.isEmpty, let profile = remote.state["context"]["workspaces"].array.first(where: { $0["id"].string == workspaceID }) else { return false }
         let projectID = membership["workspaceId"].string == workspaceID && !membership["projectId"].string.isEmpty ? membership["projectId"].string : nil
-        NativeWorkspaceNavigation.openChat(entry.run["id"].string, workspaceID: workspaceID, projectID: projectID, remote: remote)
+        NativeWorkspaceNavigation.openChat(entry.run["id"].string, workspaceID: workspaceID, projectID: projectID, remote: remote, shared: shared)
         opened.removeAll { $0.id == entry.id }
         openWorkspace(NativeWorkspaceIdentity(hostID: entry.hostID, hostName: entry.hostName, profile: profile))
         remote.activity(true)
@@ -1131,7 +1132,7 @@ struct NativeShell: View {
     private func sendToWorkspace(_ entry: AggregateChat) {
         guard let remote = destinations.remote(for: entry.hostID), let profile = remote.state["context"]["workspaces"].array.first(where: { $0["id"].string == NativeWorkspaceIdentity.workspaceID(entry.run) }) else { return }
         let workspace = NativeWorkspaceIdentity(hostID: entry.hostID, hostName: entry.hostName, profile: profile)
-        NativeWorkspaceNavigation.openChat(entry.run["id"].string, workspaceID: workspace.workspaceID, remote: remote)
+        NativeWorkspaceNavigation.openChat(entry.run["id"].string, workspaceID: workspace.workspaceID, remote: remote, shared: shared)
         opened.removeAll { $0.id == entry.id }; openWorkspace(workspace)
     }
     private func openSchedule(_ schedule: JSON, hostID: String) {
@@ -1359,6 +1360,7 @@ func nativeChatType(_ run: JSON) -> String {
 }
 struct AggregateChatsView: View {
     @EnvironmentObject var destinations: DestinationStore
+    @EnvironmentObject var shared: SharedAppStore
     @Environment(\.timeZone) private var timeZone
     @Environment(\.horizontalSizeClass) private var sizeClass
     var onSelect: ((AggregateChat) -> Void)? = nil
@@ -1499,7 +1501,7 @@ struct AggregateChatsView: View {
             if lockedWorkspaceID == nil, !NativeWorkspaceIdentity.workspaceID(item.run).isEmpty {
                 Button("Send tab to workspace", systemImage: "square") {
                     if let onSendToWorkspace { onSendToWorkspace(item) }
-                    else if let workspace = NativeWorkspaceIdentity.all(destinations).first(where: { $0.hostID == item.hostID && $0.workspaceID == NativeWorkspaceIdentity.workspaceID(item.run) }), let remote = destinations.remote(for: item.hostID) { NativeWorkspaceNavigation.openChat(item.run["id"].string, workspaceID: workspace.workspaceID, remote: remote); selectedWorkspace = workspace }
+                    else if let workspace = NativeWorkspaceIdentity.all(destinations).first(where: { $0.hostID == item.hostID && $0.workspaceID == NativeWorkspaceIdentity.workspaceID(item.run) }), let remote = destinations.remote(for: item.hostID) { NativeWorkspaceNavigation.openChat(item.run["id"].string, workspaceID: workspace.workspaceID, remote: remote, shared: shared); selectedWorkspace = workspace }
                 }
             }
             Button("Copy chat link", systemImage: "link") { UIPasteboard.general.url = NativeChatLink.url(host: item.hostID, id: item.run["id"].string) }

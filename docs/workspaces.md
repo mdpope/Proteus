@@ -1,6 +1,16 @@
+## Nov 1 — iOS canonical membership and offline intent
+
+The native organizational sidebar displays owner content descriptors in owner order, not all chats
+with project membership. A closed chat remains in chat history without appearing as an open tab.
+Explicit open/close/reorder intents persist before delivery. Reconnect replays an uncertain envelope
+unchanged, then rebases later intentions against current closing revisions and concurrent order.
+Known offscreen scopes refresh after reconnect. Legacy inferred deletions retain their original
+envelope for review and are removed from automatic replay. Local windows keep independent selection
+and reading state; remote paired follow remains its separate presentation mechanism.
+
 ## November 1 — durable membership and unavailable sources
 
-Project/workspace membership and order belong to their owning host/container; a window retains only its own presentation. Missing local documents appear as unavailable tabs with Retry/Close while other descriptors continue syncing. Explicit local Close is queued independently of history conflicts or first-baseline failure. Owner close/move revisions prevent passive or delayed opens from recreating retired identities; explicit reopen uses the observed closing revision. Window closure preserves the project content. Local candidate only; wider rollout is held.
+Project/workspace membership and order belong to their owning host/container; a window retains only its own presentation. Missing local documents appear as unavailable tabs with Retry/Close while other descriptors continue syncing. Explicit local Close is queued independently of history conflicts or first-baseline failure. Owner close/move revisions prevent passive or delayed opens from recreating retired identities; explicit reopen uses the observed closing revision. Window closure preserves the project content. All-platform rollout is authorized; installed acceptance remains separate.
 
 A disappearing local view is never a shared Close or reorder. Parent remounts and historical
 chat aliases must rematerialize retained children from the owner. Only explicit Close intent or

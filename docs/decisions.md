@@ -2961,3 +2961,15 @@ Reuse the tested local serial tool loop for a distinct llama-cpp provider identi
 ## October 31 - relay-only inference sharing
 
 Reuse the existing end-to-end encrypted paired transport rather than introduce a general HTTP proxy or peer-to-peer negotiation. The serving host exposes only authenticated local-backend discovery, context admission, one-shot generation, cursor reads and cancellation. The consuming provider owns agent history and tools. Durable start identities and metadata-only receipts prevent automatic generation replay after ambiguous delivery or restart. Explicit device grants and imports remain separate from existing computer permissions; shared/remote providers cannot be exported again. Direct LAN optimization and shared image delivery are deferred.
+## Nov 1 — causal native intents and scoped update authorization
+
+iOS open-tab membership comes from the owner's ordered descriptors. Offline UI actions carry
+stable intent IDs and observed closing revisions. Persist the original in-flight request before
+sending and reconcile it before rebasing later intent. Never infer deletion from an incomplete
+view or silently replay a legacy inferred deletion. Notification upload time cannot refresh event
+age; preserve original occurrence time through server push and native deduplication.
+
+Extension state captures concrete windows because a presentation proxy changes identity as focus
+changes. Current sender and last-focused window are separate concepts; active tabs are per window.
+Updater permission is a persisted, versioned owner grant for update and narrow preflight actions,
+not a cross-machine permission-answering capability or arbitrary shell grant.

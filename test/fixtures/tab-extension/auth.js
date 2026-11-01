@@ -1,0 +1,1 @@
+document.querySelector('#complete').onclick=async()=>{await chrome.storage.local.set({syntheticUnlocked:true});await chrome.runtime.sendMessage({type:'synthetic-unlocked'});const current=await chrome.windows.getCurrent();await chrome.windows.remove(current.id);};

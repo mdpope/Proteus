@@ -1,1 +1,1 @@
-{"manifest_version":3,"name":"__MSG_extName__","default_locale":"en","version":"1.0.0","permissions":["tabs"],"action":{"default_popup":"popup.html"}}
+{"manifest_version":3,"name":"__MSG_extName__","default_locale":"en","version":"1.0.0","permissions":["tabs","storage","scripting"],"host_permissions":["http://127.0.0.1/*"],"content_scripts":[{"matches":["http://127.0.0.1/*"],"js":["fill.js"]}],"action":{"default_popup":"popup.html"}}

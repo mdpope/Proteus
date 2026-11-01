@@ -1,4 +1,13 @@
-## November 1 — local synchronization, sizing and integration correction
+## November 1 — 0.2.40 rollout authorized, expanded corrections under test
+
+The operator lifted the local hold and requested all-platform rollout plus Work Mac verification.
+Nov 1 now reserves 0.2.40. Added work covers iPad canonical tab membership/offline intent replay,
+stale notification suppression/five-second expiry, extension window/authentication/autofill and
+persisted scoped updater preflight authorization. The earlier accepted 0.2.39 local package is a
+historical checkpoint, not the new deployable pin. See the Nov 1 plan and release ledger. Remote
+preflight is distinct from building, publication, installation and live preservation verification.
+
+## November 1 — historical local synchronization checkpoint
 
 Local implementation/build is authorized; wider rollout is held for additional bugs. Continue from combined 08db248 plus HC handoff 5f55c75. The isolated Nov 1 branch fixes missing-document scope failure, durable Close/reopen, native browser Close and actual browser-surface geometry, and removes repeated global integration scans with bounded event-loop yields. See [the Nov 1 plan](2026-11-01-release-plan.md) for acceptance and remaining package/HC gates. The existing named 0.2.39 release is still open; no new version or production rollout is claimed.
 

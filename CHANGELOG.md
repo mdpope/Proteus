@@ -1,4 +1,14 @@
-## November 1 local candidate — rollout held
+## Nov 1 — 0.2.40 (in progress)
+
+- Sync the iOS project sidebar from canonical tab membership and order; retain explicit offline
+  actions and retry identities without resurrecting closed chats or replaying inferred deletions.
+- Preserve notification occurrence time, suppress stale/read alerts and expire native banner
+  bursts after five seconds without replaying historical queues.
+- Correct extension window identity, active-tab filtering and authentication-window lifecycle.
+- Persist narrowly scoped owner preflight authorization for user-started update coordinators.
+- All-platform rollout is authorized; deployment/live verification remains in progress.
+
+## November 1 historical local candidate — initially held
 
 - Coordinate project-scoped native build chats separately from destination-default installation chats; compare navigation identities/order/descriptors in update preservation receipts.
 - Display the named release date on desktop, web and iOS Home.
