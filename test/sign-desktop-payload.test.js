@@ -6,9 +6,12 @@ import path from 'node:path';
 import {createHash,generateKeyPairSync} from 'node:crypto';
 import {signDesktopPayload} from '../scripts/sign-desktop-payload.mjs';
 import {verifyRelease} from '../src/services/updates/desktop-releases.js';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 const sha=b=>createHash('sha256').update(b).digest('hex');
 function fixture(t){
- const root=fs.mkdtempSync(path.join(os.tmpdir(),'payload-sign-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+ // chmod alone does not protect ephemeral keys on Windows: establish the
+ // repository's private DACL before creating them, as the production guard requires.
+ const root=privateTemporaryDirectory(path.join(os.tmpdir(),'payload-sign-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
  const {privateKey,publicKey}=generateKeyPairSync('ed25519'),keyFile=path.join(root,'publisher.pem'),output=path.join(root,'release.json');
  fs.writeFileSync(keyFile,privateKey.export({type:'pkcs8',format:'pem'}),{mode:0o600});
  const keyId=sha(publicKey.export({type:'spki',format:'der'})).slice(0,24),keys=[{id:keyId,publicKey:publicKey.export({type:'spki',format:'pem'})}];

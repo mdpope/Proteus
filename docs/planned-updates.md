@@ -1,3 +1,7 @@
+# October 31 deployment operation
+
+The open October thirtieth release remains 0.2.39 with c54406cc as its application source. A separately validated maintenance helper supports exact-byte cross-platform publisher signing. Native build, transfer, publication, installation and live verification remain separate ledger states. Linux close-window acceptance is unresolved; do not substitute a runtime source patch or mark that gate passed from synthetic tests.
+
 ## October 30 — deployed web, Windows publication and SSH access
 
 The website now serves the accepted 0.2.39 archive: 9,221 deployed files, nine complete HTTPS
@@ -11465,7 +11469,3 @@ password manager connection; Windows/Linux package acceptance remains separate.
 ## October 27 — follow-up publication acceptance
 
 Fresh version-named update coordinators, resilient provider defaults, inline question attachments, provider-supported queued attachment steering and guarded recovery supersession are implemented and tested. Corrected Mac build `abac31955b11+src.25f29d666329` is published and installed through a new unassigned coordinator: full HTTPS archive, publisher trust, official extraction, exact source, live health and preserved chat/configuration/state checks pass. Installed page-specific UI acceptance remains limited by background-only navigation; exact-package UI tests pass. Physical iPhone/iPad 2610.27.2 installation, protected data, launch, destinations and two-generation retention pass. Both Personal and Work Macs' existing Proteus identity verifies as HTTP/HTTPS defaults, including after the Personal update and HC's separate fresh read-only acceptance. Windows installation and actual historical-recovery reconciliation remain unverified. See [the evidence ledger](2026-10-27-release-evidence.md).
-# October 31 deployment operation
-
-The open October thirtieth release remains 0.2.39 with c54406cc as its application source. A separately validated maintenance helper supports exact-byte cross-platform publisher signing. Native build, transfer, publication, installation and live verification remain separate ledger states. Linux close-window acceptance is unresolved; do not substitute a runtime source patch or mark that gate passed from synthetic tests.
-
