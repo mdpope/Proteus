@@ -734,3 +734,12 @@ October 21 follow-up: sidebar saved expansion state is loaded before capture/sav
 empty in-memory tree overwriting the restored session. The isolated UI regression retains expanded
 workspace/project rows through Engine Room pages and shell reload. MCP source rows show owner
 connection evidence separately from each workspace's enabled/default/off choice.
+
+## November 1 — partial membership reconciliation preserves local opens
+
+An older owner response can confirm a previously known tab closed while a new local tab is still
+waiting to publish. Apply that partial removal only to the owner-confirmed identities. Preserve
+the new tab and its local selection until the normal mutation pass records it in the owner. This
+shared rule covers browsers, terminals, documents and chats in every synchronized container.
+The deterministic Electron regression verifies actual owner convergence, terminal keyboard/output,
+selection through refresh and restart; the earlier package failed that same overlap.

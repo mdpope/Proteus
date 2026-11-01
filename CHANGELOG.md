@@ -6,6 +6,8 @@
   bursts after five seconds without replaying historical queues.
 - Correct extension window identity, active-tab filtering and authentication-window lifecycle.
 - Persist narrowly scoped owner preflight authorization for user-started update coordinators.
+- Preserve newly opened local tabs while applying an older owner membership response; only
+  owner-confirmed removed identities can close during that partial reconciliation.
 - All-platform rollout is authorized; deployment/live verification remains in progress.
 
 ## November 1 historical local candidate — initially held

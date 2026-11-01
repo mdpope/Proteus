@@ -1,5 +1,12 @@
 ## November 1 — 0.2.40 rollout authorized
 
+The native Linux gate additionally reproduced N11: an older membership-only response could delete
+a newly opened local terminal. The corrected shared renderer removes only owner-confirmed IDs.
+A deterministic real Electron overlap fails on the prior source and passes with the fix, including
+owner convergence, retained selection, canvas keyboard/output and restart. Full source validation
+passes 1,407 tests with four skips. Earlier desktop packages are superseded; corrective native
+packages and destination installations must pass before closing the release.
+
 The operator lifted the hold and included desktop/web/iOS deployment. N8–N10 add canonical iPad
 tab membership, durable offline transactions, age-aware deduplicated notifications, extension
 window/authentication/autofill and persisted owner-scoped updater preflight permission. Native

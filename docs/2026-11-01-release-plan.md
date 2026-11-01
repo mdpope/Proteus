@@ -33,6 +33,18 @@ work carried forward rather than represented as deployed. The named-release tool
   pending tool requests are not approved by another agent. Bootstrap old owners with their already
   authorized updater boundary, then verify the new behavior on the installed build.
 
+## N11 — preserve local opens during owner membership reconciliation
+
+Native Linux acceptance exposed a production race shared by desktop renderers. A membership-only
+response removing an old owner tab also removed a newly opened local terminal absent from that
+older snapshot. Selection fell back to the Chats index before actual keyboard input. Restrict
+partial membership removal to identities confirmed by the owner, and preserve pending local
+opens for their normal mutation pass. Test the exact overlapping response deterministically,
+including real canvas keyboard/output, selection through refresh, independent windows and
+restart/history preservation. Retain preceding-source failure evidence; unit tests alone do not
+prove the rendering path fixed. Pause desktop handoffs and supersede the earlier native packages
+after the corrected shared source passes source and packaged acceptance on all three platforms.
+
 ## Baseline and integration
 
 - Profiled installed macOS arm64 package: **0.2.39**, build

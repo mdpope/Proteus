@@ -9,5 +9,5 @@
   "implementation": "docs/releases/2026-11-01/implementation.md",
   "rollout": "docs/releases/2026-11-01/rollout.md",
   "closeout": "docs/releases/2026-11-01/closeout.md",
-  "sourceCommit": null
+  "sourceCommit": "4a36d701265d2665cf209aff481c513d983ca27f"
 }

@@ -1,4 +1,4 @@
-// Source-mode reproduction of the packaged rehearsal → terminal keyboard → restart path.
+// Controlled reproduction of the rehearsal → terminal keyboard → restart path.
 // Disposable fixture only; package identity remains a separate frozen-artifact gate.
 import { _electron as electron } from 'playwright';
 import fs from 'node:fs';
@@ -7,7 +7,8 @@ import path from 'node:path';
 import assert from 'node:assert/strict';
 import { hostPlatformMetadata } from '../src/shared/host-platform.js';
 const sourceRoot=process.env.PROTEUS_TEST_SOURCE_ROOT||path.resolve('.');
-const metadata=JSON.parse(fs.readFileSync(path.join(sourceRoot,'package.json'),'utf8')); 
+const packageExecutable=process.env.PROTEUS_TEST_PACKAGE_EXECUTABLE;
+const metadata=JSON.parse(fs.readFileSync(path.join(sourceRoot,'package.json'),'utf8'));
 const checks=[];
   const temporary = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-package-ui-')));
   const workspace = path.join(temporary, 'workspace');
@@ -16,7 +17,7 @@ const checks=[];
   fs.writeFileSync(path.join(temporary, 'schedules/workspace-pulse.json'), JSON.stringify({ schemaVersion: 1, id: 'workspace-pulse', name: 'Synthetic package rehearsal', enabled: false, cron: '0 9 * * 1-5', timezone: 'UTC', provider: 'rehearsal', model: '', workspace: { cwd: workspace, additionalDirectories: [] }, misfire: 'skip', prompt: 'Synthetic package feedback rehearsal. No model calls.' }));
   // Preserve only OS launch/display settings. Provider paths deliberately fail
   // before any CLI can inspect existing credentials, even on a signed-in machine.
-  const inherited = ['PATH', 'HOME', 'USER', 'LOGNAME', 'SHELL', 'LANG', 'LC_ALL', 'DISPLAY', 'WAYLAND_DISPLAY', 'XAUTHORITY', 'XDG_RUNTIME_DIR', 'DBUS_SESSION_BUS_ADDRESS', 'TMPDIR', 'TMP', 'TEMP'];
+  const inherited = ['PATH', 'HOME', 'USER', 'LOGNAME', 'SHELL', 'LANG', 'LC_ALL', 'DISPLAY', 'WAYLAND_DISPLAY', 'XAUTHORITY', 'XDG_RUNTIME_DIR', 'DBUS_SESSION_BUS_ADDRESS', 'TMPDIR', 'TMP', 'TEMP', 'SystemRoot', 'SYSTEMROOT', 'SystemDrive', 'COMSPEC', 'PATHEXT', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA'];
   const env = Object.fromEntries(inherited.filter(key => process.env[key] !== undefined).map(key => [key, process.env[key]]));
   Object.assign(env, { PROTEUS_HOME: temporary, PORT: '0', COPILOT_HOME: path.join(temporary, 'copilot'), COPILOT_CLI_PATH: path.join(temporary, 'unavailable-copilot'), PROTEUS_CODEX_PATH: path.join(temporary, 'unavailable-codex'), PROTEUS_CLAUDE_PATH: path.join(temporary, 'unavailable-claude'), CLAUDE_CONFIG_DIR: path.join(temporary, 'claude') });
   let application;
@@ -34,7 +35,7 @@ const checks=[];
     while (!await callback()) { if (Date.now() >= end) throw new Error('Timed out: ' + label); await new Promise(resolve => setTimeout(resolve, 100)); }
   };
   const launch = async () => {
-    application = await electron.launch({ args: [sourceRoot, ...(process.platform === 'darwin' ? ['--use-mock-keychain'] : ['--password-store=basic']), '--user-data-dir=' + path.join(temporary, 'browser')], env, timeout: 60_000 });
+    application = await electron.launch({ ...(packageExecutable?{executablePath:packageExecutable}:{}), args: [...(packageExecutable?[]:[sourceRoot]), ...(process.platform === 'darwin' ? ['--use-mock-keychain'] : ['--password-store=basic']), '--user-data-dir=' + path.join(temporary, 'browser')], env, timeout: 60_000 });
     const page = await application.firstWindow(); page.setDefaultTimeout(20_000); page.on('pageerror', error => errors.push(error.message));
     await page.locator('#topbar-home').waitFor();
     const isolation = await application.evaluate(({ app }) => ({ home: process.env.PROTEUS_HOME, browser: app.getPath('userData'), version: app.getVersion(), mock: app.commandLine.hasSwitch('use-mock-keychain') }));
@@ -87,11 +88,11 @@ const checks=[];
     assert.ok(run.events.some(event => event.role === 'assistant' && event.text.includes('no AI provider was called')));
     assert.ok(run.events.some(event => event.role === 'assistant' && event.text.includes('SYNTHETIC_PACKAGE_CHECKPOINT')));
     checks.push('explicit synthetic rehearsal and feedback; no provider usage invented');
-    await page.evaluate(async () => {
+    await page.evaluate(async windows => {
       const state = await window.desktop.terminal({ action: 'state' }), profiles = state.profiles.profiles;
-      profiles[0] = { ...profiles[0], name: 'Synthetic native PTY', shell: '/bin/sh', command: 'printf "PACKAGE_PTY_READY\\n"; read answer; printf "PACKAGE_PTY_INPUT:%s\\n" "$answer"; read finish' };
+      profiles[0] = { ...profiles[0], name: 'Synthetic native PTY', ...(windows?{command:"[Console]::WriteLine('PACKAGE_PTY_READY'); $answer=[Console]::ReadLine(); [Console]::WriteLine('PACKAGE_PTY_INPUT:'+$answer); [Console]::ReadLine()"}:{shell:'/bin/sh',command:'printf "PACKAGE_PTY_READY\\n"; read answer; printf "PACKAGE_PTY_INPUT:%s\\n" "$answer"; read finish'}) };
       await window.desktop.terminal({ action: 'save-profiles', profiles, expectedRevision: state.profiles.revision });
-    });
+    },process.platform==='win32');
     await page.locator('#tab-add-menu summary').click();
     // Ensure the owner has observed the blank browser before replacing it with
     // a terminal, reproducing the closed-browser/new-terminal overlap.
@@ -113,12 +114,12 @@ const checks=[];
     await page.locator('[data-close="terminal:' + terminal.id + '"]').click();
     assert.ok(overlap.some(row=>row.membershipOnly&&row.removedIds.length&&row.list.some(t=>t.type==='terminal'&&t.id===row.active)&&row.captured.some(t=>t.type==='terminal'&&t.id===row.active)&&!row.descriptors.some(t=>t.id===row.active)),'actual owner membership removal overlaps a selected uncommitted terminal');
     checks.push('owner removal overlaps pending selected terminal without losing keyboard input');
-    checks.push('source-mode native terminal and keyboard input through canvas');
+    checks.push('native terminal and real keyboard input through canvas');
     await closeApplication(); page = await launch();
     const restored = await runs(); assert.equal(restored.length, 1); assert.equal(restored[0].id, run.id); assert.equal(restored[0].status, 'completed');
     assert.equal(restored[0].usage.observed, false); assert.ok(restored[0].events.some(event => event.text?.includes('SYNTHETIC_PACKAGE_CHECKPOINT')));
-    checks.push('same rehearsal history survives packaged app restart'); assert.deepEqual(errors, []);
-    console.log(JSON.stringify({ passed: true, version: metadata.version, buildRevision: metadata.buildRevision, mode: 'source-mode; package provenance not checked', platform: process.platform, credentials: process.platform === 'darwin' ? 'disposable mock Keychain; real store unverified' : 'disposable basic cookie store; real keyring unverified', checks }));
+    checks.push('same rehearsal history survives app restart'); assert.deepEqual(errors, []);
+    console.log(JSON.stringify({ passed: true, version: metadata.version, buildRevision: metadata.buildRevision, mode: packageExecutable?'packaged executable; verify frozen provenance separately':'source-mode; package provenance not checked', platform: process.platform, credentials: process.platform === 'darwin' ? 'disposable mock Keychain; real store unverified' : 'disposable basic cookie store; real keyring unverified', checks }));
   } finally {
     await closeApplication();
     fs.rmSync(temporary, { recursive: true, force: true });

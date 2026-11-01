@@ -1,5 +1,12 @@
 ## November 1 — closing identity outlives window presentation
 
+Membership-only application is a partial owner observation, not a complete replacement of the
+captured local tab set. Remove only the identities confirmed absent by that owner response;
+unpublished local opens must survive until their normal mutation pass. The shared predicate keeps
+this rule identical across project/workspace/main/Team and resource types. Deterministic native
+overlap acceptance must observe both the old removed browser and newly selected terminal in the
+same response; timing-only or model tests do not establish renderer convergence.
+
 Retain compact owner close/move revisions without time expiry: forgetting a close after thirty days would allow an old window or offline client to revive the same identity. Bound records at 16,384 per scope and the existing store byte limit, rejecting writes intact rather than silently evicting authority. Explicit reopen must match the closing revision; a later close wins. Window disposal and mirror cleanup are presentation-only. Document-source failure becomes a retained unavailable view rather than aborting shared membership reconciliation. Background integration monitoring uses run-scoped fresh validation and real event-loop yields rather than a broader cross-turn context cache.
 
 Do not infer shared deletion or order from incomplete local views. Explicit durable Close intent
