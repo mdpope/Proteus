@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {IntegrationHealth} from '../src/services/integrations/integrations.js';
 import {PerformanceDiagnostics} from '../src/services/telemetry/performance-diagnostics.js';
-import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
+import {privateTemporaryDirectory,hasPrivatePermissions} from '../src/shared/private-paths.cjs';
 
 function fixture(t,dormant=600,live=32){
  const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-background-'));
@@ -35,7 +35,7 @@ test('slow background replacement yields; concurrent manual state stays ordered 
  const durable=JSON.parse(fs.readFileSync(f.health.file));
  assert.equal(durable.profiles[row.id].contexts[0].label,'Synthetic manual context');
  assert.equal(durable.observations[row.id].connection,'connected');
- assert.equal(fs.statSync(f.health.file).mode&0o777,0o600);
+ assert.equal(hasPrivatePermissions(f.health.file),true,'Background replacement retains private mode or Windows DACL');
  assert.ok(!fs.readdirSync(path.dirname(f.health.file)).some(name=>name.endsWith('.tmp')));
 });
 

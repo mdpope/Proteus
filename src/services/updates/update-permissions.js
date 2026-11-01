@@ -16,7 +16,7 @@ export function updateCoordinatorPermission(run,request,{pid=process.pid}={}){
   allowed=['status','catalog','stop'].includes(args.action);
   if(args.action==='call'&&args.backend==='cua'){
    const input=args.arguments||{};
-   allowed=args.tool==='check_permissions'||args.tool==='list_windows'&&(input.pid===pid||input.app==='Proteus')||['get_window_state','verify_state'].includes(args.tool)&&input.pid===pid;
+   allowed=args.tool==='check_permissions'&&input.prompt!==true||args.tool==='list_windows'&&(input.pid===pid||input.pid===undefined&&input.app==='Proteus')||['get_window_state','verify_state'].includes(args.tool)&&input.pid===pid&&input.target===undefined&&input.screenshot_out_file===undefined;
   }
  }
  return allowed?{allowed:true,reason:'User-started update preflight'}:null;

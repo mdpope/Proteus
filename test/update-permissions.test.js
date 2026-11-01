@@ -17,6 +17,10 @@ test('update authorization never grants unrelated writes, page access, external 
   ['proteus_chats',{action:'create'}],['proteus_chats',{action:'reply',answer:'approve'}],
   ['proteus_desktop',{action:'call',backend:'cua',tool:'click',arguments:{pid:42}}],
   ['proteus_desktop',{action:'call',backend:'cua',tool:'get_window_state',arguments:{pid:99}}],
+  ['proteus_desktop',{action:'call',backend:'cua',tool:'check_permissions',arguments:{prompt:true}}],
+  ['proteus_desktop',{action:'call',backend:'cua',tool:'list_windows',arguments:{pid:99,app:'Proteus'}}],
+  ['proteus_desktop',{action:'call',backend:'cua',tool:'get_window_state',arguments:{pid:42,screenshot_out_file:'/synthetic/output'}}],
+  ['proteus_desktop',{action:'call',backend:'cua',tool:'verify_state',arguments:{pid:42,target:{pid:99}}}],
   ['shell',{command:'anything'}],['fake__proteus_update',{}]
  ])assert.equal(updateCoordinatorPermission(run,request(tool,args),{pid:42}),null,tool);
  for(const flag of ['managedApprovalRequired','requestSandboxBypass'])assert.equal(updateCoordinatorPermission(run,{...request('proteus_update'),[flag]:true}),null);
