@@ -162,25 +162,63 @@ export function createTabSynchronizer({scopes,readLocal,apply,acknowledge=async(
     const work=async()=>{
       let wrote=false;
       let local=await snapshot(scope);
-      const raw=await request(scope,'get',{historyLimit:200});
+      let raw=await request(scope,'get',{historyLimit:200});
+      // Explicit local Close is independent of baseline/history quarantine. Its
+      // durable envelope is separate from an uncertain navigation request.
+      const closeKey='proteus.navigation.closes:'+id,closeRequestKey=closeKey+':request';
+      const queued=JSON.parse(pendingStorage?.getItem(closeKey)||'[]');
+      if(!Array.isArray(queued)||queued.length>1000||queued.some(id=>typeof id!=='string'||!/^[-a-zA-Z0-9_:.]{1,256}$/.test(id)))throw Error('Queued tab closes could not be read. The original intent was preserved.');
+      const closes=queued.slice(0,100);
+      if(closes.length){
+        const operations=closes.filter(tabId=>!Object.hasOwn(raw.closed||{},tabId)).map(id=>({action:'close',id}));
+        if(operations.length){
+          let envelope=JSON.parse(pendingStorage?.getItem(closeRequestKey)||'null');
+          if(!envelope)envelope={id:crypto.randomUUID(),issuedAt:new Date().toISOString(),args:{expectedRevision:raw.revision,operations}};
+          pendingStorage?.setItem(closeRequestKey,JSON.stringify(envelope));
+          try{raw=await request(scope,'mutate',envelope.args,{id:envelope.id,issuedAt:envelope.issuedAt});}
+          catch(error){if(/Content tabs changed/.test(error.message))pendingStorage?.removeItem(closeRequestKey);throw error;}
+        }
+        const remaining=JSON.parse(pendingStorage?.getItem(closeKey)||'[]').filter(tabId=>!closes.includes(tabId));
+        if(remaining.length){pendingStorage?.setItem(closeKey,JSON.stringify(remaining));record.again=true;}else pendingStorage?.removeItem(closeKey);
+        pendingStorage?.removeItem(closeRequestKey);
+        local=local.filter(tab=>!closes.includes(tab.id));
+      }
       if(records.get(id)!==record)return;
       if(raw.revision<record.revision)throw Error('The owner returned an older tab revision. Retry synchronization.');
       const known=new Set([...(record.baseline||[]).map(tab=>tab.id),...(record.ownerObserved||[])]),present=new Set(raw.tabs.map(tab=>tab.id));
-      const removedIds=[...known].filter(tabId=>!present.has(tabId));
+      const removedIds=[...new Set([...known,...local.filter(tab=>Object.hasOwn(raw.closed||{},tab.id)).map(tab=>tab.id)])].filter(tabId=>!present.has(tabId));
       if(removedIds.length){
         if(pendingStorage&&(record.pending?.some(op=>removedIds.includes(op.tabId))||local.some(tab=>removedIds.includes(tab.id)&&tab.navigationPending)))pendingStorage.setItem('proteus.navigation.recovery:'+id,JSON.stringify({reason:'Owner closed or moved a tab with pending navigation',resolvedAt:new Date(now()).toISOString(),pending:record.pending||[],local:local.filter(tab=>removedIds.includes(tab.id))}));
         await apply(scope,raw.tabs,local,{membershipOnly:true,removedIds});
       }
-      if(record.conflict&&raw.revision===record.revision)return;
       let remote=await hydrate(scope,raw);
       if(records.get(id)!==record)return;
       if(record.conflict){
         // Navigation review quarantines that intent, not the shared container.
         // Continue adopting canonical membership, order and unaffected metadata.
+        const quarantined=new Set((record.pending||[]).map(op=>op.tabId||op.tab?.id).filter(Boolean));
+        const membershipKey='proteus.navigation.membership:'+id;
+        let envelope=JSON.parse(pendingStorage?.getItem(membershipKey)||'null');
+        const changes=changesAfterOwnerUpdates(record.baseline||remote.tabs,local.filter(tab=>!record.localAliases?.has(tab.id)),remote.tabs,navigation)
+          .filter(op=>!op.action.startsWith('browser-')&&(op.action!=='open'||!quarantined.has(op.tab.id)))
+          .map(op=>op.action==='open'&&!remote.tabs.some(tab=>tab.id===op.tab.id)?{...op,tab:local.find(tab=>tab.id===op.tab.id)||op.tab}:op)
+          .filter(op=>op.action!=='open'||!Object.hasOwn(remote.closed||{},op.tab.id));
+        const operations=rebaseTabChanges(envelope?.args.operations||changes,remote.tabs).slice(0,100);
+        if(operations.length){
+          // Separate durable envelope: an unrelated membership action must not
+          // rewrite or replay the quarantined navigation's receipt identity.
+          envelope??={id:crypto.randomUUID(),issuedAt:new Date().toISOString(),args:{historyLimit:200,expectedRevision:remote.revision,operations}};
+          pendingStorage?.setItem(membershipKey,JSON.stringify(envelope));
+          try{remote=await hydrate(scope,await request(scope,'mutate',envelope.args,{id:envelope.id,issuedAt:envelope.issuedAt}));}
+          catch(error){if(/Content tabs changed/.test(error.message))pendingStorage?.removeItem(membershipKey);throw error;}
+          await acknowledge(scope,remote.tabs);
+        }
+        pendingStorage?.removeItem(membershipKey);
+        if(!operations.length&&remote.revision===record.revision)return;
         const protectedIds=new Set((record.pending||[]).filter(op=>op.action.startsWith('browser-')).map(op=>op.tabId));
         const safe=remote.tabs.map(tab=>{const pending=local.find(value=>value.id===tab.id);return protectedIds.has(tab.id)&&pending?.type==='browser'?{...tab,url:pending.url,history:pending.history,navigationPending:pending.navigationPending}:tab;});
         await apply(scope,safe,local,{preservedNavigationIds:[...protectedIds],removedIds});
-        record.revision=remote.revision;return;
+        record.baseline=structuredClone(remote.tabs);record.revision=remote.revision;return;
       }
       // Older owners may never have registered these saved local chat aliases.
       // Preserve them without publishing a reopening or treating absence as close.
@@ -191,7 +229,7 @@ export function createTabSynchronizer({scopes,readLocal,apply,acknowledge=async(
         if(!Array.isArray(saved)||saved.length>2000||saved.some(item=>typeof item!=='string'||item.length>256))throw Error('Saved owner tab observations could not be read. Local views were preserved.');
         record.ownerObserved=new Set(saved);
       }
-      if(record.baseline===null&&!record.localAliases)record.localAliases=new Set(local.filter(tab=>!tab.navigationPending&&remote.revision>0&&!record.ownerObserved.has(tab.id)&&!remote.tabs.some(item=>item.id===tab.id)&&preserveUntracked(scope,tab)).map(tab=>tab.id));
+      if(record.baseline===null&&!record.localAliases)record.localAliases=new Set(local.filter(tab=>!tab.navigationPending&&remote.revision>0&&!Object.hasOwn(remote.closed||{},tab.id)&&!record.ownerObserved.has(tab.id)&&!remote.tabs.some(item=>item.id===tab.id)&&preserveUntracked(scope,tab)).map(tab=>tab.id));
       const rememberOwner=()=>{
         for(const tab of remote.tabs){record.localAliases?.delete(tab.id);if(preserveUntracked(scope,tab))record.ownerObserved.add(tab.id);}
         // Remember participation across renderer restarts, including a close made
@@ -318,6 +356,25 @@ export function createTabSynchronizer({scopes,readLocal,apply,acknowledge=async(
     record.pending=null;record.conflict=false;record.again=false;record.retry=null;record.baseline=structuredClone(remote.tabs);record.revision=remote.revision;
     record.request=null;pendingStorage?.removeItem('proteus.navigation.pending:'+id);pendingStorage?.removeItem('proteus.navigation.request:'+id);
   }
+  function close(scope,tabId){
+    const storageKey='proteus.navigation.closes:'+key(scope);
+    const ids=JSON.parse(pendingStorage?.getItem(storageKey)||'[]');
+    if(!ids.includes(tabId))ids.push(tabId);
+    if(ids.length>1000)throw Error('Too many queued tab closes. Reconnect before closing more tabs.');
+    pendingStorage?.setItem(storageKey,JSON.stringify(ids));
+    // In-memory storage also supports callers without a persistent adapter.
+    if(!pendingStorage)throw Error('Closing shared tabs requires durable intent storage.');
+  }
+  async function reopen(scope,tab){
+    // An immediate Undo may race its own queued Close. Settle that intent first;
+    // a later reopen must refer to the resulting owner closing revision.
+    const closeKey='proteus.navigation.closes:'+key(scope);
+    if(JSON.parse(pendingStorage?.getItem(closeKey)||'[]').includes(tab.id))await sync(scope);
+    const remote=await request(scope,'get',{historyLimit:200}),closedRevision=Object.hasOwn(remote.closed||{},tab.id)?remote.closed[tab.id]:null;
+    if(!closedRevision)return false;
+    await request(scope,'mutate',{expectedRevision:remote.revision,operations:[{action:'reopen',closedRevision,tab}]},{id:crypto.randomUUID(),issuedAt:new Date().toISOString()});
+    await sync(scope);return true;
+  }
   function forgetKey(id){records.delete(id);for(const cacheKey of navigationCache.keys())if(cacheKey.startsWith(id+':'))navigationCache.delete(cacheKey);}
-  return {sync,checkpoint,resolve,hasConflict:scope=>records.get(key(scope))?.conflict===true,forget(scope){forgetKey(key(scope));},forgetHost(hostId){backoff.delete(hostId);for(const id of records.keys())if(JSON.parse(id)[0]===hostId)forgetKey(id);},async all(){const groups=new Map();for(const scope of scopes()){const owner=hostKey(scope);if(!groups.has(owner))groups.set(owner,[]);groups.get(owner).push(scope);}await Promise.all([...groups.values()].map(async group=>{for(const scope of group)await sync(scope);}));}};
+  return {sync,checkpoint,resolve,close,reopen,hasConflict:scope=>records.get(key(scope))?.conflict===true,forget(scope){forgetKey(key(scope));},forgetHost(hostId){backoff.delete(hostId);for(const id of records.keys())if(JSON.parse(id)[0]===hostId)forgetKey(id);},async all(){const groups=new Map();for(const scope of scopes()){const owner=hostKey(scope);if(!groups.has(owner))groups.set(owner,[]);groups.get(owner).push(scope);}await Promise.all([...groups.values()].map(async group=>{for(const scope of group)await sync(scope);}));}};
 }

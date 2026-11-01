@@ -24,3 +24,18 @@ test('owner membership removals apply before an unrelated history hydration fail
  const long=tab('long-history');long.history={...long.history,revision:2,total:2,hasMore:true};remote={revision:2,tabs:[long]};
  await sync.sync(scope);assert.deepEqual(local.map(value=>value.id),['browser:long-history']);assert.equal(local[0].history.revision,1,'existing full history stays intact');assert.match(errors[0].message,/history changed/);
 });
+
+test('a quarantined browser action does not discard or hide a new unrelated local tab',async()=>{
+ let local=[tab('one')],remote={revision:1,tabs:structuredClone(local)},conflict=false;
+ const store=new Map(),storage={getItem:key=>store.get(key)||null,setItem:(key,value)=>store.set(key,value),removeItem:key=>store.delete(key)};
+ const sync=createTabSynchronizer({pendingStorage:storage,scopes:()=>[scope],readLocal:async()=>structuredClone(local),apply:async(_scope,tabs,_captured,options={})=>{local=options.membershipOnly?local.filter(tab=>!options.removedIds.includes(tab.id)):structuredClone(tabs);},request:async(_scope,action,args)=>{
+  if(action==='get')return structuredClone(remote);
+  if(!conflict){conflict=true;throw Object.assign(Error('Synthetic conflict'),{code:'NAVIGATION_CONFLICT'});}
+  for(const op of args.operations)if(op.action==='open'){const at=remote.tabs.findIndex(tab=>tab.id===op.tab.id);if(at<0)remote.tabs.push(op.tab);else remote.tabs[at]=op.tab;}
+  remote.revision++;return structuredClone(remote);
+ }});
+ await sync.sync(scope);local[0].title='Changed';await sync.sync(scope);assert.equal(sync.hasConflict(scope),true);
+ local.push({...tab('new'),navigationPending:true});await sync.sync(scope);
+ assert.ok(remote.tabs.some(tab=>tab.id==='browser:new'),'unrelated membership reaches the owner even when its prior revision has not changed');
+ assert.ok(local.some(tab=>tab.id==='browser:new'),'new local intent is not removed by conflict hydration');
+});

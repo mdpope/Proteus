@@ -40,7 +40,8 @@ const device = options['--device'] ? devices.find(item => item.udid === options[
 if (!device) throw new Error('No matching available iOS simulator. Use doctor to list simulator identifiers.');
 const output = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-apple-'));
 const resultPath = path.join(output, 'Tests.xcresult');
-const buildArgs = ['-project', path.join(root, 'ios/Proteus.xcodeproj'), '-scheme', 'Proteus', '-destination', `platform=iOS Simulator,id=${device.udid}`, '-derivedDataPath', path.join(output, 'DerivedData'), '-parallel-testing-enabled', 'NO'];
+const releaseMetadata=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
+const buildArgs = ['MARKETING_VERSION='+releaseMetadata.version,'PROTEUS_RELEASE_DATE='+(releaseMetadata.releaseDate||''),'-project', path.join(root, 'ios/Proteus.xcodeproj'), '-scheme', 'Proteus', '-destination', `platform=iOS Simulator,id=${device.udid}`, '-derivedDataPath', path.join(output, 'DerivedData'), '-parallel-testing-enabled', 'NO'];
 if(action==='test')buildArgs.push('PROTEUS_APP_BUNDLE_IDENTIFIER=org.proteusapp.proteus.mobile-tests');
 if (process.env.PROTEUS_CLANG_PROBE_WORKAROUND === '1') {
   const compiler = exec('xcrun', ['--find', 'clang']).trim();

@@ -12,6 +12,47 @@ helper as evidence of native acceptance: retain the builder's package/source rec
 A release-operation helper can have a later maintenance commit without changing the frozen
 application/source-companion pin or rebuilding accepted application bytes.
 
+## November 1 operator contract
+
+Name new releases with their short date, for example **Nov 1**. The ISO date remains the stable
+record ID/date; `release.mjs open` derives the short name if `--name` is omitted. The reserved
+version carries `releaseDate` and `releaseName`; Home displays version plus the release date on
+desktop, web and iOS. Rebuilds retain the release identity and get distinct source/build hashes.
+
+A release begins with the bug/feature register and ends with verified deployment to every included
+desktop, web and iOS target unless the operator explicitly defers one. A local build authorization
+does not lift an explicit wider-rollout hold. At release completion, do the PR/commit/push/sync/
+merge-to-main and verified branch/worktree/backup/temp closeout below without additional prompts
+for those routine steps. Preserve unrelated work and report concrete exceptions.
+
+Device names, host IDs, designated build machines, private routing and operating directories belong
+in the operator's private project record, outside synchronized source. Use one designated builder
+per OS/architecture. Build missing targets once; every compatible consumer downloads the accepted
+signed binary from downloads.proteus.example. A failed catalog read cannot trigger an implicit source build.
+
+### Coordinated build versus installation
+
+Use `proteus_chats create` with `purpose:build` for authorized OS-specific implementation/build
+work in the designated builder's existing source project. The destination captures its saved
+Engine Room update provider/model/intensity/speed, or validates explicit build-model options
+against refreshed metadata. Context, source folders and approvals remain ordinary project
+authority. A build chat gets no automatic installation-tool grant. Its durable task receipt is
+observed for questions, source/PR synchronization, native acceptance and immutable artifact pins.
+The destination must advertise `chat.build-coordinator.v1`; older clients fail clearly rather
+than substituting default execution options.
+
+After exact artifact publication/HTTPS verification, use the existing `purpose:update` path on
+each receiving device, with `updateRelease` selected from that destination's current catalog.
+This path always captures the destination's saved update defaults and remains unassigned.
+The local Update button uses the same start/session factory. Never pass build overrides into an
+installation chat, reuse a completed update chat, or mistake dispatch for installed acceptance.
+
+Use compatible consumers in parallel once the shared artifact is accepted; observe each durable
+task independently and carry its own preservation/migration/restart/checkpoint result in the release
+ledger. Platform implementation failures do not make consumers builders. Mac/Linux source work
+uses the existing native source/package workflow; the owner `build-release` operation remains
+Windows-specific. All three platforms reuse published signed releases through the owner updater.
+
 This is the standing Proteus release process. A release has a human name, one reserved application
 version, repository documents and a per-machine rollout ledger. The coordinating Mac owns the
 release; each destination owns its installation, data, credentials, migrations and acceptance.

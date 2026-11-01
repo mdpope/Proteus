@@ -1,3 +1,25 @@
+## November 1 — automatic navigation preservation and coordinated targets
+
+The private device-role register chooses builders and consumers. Build once per OS/architecture,
+publish accepted signed artifacts to downloads.proteus.example, then download those bytes on every compatible consumer.
+Use a source-project `purpose:build` chat for authorized native code/build work; it captures updater
+defaults or explicit validated build options. Use a fresh unassigned `purpose:update` chat for
+installation, always using the receiving device's saved defaults. The local Update button and
+controller-initiated pinned updates share the session factory. See [release process](release-process.md).
+
+The owner pre-restart receipt now includes hashed canonical workspace/project identities, assignments,
+project defaults and chat memberships, ordered tab descriptors/retired identities, and logical window
+selection/drafts. Post-restart verification rejects loss or reassignment before releasing the barrier.
+Runtime view IDs may remap without changing logical identity. Private receipt hashes contain no
+prompts, paths, URLs or credential values. Complete backup verification and full browser-worker
+history, profile/pairing/source/reading-state acceptance remain separate required checks.
+
+An older installed owner that did not capture this added inventory cannot retroactively claim it.
+Its first upgrade still needs explicit coordinator before/after navigation comparisons in addition
+to the existing chat-prefix/configuration and backup checks. New receipts do not erase earlier
+qualification or replace real multiwindow/restart acceptance. These are local candidate changes;
+no device installation is claimed here.
+
 ## October 30 — Windows helper Crashpad inheritance
 
 Helper launch strips only process-specific `CHROME_CRASHPAD_*`, `CHROMIUM_CRASHPAD_*` and

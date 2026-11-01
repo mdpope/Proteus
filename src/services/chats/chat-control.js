@@ -181,7 +181,7 @@ export class ChatControl {
   taskView(task,includeFeedback=true){return {taskId:task.id,...pick(task,['id','operationId','originChatId','hostId','chatId','action','state','status','createdAt','updatedAt','error','notify','deliveryError']),...(includeFeedback&&task.feedback?{feedback:task.feedback}:{}),externalOutcomeVerified:false};}
   async models(hostId,provider){
     if(provider==='rehearsal')return {available:true,models:[{id:'',name:'Local rehearsal',controls:{}}],rehearsal:true};
-    if(!['copilot','codex','claude'].includes(provider))throw Error('Choose an advertised provider.');
+    if(typeof provider!=='string'||!/^[-a-z0-9]{1,64}$/.test(provider))throw Error('Choose an advertised provider.');
     const status=await this.request(hostId,'provider.status',{provider,force:true});
     if(!status?.available||status.stale||status.error)throw Error(status?.error||'Provider unavailable on this computer.');
     return {...status,models:(status.models||[]).filter(model=>model.id&&model.id!=='auto'&&model.policy?.state!=='disabled')};
@@ -222,7 +222,8 @@ export class ChatControl {
       if(args.updateRelease!==undefined&&args.hostId!==this.localId()&&!(await this.connection(args.hostId)).capabilities.includes('chat.update-release.v1'))throw Error('This computer needs pinned update-release support before this workflow is available.');
     }
     if(args.updateRelease!==undefined&&!(args.action==='create'&&args.purpose==='update'))throw Error('A release selection belongs to an update coordinator.');
-    if(args.action==='create'&&args.purpose!=='update')await this.validateModel(args.hostId,{...args,model:args.model??''});
+    if(args.action==='create'&&args.purpose==='build'&&args.hostId!==this.localId()&&!(await this.connection(args.hostId)).capabilities.includes('chat.build-coordinator.v1'))throw Error('This destination needs build-coordinator support before saved update defaults can be captured.');
+    if(args.action==='create'&&!['update','build'].includes(args.purpose))await this.validateModel(args.hostId,{...args,model:args.model??''});
     this.assertAccess(actor,args.hostId,actionScope,args.chatId,projectId);
     const task={schemaVersion:1,id:randomUUID(),operationId:args.operationId,actor,originChatId,hostId:args.hostId,chatId:args.chatId||null,projectId:actualProjectId,args:structuredClone(args),digest:signature,action:args.action,state:'prepared',status:'dispatching',baseline,notify:args.notify===true,createdAt:new Date().toISOString(),issuedAt:new Date().toISOString()};
     this.save(task);return this.perform(task);
@@ -236,7 +237,7 @@ export class ChatControl {
     this.assertAccess(task.actor,task.hostId,scope,task.args.chatId,task.projectId);
     if(task.state==='accepted'){await this.authorizeTask(task);return this.taskView(task);}
     const args=task.args,method={create:'chat.start',send:'chat.send',reply:'chat.reply',cancel:'chat.cancel'}[task.action];
-    const payload=task.action==='create'?{...pick(args,['purpose','name','prompt','provider','model','reasoningEffort','contextTier','serviceTier','workspaceId','projectId','selectedIds','includeDefaults','agentId','updateRelease']),...(args.purpose==='update'?{operationId:args.operationId}:{reasoningEffort:args.reasoningEffort||'',contextTier:args.contextTier||'default',serviceTier:args.serviceTier||''})}:
+    const payload=task.action==='create'?{...pick(args,['purpose','name','prompt','provider','model','reasoningEffort','contextTier','serviceTier','workspaceId','projectId','selectedIds','includeDefaults','agentId','updateRelease']),...(args.purpose==='update'?{operationId:args.operationId}:args.purpose==='build'?{}:{reasoningEffort:args.reasoningEffort||'',contextTier:args.contextTier||'default',serviceTier:args.serviceTier||''})}:
       task.action==='send'?{id:task.chatId,prompt:args.prompt,mode:args.mode||'queue',messageId:task.id}:
       task.action==='reply'?{id:task.chatId,answer:args.answer,requestId:args.requestId}:{id:task.chatId};
     if(task.action!=='create'){payload.agentControl=true;payload.expectedProjectId=task.projectId||null;}

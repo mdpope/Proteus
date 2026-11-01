@@ -1,3 +1,7 @@
+## November 1 — local synchronization, sizing and integration correction
+
+Local implementation/build is authorized; wider rollout is held for additional bugs. Continue from combined 08db248 plus HC handoff 5f55c75. The isolated Nov 1 branch fixes missing-document scope failure, durable Close/reopen, native browser Close and actual browser-surface geometry, and removes repeated global integration scans with bounded event-loop yields. See [the Nov 1 plan](2026-11-01-release-plan.md) for acceptance and remaining package/HC gates. The existing named 0.2.39 release is still open; no new version or production rollout is claimed.
+
 ## November 1 — HC responsiveness diagnosis ready for personal-Mac implementation
 
 Read the [November 1 release plan](2026-11-01-release-plan.md). A targeted live CPU sample and

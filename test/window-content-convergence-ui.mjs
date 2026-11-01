@@ -10,7 +10,7 @@ owner.seedWorkspace(store.get());
 const scope={scope:'project',id:fixture.project.id},history={entries:['back','selected','forward'].map(id=>({id,url:fixture.origin+'/'+id,title:id})),index:1,currentEntryId:'selected',revision:3};
 const pagedHistory={entries:Array.from({length:451},(_,i)=>({id:'paged-'+i,url:fixture.origin+'/paged/'+i,title:'Page '+i})),index:440,currentEntryId:'paged-440',revision:1};
 let current=owner.get(scope.scope,scope.id);
-owner.mutate({...scope,expectedRevision:current.revision,operations:[{action:'open',tab:{id:'owner-only-browser',type:'browser',title:'Owner browser',url:history.entries[1].url,history}},{action:'open',tab:{id:'paged-owner-browser',type:'browser',title:'Paged owner history',url:pagedHistory.entries[440].url,history:pagedHistory}},{action:'open',tab:{id:'chat:'+fixture.user[1].id,type:'chat',chatId:fixture.user[1].id,title:'Owner chat'}}]});
+owner.mutate({...scope,expectedRevision:current.revision,operations:[{action:'open',tab:{id:'owner-only-browser',type:'browser',title:'Owner browser',url:history.entries[1].url,history}},{action:'open',tab:{id:'paged-owner-browser',type:'browser',title:'Paged owner history',url:pagedHistory.entries[440].url,history:pagedHistory}},{action:'open',tab:{id:'chat:'+fixture.user[1].id,type:'chat',chatId:fixture.user[1].id,title:'Owner chat'}},{action:'open',tab:{id:'document:'+'a'.repeat(64),type:'document',documentId:'a'.repeat(64),title:'Unavailable worktree document',mediaType:'text/markdown'}}]});
 current=owner.get(scope.scope,scope.id);owner.mutate({...scope,expectedRevision:current.revision,operations:[{action:'reorder',ids:current.tabs.map(tab=>tab.id).reverse()}]});
 let app;const errors=[];
 const until=async(fn,label)=>{for(let i=0;i<200;i++){if(await fn())return;await new Promise(resolve=>setTimeout(resolve,100));}throw Error('Timed out: '+label);};
@@ -20,7 +20,7 @@ const logical=tab=>tab.contentTabId||(['run','remote-run'].includes(tab.type)?'c
 const childIds=async(page,parent=fixture.parentId)=>(await session(page))?.tabs.filter(tab=>tab.parentId===parent).map(logical)||[];
 const ready=async page=>{page.setDefaultTimeout(20000);page.on('pageerror',error=>errors.push(error.message));await page.locator('#topbar-home').waitFor();await until(async()=>!!await session(page),'initial window checkpoint');return page;};
 async function openProject(page){const expand=page.locator('[data-preview-workspace-expand="'+fixture.studio.id+'"]');await expand.waitFor();if(await expand.getAttribute('aria-expanded')!=='true')await expand.click();await page.locator('[data-preview-project="'+fixture.project.id+'"]').first().click();}
-const launch=async()=>{app=await electron.launch({args:['.','--use-mock-keychain'],env:{...process.env,PROTEUS_DESKTOP_PREVIEW:'1',PROTEUS_PREVIEW_HOME:fixture.locations.root,CODEX_HOME:fixture.auth,PORT:'0'}});};
+const launch=async()=>{app=await electron.launch({...(process.env.PROTEUS_UI_EXECUTABLE?{executablePath:process.env.PROTEUS_UI_EXECUTABLE}:{}),args:[...(process.env.PROTEUS_UI_EXECUTABLE?[]:['.']),'--use-mock-keychain'],env:{...process.env,PROTEUS_DESKTOP_PREVIEW:'1',PROTEUS_PREVIEW_HOME:fixture.locations.root,CODEX_HOME:fixture.auth,PORT:'0'}});};
 const snapshot=(scope= {scope:'project',id:fixture.project.id})=>native((main,scope)=>main.getService().contentTabs.getAsync(scope.scope,scope.id),scope);
 const mutate=(scope,operations)=>native(async(main,{scope,operations})=>{
  const service=main.getService();
@@ -52,7 +52,8 @@ try{
  await openProject(first);
  const visibleIds=async page=>{const ids=await page.locator('[data-chat-subtab]').evaluateAll(nodes=>nodes.map(node=>node.dataset.chatSubtab));return (await session(page)).tabs.filter(tab=>ids.includes(tab.id)&&tab.parentId===fixture.parentId).map(logical);};
  assert.deepEqual(await visibleIds(first),await visibleIds(second),'each strip shows the same owner tabs, without duplicate alias buttons');
- console.log('PASS initial inactive project and two-window visible alias convergence');
+ assert.equal((await session(first)).tabs.find(tab=>logical(tab)==='document:'+'a'.repeat(64)).type,'unavailable','a missing source cannot prevent baseline or later browser mirrors');
+ console.log('PASS initial inactive project, missing document placeholder and two-window convergence');
  // Real simultaneous native opens exercise the renderer outboxes and revision rebase.
  const openedTabs=await Promise.all([first,second].map((page,i)=>page.evaluate(value=>window.desktop.browser({action:'create',...value}),{parentId:fixture.parentId,url:fixture.origin+'/concurrent-'+i,unloaded:true})));
  await until(async()=>openedTabs.every(tab=>(owner.get(scope.scope,scope.id).tabs.some(row=>row.id===tab.id))),'both concurrent opens committed');
@@ -73,6 +74,22 @@ try{
  await native(async(main,ids)=>{for(const [i,id]of ids.entries())await main.getBrowser().get(id).view.webContents.executeJavaScript('document.body.style.height="6000px";window.scrollTo(0,'+(120+i*500)+');null');},browserViews);
  await mutate(scope,[{action:'reorder',ids:(await snapshot()).tabs.map(tab=>tab.id).reverse()}]);await converge([first,second],scope,fixture.parentId);
  assert.deepEqual(await native((main,ids)=>Promise.all(ids.map(id=>main.getBrowser().get(id).view.webContents.executeJavaScript('window.scrollY'))),browserViews),[120,620]);
+ // Change the browser surface without resizing #workspace. Observing only the
+ // outer workspace misses this and leaves stale native view dimensions.
+ const geometry=async(page,id)=>({area:await page.locator('#browser-area').evaluate(node=>{const r=node.getBoundingClientRect();return Object.fromEntries(['x','y','width','height'].map(key=>[key,Math.round(r[key])]))}),view:await native((main,id)=>main.getBrowser().get(id).view.getBounds(),id)});
+ for(const [i,page]of [first,second].entries()){
+   await page.locator('#browser-form').evaluate(node=>{node.style.minHeight='130px';});
+   await until(async()=>{const g=await geometry(page,browserViews[i]);return JSON.stringify(g.area)===JSON.stringify(g.view);},'native browser fills resized content area without switching tabs');
+   await page.locator('#browser-form').evaluate(node=>{node.style.minHeight='';});
+   await until(async()=>{const g=await geometry(page,browserViews[i]);return JSON.stringify(g.area)===JSON.stringify(g.view);},'native browser reclaims full space after toolbar contracts');
+ }
+ console.log('PASS browser surface geometry changes without tab switching');
+ // Human Close goes through the real UI with an established unavailable source.
+ const closeView=(await session(first)).tabs.find(tab=>logical(tab)===openedTabs[0].id);
+ await first.locator('[data-chat-child-close="'+closeView.id+'"]').click();
+ await converge([first,second],scope,fixture.parentId);
+ assert.ok((await snapshot()).closed[openedTabs[0].id],'explicit UI Close commits a durable owner tombstone');
+
  for(const [i,page]of [first,second].entries())await page.evaluate(i=>window.desktop.viewPositions({action:'set',key:'synthetic-reading',position:[['root',{top:120+i*500,left:0}]]}),i);
  await selected(first,fixture.user[0].id,'Draft for the first window');await selected(second,fixture.user[1].id,'Draft for the second window');
  // Inactive workspace roots receive additions, moves, closes and ordering too.
@@ -116,7 +133,7 @@ try{
  },scope);
  assert.deepEqual(paged.entries.map(({id,url,title})=>({id,url,title})),pagedHistory.entries);assert.ok(paged.entries.every(entry=>entry.entryId===entry.id&&entry.profileId==='default'));assert.equal(paged.currentEntryId,'paged-440','restart and named restore retain every Back/Forward entry beyond the saved-session window');
  assert.deepEqual(errors,[]);
- console.log(JSON.stringify({passed:true,synthetic:true,initialInactiveOwnerMembershipAndOrder:true,chatAliasesNormalized:true,twoWindowsConverge:true,concurrentOpens:true,keyboardReorder:true,inactiveWorkspaceAddMoveCloseReorder:true,independentSelectionScrollAndDrafts:true,namedRestoreBeforeHydration:true,restartAndFullForwardHistory:true}));
+ console.log(JSON.stringify({passed:true,synthetic:true,initialInactiveOwnerMembershipAndOrder:true,chatAliasesNormalized:true,twoWindowsConverge:true,concurrentOpens:true,keyboardReorder:true,inactiveWorkspaceAddMoveCloseReorder:true,independentSelectionScrollAndDrafts:true,namedRestoreBeforeHydration:true,restartAndFullForwardHistory:true,missingDocumentIsolation:true,explicitCloseTombstone:true,surfaceBoundsWithoutTabSwitch:true}));
 }finally{
  if(app){const child=app.process(),timer=setTimeout(()=>child.kill('SIGKILL'),15000);try{await app.close()}finally{clearTimeout(timer)}}
  await fixture.cleanup();

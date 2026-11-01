@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import {shortReleaseDate} from '../../../public/shared/ui/release-label.js';
 import path from 'node:path';
 import {atomicJSON} from '../../shared/files.js';
 
@@ -14,6 +15,7 @@ export function currentRelease(root){
 /** Reserve one version when a named release opens. Re-entering the same open
  * release is idempotent; package builds never increment it again. */
 export function openRelease(root,{id,name,date,plan}){
+ name??=shortReleaseDate(date);
  if(!/^[-a-z0-9]{1,80}$/.test(id||'')||typeof name!=='string'||!name.trim()||name.length>120||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(date||'')||!Number.isFinite(Date.parse(date)))throw Error('Supply a stable release ID, name and ISO date.');
  const current=currentRelease(root),metadata=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
  if(current?.status==='open'){
@@ -29,10 +31,18 @@ export function openRelease(root,{id,name,date,plan}){
  if(path.isAbsolute(planFile)||planFile.split(/[\\/]/).includes('..')||!planFile.startsWith('docs/')||!fs.statSync(path.join(root,planFile)).isFile())throw Error('Choose an existing repository release plan.');
  const record={schemaVersion:1,id,name,version,status:'open',openedOn:date,plan:planFile,implementation:base+'/implementation.md',rollout:base+'/rollout.md',closeout:base+'/closeout.md',sourceCommit:null};
  const lock=JSON.parse(fs.readFileSync(path.join(root,'package-lock.json'),'utf8'));
- metadata.version=version;lock.version=version;if(lock.packages?.[''])lock.packages[''].version=version;
+ metadata.version=version;metadata.releaseDate=date;metadata.releaseName=name;lock.version=version;if(lock.packages?.[''])lock.packages[''].version=version;
  fs.mkdirSync(directory,{recursive:true});
  fs.writeFileSync(path.join(root,record.implementation),'# '+name+' implementation\n\nVersion: '+version+'\n\nRecord implemented scope, source pins, tests, package hashes and unresolved limits here.\n',{flag:'wx'});
  fs.writeFileSync(path.join(root,record.rollout),'# '+name+' rollout\n\nVersion: '+version+'\n\n| Machine or target | Platform | Requested version | Stage | Evidence and remaining work |\n| --- | --- | --- | --- | --- |\n\nStages: not started, building, published, dispatched, staged, installed, live verified, blocked, deferred.\nKeep secrets, machine IDs, private paths and raw receipts outside Git.\n',{flag:'wx'});
+ const ios=path.join(root,'ios','project.yml');
+ if(fs.existsSync(ios)){
+  let project=fs.readFileSync(ios,'utf8').replace(/MARKETING_VERSION: ['"]?[^'"\n]+['"]?/,"MARKETING_VERSION: '"+version+"'");
+  project=project.includes('PROTEUS_RELEASE_DATE:')?project.replace(/PROTEUS_RELEASE_DATE: ['"]?[^'"\n]+['"]?/,"PROTEUS_RELEASE_DATE: '"+date+"'"):project.replace(/(MARKETING_VERSION:[^\n]+)/,"$1\n    PROTEUS_RELEASE_DATE: '"+date+"'");
+  fs.writeFileSync(ios,project);
+ }
+ const xcode=path.join(root,'ios','Proteus.xcodeproj','project.pbxproj');
+ if(fs.existsSync(xcode))fs.writeFileSync(xcode,fs.readFileSync(xcode,'utf8').replace(/MARKETING_VERSION = [^;]+;/g,'MARKETING_VERSION = '+version+';').replace(/PROTEUS_RELEASE_DATE = [^;]+;/g,'PROTEUS_RELEASE_DATE = "'+date+'";'));
  atomicJSON(path.join(root,'package.json'),metadata);atomicJSON(path.join(root,'package-lock.json'),lock);
  atomicJSON(path.join(root,base,'release.json'),record);
  atomicJSON(path.join(root,'docs/releases/current.json'),{schemaVersion:1,id,version});

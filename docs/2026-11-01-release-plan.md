@@ -1,9 +1,15 @@
 # November 1 release plan — desktop responsiveness
 
-**Stage: profiled and planned; production correction not implemented.** The operator requested
-profiling of recurring Work Mac hangs and a committed handoff for the personal Mac to implement
-and build. This checkpoint contains the diagnosis, synthetic reproduction and acceptance plan.
-It does not change the running app, provider sessions, permissions or release version.
+**Stage: local implementation and testing authorized; wider rollout held.** The operator
+authorized local builds on October 31, including this exact Work Mac handoff, project/window
+synchronization and browser surface sizing. More bugs may be added before distribution.
+No installation, public publication or destination update is authorized by this checkpoint.
+
+The isolated continuation starts from the installed combined source `08db248` plus HC handoff
+`5f55c75`. The existing October thirtieth 0.2.39 release record is still open, so this checkpoint
+does not close that release, reserve another version or relabel an accepted package.
+The first local review build retains 0.2.39 with distinct source provenance. Assign the next
+version through the named-release tool after the existing closeout is reconciled.
 
 ## Baseline and integration
 
@@ -179,3 +185,124 @@ UI acceptance is claimed for this documentation/profiling checkpoint.
 
 The production algorithm, new regression cases, signed candidate and post-install acceptance are
 **still required on the building Mac**. This checkpoint is not an installed performance fix.
+
+## N3 — project membership and Close across windows
+
+One owner project has one ordered logical tab collection, independent of its parent workspace
+and every window displaying it. URL/current entry/Back/Forward history and order converge in
+active and inactive local windows. Selection, scrolling, drafts and reading positions remain
+window-local. Paired clients retain the existing owner-scoped remote follow behavior.
+
+Implemented locally:
+- Document resolution failures materialize an unavailable tab with Retry and Close, allowing
+  the rest of the scope to establish its baseline. Saved-window projection uses the same rule.
+- Owner Close/move records retain compact logical IDs and closing revisions. Plain opens,
+  passive metadata, stale windows/outboxes and old clients cannot revive retired identities.
+  Records do not expire; each scope has a 16,384-record limit and writes fail without replacing
+  the registry at that limit. The existing 16 MB total-store bound still applies.
+- Explicit reopen carries the reviewed closing revision; a later Close invalidates it. Explicit
+  retained-window recovery can reopen reviewed identities without replacing current histories.
+- Human Close uses a durable independent queue before navigation hydration or quarantine.
+  Native browser Close reaches the owner directly; window disposal and passive mirror cleanup
+  retain owner membership. Owner removal wins over concurrent title/metadata updates.
+- Explicit chat reopen settles its queued Close and restores the new selection only if no
+  subsequent human selection intervened. Chat aliases share one child-scope baseline. Closing
+  a chat view releases its browser/document views without closing the owner's child records or
+  ending terminal sessions; reopening and restarting restore those same child identities.
+  Native child Close resolves the current window's chat alias before interpreting project
+  prefixes, and never mutates another owner's scope.
+
+Acceptance includes missing documents at the front of the owner list, first-baseline failure,
+navigation quarantine, delayed opens, stale reopen, native Close, two-window independent
+selection/scroll/drafts, concurrent opens/reorder, close-window/named restore, restart, and all
+451 history entries including Forward. The existing encrypted follow fixture remains a separate
+cross-owner gate. No physical iOS or affected-HC soak acceptance is claimed.
+
+## N4 — browser fills its content area without a tab switch
+
+The renderer observed the outer workspace, but nested browser surface dimensions can change
+without changing that outer box. A resize observer now tracks the actual mounted browser area,
+disconnecting the previous surface when replaced. Existing native selection/revision checks
+and geometry validation remain authoritative.
+
+The same disposable Electron reproduction fails on unmodified combined 0.2.39 when the toolbar
+changes height without changing the outer workspace, and passes with the correction. Both local
+windows reclaim the full surface after expansion/contraction without selecting another tab.
+
+The Team browser also remounted its toolbar during unrelated refreshes if native layout advanced
+the selection revision while control initialization awaited IPC. Recording the mounted form
+before that await preserves the same toolbar/surface, address draft and scroll. The existing
+Team-refresh reproduction fails on the unchanged installed baseline and passes with this fix.
+
+## Local implementation checkpoint
+
+N1 now enumerates runs once, skips absent sessions before MCP/context projection, resolves and
+validates current run-scoped identities before effects and after awaits, and returns compact
+background results. Every sixteen candidates or eight milliseconds it yields to a real event-loop
+turn. Recovery caps/backoff, provider holds, active turns, session loss, close/drain and overlap
+coalescing remain enforced. Whole-tick async timings, synchronous candidate timings and bounded
+fixed aggregate counters are available in performance diagnostics.
+
+N2 routine state-projection optimization remains deferred; it is independent of the fixed
+repeated-scan background algorithm and needs a separate measured invalidation design.
+No broad inventory cache or weaker source/identity validation was introduced.
+
+Final source verification: 1,398 Node passes, four skips, no failures, and static checks pass.
+The extended real Electron multiwindow fixture and chat Close/reopen/restart fixture pass.
+The original default macOS temporary path exposed
+symlink/Unix-socket fixture failures; the complete successful run uses canonical `/private/tmp`.
+
+The synthetic Electron 600-live-session rehearsal completes three passes / 1,800 probes with
+three run inventories. Observed maximum timer gap 66.28 ms, p95 16.59 ms, maximum combined
+typing/loopback-request latency 232 ms, elapsed batch time 13.41 seconds and heap delta
+46,778,400 bytes. Heap delta is not total allocation or a leak measurement. Timings vary by
+runtime, disk and contention; structural and responsiveness assertions are separate.
+The packaged artifact must run this same rehearsal and restart checks before acceptance.
+Affected-HC observation over two five-minute intervals remains a post-install gate under the
+rollout hold.
+
+
+## N5 — coordinated distribution and stronger preservation
+
+The private device/role and project process record is created in the configured private notes vault;
+no personal device routes or local paths are copied into source. Standing release guidance now
+requires short-date naming, all-target rollout unless deferred, and automatic routine source/
+PR/main/backup/temp closeout at release completion. The current rollout hold remains unchanged.
+
+Implemented candidate: project-scoped `purpose:build` chats capture the designated builder's
+saved updater options, or validate explicit build options. They retain project authority and
+get no installation-tool grant. The new capability gates older destinations. Installation
+remains the existing fresh unassigned `purpose:update` path used by both local and controller
+starts. Feed resolution remains OS/architecture-specific, signed, pinned and download-first.
+Windows has its existing owner-native build operation; Mac/Linux use their native source workflow.
+Source tests verify all three coordinator providers and explicit build overrides.
+
+Automatic update receipts now compare canonical navigation identities/order/descriptors and
+saved window selection/drafts as well as chat prefixes/configuration. Corruption prevents
+barrier release. Complete backup and full history/pairing/reading-state checks remain required.
+An old owner lacking this capture requires explicit first-upgrade navigation comparisons; do not
+report enhanced coverage retroactively.
+
+## N6 — release date in desktop/web/iOS Home
+
+Package metadata carries the release's ISO date and short name. Desktop and web share a UTC-stable
+short-date formatter; website metadata/route/view passes the same date. Native Home reads its own
+bundle release date, with the normal Apple build workflow supplying it from package metadata.
+Unknown historical dates remain absent, not guessed. The current provisional candidate displays
+its inherited 0.2.39 / Oct 30 lineage; opening the next named release assigns its own version/date.
+
+## N7 — shared local provider parity
+
+| Feature | Finding and local disposition |
+| --- | --- |
+| New-chat and schedule provider choices on iOS | The fixed three-provider list hid MTPLX, llama.cpp and Shared local models. It now derives choices from the executing owner's advertised catalog and retains unavailable saved choices. |
+| Model/effort/context/service tiers | Existing native picker consumes advertised model controls, including Fusion effort labels. Reused for every advertised provider; no model-name table. |
+| Remote tool-created chats | Catalog validation now accepts the actual advertised provider rather than a fixed cloud-provider list. Permissions and fresh model/options validation remain required. |
+| Attachment and MCP capabilities in remote state | Project from all actual owner adapters rather than the original three providers; do not advertise unsupported media or login. |
+| Fusion phases and attribution | Present in the combined source baseline. Preserve this implementation; no replacement provider/session. |
+| Other October 31 collected items | Separate research register remains authoritative. This parity checkpoint does not claim every collected question, layout or device issue implemented. |
+
+iOS build succeeds and the existing shared iPhone simulator passes 31 NativeParityTests,
+including the new owner-advertised local-provider case. A first focused run selected zero tests
+and is not counted as a test pass. Web assets build and five Home/remote-workspace feature tests
+pass (37 assertions); Pint passes. No physical mobile device or website is deployed.

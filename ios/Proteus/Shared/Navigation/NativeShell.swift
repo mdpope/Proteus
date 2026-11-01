@@ -1208,6 +1208,13 @@ struct NativeHome: View {
     }
     private var version: String { Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown" }
     private var build: String { Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "Unknown" }
+    private var releaseDate: String {
+        guard let raw = Bundle.main.infoDictionary?["ProteusReleaseDate"] as? String else { return "" }
+        let parser = DateFormatter(); parser.locale = Locale(identifier: "en_US_POSIX"); parser.timeZone = TimeZone(secondsFromGMT: 0); parser.dateFormat = "yyyy-MM-dd"; parser.isLenient = false
+        guard let date = parser.date(from: raw), parser.string(from: date) == raw else { return "" }
+        let display = DateFormatter(); display.locale = Locale(identifier: "en_US"); display.timeZone = parser.timeZone; display.dateFormat = "MMM d"
+        return display.string(from: date)
+    }
     var body: some View {
         NavigationStack {
             if let remote = destinations.selected {
@@ -1216,7 +1223,7 @@ struct NativeHome: View {
                         HStack(spacing: 10) { Text("⤨").font(.system(size: 36, weight: .bold)).foregroundStyle(Color(red: 0.67, green: 0.86, blue: 0.49)); Text("Proteus").font(.largeTitle.bold()) }
                             .accessibilityElement(children: .combine).accessibilityIdentifier("home-intro-title").frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 4)
                         Text("Proteus keeps conversations, schedules and tools connected to your computers. Choose a computer, review work that needs your input, or open a chat.")
-                        Text("Version \(version) (\(build))").font(.caption).foregroundStyle(.secondary)
+                        Text("Version \(version)\(releaseDate.isEmpty ? "" : " · " + releaseDate) (\(build))").font(.caption).foregroundStyle(.secondary)
                         guideLink
                         Button("Future updates and changelog", systemImage: "clock.arrow.circlepath") { updates = true }
                     }

@@ -40,6 +40,11 @@ for(const provider of ['codex','copilot','claude'])test(provider+' coordinator c
  const response=await fetch(app.origin+'/api/chat',{method:'POST',headers:{authorization:'Bearer '+app.token,'content-type':'application/json'},body:JSON.stringify({purpose:'update',prompt:'Prepare the synthetic requested release'})});const run=await response.json();assert.equal(response.status,200,JSON.stringify(run));
  assert.equal(run.schedule.purpose,'update');assert.equal(run.schedule.context.workspaceId,null);assert.equal(run.schedule.context.agentId,null);assert.deepEqual(run.schedule.context.entries,[]);assert.equal(run.schedule.provider,provider);assert.equal(run.schedule.model,'fixture');assert.equal(run.schedule.serviceTier,'priority');assert.equal(run.projectId??null,null);assert.equal(app.workspaceProjects.get(app.engine).memberships[run.id]?.projectId??null,null);
  app.settings.save({...app.settings.get(),updateCoordinator:{...defaults,reasoningEffort:''}},app.settings.get().revision);assert.equal(app.engine.getRun(run.id).schedule.reasoningEffort,'high');
+ const workspaceId=app.context.get().defaultWorkspaceId;
+ const build=await app.buildChatSchedule({purpose:'build',workspaceId,prompt:'Synthetic OS implementation and packaging'});
+ assert.equal(build.purpose,'build');assert.equal(build.context.workspaceId,workspaceId);assert.equal(build.provider,provider);assert.equal(build.model,'fixture');assert.equal(build.serviceTier,'priority');assert.equal(build.updateAuthorization,undefined,'Source-build work does not inherit installation tool authorization');
+ const override=await app.buildChatSchedule({purpose:'build',workspaceId,prompt:'Explicit build model options',provider,model:'fixture',reasoningEffort:'high',serviceTier:''});
+ assert.equal(override.reasoningEffort,'high');assert.equal(override.serviceTier,'');assert.equal(override.context.workspaceId,workspaceId);
  // The person who started this coordinator is not asked again for its update tool.
  const live=app.engine.getRun(run.id),update=app.engine.decidePermission(live,{kind:'custom-tool',toolName:'proteus_update',args:{action:'status'}});
  assert.equal(update.allowed,true);assert.equal(update.reason,'User-started update coordinator');

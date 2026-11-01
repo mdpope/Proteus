@@ -1,6 +1,7 @@
 import {verifyRelease,extractRelease} from './desktop-releases.js';
 import {DesktopReleaseFeed} from './desktop-release-feed.js';
 import {initializeFreshRecovery} from './recovery-inventory.js';
+import {captureNavigation,verifyNavigation} from './navigation-preservation.js';
 import {taskFeedbackDelivery} from '../chats/task-feedback-kind.js';
 import {ensurePrivateHome} from '../../shared/private-paths.cjs';
 import fs from 'node:fs';
@@ -48,7 +49,8 @@ export class Updates {
  context(run){return digest(JSON.stringify({provider:run.schedule.provider,providerSessionId:run.providerSessionId,workspace:run.schedule.workspace,context:run.schedule.context,permissions:run.schedule.permissions,chatPermissionRevision:run.chatPermissionRevision,model:run.schedule.model,effort:run.schedule.reasoningEffort}));}
  preservation(){
   const runs=this.service.engine.listRuns().map(run=>({id:run.id,eventCount:run.events.length,eventHash:digest(JSON.stringify(run.events)),contextHash:this.context(run)}));
-  const receipt={schemaVersion:1,at:new Date().toISOString(),runs},file=path.join(path.dirname(this.file),'preservation.json');
+  const navigation=captureNavigation(this.service);
+  const receipt={schemaVersion:1,at:new Date().toISOString(),runs,...(navigation?{navigation}:{})},file=path.join(path.dirname(this.file),'preservation.json');
   atomicJSON(file,receipt);return digest(fs.readFileSync(file));
  }
  verifyPreservation(job){
@@ -57,7 +59,7 @@ export class Updates {
   const receipt=JSON.parse(fs.readFileSync(file,'utf8'));
   if(receipt.schemaVersion!==1||!Array.isArray(receipt.runs))throw Error('The pre-restart chat preservation receipt is invalid.');
   for(const row of receipt.runs){const run=this.service.engine.runs.get(row.id);if(!run||run.events.length<row.eventCount||digest(JSON.stringify(run.events.slice(0,row.eventCount)))!==row.eventHash||this.context(run)!==row.contextHash)throw Error('A pre-restart chat, event history or effective configuration changed. Preserve the recovery data for inspection.');}
-  return {runs:receipt.runs.length,events:receipt.runs.reduce((sum,row)=>sum+row.eventCount,0)};
+  return {runs:receipt.runs.length,events:receipt.runs.reduce((sum,row)=>sum+row.eventCount,0),...(receipt.navigation?{navigation:verifyNavigation(receipt.navigation,captureNavigation(this.service))}:{})};
  }
  async handle(value={},runId){
   if(value.action==='status'||value.action==='identity'||!value.action)return this.status();
@@ -122,7 +124,7 @@ export class Updates {
   if(!/^\d+\.\d+\.\d+(?:[-+][A-Za-z0-9.-]+)?$/.test(value.version||'')||value.sourceFingerprint!==undefined&&!/^[a-f0-9]{64}$/.test(value.sourceFingerprint)||value.sourceCommit!==undefined&&!/^[a-f0-9]{40,64}$/.test(value.sourceCommit))throw Error('Specify the requested version and, when known, exact source fingerprint or commit.');
   const {releases}=await this.releases(value.channel),matches=releases.filter(row=>row.version===value.version&&(!value.sourceFingerprint||row.sourceFingerprint===value.sourceFingerprint)&&(!value.sourceCommit||row.sourceCommit===value.sourceCommit));
   if(matches.length>1)throw Error('More than one release matches. Select an exact source fingerprint or release ID.');
-  return {resolution:matches.length?'published':'build-required',platform:this.platform,arch:process.arch,requested:{version:value.version,sourceFingerprint:value.sourceFingerprint||null,sourceCommit:value.sourceCommit||null},release:matches[0]||null,note:matches.length?'Reuse the signed published release.':'Only the designated Windows build machine builds missing Windows releases; consumer machines wait for publication. A failed catalog request is never treated as a missing release.'};
+  return {resolution:matches.length?'published':'build-required',platform:this.platform,arch:process.arch,requested:{version:value.version,sourceFingerprint:value.sourceFingerprint||null,sourceCommit:value.sourceCommit||null},release:matches[0]||null,note:matches.length?'Reuse the signed published release.':'Only the designated builder for this OS/architecture builds a missing release. Consumer machines wait for its signed publication on downloads.proteus.example. A failed catalog request is never treated as a missing release.'};
  }
  async stageRelease(value,runId){
   if(this.busy||this.downloading)throw Error('Another update check is running.');

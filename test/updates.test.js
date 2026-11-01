@@ -221,6 +221,14 @@ test('recovery health verifies every prior chat prefix while permitting new queu
  f.run.events[0].text='Synthetic corruption of original event';f.engine.persist(f.run);
  await assert.rejects(f.controller.recovery({action:'verify',id:job.id,secret:job.secret}),/event history/);assert.equal(f.engine.updateBarrier,true);
 });
+test('recovery health independently rejects canonical project/tab loss before releasing the barrier',async t=>{
+ const f=fixture(t),state={workspaces:[{id:'w',name:'Synthetic'}],projects:[{id:'p',workspaceId:'w',name:'Synthetic'}],scopes:{'project:p':{revision:1,tabs:[{id:'browser',type:'browser',url:'https://example.test'}]}}};
+ Object.assign(f.controller.service,{context:{config:()=>state},workspaceProjects:{read:()=>state},contentTabs:{read:()=>state}});
+ await handoff(f,await prepare(f));await f.controller.advance();const job=writeJob(f.controller.file,{phase:'verifying'});
+ const healthy=await f.controller.recovery({action:'verify',id:job.id,secret:job.secret});assert.equal(healthy.preservation.navigation.tabs,1);assert.equal(healthy.preservation.navigation.projects,1);
+ state.scopes['project:p'].tabs=[];
+ await assert.rejects(f.controller.recovery({action:'verify',id:job.id,secret:job.secret}),/tab membership/);assert.equal(f.engine.updateBarrier,true);
+});
 test('update budgets sum copies on one volume and independently reject a full recovery volume',()=>{
  const options={exists:()=>true,stat:file=>({dev:file.startsWith('/recovery')?2:1}),statfs:file=>({bavail:file.startsWith('/recovery')?50:100,bsize:1}),reserve:10};
  const same=spaceBudget([{directory:'/install',bytes:30},{directory:'/stage',bytes:40}],options);assert.equal(same.length,1);assert.equal(same[0].needed,80);

@@ -15,6 +15,7 @@ private actor PreviewRequestCounter {
 }
 
 private final class TabCacheWriteGate: @unchecked Sendable {
+
     private let lock = NSLock()
     private let release = DispatchSemaphore(value: 0)
     private var nextWrite: XCTestExpectation?
@@ -1838,6 +1839,17 @@ extension DestinationTests {
 }
 
 final class NativeParityTests: XCTestCase {
+    func testOwnerAdvertisedLocalProvidersAndSavedUnavailableSelection() {
+        let statuses: [String: JSON] = ["codex": .object([:]), "shared-llm": .object([:]), "llama-cpp": .object([:]), "mtplx": .object([:]), "local-process": .object([:])]
+        let choices = nativeProviderIDs(statuses, selected: "saved-unavailable")
+        XCTAssertTrue(choices.contains("shared-llm"))
+        XCTAssertTrue(choices.contains("llama-cpp"))
+        XCTAssertTrue(choices.contains("mtplx"))
+        XCTAssertTrue(choices.contains("saved-unavailable"))
+        XCTAssertFalse(choices.contains("local-process"))
+        XCTAssertEqual(nativeProviderName("shared-llm"), "Shared local models")
+    }
+
     func testProviderActivityGroupsMetadataWhilePreservingHumanAndAssistantMessages() {
         let activity: JSON = .object(["role": .string("system"), "text": .string("Thinking"), "data": .object(["activity": .object(["kind": .string("thinking"), "provider": .string("codex")])])])
         let commentary: JSON = .object(["role": .string("assistant"), "text": .string("An ordinary progress update"), "data": .object(["phase": .string("commentary")])])

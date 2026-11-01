@@ -1,3 +1,14 @@
+## November 1 local candidate — rollout held
+
+- Coordinate project-scoped native build chats separately from destination-default installation chats; compare navigation identities/order/descriptors in update preservation receipts.
+- Display the named release date on desktop, web and iOS Home.
+- Show owner-advertised local/shared model providers in native chat/schedule pickers and project actual adapter capabilities to remote clients.
+
+- Prevent stale project views/outboxes from reviving closed tabs; retain owner close revisions and allow reviewed explicit reopen. Isolate unavailable document sources so other tabs keep syncing.
+- Keep browser bounds current when its content area changes without a window resize or tab switch.
+- Bound background integration work, avoid repeated global scans, skip dormant sessions before context hashing, and retain fresh configuration/session validation.
+- Local source/UI validation only at this checkpoint; package acceptance and affected-HC observation remain separate.
+
 # Planned — November 1 responsiveness correction
 
 - Profiled recurring desktop stalls and documented the required integration-health batching,

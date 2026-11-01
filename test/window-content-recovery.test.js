@@ -42,7 +42,7 @@ test('owner recovery scans retained files in a worker, rejects stale review, and
  const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-window-recovery-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
  const saved=source('legacy',[browser('one',['a','old']),browser('lost',['lost'])]);
  fs.writeFileSync(path.join(home,'desktop-workspace.json'),JSON.stringify(saved.session));
- const contentTabs=new ContentTabs(home);contentTabs.mutate({scope:'project',id:'p',expectedRevision:0,operations:[{action:'open',tab:browser('one',['a','new'])}]});
+ const contentTabs=new ContentTabs(home);contentTabs.mutate({scope:'project',id:'p',expectedRevision:0,operations:[{action:'open',tab:browser('one',['a','new'])},{action:'close',id:'lost'}]});
  const service={home,contentTabs,engine:{},context:{get:()=>({workspaces:[{id:'w'}]}),scope:()=>{}},workspaceProjects:{remapSession:value=>value,get:()=>({projects:[{id:'p'}]}),projectFor:()=>{}},mutateContentTabs:value=>contentTabs.mutateAsync(value)};
  const recovery=new WindowContentRecovery(service),first=await recovery.audit();assert.equal(first.items.length,2);assert.deepEqual(first.gaps,[]);
  contentTabs.mutate({scope:'project',id:'p',expectedRevision:1,operations:[{action:'rename',id:'one',title:'Fresh'}]});

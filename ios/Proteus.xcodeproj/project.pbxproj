@@ -47,6 +47,7 @@
 		D0A6A874D71541FD86BC5E31 /* NativeSharedCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0A6A874D71541FD86BC5E32 /* NativeSharedCache.swift */; };
 		D1240567439FF2681FD55806 /* NativeChatScrollMeasurements.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07A3786A67A7D7F69111D816 /* NativeChatScrollMeasurements.swift */; };
 		88BD493A4BA05423DD6D27BC /* NativeMoveMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD3C496FEA9D3B251477A77E /* NativeMoveMenu.swift */; };
+		A0F1D23E45678901ABCD0001 /* ProviderChoices.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0F1D23E45678901ABCD0002 /* ProviderChoices.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -111,6 +112,7 @@
 		D0A6A874D71541FD86BC5E32 /* NativeSharedCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeSharedCache.swift; sourceTree = "<group>"; };
 		07A3786A67A7D7F69111D816 /* NativeChatScrollMeasurements.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeChatScrollMeasurements.swift; sourceTree = "<group>"; };
 		CD3C496FEA9D3B251477A77E /* NativeMoveMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeMoveMenu.swift; sourceTree = "<group>"; };
+		A0F1D23E45678901ABCD0002 /* ProviderChoices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderChoices.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -304,6 +306,7 @@
 			children = (
 				E97DA91FEBC6D447B7D9A9BE /* BrowserModels.swift */,
 				AEBA300AF9361FCB954195A9 /* ChatScrollModels.swift */,
+				A0F1D23E45678901ABCD0002 /* ProviderChoices.swift */,
 				8EE5D84DB0FFFCF87E643DDA /* JSON.swift */,
 				85CC555919516B6821F4F60E /* NativeProjects.swift */,
 			);
@@ -565,6 +568,7 @@
 				5740FAB8AE1ED396820BEC60 /* ToolActivityView.swift in Sources */,
 				7D2D46EE0FD987BA432874CD /* BrowserModels.swift in Sources */,
 				5EF60626047C8C2416E2255F /* ChatScrollModels.swift in Sources */,
+				A0F1D23E45678901ABCD0001 /* ProviderChoices.swift in Sources */,
 				E430010E9EE52E44B1F9CA66 /* BrowserCacheKeychain.swift in Sources */,
 				35F51F9D47A18DF741E5E436 /* NativeDescriptorCache.swift in Sources */,
 				D0A6A874D71541FD86BC5E31 /* NativeSharedCache.swift in Sources */,
@@ -677,6 +681,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 0.2.39;
+				PROTEUS_RELEASE_DATE = "2026-10-30";
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -776,6 +781,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 0.2.39;
+				PROTEUS_RELEASE_DATE = "2026-10-30";
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";

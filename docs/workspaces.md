@@ -1,3 +1,7 @@
+## November 1 — durable membership and unavailable sources
+
+Project/workspace membership and order belong to their owning host/container; a window retains only its own presentation. Missing local documents appear as unavailable tabs with Retry/Close while other descriptors continue syncing. Explicit local Close is queued independently of history conflicts or first-baseline failure. Owner close/move revisions prevent passive or delayed opens from recreating retired identities; explicit reopen uses the observed closing revision. Window closure preserves the project content. Local candidate only; wider rollout is held.
+
 ## October 30 — one ordered content set across local windows
 
 Workspace/project content uses the owning host's ordered logical descriptors in every open window,

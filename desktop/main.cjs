@@ -82,6 +82,7 @@ else {
     const resolvePreviewPlacement=value=>projects.remapBrowserPlacement(value);
     await service.browserProfiles.refresh().catch(()=>{});
     browser = new BrowserTabs(firstWindow, service.origin,{errorPalette,windowRegistry:windows,newWindow:()=>createAppWindow?.(),projects:true,preview:!!desktopPreview,resolvePreviewPlacement,retainedTabs:()=>service.settings.get().browser?.loadedTabLimit??6,home:service.home,handleCallback:url=>{if(!url.startsWith('proteus-desktop://life-oauth/callback?'))return false;void service.life.callback(url).catch(error=>browser.actions.send({type:'error',message:error.message}));returnToAuthWindow();return true;},diagnostics:service.performanceDiagnostics,history:browsingHistory,agentDestination:(runId,value)=>browserDestination(service,runId,value,{preview:!!projects}),agentDestinations:runId=>browserDestinations(service,runId,{preview:!!projects}),profiles:service.browserProfiles,onSiteNotification:(item,tab)=>{service.activity.websiteNotification({windowId:tab.windowId||'main',tabId:tab.id,logicalTabId:tab.thumbnailId,profileId:item.profileId,origin:item.origin,siteNotificationId:item.id,title:item.title,body:item.body,silent:item.silent,hostId:service.remote.info().hostId,hostName:require('node:os').hostname()});service.notify();service.remote.changed();},onLoadError:({error,url,detail,tabId,windowId})=>{const log=service.activity.log('warning','browser.load-failed',`${error}\n${url||''}`,{hostId:service.remote.info().hostId,tabId,error:detail,url});let site='this page';try{site=new URL(url).host;}catch{}const item=service.activity.browserIssue({kind:'load-error',windowId,tabId,logId:log.id,title:'Could not load '+site,body:error});service.notify();return {...log,notificationId:item.id};}});
+    browser.options.closeLogicalTab=(await import('./browser/logical-close.js')).logicalBrowserCloser(service);
     service.previewAllowed=tab=>browser.profileAvailable({profileId:tab.profileId||'default'});
     service.browserAttention=()=>browser.permissions.list().filter(item=>item.kind!=='site-notification');
     const closeCurrentTab=()=>{const ctx=windows.current();if(ctx&&!closing)ctx.window.webContents.send('proteus:close-current-tab');};
@@ -130,6 +131,7 @@ else {
     powerMonitor.on('resume',()=>peers?.resumeConnections());
     const makeSession=id=>new WorkspaceSession(service.home,{windowId:id,projects:true,sharedTeam:true,remap:value=>projects.remapSession(value,service.engine)});
     windows.current().session=makeSession(firstRecord.id);const workspaceSession=windows.proxy('session');
+    service.navigationSessions=()=>[...windows.contexts.values()].filter(ctx=>ctx.session).map(ctx=>({id:ctx.id,session:ctx.session.get()}));
     const tabActions=new Map();
     const windowLayouts=new (require('./windows/window-layouts.cjs').WindowLayouts)(service.home);
     const {WindowContentRecovery}=await import('./windows/content-recovery.js');

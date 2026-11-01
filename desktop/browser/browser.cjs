@@ -470,16 +470,17 @@ class BrowserTabs {
     if(returnRendererFocus)this.window.webContents.focus();
     this.updateThrottling();
   }
-  async close(id,{preserveCache=false}={}) {
-    const owner=this.tabs.get(id)?.windowId;if(this.windowRegistry&&owner&&owner!==this.windowId())return this.windowRegistry.run(owner,()=>this.close(id,{preserveCache}));
+  async close(id,{preserveCache=false,presentationOnly=false}={}) {
+    const owner=this.tabs.get(id)?.windowId;if(this.windowRegistry&&owner&&owner!==this.windowId())return this.windowRegistry.run(owner,()=>this.close(id,{preserveCache,presentationOnly}));
     const tab=this.tabs.get(id);if(!tab)return;
     if(tab.closePromise)return tab.closePromise;
     tab.closePromise=(async()=>{
+      if(!this.shuttingDown&&!preserveCache&&!presentationOnly)await this.options.closeLogicalTab?.(tab);
       if(id===this.active)this.transition?.cancel();this.videoPopout.close(tab);
       tab.shared=false;tab.owner=null;tab.resumeOwner=null;tab.faviconResolver?.close();clearTimeout(tab.thumbnailTimer);if(!this.shuttingDown&&!preserveCache)this.thumbnails?.delete(this.thumbnailKey(tab));
       if(tab.view){const wc=tab.view.webContents;cancelNavigation(wc,'Browser tab closed during navigation.');await this.disconnect(tab);if(!wc.isDestroyed()){this.window.contentView.removeChildView(tab.view);wc.close();}}
       this.tabs.delete(id);if(this.active===id)this.active=null;this.changed();
-    })();return tab.closePromise;
+    })().finally(()=>{if(this.tabs.get(id)===tab)tab.closePromise=null;});return tab.closePromise;
   }
   async unload(id, {hiding=false}={}) {
     const owner=this.tabs.get(id)?.windowId;if(this.windowRegistry&&owner&&owner!==this.windowId())return this.windowRegistry.run(owner,()=>this.unload(id,{hiding}));
@@ -736,7 +737,7 @@ class BrowserTabs {
     }
     if (action === 'show') { if(this.acceptRendererSelection(value,id))this.show(id, value.bounds); return; }
     if (action === 'hide') { if(this.acceptRendererSelection(value,null))this.show(null); return; }
-    if (action === 'close') return this.close(id);
+    if (action === 'close') return this.close(id,{presentationOnly:value.presentationOnly===true});
     if (action === 'navigate') return this.navigate(id, value.url);
     if(action==='restore-history'||action==='apply-history'){
       const tab=this.get(id),history=restoreNavigation(value.history,this.appOrigin);

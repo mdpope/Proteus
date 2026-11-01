@@ -1,3 +1,11 @@
+## November 1 expanded scope — source/local review only
+
+Distribution roles are private; [N5–N7](2026-11-01-release-plan.md) add captured-default build chats, automatic canonical navigation preservation, short release dates and native shared/local-provider choices. Installation still uses receiving-device updater defaults. All-target rollout/automatic release closeout are standing policy; Nov 1 remains held for more bugs.
+
+## November 1 — local candidate authorized, rollout held
+
+The operator authorizes local implementation/build/test for [N1–N4](2026-11-01-release-plan.md): integration-health stalls, shared project membership/permanent Close and browser surface sizing. N2 state-projection caching stays deferred. Current local changes preserve independent window selection/scroll and existing paired follow. No destination installation or publication is authorized.
+
 # November 1 — profiled desktop responsiveness correction
 
 The [November 1 release plan](2026-11-01-release-plan.md) records the confirmed background

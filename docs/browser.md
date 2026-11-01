@@ -1,3 +1,7 @@
+## November 1 — browser surface geometry and native Close
+
+Observe the mounted browser content area as well as the outer workspace so nested layout changes update native view bounds without a tab switch. Native browser Close commits owner membership before destroying its view. Closing a window and passive mirror reconciliation preserve the owner tab. URL/history synchronization continues to share content while local scrolling stays independent. These corrections are in the local Nov 1 candidate; no installed-device acceptance is claimed.
+
 ## October 30 — intranet sites and custom ports
 
 Both explicit HTTP(S) URLs and omitted-scheme single-label `consolefixture:8006` addresses retain the

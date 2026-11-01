@@ -222,7 +222,7 @@ struct ProviderModelPicker: View {
     var provider = "copilot"
     private var catalog: JSON { store.providerStatuses[provider] ?? (provider == "copilot" ? store.modelStatus : .null) }
     private var hostName: String { store.displayName }
-    private var providerName: String { ["copilot": "GitHub Copilot", "codex": "Codex", "claude": "Claude"][provider] ?? provider }
+    private var providerName: String { nativeProviderName(provider) }
     private var models: [JSON] { catalog["models"].array }
     var disabled = false
     private var controls: JSON { models.first { $0["id"].string == model }?["controls"] ?? .null }
@@ -442,7 +442,7 @@ struct ComposerModelPicker: View {
     private var models: [JSON] { (store.providerStatuses[provider] ?? (provider == "copilot" ? store.modelStatus : .null))["models"].array }
     private var catalog: JSON { store.providerStatuses[provider] ?? (provider == "copilot" ? store.modelStatus : .null) }
     private var hostName: String { store.displayName }
-    private var providerName: String { ["copilot": "GitHub Copilot", "codex": "Codex", "claude": "Claude"][provider] ?? provider }
+    private var providerName: String { nativeProviderName(provider) }
     private var selected: JSON { models.first { $0["id"].string == model } ?? .null }
     private var controls: JSON { selected["controls"] }
     private var efforts: [String] { controls["reasoningEfforts"].array.map(\.string) }
