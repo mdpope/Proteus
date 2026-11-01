@@ -1,3 +1,11 @@
+## Current combined rollout: website live, native gates pending
+
+Combined website release 20261101T010326Z is live from exact 08db248: all 9,221 deployed/local file hashes, nine HTTPS assets and fourteen endpoint checks pass. The 105 PHP tests/920 assertions pass. Ordinary restore failed and isolated captured-state verification passed, with its live comparison explicitly not performed. Two local recoveries verify; temporary server retention cleanup awaits the Mac's existing SSH key becoming available after unlock.
+
+The combined Linux package passes 1,382 native tests/four skips, package/real provider/multiwindow/PTY/restart, six-value kwallet6 continuity and isolated update/rollback/failure acceptance. Controller downloads and all 1,494 source Git blobs/436 runtime/eight input hashes match. Publisher signing and live installation remain pending. Windows' existing build is unresolved while that machine reconnects; no retry is started. Ian remains a consumer awaiting the same accepted Windows bytes.
+
+Build Mac's combined candidate is prepared without handoff. HC is armed for normal idle but an unrelated browser agent-control flag blocks replacement; neither is installed. The iPhone copied all 304 files, then safely refused final cold-state acceptance because the app relaunched; source metadata is unchanged and installation has not begun. Reuse this same capture. The Mac relocked and must be unlocked before further Apple checks or SSH signing-key access. iPad remains explicitly deferred. Release/branch closeout waits for actual rollout.
+
 ## Frozen combined application source
 
 Build/deploy only `08db24856fe401db9ac39ed4283b7054568555ea`, the validated merge of the Fusion/layout branch and R15/R16. Both source commits are verified ancestors. This following documentation commit records the immutable application pin; do not build from the moving branch tip. Version remains **0.2.39**. New packages and installed/live checks remain required. iPad is deferred by the operator; iPhone and all intended desktops/web remain in scope. Final closeout must merge/push validated related work into main and retire merged clean release branches/worktrees without erasing unrelated changes.

@@ -1,3 +1,11 @@
+## Current combined rollout: website live, native gates pending
+
+Combined website release 20261101T010326Z is live from exact 08db248: all 9,221 deployed/local file hashes, nine HTTPS assets and fourteen endpoint checks pass. The 105 PHP tests/920 assertions pass. Ordinary restore failed and isolated captured-state verification passed, with its live comparison explicitly not performed. Two local recoveries verify; temporary server retention cleanup awaits the Mac's existing SSH key becoming available after unlock.
+
+The combined Linux package passes 1,382 native tests/four skips, package/real provider/multiwindow/PTY/restart, six-value kwallet6 continuity and isolated update/rollback/failure acceptance. Controller downloads and all 1,494 source Git blobs/436 runtime/eight input hashes match. Publisher signing and live installation remain pending. Windows' existing build is unresolved while that machine reconnects; no retry is started. Ian remains a consumer awaiting the same accepted Windows bytes.
+
+Build Mac's combined candidate is prepared without handoff. HC is armed for normal idle but an unrelated browser agent-control flag blocks replacement; neither is installed. The iPhone copied all 304 files, then safely refused final cold-state acceptance because the app relaunched; source metadata is unchanged and installation has not begun. Reuse this same capture. The Mac relocked and must be unlocked before further Apple checks or SSH signing-key access. iPad remains explicitly deferred. Release/branch closeout waits for actual rollout.
+
 ## Combined native artifacts — rollout in progress
 
 The exact 08db248 Mac package is accepted: signed build `08db24856fe4+src.4f3b8836cb76`, full package hash `d24e4511450dcf8a989eb4565b796039d28a18db6e807424c5dc9dc4b79665d6`. Official extraction, native isolated startup/catalog/UI/PTY/restart and all 1,479 corresponding-source Git blobs pass. HC is authorized to verify and hand off through normal idle; Build Mac is prepare-only while command-center device work runs. Neither is claimed installed. Two native builders are validating the same combined pin; Windows is temporarily reconnecting.
