@@ -275,9 +275,7 @@
     "remoteProjectsUI": true,
     "liveModelUI": "requires designated Windows configured server; not run on this Mac without its own connection configuration"
   },
-  "operatorDeferredTargets": {
-    "ipad": "Operator explicitly deferred this physical device; keep its installed app and two recovery generations unchanged."
-  },
+  "operatorDeferredTargets": {},
   "closeoutRequested": true,
   "combinedMacCandidate": {
     "sourceCommit": "08db24856fe401db9ac39ed4283b7054568555ea",
@@ -304,7 +302,7 @@
     "installed": true,
     "published": false,
     "publisherSignatureVerified": false,
-    "personalMacState": "handoff accepted; waiting for normal idle: command-center turn, one attached unshared terminal and another chat browser turn",
+    "personalMacState": "First attempt failed before replacement during recovery verification; failure evidence retained. A separate normal preparation of the same package succeeded and remains held before handoff during iPad work.",
     "hcState": "installed and independently verified healthy; settings/preferences/pairings byte-identical and 46 drafts preserved against verified native-update recovery",
     "hcInstalled": true,
     "personalMacInstalled": false,
@@ -320,8 +318,8 @@
     "build": "2610.31.2",
     "artifactHash": "19c064e771fd0d68ebff6c7555873415cfd3a578ec9b4ade5456d0e756b8c90b",
     "signedAndFrozen": true,
-    "iphone": "304-file capture stopped because app relaunched; all before/after source metadata matches; installation not attempted; reuse same capture after cold-state recheck",
-    "ipad": "explicitly deferred by operator"
+    "iphone": "Installed 2610.31.2; all 304 protected file hashes matched before first launch, four destinations and selection preserved; launch verified; two recovery generations retained. Physical gestures, reconnect and push delivery not verified.",
+    "ipad": "Operator resumed deferred rollout by unlocking iPad; same signed 2610.31.2 package frozen, preflight passed and recovery capture in progress; not installed."
   },
   "combinedWebCandidate": {
     "sourceCommit": "08db24856fe401db9ac39ed4283b7054568555ea",
@@ -332,7 +330,7 @@
     "sourceTestsPassed": 105,
     "assertions": 920,
     "deployed": true,
-    "deploymentState": "owner SSH workflow in progress; prior c544 website remains live until verified activation",
+    "deploymentState": "Live deployment and retention complete; hashes and endpoint checks passed with recorded restore/log qualifications.",
     "completedAt": "2026-11-01T01:08:29.433316+00:00",
     "archiveBytes": 7503773,
     "publicAssetsVerified": 9,
@@ -366,7 +364,7 @@
     "published": false,
     "qualification": "isolated real provider/multiwindow/PTY/restart, actual six-value kwallet6 synthetic continuity, update/rollback/pre-install failure pass; production credentials/live installation not tested"
   },
-  "combinedWindowsBuildState": "designated owner build started; host temporarily reconnecting, final build and actual package acceptance unresolved; no duplicate build or installation",
+  "combinedWindowsBuildState": "Interrupted during packaging after 1380 passed and six skipped tests; no accepted artifact. Stopped operation cancelled through owner. Canonical Windows owner online; public npm restoration, same-baseline installer registration repair and graceful owner refresh plans await review.",
   "combinedProviderReadiness": {
     "hcCodexAvailable": true,
     "hcCodexModels": 8,
@@ -385,5 +383,5 @@
     "simulatorDataTouched": false
   },
   "previousReview": "https://github.com/mdpope/Proteus/pull/24",
-  "reviewStatus": "draft; merge and close superseded release work only after verified authorized rollout, with iPad explicitly deferred"
+  "reviewStatus": "draft; merge and close superseded release work after verified authorized rollout; iPad resumed and remains in scope"
 }

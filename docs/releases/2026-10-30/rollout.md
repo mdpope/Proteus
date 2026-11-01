@@ -1,3 +1,13 @@
+## Current rollout reconciliation
+
+Work Mac and the combined website are installed and independently verified. The iPhone now runs signed 2610.31.2 from the frozen combined source: all 304 protected files matched before first launch, the four destinations and selection matched, launch passed and exactly two recovery generations remain. Physical notification delivery and gestures remain unverified.
+
+The operator resumed the iPad rollout. The same signed package passed preflight and its recovery capture is in progress; no iPad installation is claimed. Build Mac failed before replacement during recovery verification; its evidence and two verified recoveries remain. A separate normal preparation succeeded and is held before handoff during device work.
+
+The canonical Windows owner is online after profile consolidation. Its combined build was interrupted during packaging after 1,380 tests passed and six skipped; no accepted artifact exists. The stopped operation is cancelled through the owner. Reviewed repair planning covers its missing public npm files, stale native installer registration and cached owner state; no repair or replacement is yet claimed. Linux awaits designated signing and Ian awaits the same accepted Windows bytes. The release stays open; branch and PR closeout follows actual rollout.
+
+Earlier entries below are historical progress, superseded by this current reconciliation.
+
 ## Build Mac handoff accepted; release remains open
 
 Build Mac has handed the exact accepted combined candidate to its supervisor. It remains on the earlier baseline until normal idle and verified replacement. Its attached unshared Default shell and another chat browser turn are protected; neither was interrupted. The command center is ending its turn so its own active run stops blocking the barrier. The task-owned sleep assertion was stopped and was not the user terminal.
