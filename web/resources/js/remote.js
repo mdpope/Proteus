@@ -3,7 +3,7 @@ import {moveMenuMarkup,projectMoveGroups} from '../../../public/shared/navigatio
 import {modelControlVisible,optionsForModelChange} from '../../../public/features/chats/model-choices.js';
 import {mountQuestionAttachments} from '../../../public/features/chats/question-attachments.js';
 import {openStoredAttachment,readRemoteAttachment} from '../../../public/features/chats/chat-attachments.js';
-import {chatQuestions,mountQuestionCard,mountQuestionQueue} from '../../../public/features/chats/user-questions.js';
+import {chatQuestions,mountQuestionCard,mountQuestionQueue,questionPromptVisible,bindQuestionReturn} from '../../../public/features/chats/user-questions.js';
 import {recentItemMarkup} from './navigation-icons.js';
 import {bindWebChatPermissions} from './chat-permissions.js';
 import {chatLink} from '../../../public/features/chats/chat-links.js';
@@ -640,11 +640,12 @@ function renderChats(current) {
             const after=current.historyWindows?.get(run.id)??renderStart;
             if(after<before){await root.querySelector('.user-question-queue')?.questionActions.jump(question);}else notice('Load earlier messages to view this question.');
         }});
-        const questions=chatQuestions(run),ids=new Set(questions.map(question=>question.id));
+        const questions=chatQuestions(run),ids=new Set(questions.map(question=>question.id)),questionCounts=new Map();
+        for(const question of questions)questionCounts.set(question.eventIndex,(questionCounts.get(question.eventIndex)||0)+1);
         for(const card of root.querySelectorAll('.user-question-card'))if(!ids.has(card.dataset.questionId))card.remove();
         for(const question of questions){
             const row=root.querySelector(`[data-event-key="${question.eventIndex}"]`);if(!row)continue;
-            let card=[...row.querySelectorAll(':scope>.user-question-card')].find(node=>node.dataset.questionId===question.id);if(!card){card=document.createElement('div');row.append(card);}mountQuestionCard(card,question,{key:current.host.hostId+':'+run.id+':'+question.id,answer:answerQuestion,attachments:current.state.capabilities?.includes('chat.question-attachments.v1')?{providerId:run.schedule?.provider,mediaTypes:current.state.questionAttachmentMediaTypes||{},destination:current.host.label+' · '+run.title,chatId:run.id,send:(action,args)=>commandForHost(current,'chat.attachments.'+action,args)}:undefined,notify:notice});
+            let card=[...row.querySelectorAll(':scope>.user-question-card')].find(node=>node.dataset.questionId===question.id);if(!card){card=document.createElement('div');row.append(card);}mountQuestionCard(card,question,{key:current.host.hostId+':'+run.id+':'+question.id,answer:answerQuestion,showHeading:!questionPromptVisible(question,run.events?.[question.eventIndex-(run.eventStart||0)]?.text,questionCounts.get(question.eventIndex)),attachments:current.state.capabilities?.includes('chat.question-attachments.v1')?{providerId:run.schedule?.provider,mediaTypes:current.state.questionAttachmentMediaTypes||{},destination:current.host.label+' · '+run.title,chatId:run.id,send:(action,args)=>commandForHost(current,'chat.attachments.'+action,args)}:undefined,notify:notice});
         }
     }
     const questionAttachments=mountQuestionAttachments({key:current.host.hostId+':'+answerKey,host:$('remote-question-attachments'),textarea:$('remote-answer')?.querySelector('textarea'),providerId:run?.schedule?.provider,mediaTypes:current.state.questionAttachmentMediaTypes||{},destination:current.host.label+' · '+run?.title,chatId:run?.id,requestId:pending?.id,send:(action,args)=>commandForHost(current,'chat.attachments.'+action,args),notify:notice});
@@ -652,6 +653,7 @@ function renderChats(current) {
     root.querySelectorAll('[data-answer]').forEach(button => button.onclick = () => answer(button.dataset.answer));
     $('remote-answer')?.addEventListener('input',event=>{answerDraft.values.answer=new FormData(event.currentTarget).get('answer');});
     $('remote-answer')?.addEventListener('submit', event => { event.preventDefault(); answer(new FormData(event.target).get('answer')); });
+    bindQuestionReturn($('remote-answer')?.querySelector('textarea'),()=>$('remote-answer')?.requestSubmit());
     $('remote-cancel')?.addEventListener('click', async () => { try { await command('chat.cancel', { id: run.id }); await openChat(run.id); } catch (error) { notice(error.message); } },{signal:formBindings.renderBindings.signal});
     root.querySelectorAll('[data-steer-queued]').forEach(button=>button.onclick=async()=>{try{await command('chat.steer-queued',{id:run.id,messageId:button.dataset.steerQueued});await openChat(run.id);}catch(error){notice(error.message);}});
     root.querySelectorAll('[data-edit-queued]').forEach(button=>button.onclick=()=>editQueuedMessage(current,run,run.queuedMessages.find(m=>m.id===button.dataset.editQueued)));

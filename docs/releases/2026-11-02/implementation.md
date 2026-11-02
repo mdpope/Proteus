@@ -2,6 +2,15 @@
 
 Version: 0.2.41
 
+R9 was added after the earlier application freeze. Its source fixes restore inline question
+Enter/Send and omit card headings already present in the transcript. The preceding UI fixture
+fails on the repeated heading; corrected shared desktop/web tests, complete Node suite and static
+checks pass. Native unit and iPhone/iPad software-keyboard Send checks pass; replacement
+package acceptance is tracked separately. Multi-question events retain distinct card headings
+so each answer field stays identifiable. Earlier accepted/published/installed R1–R8 artifacts
+retain their original pins and do not contain R9. Desktop build/publisher tasks have a hold on
+promoting those earlier bytes while the replacement pin is validated.
+
 Status: signed Mac candidate accepted locally; publisher signature and destination approvals
 remain pending. No desktop package publication or installation yet. Draft review: [PR 29](https://github.com/mdpope/Proteus/pull/29).
 
@@ -20,8 +29,12 @@ recovery, central copy and ordinary isolated restore verify. The first activatio
 because three existing code generations exceeded the two-generation guard. After retiring the
 exact verified oldest code copy, the guarded retry reused the same archive and recovery capture;
 both activation and audit completed. Native Windows/Linux build chats await ordinary
-destination-owned preflight approvals. Both physical mobile devices are reachable but locked;
-no new capture or installation has started.
+destination-owned preflight approvals. Both physical mobile devices received the earlier frozen
+0.2.41 / 2611.2.1 build in place after the operator unlocked them. All 350 phone and 186 tablet
+protected files match before first launch; both processes and all four saved destinations on each
+device verify. Signing and keychain entitlement identity are unchanged. Exactly two verified
+recoveries remain per device. Physical gestures, authentication/reconnection and push remain
+separate acceptance checks. These installations do not include the subsequently requested R9.
 
 All nine served HTTPS assets match the accepted website archive. Final retention verifies two
 local recovery dates, one server recovery date and two code generations. The bounded final server
@@ -41,6 +54,7 @@ claim that every existing system log is clean.
 | R6 | Hydrate mounted model controls from refreshed owner state even during a fresh network-cache TTL. | Real owner catalogs contain Astra/Terra and current Claude choices. Mounted-control regression preserves model/effort and adds newly advertised IDs with zero network reads. No model capability table was added. |
 | R7 | Explain actual Fusion availability in model/provider screens; keep Auto separate. | Pinned Copilot SDK 1.0.28/runtime 1.0.105 advertises Auto without Fusion tiers. Advertised-tier routing/attribution regressions pass; real Fusion execution is unavailable and unverified. |
 | R8 | Keep the external-link selector through focus loss without a default; remove arbitrary-window fallback; read source-app icon resources without the crashing native file-icon worker. | HC has no rules/default bypass. Disposable native icon lookup reproducibly terminates Electron with SIGTRAP; replacing that lookup passes the actual picker/filter/focus/project/rule/cancel test. Internal-link placement remains separate. HC Outlook acceptance remains. |
+| R9 | Submit inline question answers with Enter/Send through the existing form; preserve alternate newlines, composition, held-key/empty/busy guards and retry identity; omit a repeated single-question prompt while retaining labels for multiple questions. | Prior-source duplicate-heading failure reproduced. Corrected shared card and built website tests pass with choices, draft preservation, consent and identical uncertain retries. Native question/Return unit tests and iPhone/iPad software-keyboard Send pass. New package/live acceptance remains separate from earlier R1–R8 artifacts. |
 
 Two initial packaged extension fixtures accepted an unrelated website WebContentsView as the
 next Electron window event. Captured failure state identifies the controlled HTTP form, with no

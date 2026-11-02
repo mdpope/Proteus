@@ -7,6 +7,7 @@
 - Open mobile New chat in an independent tab with retained draft, attachment scope and retry identity.
 - Hydrate mounted model pickers from refreshed owner catalogs, and distinguish Copilot Auto from unadvertised Fusion.
 - Keep external-link destination selection through focus changes and avoid a native source-icon lookup crash. Internal links retain their originating project.
+- Send inline question answers with Enter; retain Shift+Enter newlines and omit repeated card headings already shown in the transcript.
 
 Implementation and validation are tracked in [the release record](docs/releases/2026-11-02/implementation.md); no installation is claimed by these source changes.
 

@@ -1,16 +1,23 @@
 import {mountQuestionAttachments} from './question-attachments.js';
 const drafts=new Map(),attempts=new Map(),queueStates=new Map();
+// The transcript retains the original prose. Omit only a card heading that is
+// already present there; choices and answer controls still belong to this card.
+export function questionPromptVisible(question,text,questionCount=1){const normalize=value=>String(value||'').replace(/\s+/g,' ').trim();const prompt=normalize(question.text);return questionCount===1&&!!prompt&&normalize(text).includes(prompt);}
+export function bindQuestionReturn(input,submit){
+  if(!input)return;
+  input.addEventListener('keydown',event=>{if(event.key!=='Enter'||event.shiftKey||event.altKey||event.ctrlKey||event.metaKey||event.isComposing||event.keyCode===229)return;event.preventDefault();if(!event.repeat)submit();});
+}
 export function chatQuestions(run){
   const questions=[...(run.userQuestions||[])];
   if(run.pending?.type==='question')questions.push({id:run.pending.id,text:run.pending.question,choices:run.pending.choices||[],status:'pending',blocking:true,eventIndex:(run.eventStart||0)+run.events.findIndex(event=>event.data?.question?.id===run.pending.id)});
   return questions;
 }
 const button=(label,action)=>{const node=document.createElement('button');node.type='button';node.textContent=label;node.onclick=action;return node;};
-export function mountQuestionCard(host,question,{key,answer,attachments,notify=()=>{}}){
-  const signature=JSON.stringify(question);host.questionActions={answer,notify};
+export function mountQuestionCard(host,question,{key,answer,attachments,showHeading=true,notify=()=>{}}){
+  const signature=JSON.stringify([question,showHeading]);host.questionActions={answer,notify};
   if(host.questionSignature===signature)return;
   host.questionSignature=signature;host.replaceChildren();host.className='user-question-card';host.dataset.questionId=question.id;
-  const heading=document.createElement('h4');heading.textContent=question.text;host.append(heading);
+  if(showHeading){const heading=document.createElement('h4');heading.textContent=question.text;host.append(heading);}
   if(question.status!=='pending'){
     const status=document.createElement('p');status.textContent=question.status==='uncertain'?'Answer delivery unconfirmed. Inspect this session before sending another answer.':question.status==='sending'?'Sending answer…':question.status==='dismissed'?'Question dismissed.':'Answered'+(question.deliveryState==='queued'?' · queued for the next turn':'');host.append(status);return;
   }
@@ -30,7 +37,7 @@ export function mountQuestionCard(host,question,{key,answer,attachments,notify=(
     try{const delivery=attempt?.delivery||await picker.payload(value,messageId);attempts.set(key,{messageId,answer:submittedAnswer,files,delivery});await host.questionActions.answer(question,value,messageId,delivery);drafts.delete(key);attempts.delete(key);picker.clear();}catch(error){host.questionActions.notify(error.message);}finally{busy=false;submit.disabled=false;}
   };
   for(const choice of question.choices||[])choices.append(button(choice,()=>{input.value=choice;drafts.set(key,choice);void send(choice);}));
-  input.oninput=()=>drafts.set(key,input.value);submit.type='submit';submit.textContent='Send answer';form.onsubmit=event=>{event.preventDefault();void send(input.value);};footer.append(attachmentHost,submit);form.append(choices,label,footer);host.append(form);
+  input.oninput=()=>drafts.set(key,input.value);bindQuestionReturn(input,()=>form.requestSubmit());submit.type='submit';submit.textContent='Send answer';form.onsubmit=event=>{event.preventDefault();void send(input.value);};footer.append(attachmentHost,submit);form.append(choices,label,footer);host.append(form);
 }
 export function mountQuestionQueue(host,run,{jump,answer,notify}){
   const questions=chatQuestions(run).filter(question=>['pending','sending','uncertain'].includes(question.status));

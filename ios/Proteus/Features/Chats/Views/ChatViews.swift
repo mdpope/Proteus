@@ -58,7 +58,7 @@ enum NativeChatTextEdit {
     }
 }
 
-private struct ChatReturnKey: ViewModifier {
+struct ChatReturnKey: ViewModifier {
     @Binding var text: String
     let submit: () -> Void
     @State private var shiftedReturnAt = Date.distantPast
@@ -1090,8 +1090,9 @@ NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs
                             if event["role"].string == "assistant", let turn = NativeFusion.turn(run, id: event["data"]["fusion"]["fusionId"].string) {
                                 NativeFusionAttribution(run: run, turn: turn).padding(.horizontal, 4).padding(.bottom, 6)
                             }
-                            ForEach(NativeUserQuestion.read(run).filter { $0.eventIndex == absoluteIndex }) { question in
-                                NativeUserQuestionCard(question: question) { value, messageID in
+                            let eventQuestions = NativeUserQuestion.read(run).filter { $0.eventIndex == absoluteIndex }
+                            ForEach(eventQuestions) { question in
+                                NativeUserQuestionCard(question: question, showHeading: !question.promptVisible(in: event["text"].string, among: eventQuestions.count)) { value, messageID in
                                     _ = try await store.request(question.blocking ? "chat.reply" : "chat.answer-question", ["id": .string(id), "answer": .string(value), "messageId": .string(messageID), question.blocking ? "requestId" : "questionId": .string(question.id)])
                                     await store.openChat(id)
                                 }

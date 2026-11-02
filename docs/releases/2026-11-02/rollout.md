@@ -10,13 +10,16 @@ Version: 0.2.41
 | Secondary Windows | Windows | 0.2.41 | not started | Must reuse accepted compatible Windows artifact. |
 | Primary Linux | Linux | 0.2.41 | blocked | Designated native build chat awaits its ordinary destination-owned preflight approval; clean application/source pin queued. |
 | Website | Web | 0.2.41 | installed | Frozen-source deployment activated and audited: 9,221 file hashes, nine served HTTPS assets, fourteen endpoints, schema/runtime/protected-data preservation and ordinary isolated recovery restore pass. Final retention verifies two local recovery dates, one server recovery and two code generations. Real inference and authenticated browser workflows remain separate. |
-| iPhone | iOS | 0.2.41 | staged | Existing paid signing verifies for 0.2.41 / 2611.2.1. Phone simulator tab/draft/cancel passes. Physical device is locked; no capture/install started. |
-| iPad | iPadOS | 0.2.41 | staged | Same signed mobile artifact; tablet simulator tab/draft/cancel passes. Physical device is locked; no capture/install started. |
+| iPhone | iOS | 0.2.41 | installed | Frozen R1–R8 build 2611.2.1 installed in place and launched; all 350 protected files matched before first launch, four saved destinations retained, signing/keychain entitlements unchanged. Two verified recovery generations remain. Later R9 is not included. |
+| iPad | iPadOS | 0.2.41 | installed | Same frozen R1–R8 artifact installed in place and launched; all 186 protected files matched before first launch, four saved destinations retained, signing/keychain entitlements unchanged. Two verified recovery generations remain. Later R9 is not included. |
 
 Stages: not started, building, published, dispatched, staged, installed, live verified, blocked, deferred.
 Keep secrets, machine IDs, private paths and raw receipts outside Git.
 
 Frozen application/source pin: `f75f98f7f2e623acdb77adedb2a0da7e09785fa7`.
 The validation-only harness correction and later release records do not relabel that artifact.
+Subsequent R9 source is under validation for a replacement candidate; earlier desktop promotion
+is held. Existing website/mobile installations retain the earlier pin and do not acquire R9 from
+these source edits.
 The release remains open; package acceptance and simulator results do not establish installed
 desktop behavior, real Bitwarden authentication or physical mobile acceptance.

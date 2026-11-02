@@ -39,12 +39,13 @@ try{
   const app=apps[0],schedule=await app.buildChatSchedule({name:'Structured web questions',prompt:'Synthetic question history',provider:'copilot',model:'synthetic'}),run=app.engine.createRun(schedule,'chat',null,{deferStart:true});
   run.status='completed';delete run.deferredStart;delete run.nextPrompt;
   app.engine.providers.copilot.run=async({emit,attachments=[]})=>{if(attachments.length)app.syntheticAttachmentDeliveries.push(attachments.map(item=>({name:item.name,mediaType:item.mediaType,bytes:Buffer.from(item.bytes)})));emit('assistant','Synthetic answer accepted. No external provider.');};
-  app.engine.event(run,'assistant','Choose a web destination.',{providerItemId:'web-question-item',userQuestions:[{title:'Web destination?',options:['Web A','Web B']},{title:'Web instructions?'},{title:'Show the relevant file.'}]});
+  app.engine.event(run,'assistant','Web destination?\nWeb instructions?\nShow the relevant file.',{providerItemId:'web-question-item',userQuestions:[{title:'Web destination?',options:['Web A','Web B']},{title:'Web instructions?'},{title:'Show the relevant file.'}]});
   await page.reload();await page.locator(`[data-run="${run.id}"]`).first().click();await page.locator('.user-question-queue summary').waitFor();
   await page.locator('.user-question-queue summary').click();await page.getByRole('button',{name:'Web destination?',exact:true}).click();await page.getByRole('button',{name:'Web B',exact:true}).click();
   await until(()=>run.userQuestions[0].status==='answered');await until(()=>run.status==='completed');
   await page.locator('.user-question-queue summary').waitFor();await page.locator(`[data-question-id="${run.userQuestions[1].id}"] textarea`).fill('Custom web answer');
-  await page.locator(`[data-question-id="${run.userQuestions[1].id}"]`).getByRole('button',{name:'Send answer',exact:true}).click();await until(()=>run.userQuestions[1].status==='answered');
+  assert.equal(await page.locator(`[data-question-id="${run.userQuestions[1].id}"] h4`).textContent(),'Web instructions?','Multiple answer fields retain their own distinct question labels');
+  await page.locator(`[data-question-id="${run.userQuestions[1].id}"] textarea`).press('Enter');await until(()=>run.userQuestions[1].status==='answered');
   await until(()=>run.status==='completed');
   const commands=[];let failFileAnswer=true;
   for(const [index,owner] of apps.entries()){const execute=owner.remote.execute.bind(owner.remote);owner.remote.execute=async(peer,method,args)=>{if(method.startsWith('chat.attachments.')||method==='chat.answer-question'){commands.push({index,method,args});if(method==='chat.answer-question'&&args.attachments?.length&&failFileAnswer){failFileAnswer=false;throw Error('Synthetic uncertain answer transport');}}return execute(peer,method,args);};}

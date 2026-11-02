@@ -1,5 +1,5 @@
 import {mountSubagentViewer} from './subagent-view.js';
-import {chatQuestions,mountQuestionCard,mountQuestionQueue} from './user-questions.js';
+import {chatQuestions,mountQuestionCard,mountQuestionQueue,questionPromptVisible} from './user-questions.js';
 import {chatHistoryWindowStart,firstAssistantKeys} from './chat-history.js';
 import {mountSvgPreviews} from './svg-preview.js';
 import {bindRuntimeTimer,refreshRuntimeTimers,disposeRuntimeTimers,formatDuration,turnDuration,runtimeTotal,toolDuration,groupDuration} from './runtime.js';
@@ -260,7 +260,7 @@ export function conversation(target, run, options) {
     ProteusMarkdown.mount(body, entry.text, { ...options, resize: view.position });
     const index=eventIndex(entry.key),eventQuestions=questions.filter(question=>question.eventIndex===index);
     let questionCards=node.querySelector('.user-question-cards');
-    if(eventQuestions.length&&options.answerQuestion){if(!questionCards){questionCards=document.createElement('div');questionCards.className='user-question-cards';node.append(questionCards);}for(const question of eventQuestions){let card=[...questionCards.children].find(card=>card.dataset.questionId===question.id);if(!card){card=document.createElement('div');questionCards.append(card);}mountQuestionCard(card,question,{...questionOptions,key:run.id+':'+question.id});}}else questionCards?.remove();
+    if(eventQuestions.length&&options.answerQuestion){if(!questionCards){questionCards=document.createElement('div');questionCards.className='user-question-cards';node.append(questionCards);}for(const question of eventQuestions){let card=[...questionCards.children].find(card=>card.dataset.questionId===question.id);if(!card){card=document.createElement('div');questionCards.append(card);}mountQuestionCard(card,question,{...questionOptions,key:run.id+':'+question.id,showHeading:!questionPromptVisible(question,entry.text,eventQuestions.length)});}}else questionCards?.remove();
     if(run.schedule.provider==='mtplx'&&entry.role==='assistant'&&!entry.streaming)mountSvgPreviews(body,{resize:view.position});
     mountChatRecovery(node,entry,run,{...options,resize:view.position});
     let files=node.querySelector('.message-attachments');

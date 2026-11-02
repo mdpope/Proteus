@@ -20,6 +20,16 @@ The disposable native residency fixture verifies eviction of both data and DOM, 
 pages of a 2,507-event history to the same event/offset, draft preservation and UI settings writes.
 Installed profile behavior is verified during the separate rollout.
 
+## November 2 — quick question answers
+
+Inline question answer fields send with Enter and retain Shift+Enter or Alt/Option+Enter for
+newlines. IME composition, held Return and empty answers without files do not send. Submission
+uses the same form, consent and retained operation identity as Send answer. Native cards reuse
+the existing composer Return/Send handling. When the event prose already contains a question's
+prompt, its card omits the repeated heading; distinct prompts and choice buttons remain.
+Events with several questions retain each card's heading to identify its answer field.
+The accepted earlier R1–R8 mobile/desktop artifacts remain separate from this source addition.
+
 ## October 29 — compact question answers
 
 Shared desktop/web question cards place the attachment + at the left and Send answer at the

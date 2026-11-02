@@ -100,6 +100,19 @@ in an isolated fixture, followed by exact-package and live acceptance.
 Confirmed scope: workstation.example.test links opened from Outlook. Internal website links retain their originating
 project and do not invoke the external destination selector.
 
+## R9 — quick question answers and repeated prompts
+
+The operator reports that Enter still inserts a newline in the question-answer box, despite the
+earlier O1 request, and that the same question is rendered as assistant prose and again as a card
+heading. Restore Enter-to-send through the existing submission path. Shift+Enter and Alt/Option
+newlines, IME composition, held-key suppression, empty-answer guards, choices, attachment consent
+and durable uncertain-delivery identity must remain intact. Omit a redundant heading only when
+the same prompt is already present in the event's prose; retain distinct questions and all choices.
+For a multi-question event, retain each card's label so its answer field remains identifiable.
+Apply the shared desktop/web card behavior and native return-key handling. Verify the preceding
+failure and corrected keyboard/choice/draft/retry behavior, including native software-keyboard
+Send. Earlier accepted R1–R8 artifacts do not contain this addition and must not be relabelled.
+
 ## Handoff and acceptance
 
 Start with `docs/handoff.md`, `docs/release-process.md` and the Nov 1 closeout. Private project
