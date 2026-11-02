@@ -1,4 +1,5 @@
 import {_electron as electron} from 'playwright';
+import {extensionWindow} from './extension-window-fixture.mjs';
 import {sidebarFixture} from './preview-sidebar-fixture.mjs';
 import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import assert from 'node:assert/strict';
 const source=process.env.PROTEUS_TEST_EXTENSION||path.resolve("test/fixtures/tab-extension");
@@ -10,8 +11,8 @@ let app;try{
  app=await electron.launch({...(process.env.PROTEUS_TEST_EXECUTABLE?{executablePath:process.env.PROTEUS_TEST_EXECUTABLE}:{}),args:[...(process.env.PROTEUS_TEST_EXECUTABLE?[]:['.']),...(fixture?[]:['--use-mock-keychain','--user-data-dir='+path.join(home,'electron')])],env:{...process.env,PROTEUS_HOME:home,...(fixture?{PROTEUS_DESKTOP_PREVIEW:'1',PROTEUS_PREVIEW_HOME:fixture.locations.root,CODEX_HOME:fixture.auth}:{}),PORT:'0'}});await (await app.firstWindow()).locator('#topbar-home').waitFor();
  const installed=await app.evaluate(async({app,dialog},source)=>{const main=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs'),browser=main.getBrowser();await main.getService().browserProfiles.handle({action:'settings',id:'default',settings:{blockingEnabled:false}});const oldOpen=dialog.showOpenDialog,oldMessage=dialog.showMessageBox;dialog.showOpenDialog=async()=>({canceled:false,filePaths:[source]});dialog.showMessageBox=async()=>({response:1});try{return await browser.command({action:'extensions-install',profileId:'default'});}finally{dialog.showOpenDialog=oldOpen;dialog.showMessageBox=oldMessage;}},source);
  assert.equal(installed.length,1);assert.equal(installed[0].enabled,true);if(!process.env.PROTEUS_TEST_EXTENSION)assert.equal(installed[0].name,'Proteus synthetic extension');console.log(JSON.stringify({installed:installed.map(({name,version,id})=>({name,version,id}))}));
- await app.evaluate(({app},id)=>process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser().command({action:'extensions-open',extensionId:id}),installed[0].id);
- const popup=await app.waitForEvent('window',{predicate:page=>page.url().startsWith('chrome-extension:'),timeout:15000}).catch(()=>app.windows().find(page=>page.url().startsWith('chrome-extension:')));assert.ok(popup);
+ const popupEvent=extensionWindow(app,installed[0].id);await app.evaluate(({app},id)=>process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser().command({action:'extensions-open',extensionId:id}),installed[0].id);
+ const popup=await popupEvent;assert.ok(popup);
  await popup.locator('body').waitFor();await popup.waitForFunction(()=>document.body.innerText.trim().length>40,{},{timeout:20000});
  if(!process.env.PROTEUS_TEST_EXTENSION){
   const contexts=await popup.evaluate(async()=>({supported:typeof chrome.runtime.getContexts==='function',contexts:typeof chrome.runtime.getContexts==='function'?(await chrome.runtime.getContexts({})).map(context=>({type:context.contextType,frameId:context.frameId,documentId:context.documentId})):[]}));

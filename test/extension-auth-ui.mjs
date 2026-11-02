@@ -1,5 +1,6 @@
 // Synthetic extension, authentication window and form only. No real vault/login.
 import {_electron as electron} from 'playwright';
+import {extensionWindow} from './extension-window-fixture.mjs';
 import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import http from 'node:http';import assert from 'node:assert/strict';
 const home=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'proteus-extension-auth-')));
 fs.writeFileSync(path.join(home,'settings.json'),JSON.stringify({schemaVersion:1,provider:'rehearsal',timezone:'UTC',workspace:{cwd:home,additionalDirectories:[]},skillDirectories:[],mcpServers:{}}));
@@ -14,7 +15,7 @@ try{
  const create=async(page,url)=>native(async(main,value)=>main.getWindows().run(value.windowId,async()=>{const browser=main.getBrowser(),info=await browser.command({action:'create',url:value.url});browser.actions.send({type:'select-tab',info});return {id:info.id,nativeId:browser.get(info.id).view.webContents.id,windowId:browser.window.id};}),{windowId:await page.evaluate(()=>window.desktop.windowId),url});
  await native(main=>{main.extensionFocusTrace=[];for(const ctx of main.getWindows().contexts.values())ctx.window.on('focus',()=>main.extensionFocusTrace.push({window:ctx.window.id,at:Date.now()}));});
  const a=await create(first,origin+'/first');
- const popupEvent=app.waitForEvent('window');await native((main,id)=>main.getBrowser().command({action:'extensions-open',extensionId:id}),installed[0].id);const popup=await popupEvent;await popup.getByText(/Extension API ready/).waitFor();
+ const popupEvent=extensionWindow(app,installed[0].id,'/popup.html');await native((main,id)=>main.getBrowser().command({action:'extensions-open',extensionId:id}),installed[0].id);const popup=await popupEvent;await popup.getByText(/Extension API ready/).waitFor();
  await popup.evaluate(id=>new Promise(resolve=>chrome.tabs.update(id,{active:true},resolve)),a.nativeId);await first.locator('[data-tab-container="'+a.id+'"].selected').waitFor();
  const secondEvent=app.waitForEvent('window');await native(main=>main.createWindow());const second=await secondEvent;await second.locator('#topbar-home').waitFor();const b=await create(second,origin+'/second');
  await popup.evaluate(id=>new Promise(resolve=>chrome.tabs.update(id,{active:true},resolve)),b.nativeId);await native((main,id)=>{const ctx=[...main.getWindows().contexts.values()].find(ctx=>ctx.window.id===id);ctx.window.focus();},b.windowId);
@@ -24,7 +25,7 @@ try{
  const contexts=await popup.evaluate(async()=>({current:await chrome.windows.getCurrent(),lastWindow:await chrome.windows.getLastFocused(),all:await chrome.tabs.query({active:true}),tabs:await chrome.tabs.query({active:true,currentWindow:true}),last:await chrome.tabs.query({active:true,lastFocusedWindow:true})}));
  console.log(JSON.stringify({synthetic:true,a,b,contexts,trace:await native(main=>({focus:main.extensionFocusTrace,store:[...main.getBrowser().extensions.profiles.values()].map(host=>({last:host.adapter.ctx.store.lastFocusedWindowId,windows:[...host.adapter.ctx.store.windows].map(w=>w.id)}))}))}));
  assert.equal(contexts.current.id,a.windowId);assert.deepEqual(contexts.tabs.map(tab=>tab.id),[a.nativeId]);assert.deepEqual(contexts.all.map(tab=>tab.id).sort(),[a.nativeId,b.nativeId].sort());assert.deepEqual(contexts.last.map(tab=>tab.id),contexts.all.filter(tab=>tab.windowId===contexts.lastWindow.id).map(tab=>tab.id));
- const authenticationEvent=app.waitForEvent('window');await popup.locator('#unlock').click();const authentication=await authenticationEvent;await authentication.locator('#complete').waitFor();const closed=authentication.waitForEvent('close');await authentication.locator('#complete').click();await closed;
+ const authenticationEvent=extensionWindow(app,installed[0].id,'/auth.html');await popup.locator('#unlock').click();const authentication=await authenticationEvent;await authentication.locator('#complete').waitFor();const closed=authentication.waitForEvent('close');await authentication.locator('#complete').click();await closed;
  await popup.getByText('Synthetic vault unlocked',{exact:true}).waitFor();assert.equal(popup.isClosed(),false);
  await popup.locator('#fill').click();await popup.getByText('Synthetic form filled',{exact:true}).waitFor();
  const form=await native(async(main,id)=>main.getBrowser().get(id).view.webContents.executeJavaScript('({user:document.querySelector("#username").value,password:document.querySelector("#password").value,inputs:window.inputs})'),a.id);
