@@ -18,6 +18,18 @@ Nov 2 owns browser sizing; real vault unlock/authentication/autofill; closed-pop
 
 No physical notification-expiry confirmation was received; three final automated native notification/provider checks passed. No universal authentication or interactive-UI claim is made. Ordinary isolated website restore remains unproven; capture-state verification is qualified.
 
-The operator requires an exact full-path disk cleanup review before any further local deletion. The private review lists sizes, retained evidence and protected data; deletion is held for approval. Preserve the canonical checkout, Nov 2 handoff, incident records and accepted originals. Dirty worktrees require preservation before retirement. Two verified installed Mac recoveries and two complete local website recoveries remain protected.
+The operator reviewed and approved cleanup groups A/B/C. All 15 approved paths were removed:
+seven duplicate publication payloads, two completed Xcode test-output directories, three merged
+worktrees and three superseded diagnostic packages. Required Node/web dependencies were moved
+once to a stable shared location and their retained checkout links verified; no dependency copy
+was created. Minimal test/package evidence and 15 original notes were preserved with hashes.
+Stale status notes now link to the closed release record and unchanged private history.
+
+The operation measured **413,913,088 bytes** of increased free space. Its original 4.88 GiB
+allocated estimate is not a reclaimed-space claim: dependencies were retained and APFS clones
+may share extents. No matching deleted-but-open files were observed afterward. Live data,
+accepted package originals, two verified installed Mac recoveries, two complete local website
+recoveries and active/dirty worktrees remain protected. Additional paths outside the approved
+groups remain held for their own identity, retention and active-use review.
 
 Primary-Mac maintenance refuses two historical pre-install attention jobs and an unregistered partial recovery; their candidate staging totals about 1.29 GB allocated. This differs from the reconciled post-install case. Preserve evidence until supported resolution verifies it and returns a clean retirement plan; never edit journals or waive checks. The website dispatcher has no server recovery-retirement action; protected server cleanup requires an authorized bounded hosting path. Never reuse stale deletion scripts. Public-package and local temporary-file cleanup must be reported from completed receipts, not inferred from current feeds or a closed record.

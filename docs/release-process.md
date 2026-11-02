@@ -225,6 +225,39 @@ test-created duplicates and obsolete build products during closeout; preserve ot
 pairings and active tests. Do not erase a shared simulator or create copies to isolate a project
 without a specific need.
 
+## Private evidence, temporary outputs and dependency ownership
+
+Use one current private release index and date-scoped `release-records/<release-id>/` folders
+outside Git. Keep device routing, raw logs, operation receipts, transfer pins and historical notes
+there. Source-owned plans, implementation/rollout/closeout and reusable tests stay in this repository.
+Do not create another full app/profile/container copy merely to preserve a test or a note.
+
+When normalizing old notes, preserve the original bytes and record source/destination hashes.
+Replace stale top-level status documents with concise links to the current source-owned release
+record and unchanged private history. Preserve qualifications and failed attempts; an old hold,
+handoff request or deletion command is historical, not a current instruction. Do not accumulate
+contradictory CURRENT sections or put frontmatter below an added status heading.
+
+Retain minimal test summaries, failure/pass logs and immutable artifact/source identity receipts.
+After a completed run, retire its disposable DerivedData, extracted packages, dependency caches
+and merged worktree copies when eligible. Keep unique failed-state evidence until diagnosed;
+neither a successful build nor an aggregate pass count proves a live workflow succeeded. Avoid
+repeating builds/tests merely for closeout when existing exact-source results remain applicable.
+
+Before removing a worktree, inspect ignored files and dependency links from every retained checkout,
+including web dependencies. A symlink into an obsolete worktree is still a live dependency. Move
+the required dependency set once to a stable versioned build-dependency location and atomically
+update its consumers; do not delete it with the worktree or create another copy. Preserve active
+processes, unique source edits, user state and owner-managed recovery data. A local cleanup helper
+must not bypass the updater's recovery policy.
+
+Use the operator's latest cleanup scope: standing release cleanup authorization applies unless
+the operator requests a full-path review. For such a review, show exact paths, allocation, retained
+copies/evidence and holds before deletion; refresh identities and active-use checks immediately
+before acting. Record a durable per-item intent/result, verify survivors, and report measured
+free-space change separately from logical/allocated bytes. APFS clones, retained dependencies
+and background writes mean those values need not match.
+
 ## Close means integrate and move on
 
 When the operator finishes/closes a release, perform this workflow without asking again for its
