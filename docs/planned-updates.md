@@ -148,6 +148,20 @@ per name, implementation/rollout documents, pinned native source builds and pack
 current-only downloads.proteus.example payloads, backup/simulator limits and integration/push/worktree closeout.
 The previously closed October 27 cycle remains closed. No device rollout or server mutation
 is established by this source implementation.
+## October 30 — taskbar startup failure diagnosed
+
+Captured the main-process `ensurePrivateHome` error from the actual taskbar launch.
+The pinned and Start-menu shortcuts target the correct executable without arguments.
+Native Windows security inspection reveals an inherited CodexSandboxUsers profile read
+grant omitted by the shell filesystem view. A scoped authorized profile DACL repair
+removes that grant and retains owner/SYSTEM/Administrators access; no runtime policy,
+credentials, profile contents or installed package changes. Verification must use the
+actual taskbar shortcut rather than treating direct agent startup as equivalent.
+After normal owner shutdown, the unchanged pinned shortcut cold-starts the installed
+0.2.36 successfully with a healthy authenticated service and no error dialog. Native
+inspection confirms the profile DACL is protected and contains only the three intended
+principals. The original security descriptor and error details remain private.
+This local repair is separate from the closed release and future implementation hold.
 
 ## October 30 — prior release closed; future request collection preserved
 

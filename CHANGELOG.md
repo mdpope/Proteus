@@ -110,6 +110,9 @@ Combines the [October 31 Fusion/layout plan](docs/2026-10-31-release-plan.md) an
 - Windows and both physical iOS devices are installed with their recorded acceptance qualifications.
   The website is deployed and verified; the signed Windows public downloads and current descriptor
   verify. Final corrective Macs, Linux/Ian approvals and release closeout remain pending.
+## Windows startup troubleshooting
+
+- Document native inherited profile grants that can make taskbar startup fail while a sandboxed direct launch succeeds. Preserve strict private-storage validation.
 
 ## 0.2.38 — release work closed
 
