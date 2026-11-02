@@ -1,3 +1,123 @@
+## Nov 2 — collected for a new chat
+
+Browser sizing, vault lifecycle, closed-popup control, machine-specific local models and in-tab mobile New chat are recorded in [the Nov 2 plan](docs/2026-11-02-release-plan.md). No new implementation or version reservation is claimed.
+
+## Nov 1 — 0.2.40 (closed)
+
+- Reconcile a reviewed post-install recovery-checksum failure through the owner maintenance
+  boundary, preserving its original journal and failure evidence before eligible cleanup.
+
+- Inspect recovery SQLite history through verified disposable copies; never connect to frozen
+  originals, since read-only connections can still create sidecars and break recovery checksums.
+
+- Sync the iOS project sidebar from canonical tab membership and order; retain explicit offline
+  actions and retry identities without resurrecting closed chats or replaying inferred deletions.
+- Preserve notification occurrence time, suppress stale/read alerts and expire native banner
+  bursts after five seconds without replaying historical queues.
+- Correct extension window identity, active-tab filtering and authentication-window lifecycle.
+- Persist narrowly scoped owner preflight authorization for user-started update coordinators.
+- Preserve newly opened local tabs while applying an older owner membership response; only
+  owner-confirmed removed identities can close during that partial reconciliation.
+- All-platform rollout is authorized; deployment/live verification remains in progress.
+
+## November 1 historical local candidate — initially held
+
+- Coordinate project-scoped native build chats separately from destination-default installation chats; compare navigation identities/order/descriptors in update preservation receipts.
+- Display the named release date on desktop, web and iOS Home.
+- Show owner-advertised local/shared model providers in native chat/schedule pickers and project actual adapter capabilities to remote clients.
+
+- Prevent stale project views/outboxes from reviving closed tabs; retain owner close revisions and allow reviewed explicit reopen. Isolate unavailable document sources so other tabs keep syncing.
+- Require explicit shared Close intent; preserve chat children across alias changes, parent closure and restart without ending their terminal sessions.
+- Keep browser bounds current when its content area changes without a window resize or tab switch.
+- Bound background integration work, avoid repeated global scans, skip dormant sessions before context hashing, and retain fresh configuration/session validation. Move background fsync/replacement off the input loop while ordering concurrent manual saves and draining writes at Close.
+- Local source/UI validation only at this checkpoint; package acceptance and affected-HC observation remain separate.
+
+# HC handoff — November 1 responsiveness diagnosis
+
+- Profiled recurring desktop stalls and documented the required integration-health batching,
+  scoped verification and event-loop yielding in the [release plan](docs/2026-11-01-release-plan.md).
+  Added a provider-free synthetic profiling probe. This records the diagnosis preceding the
+  local implementation above; deployment and affected-device observation remain held.
+
+## 0.2.39 — October thirtieth release, combined October 31 candidate
+
+Combines the [October 31 Fusion/layout plan](docs/2026-10-31-release-plan.md) and R15/R16 from the [open release plan](docs/2026-10-30-release-plan.md). Source validation and new native package acceptance precede deployment.
+
+- Preserve exact accepted native payload bytes when signing on another platform, checking the full source pin, payload hash and existing publisher trust.
+
+- Add **Copilot Fusion** to Copilot chats when the account's runtime advertises Fusion routing tiers.
+  Choose Copilot Fusion and a Fusion effort (advertised names such as Standard/High/Max) in every
+  model picker. Unavailable tiers show their reasons, and unavailable accounts get a clear message.
+- Record exactly which models each Fusion turn used: planned models, every executed phase (role,
+  model, effort, status, duration, usage), per-model requests, the model that wrote the answer, and
+  turn totals. Shown under each answer on desktop, remote views, the website and iOS, with per-model
+  totals in Run details. Planned-but-unrun models are never shown as used, and drafts are never stored.
+- Upgrade `@github/copilot-sdk` to 1.0.28 on every platform.
+- Remote computers: workspace project pages and rows match the local layout; the remote new-chat
+  composer uses the same compact model controls as local (no inapplicable Context, one line); and
+  source folders list the remote workspace's folders instead of an empty box. Website project rows
+  match the desktop layout and gain New chat.
+
+### Relay-based shared local models
+
+- Add opt-in llama.cpp/MTPLX sharing with per-device grants and shared-provider imports in Providers.
+- Keep chats, tools and approvals on the consumer; send only inference over the existing encrypted relay.
+- Add bounded queues, Stop propagation, durable no-replay receipts and interrupted-request recovery.
+
+### llama.cpp provider
+
+- Add a Windows-capable llama.cpp provider with authenticated HTTPS, optional per-connection CA trust, live model controls and exact server token accounting.
+- Reuse local tool approvals, selected MCPs, cancellation, usage and delivered-history recovery; expose the provider in Providers and New Chat.
+
+## 0.2.39 — October thirtieth release open
+
+- Include native build sources in source companions. With accepted provenance, preserve exact
+  native line endings and recorded generated inputs while rejecting changed inputs and secrets.
+- Prepare the pinned Electron binary serially before Windows source tests, avoiding competing
+  lazy installers. Wait for fixture helpers to exit before removing their native test directories.
+- Keep inherited Crashpad pipes out of update-helper children so Windows readiness cannot
+  write into the immutable staged package. Preserve ordinary launch context and full integrity checks.
+- Accept website notification events on the shared service, preserve site sound choices and
+  suppress duplicate, muted or stale mobile alerts. iPhone/iPad notification taps retain the
+  original event ID and can open its source tab on the paired desktop.
+- Bind full publication source commits by verifying every packaged runtime/build input.
+  Keep simulator test installs under a separate application identity.
+- Show observed certificate information directly on bad-certificate pages, independently of
+  one-click acceptance. Restore the original notification colors; error pages follow the app theme.
+- Add a digest-guarded Windows builder refresh for a removed provider Node runtime, preserving
+  the existing source, npm, Git and publisher-key references with private repair receipts.
+- Recognize intranet host:port input, retain custom ports in error pages, explain network-access
+  failures and declare Mac local-network use. Add one-click certificate acceptance on the app-themed error
+  page. Native acceptance passes; reported installed-browser connectivity remains unverified.
+- Preserve a pending update handoff when another chat receives owner-delivered task feedback.
+  Keep human-input cancellation, updating-chat checkpoint review and all active-work idle barriers.
+- Add configurable shared chat/document memory limits and idle eviction in Resources. Reload
+  evicted transcripts to the saved message/offset; preserve drafts, approvals and terminal sessions.
+- Route actual permitted website page notifications through the common history/native mechanism,
+  preserving source text and silent intent. Add explicit device forwarding and safe retry retention;
+  server/iPhone background delivery and actual Slack acceptance remain pending after HC verification.
+- Add Emerald Canopy and white Daylight presets in Colors with durable application selection.
+- Quiet routine notices by default, deduplicate actionable requests, retire answered alerts,
+  bound banner queues and acknowledge the Needs attention list with Clear all.
+- Scope remembered Proteus conversation access approvals to the granted host/actions/resources.
+- Keep shared tab membership/order converging during a quarantined navigation conflict.
+- Restrict autoplay exceptions to deliberate video playback rather than any prior page click.
+- Surface Copilot Fusion availability and native phase/attribution receipts. This account's
+  refreshed catalog advertises no Fusion model; real Fusion execution remains unavailable.
+- Reserve one version per named release and keep repository plan, implementation and machine
+  rollout records; codify main/PR/push/branch/worktree closeout and bounded retention.
+- Stage one current public package set across platforms, advertise pending targets with empty
+  catalogs, and verify digest-bound retirement of superseded public release payloads.
+- Start pinned remote update coordinators using destination defaults. Return chat-specific owner
+  update receipts and keep monitoring beyond the pre-restart completed model turn.
+- Preserve additional migration/test instructions in the pinned coordinator request.
+- Windows and both physical iOS devices are installed with their recorded acceptance qualifications.
+  The website is deployed and verified; the signed Windows public downloads and current descriptor
+  verify. Final corrective Macs, Linux/Ian approvals and release closeout remain pending.
+## Windows startup troubleshooting
+
+- Document native inherited profile grants that can make taskbar startup fail while a sandboxed direct launch succeeds. Preserve strict private-storage validation.
+
 ## 0.2.38 — release work closed
 
 The operator closed this release cycle independently of device rollout. Source and accepted private artifacts are retained; see [closeout](docs/2026-10-30-release-closeout.md).
@@ -22,6 +142,8 @@ Collection started; these items are not implemented. See the
 - Fix the reported browser regression where videos autoplay despite enabled video-autoplay blocking.
 - Apply Auto-approve tools and scope-aware remembered approvals to Proteus actions, including
   `proteus_chats`, without repeated prompts for matching approved scopes.
+- Fix shared workspace/project tab-list divergence across windows. Keep tab strips, sidebars,
+  Tabs tables, counts and shared metadata consistent whichever window is used, including Close.
 
 ## 0.2.37 — Windows candidate
 

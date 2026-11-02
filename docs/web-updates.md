@@ -1,3 +1,13 @@
+## October 30 retention policy override for Proteus
+
+Follow [the named release process](release-process.md). Keep one live website and at most one
+verified website recovery backup on its server, with at most two complete verified recovery
+generations locally. Retire older duplicate site/deployment trees after replacement verification;
+do not keep two server backup generations or apply the generic broader website retention policy
+to this site. Public desktop downloads keep only the current release generation per target.
+These are the operator's current Proteus-specific limits; dated counts below remain historical.
+This instruction changes policy, not a claim that live server cleanup has been performed.
+
 ## October 29 — sidebar palette correction deployed
 
 The website's grouped navigation duplicated the old sampled sidebar colors and overrode the

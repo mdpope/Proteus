@@ -108,4 +108,5 @@ struct NativeBrowserNavigationConflict: Identifiable, Codable, Equatable {
     var tabID: String
     var tab: BrowserDescriptor
     var operations: [JSON]
+    var receipt: JSON? = nil
 }

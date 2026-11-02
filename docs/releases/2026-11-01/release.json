@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "2026-11-01",
+  "name": "Nov 1",
+  "version": "0.2.40",
+  "status": "closed",
+  "openedOn": "2026-11-01",
+  "plan": "docs/2026-11-01-release-plan.md",
+  "implementation": "docs/releases/2026-11-01/implementation.md",
+  "rollout": "docs/releases/2026-11-01/rollout.md",
+  "closeout": "docs/releases/2026-11-01/closeout.md",
+  "sourceCommit": "11ca09b84408bab3a630daeea8fa12c8e373e5fc",
+  "closedOn": "2026-11-01",
+  "review": "https://github.com/mdpope/Proteus/pull/27",
+  "followUpPlan": "docs/2026-11-02-release-plan.md",
+  "cleanupStatus": "Full-path review pending operator approval before local deletion"
+}

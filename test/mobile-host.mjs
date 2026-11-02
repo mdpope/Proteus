@@ -115,6 +115,12 @@ async function seedProjectFixture() {
 // Website-service rehearsal shared by both simulator previews; never reads a live account.
 let previewTeamLists = [{id:'preview-team', revision:'1', name:'Platform Services Team', timezone:'America/Denver', instructions:'Review yesterday, today and any blockers.', members:[{id:'p1',name:'Alex',mode:'random'},{id:'p2',name:'Morgan',mode:'fixed'},{id:'p3',name:'Sam',mode:'random'}], links:[{id:'l1',title:'On Call — Operations',url:fixtureHTTPOrigin+'/browser/phone-preview?section=on-call'},{id:'l2',title:'Operational Health',url:fixtureHTTPOrigin+'/browser/one'},{id:'l3',title:'Team Queue',url:fixtureHTTPOrigin+'/browser/two'}]}, {id:'preview-review', revision:'1', name:'Design review', timezone:'UTC', instructions:'Review the current design.', members:[{id:'r1',name:'Taylor',mode:'fixed'}], links:[{id:'r-link',title:'Design notes',url:fixtureHTTPOrigin+'/browser/phone-preview?section=design-notes'}]}];
 const fixture = http.createServer(async (req, res) => {
+  if(req.url==='/tab-sync-fixture'&&req.method==='POST'){
+    let raw='';for await(const chunk of req){raw+=chunk;if(raw.length>262144)throw Error('Synthetic request too large');}
+    const value=JSON.parse(raw),current=app.contentTabs.get(value.scope,value.id);
+    const result=value.operations?.length?app.contentTabs.mutate({...value,expectedRevision:current.revision}):current;
+    res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify(result));return;
+  }
   if(req.url.startsWith('/native-app')) {
     res.setHeader('Content-Type','application/json');
     if(req.url==='/native-app' && req.method==='GET'){res.end(JSON.stringify({teamLists:previewTeamLists,links:[],identity:{accountId:'synthetic-service-account'}}));return;}

@@ -1,4 +1,6 @@
 import { isActiveExecutionLimit } from './providers/execution-policy.js';
+import {taskFeedbackDelivery} from './services/chats/task-feedback-kind.js';
+import {updateCoordinatorPermission} from './services/updates/update-permissions.js';
 import {providerAttachmentInputs} from './services/chats/attachment-input.js';
 import {DelegationService} from './services/chats/delegation.js';
 import {captureUserQuestions,answerUserQuestion,recoverUserQuestions,askBackgroundQuestion} from './services/chats/user-questions.js';
@@ -186,8 +188,8 @@ export class Engine extends EventEmitter {
     // An update coordinator exists only because a person started that update (Updates
     // page or an explicit update dispatch). Its own update tool needs no second prompt.
     // Protected requests and every other tool keep their normal approval path.
-    if(request?.kind==='custom-tool'&&request.toolName==='proteus_update'&&run.schedule.purpose==='update'&&run.schedule.updateAuthorization?.tool==='proteus_update'&&!request.managedApprovalRequired&&!request.requestSandboxBypass)
-      return {source:'update',allowed:true,reason:'User-started update coordinator',mode:profile.mode};
+    const update=updateCoordinatorPermission(run,request);
+    if(update)return {source:'update',...update,mode:profile.mode};
     return { source: profile.source, ...this.permissions.decide(run.schedule, request, profile) };
   }
   renameChat(id, title, expectedTitleRevision) {
@@ -281,14 +283,14 @@ export class Engine extends EventEmitter {
     run.status = 'queued'; run.pending = null; run.nextPrompt = prompt;
     this.event(run, 'user', prompt);if(wasArchived)this.emit('lifecycle',{id:run.id,archivedAt:null,archived:false,updatedAt:run.updatedAt}); queueMicrotask(() => this.drain()); return run;
   }
-  async send(id, prompt, mode = 'queue', messageId = randomUUID(), modelOptions, dispatch) {
+  async send(id, prompt, mode = 'queue', messageId = randomUUID(), modelOptions, dispatch, source) {
     const run = this.getRun(id);
     if (typeof prompt !== 'string' || !prompt.trim()) throw new Error('Write a message first.');
     if (!['queue','steer'].includes(mode)) throw new Error('Choose Queue next or Steer now.');
     if (typeof messageId !== 'string' || !/^[a-zA-Z0-9_-]{1,100}$/.test(messageId)) throw new Error('Invalid message identifier.');
     if (run.events.some(e => e.data?.delivery?.id === messageId)) return run;
     if (this.stopping) throw new Error('Runner is stopping.');
-    this.updateGuard?.();
+    this.updateGuard?.({runId:id,source:source===taskFeedbackDelivery?taskFeedbackDelivery:undefined});
     if (mode === 'steer' && modelOptions) throw new Error('Steering keeps the current turn’s model. Queue a message to change model settings.');
     const attached=dispatch?this.verifyAttachmentDispatch(run,dispatch):[];
     const provider=this.providers[run.schedule.provider];
@@ -621,6 +623,7 @@ export class Engine extends EventEmitter {
     if (this.stopping) this.pendingSchedulerTime = null;
   }
   async close() {
+    this.historyCache.close();
     if (this.closePromise) return this.closePromise;
     this.stopping = true;
     this.recovery.close();this.allowanceClosing=this.allowance?.close();

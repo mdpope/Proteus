@@ -1,3 +1,50 @@
+## November 1 — automatic navigation preservation and coordinated targets
+
+The private device-role register chooses builders and consumers. Build once per OS/architecture,
+publish accepted signed artifacts to downloads.proteus.example, then download those bytes on every compatible consumer.
+Use a source-project `purpose:build` chat for authorized native code/build work; it captures updater
+defaults or explicit validated build options. Use a fresh unassigned `purpose:update` chat for
+installation, always using the receiving device's saved defaults. The local Update button and
+controller-initiated pinned updates share the session factory. See [release process](release-process.md).
+
+The owner pre-restart receipt now includes hashed canonical workspace/project identities, assignments,
+project defaults and chat memberships, ordered tab descriptors/retired identities, and logical window
+selection/drafts. Post-restart verification rejects loss or reassignment before releasing the barrier.
+Runtime view IDs may remap without changing logical identity. Private receipt hashes contain no
+prompts, paths, URLs or credential values. Complete backup verification and full browser-worker
+history, profile/pairing/source/reading-state acceptance remain separate required checks.
+
+An older installed owner that did not capture this added inventory cannot retroactively claim it.
+Its first upgrade still needs explicit coordinator before/after navigation comparisons in addition
+to the existing chat-prefix/configuration and backup checks. New receipts do not erase earlier
+qualification or replace real multiwindow/restart acceptance. These are local candidate changes;
+no device installation is claimed here.
+
+## October 30 — Windows helper Crashpad inheritance
+
+Helper launch strips only process-specific `CHROME_CRASHPAD_*`, `CHROMIUM_CRASHPAD_*` and
+`ELECTRON_CRASHPAD_*` context from its child environment, with a private job working directory.
+Native evidence shows an inherited pipe caused Chromium to add a root `debug.log` before arm-ready
+integrity checking. Removing that context preserves the complete package and real helper IPC.
+App relaunch cannot reintroduce those variables through overrides. Full hashing remains strict.
+
+An older installed owner cannot acquire this launch correction merely by staging a new helper.
+When it lacks a supported idle-gated same-baseline restart, preserve the cancelled attempt and
+qualified probe, prepare the normal shortcut/checkpoint/preservation comparison, and have the
+operator Quit only after work finishes and reopen normally. Verify actual launch context and
+health afterward; do not patch installed sources, edit journals or force unrelated work to stop.
+
+## October 30 named release and command center process
+
+The standing [release process](release-process.md) unifies version reservation, repository records,
+native first-builder/source synchronization, current-only downloads.proteus.example publication and per-machine
+update chats. The October thirtieth release reserves 0.2.39; implementation and rollout status
+are in [its record](releases/2026-10-30/release.json). Destination coordinator defaults belong to
+the destination. Pinned release tasks now retain owner update observations through restart.
+The new source requires package/bootstrap deployment before older clients can use the new tool
+contract. No new publication or installation is established by source tests.
+This process supersedes older instructions below to reuse an existing destination update chat.
+
 ## October 29 — Windows owner maintenance and distribution
 
 The approved Windows workflow now has installation-bound maintenance plans, verified recovery reconciliation, a designated native builder and signed release reuse before building. See [Windows distribution](windows-distribution.md). Source implementation and live acceptance remain separate; old-client bootstrap uses the existing signed owner updater before fresh coordinator support is available.
@@ -344,7 +391,13 @@ for delegated work; do not make a particular model a permanent deployment depend
    where applicable. Freeze runtime inputs after packaging; runtime changes require a new build
    and artifact identity. Never rebuild independently on the destination and call it the same
    tested artifact.
-2. Produce the corresponding source with `scripts/package-source.mjs`. Verify that the source
+2. Produce the corresponding source with `scripts/package-source.mjs`. For a native accepted
+   package, pass `--root <exact-build-checkout> --provenance <accepted-build-source.json>
+   --output <new-private-directory>` to the reviewed exporter. It includes native build sources,
+   preserves native line endings, and binds any recorded generated inputs to accepted hashes.
+   A Mac-exported archive is not an exact substitute for a Windows build's source companion.
+   Use an external maintenance checkout for a newer exporter; do not modify the frozen native
+   source or accepted package. Verify that the source
    matches every runtime hash in the bundle's `build-source.json`, including relevant uncommitted
    changes. Version alone is insufficient: record build revision, source fingerprint, runtime
    file count and SHA-256 archive/manifest hashes.
@@ -437,6 +490,26 @@ actual-owner logical evidence; their ciphertext alone does not establish content
 Distinguish evidence captured at a stated time from current opaque cache inspection.
 
 ## Two generation backup retention
+
+For an installed, health-verified update whose repaired recovery still leaves an `attention`
+maintenance hold, use [post-install reconciliation](2026-11-01-attention-reconciliation.md).
+The owner writes separate verification evidence and preserves the original journal/error;
+ordinary digest-bound maintenance remains a separate operation after every recovery re-verifies.
+
+Treat verified recovery trees as frozen opaque files. A SQLite connection to an original
+recovery database is forbidden even with `readOnly: true`: SQLite can create or change WAL/SHM
+files beside it and invalidate the recovery receipt. For semantic queries, use
+`scripts/recovery-sqlite-read-copy.mjs` to copy the database and its existing WAL/SHM/journal into
+a private disposable directory, verify copied contents and unchanged originals, query only the
+copy, then remove that copy. Never checkpoint the original or regenerate a receipt to accept a
+changed tree. Hash/stat inspection alone does not open SQLite.
+
+If verification introduced auxiliary files, prove in memory that excluding only those exact new
+rows reproduces the original root hash, count and bytes. Preserve the receipt, failed attempt
+and file identities. A separately authorized repair may quarantine those proven extra files
+under exclusive access with exact native metadata and hash checks, then require the original
+tree and owner recovery verification to pass. Do not remove original receipt-covered sidecars.
+Use native timestamp integers consistently; cross-runtime formatted times can round differently.
 
 For website delivery, apply the same ceiling to inactive code and local package/build copies.
 Count failed/incomplete extraction directories. Block another build when prior package copies
@@ -622,3 +695,12 @@ See [Windows desktop](windows-app.md) for the authenticated signed-manifest dist
 The signing recipe uses a package-hash-based public release ID, independently of punctuation in the full signed build revision. Archive app contents at the extraction root, so the official extractor inspects `Contents/Resources/app` directly on Mac. Verify the exact finished archive through `extractRelease` before asking the protected publisher to sign. A generic tar extraction or signature alone does not establish updater compatibility. Preserve rejected private drafts as superseded evidence; never activate them.
 
 Mac 0.2.30 and this 0.2.31 candidate accept the corrected common static feed. Windows 0.2.29 accepts its own static Windows feed but rejects a Mac static manifest by target/distribution policy; that does not invalidate its cryptographic publisher trust. Older unsupported consumers require the documented helper-capable baseline, with an actionable upgrade rather than relaxed trust or redirected credentials.
+## Nov 1 — persisted updater preflight authorization
+
+A user-started update coordinator persists its local owner identity and versioned scoped permission
+alongside the existing update grant. Restart preserves authorization for owner update operations,
+tab inventory, browser placement inventory, local metadata/own-chat reads and read-only desktop
+capability/own-process observation. It does not authorize shell, website contents, chat dispatch,
+foreign owners or desktop input. Protected approval requests remain human decisions. Older grants
+retain their original update-only scope; bootstrap them through the updater boundary. Both direct
+Update and remote initiation still capture receiving-device Engine Room defaults.

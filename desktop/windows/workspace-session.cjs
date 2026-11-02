@@ -8,15 +8,21 @@ const MAX_SESSION_BYTES=16*1024*1024, MAX_TOTAL_HISTORY_BYTES=8*1024*1024, MAX_S
 const safeFavicon=value=>typeof value==='string'&&value.length<=96*1024&&/^data:image\/png;base64,[A-Za-z0-9+/]+=*$/.test(value)?value:undefined;
 const text = (value, max = 4096) => typeof value === 'string' ? value.slice(0, max) : '';
 const engineSections=['desktop-control','updates','resources','providers','connections','security','account','settings','setup','preferences','integrations','usage','notifications','logs','source-library'];
+function unavailableDocument(item){
+ const descriptor=item.unavailableDescriptor;
+ if(descriptor?.type!=='document'||!/^document:[a-f0-9]{64}$/.test(descriptor.id||'')||descriptor.id!=='document:'+descriptor.documentId)return null;
+ return {unavailableDescriptor:{id:descriptor.id,type:'document',documentId:descriptor.documentId,title:text(descriptor.title,200),mediaType:descriptor.mediaType==='text/html'?'text/html':'text/markdown',...(descriptor.chatId?{chatId:text(descriptor.chatId,128)}:{})},unavailableReason:text(item.unavailableReason,1000)};
+}
 function normalizeTeam(value,options={},historyBudget={bytes:0}){
   if(!value||typeof value!=='object')return undefined;
   const tabs=[],seen=new Set();
   for(const item of Array.isArray(value.tabs)?value.tabs.slice(0,50):[]){
-    const id=text(item?.id,256),type=['browser','terminal','markdown','remote-document','agent-terminal'].includes(item?.type)?item.type:'browser',url=item?.url?safeHistoryURL(item.url):'';
+    const id=text(item?.id,256),type=['browser','terminal','markdown','unavailable','remote-document','agent-terminal'].includes(item?.type)?item.type:'browser',url=item?.url?safeHistoryURL(item.url):'';
     if(!id||seen.has(id)||item?.url&&!url)continue;seen.add(id);
     const common={...(item.hidden===true?{hidden:true}:{}),...(text(item.contentTabId,256)?{contentTabId:text(item.contentTabId,256)}:{}),...(text(item.customTitle,200)?{customTitle:text(item.customTitle,200)}:{}),...(text(item.associationChatId,256)?{associationChatId:text(item.associationChatId,256)}:{})};for(const field of ['openedAt','lastTouchedAt','lastActivityAt'])if(Number.isFinite(Date.parse(item[field])))common[field]=new Date(item[field]).toISOString();
     if(type==='agent-terminal'){if(!/^[a-zA-Z0-9_-]{1,128}$/.test(item.runId||''))continue;tabs.push({id,type,...common,title:text(item.title||item.label,200),runId:item.runId});continue;}
     if(type==='remote-document'){if(!/^[a-f0-9-]{36}$/i.test(item.hostId||'')||!/^[a-f0-9]{64}$/i.test(item.documentId||''))continue;tabs.push({id,type,...common,title:text(item.title||item.label,200),hostId:item.hostId,runId:text(item.runId,128),workspaceId:text(item.workspaceId,128),projectId:text(item.projectId,128),documentId:item.documentId,mediaType:item.mediaType==='text/html'?'text/html':'text/markdown',preview:item.preview===true});continue;}
+    if(type==='unavailable'){const unavailable=unavailableDocument(item);if(!unavailable)continue;tabs.push({id,type,...common,...unavailable,title:text(item.title||item.label,200)});continue;}
     if(type==='markdown') {const file=text(item.file||item.markdown?.file);if(!path.isAbsolute(file))continue;tabs.push({id,type,...common,file,label:text(item.label,200)||path.basename(file)});continue;}
     if(type==='terminal'){if(!item.terminal?.id)continue;tabs.push({id,type,...common,label:text(item.label,200)||'Terminal',terminal:Object.fromEntries(['id','profileId','rootId','directory','persistence','tmuxSessionId','tmuxSessionTag'].map(key=>[key,text(item.terminal[key])]))});continue;}
     const savedNavigation=savedBrowserNavigation(item,options,historyBudget);
@@ -68,17 +74,20 @@ function normalizeSession(value, options={}) {
   if(Array.isArray(value?.tabs)&&value.tabs.length>MAX_SESSION_TABS)throw new Error('Workspace has too many saved tabs. The original record was preserved.');
   const tabs = [], seen = new Set(),historyBudget={bytes:0};
   for (const item of Array.isArray(value?.tabs) ? value.tabs : []) {
-    if (!item || !['overview','schedule','run','markdown','browser','standup','omi','life','terminal','agent-terminal','remote-run','remote-document','team','engine','home','workspace'].includes(item.type)) continue;
+    if (!item || !['overview','schedule','run','markdown','unavailable','browser','standup','omi','life','terminal','agent-terminal','remote-run','remote-document','team','engine','home','workspace'].includes(item.type)) continue;
     const tab = {id:text(item.id,256),type:item.type,label:text(item.label,200)};
     if(/^[a-zA-Z0-9_:.\-]{1,256}$/.test(item.associationChatId||''))tab.associationChatId=item.associationChatId;
     for(const field of ['openedAt','lastTouchedAt','lastActivityAt'])if(Number.isFinite(Date.parse(item[field])))tab[field]=new Date(item[field]).toISOString();
     if(item.hidden===true)tab.hidden=true;
     if(item.navigationClosed===true)tab.navigationClosed=true;
     if(item.pendingOpen===true)tab.pendingOpen=true;
+    if(item.type==='unavailable'){
+      const unavailable=unavailableDocument(item);if(!unavailable)continue;Object.assign(tab,unavailable);
+    }
     if(item.type==='browser')tab.persist=item.persist===true;
     if(text(item.customTitle,200))tab.customTitle=text(item.customTitle,200);
     if(text(item.contentTabId,256))tab.contentTabId=text(item.contentTabId,256);
-    if(['browser','markdown','terminal','agent-terminal','remote-document','run','remote-run'].includes(tab.type)&&typeof item.parentId==='string')tab.parentId=text(item.parentId,256);
+    if(['browser','markdown','unavailable','terminal','agent-terminal','remote-document','run','remote-run'].includes(tab.type)&&typeof item.parentId==='string')tab.parentId=text(item.parentId,256);
     if (!tab.id || seen.has(tab.id) || (tab.id==='overview') !== (tab.type==='overview')) continue;
     if (tab.type === 'workspace') {
       if(!/^[a-zA-Z0-9_-]{1,128}$/.test(item.workspaceId||''))continue;

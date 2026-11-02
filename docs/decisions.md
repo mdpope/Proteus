@@ -1,3 +1,168 @@
+## November 1 — reconcile repaired recovery attention without rewriting history
+
+A verified installation can fail its later recovery-retirement step. A separate owner-created
+resolution receipt binds the exact original attention journal, installed identity, surviving
+owner, preservation evidence and every fully verified recovery. The journal remains byte-identical;
+its error and undelivered continuation are not relabelled as success. Fresh digest-bound maintenance
+may then rotate eligible generations. The existing source-owned maintenance adapter supplies this
+same bounded operation for older clients; it never patches a signed app or directly invokes helper
+retirement to bypass verification. Unsupported failure types still need inspection.
+
+## November 1 — frozen recovery databases are queried only through copies
+
+SQLite read-only connections may create WAL/SHM next to a frozen database. Recovery verification
+therefore copies the database and its existing sidecars into a private disposable directory,
+checks opaque hashes before/after and queries only that copy. Original receipts stay unchanged.
+Proven verification-created extras require a separate bounded quarantine operation with exact
+native file identities, preserved evidence and full owner re-verification. This release-operation
+tooling does not change the accepted `11ca09b` application package or its corresponding source.
+
+## November 1 — closing identity outlives window presentation
+
+Membership-only application is a partial owner observation, not a complete replacement of the
+captured local tab set. Remove only the identities confirmed absent by that owner response;
+unpublished local opens must survive until their normal mutation pass. The shared predicate keeps
+this rule identical across project/workspace/main/Team and resource types. Deterministic native
+overlap acceptance must observe both the old removed browser and newly selected terminal in the
+same response; timing-only or model tests do not establish renderer convergence.
+
+Retain compact owner close/move revisions without time expiry: forgetting a close after thirty days would allow an old window or offline client to revive the same identity. Bound records at 16,384 per scope and the existing store byte limit, rejecting writes intact rather than silently evicting authority. Explicit reopen must match the closing revision; a later close wins. Window disposal and mirror cleanup are presentation-only. Document-source failure becomes a retained unavailable view rather than aborting shared membership reconciliation. Background integration monitoring uses run-scoped fresh validation and real event-loop yields rather than a broader cross-turn context cache.
+
+Do not infer shared deletion or order from incomplete local views. Explicit durable Close intent
+is the deletion boundary; retained legacy deletion envelopes are reviewed without rewriting
+uncertain receipts. This prevents alias/parent remounts from deleting saved child resources.
+
+## October 31 — combine Fusion/layout with R15/R16
+
+The operator approved combining c54406cc66150c45521fd194d89c6391c44b646a and269f32f1b9f66cdcb042396f95532632ec5da937. Keep both feature sets, reserve no new version while the named0.2.39 release remains open, and validate a new full source pin before rebuilding. Cancel only superseded preparations through their original coordinators; preserve active work and all evidence. Earlier source pins below describe accepted intermediate artifacts, not acceptance of the combined source. iPad deployment is explicitly deferred.
+
+## October 31 — preserve cross-platform publisher payload bytes
+
+The existing release signer reconstructs metadata for its host and cannot sign another native
+target's already accepted payload unchanged. A separate release-operation helper binds exact
+payload bytes/hash/full source pin, preserves dates and target, verifies the trusted publisher
+and normal manifest constraints, and refuses output replacement. Its tests use ephemeral keys;
+the CLI cannot override publisher trust. This maintenance tooling does not change the frozen
+c54406cc application or native source companion; signing is separate from native acceptance.
+
+## October 31 — retain the open named version for Fusion/layout rollout
+
+O14–O17 are an operator-authorized supplement to the still-open October thirtieth release, 0.2.39. A new named release requires closing the current one; no closeout has occurred. Freeze c54406cc66150c45521fd194d89c6391c44b646a and bind new platform artifacts to distinct build/hash identities. Keep prior installed/public evidence separate.
+
+## October 30 — SSH publication access
+
+Use the existing deployment SSH identity and its documented credential-provider options for
+package transfers. The operator explicitly rejects browser file uploads and authorizes the needed
+agent access. Delegate write access to the Proteus public download subtree and private staging;
+use a fixed recent-window read-only command for protected configuration hashes and hosting-log
+aggregates. Preserve the existing bounded website updater, account keys and unrelated site access.
+Keep permission/credential routing and operational receipts in the private hosting workspace.
+Publication still requires complete public artifact hashes, publisher-signature verification,
+one current descriptor, empty pending-target catalogs and digest-bound retirement of old payloads.
+
+## October 30 — exact native source companions
+
+Keep each accepted platform's immutable application source pin separate from later export-tool
+maintenance. A Windows checkout may have native CRLF bytes and a generated terminal guardian;
+a Mac Git archive is insufficient proof of exact correspondence. Include native build sources
+and, only with explicit accepted provenance, the recorded generated inputs. Verify every input
+before and after export, preserve its bytes and reject environment secrets and unsafe paths.
+The exporter can run from a separate maintenance checkout against the frozen native source;
+neither the application nor its recorded identity is rebuilt or rewritten to repair a companion.
+
+## October 30 — process-specific Crashpad state at update launch
+
+The Windows helper inherited `CHROME_CRASHPAD_PIPE_NAME` and Chromium created `debug.log` beside
+its staged executable before readiness verification. A private cwd and external logging variable
+did not prevent the mutation. A native probe omitting only the three branded Crashpad variable
+families preserved every package entry and completed arm-ready IPC; a fresh isolated baseline
+owner also passed the original helper launch. Remove those process-specific variables from helper
+children and app relaunch overrides, preserving ordinary provider/desktop context. Never ignore,
+delete or whitelist the new log to make package verification pass.
+
+The installed older owner lacks same-baseline idle-gated restart/environment controls. Its failed
+job was cancelled through the owner after the task-created maintenance checkout was relocated
+outside the installation. A normal operator Quit/Start Menu reopen is the remaining bootstrap
+step; source tests and the isolated probe are not a live restart or installation result.
+
+## October 30 — website notification identity across mobile delivery
+
+Carry the desktop's stable notification event ID through the account server and APNs route, so
+the encrypted host stream and push collapse into one alert. Keep origin/text/sound portable;
+window/profile/tab activation references stay on their owning desktop. Mobile activation invokes
+that paired owner's existing notification operation, never an arbitrary URL. Global alert suppression
+differs from the website's no-sound choice: the former suppresses alert delivery while the latter
+preserves a visible notification without audio. Website alerts expire after five minutes.
+
+Native test fixtures must install under a separate app identity. Build-for-testing verifies that
+identity before installing; normal app/device updates retain their existing identifiers. The test
+isolation correction follows an observed iPhone simulator fixture reset; physical data is unaffected.
+
+## October 30 — stale Windows builder runtime reference
+
+A provider update can remove the hash directory captured by the designated builder. Repair this
+with a repository-owned CLI that binds the live installation and prior policy hash, verifies the
+current signed provider Node family, refuses active/unreconciled builds, and changes only `node`.
+The read-only plan digest and stable operation receipt protect reviewed application and uncertain
+retries. Keep previous policy bytes in private intent/completion evidence; do not recreate provider
+caches or modify a builder policy by hand. Existing source, Git, npm, publisher key and unknown
+fields retain their exact values. This maintenance helper does not change a frozen consumer build.
+
+## October 30 — direct certificate acceptance and themed browser failures
+
+Custom-port HTTP(S) addresses retain their port; a numeric port distinguishes single-label
+intranet addresses from ordinary searches. Browser failures display host and port, with separate
+network-access/DNS/TLS categories. Mac bundles declare local-network use without changing grants.
+
+The operator requests direct acceptance on the certificate error page, with no review menus or
+second confirmation. A trusted click crosses an isolated preload bridge; the owner validates its
+main frame, exact generated error document and current certificate token. Page scripts cannot
+invoke acceptance, and there is no generic tool action to alter TLS policy. Match Chromium's
+profile/hostname/exact-certificate session scope rather than promise tab-only isolation that its
+native certificate cache cannot enforce. Restart ends acceptance; changed certificates and other
+profiles require separate decisions. Preserve ordinary HTTPS verification everywhere else.
+
+Render browser failures using resolved saved app colors, including brightness/saturation, rather
+than OS prefers-color-scheme. Send validated colors to existing error pages when settings change,
+without reloading the page or replacing its pending certificate token.
+
+## October 30 — shared view residency and durable reading anchors
+
+Update input guards distinguish owner-generated task feedback using an internal non-JSON symbol.
+Only feedback to another chat preserves a pending handoff; its actual queued/running work still
+blocks restart. Human input cannot claim that provenance through API arguments. New input into
+the updating chat always requires a refreshed checkpoint. This prevents command-center feedback
+from repeatedly cancelling the very installation it is observing, without weakening idle checks.
+
+Use one renderer content budget across local/paired chats, with a separate document budget and
+one idle timeout. Small navigation metadata remains resident; loaded transcripts and detached DOM
+share the same eviction identity. Preserve reading anchors outside heavy content and page the
+durable transcript back to the actual event before considering restoration applied. Selected views
+and provider execution are protected separately: unloading a view never stops a turn or terminal.
+Document eviction retains authorization routing instead of behaving as Close or revoking a grant.
+Settings are durable per installation; updates do not reset a selected policy or theme.
+
+Navigation conflict review quarantines uncertain navigation only. Continue reading canonical
+membership/order, and apply proven closes before unrelated history hydration. Retain recovery
+intent and original retry identity; do not use a missing descriptor alone to discard an outbox.
+
+## October 30 named releases and owner-observed update coordination
+
+A human release name maps to one reserved package version. Small repository records retain plan,
+implementation, rollout and closeout; private machine/recovery data remains outside source.
+The coordinating Mac chooses an exact signed package while the destination captures its own
+provider defaults and owns installation. Update tasks observe the destination owner's bounded,
+chat-specific receipt through the pre-restart turn and resumed verification; package health does
+not attest arbitrary migration/workflow results. Existing chat access and retry boundaries apply.
+
+One version is current on downloads.proteus.example. New publication writes empty catalogs for pending native targets
+instead of retaining an older advertised version, then retires obsolete payload directories only
+after checking new public bytes and a digest-bound cleanup plan. Local recovery remains separate:
+at most two native/site generations and one server-side website backup. A designated native builder
+may build from pinned repository source; subsequent consumers never build. Closing a release
+integrates and pushes its source into main and retires related branches/worktrees without requiring
+every deferred installation to finish. See [release process](release-process.md).
+
 ## October 30 — reconcile owner descriptors separately from window views
 
 Use one ordered logical identity set for workspace/project content, with window-local view IDs,
@@ -2802,3 +2967,35 @@ Chats have no header bar. Their actions live on the tab that names the chat, so 
 iPhone shows only the project bar and the chat's own tab row. The single sidebar control sits at the
 start of the project/workspace bar on both iPhone and iPad and is never opened by an edge swipe.
 Project tabs swipe back to their project home before UIKit pops the project.
+
+## October 31 — Copilot Fusion is selected from advertised Auto tiers
+
+Copilot Fusion is exposed by `@github/copilot-sdk` as Auto routing tiers (`ModelList.auto.tiers`,
+`type: "fusion"` / `fusionTier`), not as an ordinary model. Proteus publishes a synthetic
+`copilot-fusion` catalog entry only from those advertised, enabled, picker-visible tiers, and reuses
+the existing effort control (`reasoningEffort` holds the opaque tier ID, labelled with the tier's
+`displayName`). Sessions run `model: "auto"` with `autoTier`. No tier IDs, model rosters or plan
+entitlements are hard-coded. Attribution is a durable per-turn journal keyed by `fusionId`, built
+only from provider events. Metadata is kept; draft and critique content is not. Planned and executed
+models stay distinct. Remote clients receive the turns referenced by their visible history window
+plus the latest turn, so payloads stay bounded.
+
+## October 31 - standalone llama.cpp transport
+
+Reuse the tested local serial tool loop for a distinct llama-cpp provider identity. Discover context and reasoning metadata from the server, and use its template/tokenizer for admission rather than a model-name table or a byte count. Keep connection credentials in private files and allow remote HTTPS with scoped CA trust. Preserve the existing GGUF and default to one server slot on an 8 GB GPU. This avoids a second model download and unsupported promises that removing LM Studio increases model throughput.
+
+## October 31 - relay-only inference sharing
+
+Reuse the existing end-to-end encrypted paired transport rather than introduce a general HTTP proxy or peer-to-peer negotiation. The serving host exposes only authenticated local-backend discovery, context admission, one-shot generation, cursor reads and cancellation. The consuming provider owns agent history and tools. Durable start identities and metadata-only receipts prevent automatic generation replay after ambiguous delivery or restart. Explicit device grants and imports remain separate from existing computer permissions; shared/remote providers cannot be exported again. Direct LAN optimization and shared image delivery are deferred.
+## Nov 1 — causal native intents and scoped update authorization
+
+iOS open-tab membership comes from the owner's ordered descriptors. Offline UI actions carry
+stable intent IDs and observed closing revisions. Persist the original in-flight request before
+sending and reconcile it before rebasing later intent. Never infer deletion from an incomplete
+view or silently replay a legacy inferred deletion. Notification upload time cannot refresh event
+age; preserve original occurrence time through server push and native deduplication.
+
+Extension state captures concrete windows because a presentation proxy changes identity as focus
+changes. Current sender and last-focused window are separate concepts; active tabs are per window.
+Updater permission is a persisted, versioned owner grant for update and narrow preflight actions,
+not a cross-machine permission-answering capability or arbitrary shell grant.

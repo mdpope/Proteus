@@ -41,6 +41,10 @@ use the same runner and data directory; only one may own that directory at a tim
 printed local launch URL when running the web interface. The default port is 4317; `PORT=0`
 selects an available port. `PROTEUS_HOME` overrides the application-data directory.
 
+## Shared local models
+
+Share llama.cpp or MTPLX inference with selected paired computers in Providers. Other desktops add the shared provider and choose its host-labelled model in a local chat. Workspace tools and approvals stay on the consuming computer. See [shared models](docs/shared-models.md).
+
 ## Implemented
 
 - Editable five-field cron expressions with IANA time zones and next-five-run previews.

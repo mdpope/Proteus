@@ -28,3 +28,18 @@ test('workspace reordering persists one owner order without changing defaults, f
  const current=new ContextStore(root,settings,{skipRefresh:true}).config();assert.deepEqual(current.workspaces.map(row=>row.id),ids);assert.equal(current.defaultWorkspaceId,before.defaultWorkspaceId);assert.equal(current.extension,'retained');
  assert.throws(()=>context.reorderWorkspaces(ids,before.revision),/changed/);assert.throws(()=>context.reorderWorkspaces([ids[0],ids[0]],current.revision),/every current workspace/);
 });
+
+
+test('conversation reading anchors retain their paging identity through owner persistence',t=>{
+ const root=home(t),store=new ViewPositions(root);
+ store.set('window:synthetic:tab:chat',[['#conversation',{top:420,left:0,conversation:true,follow:false,anchor:{index:2,offset:8,key:'event-1200',text:'Synthetic historical message'}}]]);
+ const saved=new ViewPositions(root).get()[0][1][0][1];
+ assert.equal(saved.conversation,true);assert.equal(saved.anchor.key,'event-1200');assert.equal(saved.anchor.offset,8);
+});
+
+test('native document positions persist only bounded numeric rows bound to an exact document version',t=>{
+ const store=new ViewPositions(home(t)),version='a'.repeat(64),positions=[{path:'root',top:300,left:0,x:0,y:.5}];
+ store.set('artifact:synthetic',[['artifact',{top:0,left:0,artifact:{version,positions}}]]);
+ assert.deepEqual(new ViewPositions(path.dirname(store.file)).get()[0][1][0][1].artifact,{version,positions});
+ const before=fs.readFileSync(store.file);for(const artifact of [{version:'invalid',positions},{version,positions:[{...positions[0],top:Infinity}]},{version,positions:[{...positions[0],path:'script'}]}])assert.throws(()=>store.set('artifact:synthetic',[['artifact',{top:0,left:0,artifact}]]));assert.deepEqual(fs.readFileSync(store.file),before);
+});

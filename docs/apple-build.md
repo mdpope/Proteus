@@ -1,3 +1,29 @@
+## October 30 — isolated native tests and normal-app repair
+
+`apple-build.mjs test` builds `org.proteusapp.proteus.mobile-tests` and verifies that identity before
+installing fixtures. Normal app builds retain their existing identity. On the shared iPhone,
+157 native unit tests and the website-notification offline-route UI test pass under the separate
+test identity; the targeted iPad unit/UI checks pass as well.
+
+Explicit live acceptance can select an already-installed normal/preview app with
+`PROTEUS_LIVE_SIMULATOR_BUNDLE`, while the test runner remains separate. A loopback live-owner
+bridge is still required. The earlier fixture-removal test did not verify the actual saved
+destination list, so it was removed. The two task-created destinations were removed through
+the actual management UI. A normal cold restart then reauthenticated to the real owner with
+the same saved selection; the earlier missing cache is not described as restored. Physical
+deployment remains a separate acceptance gate.
+
+## October 30 shared simulator retention
+
+Use the existing shared compatible iPhone/iPad simulator pool for Proteus and Mnemosyne.
+Inventory devices/runtimes before creating anything; do not make one device pool per project.
+Retain only unique required compatibility coverage and retire unused test-created duplicates,
+obsolete runtimes and build products during authorized release cleanup. Preserve active tests,
+installed applications, pairings and data; do not erase shared devices as routine setup.
+The [release process](release-process.md) limits local native artifact generations to two and
+keeps the existing two verified recoveries per physical device/installation. No live simulator
+or recovery cleanup is claimed merely from this policy update.
+
 ## October 29 — current-owner simulator acceptance
 
 Both existing simulators run 0.2.36 / 2610.29.1, with exact app bytes and protected data verified

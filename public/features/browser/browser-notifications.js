@@ -15,12 +15,12 @@ export function initBrowserNotifications(options){
   ui=options;
   window.desktop?.onNotification?.(value=>{if(value.browserIssueId)void act(value);});
 }
-async function act({browserIssueId,issueAction='review'}){
+async function act({browserIssueId,issueAction='review',browserIssueTarget}){
   if(processing.has(browserIssueId))return;processing.add(browserIssueId);
   let item;
   try{
     item=(await ui.api('/api/notifications')).items.find(item=>item.id===browserIssueId);
-    const issue=item?.browserIssue;
+    const issue=browserIssueTarget||item?.browserIssue;
     if(!issue||issue.windowId!==window.desktop.windowId)throw Error('This browser notification belongs to another window.');
     if(issueAction==='review'){await ui.refresh(true);ui.review(item);return;}
     if(issueAction==='keep-history'||issueAction==='open-copy'){

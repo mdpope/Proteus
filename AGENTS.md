@@ -1,5 +1,32 @@
 # Proteus
 
+## Release scope and private device routing
+
+Use short-date release names such as Nov 1. A release starts with requested bugs/features and ends
+with verified deployment to included desktop/web/iOS targets unless the operator defers them.
+At release completion, perform routine PR/commit/push/sync/merge-to-main and verified branch,
+worktree, backup and temporary-file closeout without requiring separate requests.
+An explicit rollout hold remains in force until the operator lifts it.
+
+Keep device roles, host IDs and machine-specific operating paths in the operator's private project
+record outside this repository. Build each OS/architecture on its designated builder once; consumers
+download accepted signed binaries from downloads.proteus.example. Authorized source work can use a project-scoped
+purpose:build chat capturing destination updater defaults or explicit validated build options.
+Installation always uses a separate unassigned purpose:update chat with receiving-device defaults,
+whether initiated locally or from the controller. Preserve ordinary source/tool approvals.
+
+## Named release workflow
+
+Follow [docs/release-process.md](docs/release-process.md) for every release. Resolve the current
+named release/version before work; reserve its version once, keep plan/implementation/rollout
+records in Git, and distinguish source, published, installed and live-verified status.
+On operator closeout, merge validated release PRs/branches into main, synchronize/push and verify
+remote main, then retire merged release branches/worktrees and close the record. Do not leave
+another open release effort or restart a closed cycle. Public downloads retain only the current
+generation; website server recovery is one backup and local website recovery is at most two.
+Reuse the shared iOS simulator pool across projects. Apply the precise retention and build-first/
+download-subsequently rules in that document without expanding authorization to unrelated work.
+
 Proteus is an independent, provider-neutral local scheduler and conversation client.
 Follow `docs/code-organization.md` for source placement and boundary commentary. Keep models,
 state, services and feature views in their related folders; keep root files for composition

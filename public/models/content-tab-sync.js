@@ -2,6 +2,13 @@
 import {safeContentTabURL,sameContentTab,mergeContentTabMetadata} from './content-tab-descriptor.js';
 import {applyNavigationDelta} from '../shared/navigation/navigation-history.js';
 export function syncableTabURL(value){return value?safeContentTabURL(value):'';}
+// A membership-only pass may remove only identities confirmed absent by the owner.
+// Newly captured local opens must survive until the subsequent mutation pass.
+export function shouldRemoveCapturedTab(id,ownerIds,capturedIds,{membershipOnly=false,removedIds=[],preservedIds=[]}={}){
+  if(!id||ownerIds.has(id)||!capturedIds.has(id))return false;
+  if(membershipOnly&&!removedIds.includes(id))return false;
+  return !preservedIds.includes(id)||removedIds.includes(id);
+}
 export function tabChanges(before,after,{navigation=false,seed=false}={}){
   const prior=new Map(before.map(tab=>[tab.id,tab])),next=new Map(after.map(tab=>[tab.id,tab])),operations=[];
   const seedNavigation=tab=>{
@@ -89,8 +96,11 @@ function changesAfterOwnerUpdates(baseline,local,remote,navigation){
   const localOrder=local.filter(tab=>!arrivals.has(tab.id)).map(tab=>tab.id);
   return previousOrder.join('\0')===localOrder.join('\0')?operations.filter(op=>op.action!=='reorder'):operations;
 }
-export function createTabSynchronizer({scopes,readLocal,apply,acknowledge=async()=>{},request,onError=()=>{},navigation=false,pendingStorage,now=Date.now,preserveUntracked=()=>false}){
+export function createTabSynchronizer({scopes,readLocal,apply,acknowledge=async()=>{},request,onError=()=>{},navigation=false,explicitCloseOnly=false,pendingStorage,now=Date.now,preserveUntracked=()=>false}){
   const records=new Map(),navigationCache=new Map(),backoff=new Map();
+  // A view can disappear while its parent remounts or an alias changes. Only a
+  // durable human Close can delete membership; incomplete views cannot reorder it.
+  const viewChanges=(before,after,operations)=>!explicitCloseOnly?operations:operations.filter(op=>op.action!=='close'&&(op.action!=='reorder'||before.every(tab=>after.some(row=>row.id===tab.id))));
   const hostKey=scope=>scope.hostId||'local';
   const key=scope=>JSON.stringify([scope.hostId||'',scope.scope,scope.id]);
   async function hydrate(scope,remote){
@@ -149,7 +159,7 @@ export function createTabSynchronizer({scopes,readLocal,apply,acknowledge=async(
     if(!baseline||record.busy||record.pending||record.conflict||!pendingStorage)return false;
     const local=(await snapshot(scope)).filter(tab=>!record.localAliases?.has(tab.id));
     if(records.get(id)!==record||record.baseline!==baseline||record.busy||record.pending||record.conflict)return false;
-    const operations=tabChanges(baseline,local,{navigation});if(!operations.length)return false;
+    const operations=viewChanges(baseline,local,tabChanges(baseline,local,{navigation}));if(!operations.length)return false;
     pendingStorage.setItem('proteus.navigation.pending:'+id,JSON.stringify(operations));
     record.pending=operations;record.pendingSnapshot=structuredClone(local);return true;
   }
@@ -157,14 +167,70 @@ export function createTabSynchronizer({scopes,readLocal,apply,acknowledge=async(
     if((backoff.get(hostKey(scope))?.until||0)>now())return;
     const id=key(scope);let record=records.get(id);
     if(record?.busy){record.again=true;return record.busy;}
-    if(record?.conflict)return;
     if((record?.retry?.until||0)>now())return;
     if(!record){record={baseline:null,revision:0};records.set(id,record);}
     const work=async()=>{
       let wrote=false;
       let local=await snapshot(scope);
-      let remote=await hydrate(scope,await request(scope,'get',{historyLimit:200}));
+      let raw=await request(scope,'get',{historyLimit:200});
+      // Explicit local Close is independent of baseline/history quarantine. Its
+      // durable envelope is separate from an uncertain navigation request.
+      const closeKey='proteus.navigation.closes:'+id,closeRequestKey=closeKey+':request';
+      const queued=JSON.parse(pendingStorage?.getItem(closeKey)||'[]');
+      if(!Array.isArray(queued)||queued.length>1000||queued.some(id=>typeof id!=='string'||!/^[-a-zA-Z0-9_:.]{1,256}$/.test(id)))throw Error('Queued tab closes could not be read. The original intent was preserved.');
+      const closes=queued.slice(0,100);
+      if(closes.length){
+        const operations=closes.filter(tabId=>!Object.hasOwn(raw.closed||{},tabId)).map(id=>({action:'close',id}));
+        if(operations.length){
+          let envelope=JSON.parse(pendingStorage?.getItem(closeRequestKey)||'null');
+          if(!envelope)envelope={id:crypto.randomUUID(),issuedAt:new Date().toISOString(),args:{expectedRevision:raw.revision,operations}};
+          pendingStorage?.setItem(closeRequestKey,JSON.stringify(envelope));
+          try{raw=await request(scope,'mutate',envelope.args,{id:envelope.id,issuedAt:envelope.issuedAt});}
+          catch(error){if(/Content tabs changed/.test(error.message))pendingStorage?.removeItem(closeRequestKey);throw error;}
+        }
+        const remaining=JSON.parse(pendingStorage?.getItem(closeKey)||'[]').filter(tabId=>!closes.includes(tabId));
+        if(remaining.length){pendingStorage?.setItem(closeKey,JSON.stringify(remaining));record.again=true;}else pendingStorage?.removeItem(closeKey);
+        pendingStorage?.removeItem(closeRequestKey);
+        local=local.filter(tab=>!closes.includes(tab.id));
+      }
       if(records.get(id)!==record)return;
+      if(raw.revision<record.revision)throw Error('The owner returned an older tab revision. Retry synchronization.');
+      const known=new Set([...(record.baseline||[]).map(tab=>tab.id),...(record.ownerObserved||[])]),present=new Set(raw.tabs.map(tab=>tab.id));
+      const removedIds=[...new Set([...known,...local.filter(tab=>Object.hasOwn(raw.closed||{},tab.id)).map(tab=>tab.id)])].filter(tabId=>!present.has(tabId));
+      if(removedIds.length){
+        if(pendingStorage&&(record.pending?.some(op=>removedIds.includes(op.tabId))||local.some(tab=>removedIds.includes(tab.id)&&tab.navigationPending)))pendingStorage.setItem('proteus.navigation.recovery:'+id,JSON.stringify({reason:'Owner closed or moved a tab with pending navigation',resolvedAt:new Date(now()).toISOString(),pending:record.pending||[],local:local.filter(tab=>removedIds.includes(tab.id))}));
+        await apply(scope,raw.tabs,local,{membershipOnly:true,removedIds});
+      }
+      let remote=await hydrate(scope,raw);
+      if(records.get(id)!==record)return;
+      if(record.conflict){
+        // Navigation review quarantines that intent, not the shared container.
+        // Continue adopting canonical membership, order and unaffected metadata.
+        const quarantined=new Set((record.pending||[]).map(op=>op.tabId||op.tab?.id).filter(Boolean));
+        const membershipKey='proteus.navigation.membership:'+id;
+        let envelope=JSON.parse(pendingStorage?.getItem(membershipKey)||'null');
+        const observed=local.filter(tab=>!record.localAliases?.has(tab.id));
+        const changes=viewChanges(record.baseline||remote.tabs,observed,changesAfterOwnerUpdates(record.baseline||remote.tabs,observed,remote.tabs,navigation))
+          .filter(op=>!op.action.startsWith('browser-')&&(op.action!=='open'||!quarantined.has(op.tab.id)))
+          .map(op=>op.action==='open'&&!remote.tabs.some(tab=>tab.id===op.tab.id)?{...op,tab:local.find(tab=>tab.id===op.tab.id)||op.tab}:op)
+          .filter(op=>op.action!=='open'||!Object.hasOwn(remote.closed||{},op.tab.id));
+        const operations=rebaseTabChanges(envelope?.args.operations||changes,remote.tabs).slice(0,100);
+        if(operations.length){
+          // Separate durable envelope: an unrelated membership action must not
+          // rewrite or replay the quarantined navigation's receipt identity.
+          envelope??={id:crypto.randomUUID(),issuedAt:new Date().toISOString(),args:{historyLimit:200,expectedRevision:remote.revision,operations}};
+          pendingStorage?.setItem(membershipKey,JSON.stringify(envelope));
+          try{remote=await hydrate(scope,await request(scope,'mutate',envelope.args,{id:envelope.id,issuedAt:envelope.issuedAt}));}
+          catch(error){if(/Content tabs changed/.test(error.message))pendingStorage?.removeItem(membershipKey);throw error;}
+          await acknowledge(scope,remote.tabs);
+        }
+        pendingStorage?.removeItem(membershipKey);
+        if(!operations.length&&remote.revision===record.revision)return;
+        const protectedIds=new Set((record.pending||[]).filter(op=>op.action.startsWith('browser-')).map(op=>op.tabId));
+        const safe=remote.tabs.map(tab=>{const pending=local.find(value=>value.id===tab.id);return protectedIds.has(tab.id)&&pending?.type==='browser'?{...tab,url:pending.url,history:pending.history,navigationPending:pending.navigationPending}:tab;});
+        await apply(scope,safe,local,{preservedNavigationIds:[...protectedIds],removedIds});
+        record.baseline=structuredClone(remote.tabs);record.revision=remote.revision;return;
+      }
       // Older owners may never have registered these saved local chat aliases.
       // Preserve them without publishing a reopening or treating absence as close.
       // Once the owner exposes an identity, ordinary synchronization owns it.
@@ -174,7 +240,7 @@ export function createTabSynchronizer({scopes,readLocal,apply,acknowledge=async(
         if(!Array.isArray(saved)||saved.length>2000||saved.some(item=>typeof item!=='string'||item.length>256))throw Error('Saved owner tab observations could not be read. Local views were preserved.');
         record.ownerObserved=new Set(saved);
       }
-      if(record.baseline===null&&!record.localAliases)record.localAliases=new Set(local.filter(tab=>!tab.navigationPending&&remote.revision>0&&!record.ownerObserved.has(tab.id)&&!remote.tabs.some(item=>item.id===tab.id)&&preserveUntracked(scope,tab)).map(tab=>tab.id));
+      if(record.baseline===null&&!record.localAliases)record.localAliases=new Set(local.filter(tab=>!tab.navigationPending&&remote.revision>0&&!Object.hasOwn(remote.closed||{},tab.id)&&!record.ownerObserved.has(tab.id)&&!remote.tabs.some(item=>item.id===tab.id)&&preserveUntracked(scope,tab)).map(tab=>tab.id));
       const rememberOwner=()=>{
         for(const tab of remote.tabs){record.localAliases?.delete(tab.id);if(preserveUntracked(scope,tab))record.ownerObserved.add(tab.id);}
         // Remember participation across renderer restarts, including a close made
@@ -191,9 +257,10 @@ export function createTabSynchronizer({scopes,readLocal,apply,acknowledge=async(
       const storageKey='proteus.navigation.pending:'+id;
       const requestKey='proteus.navigation.request:'+id;
       if(!record.pending&&pendingStorage)try{record.pending=JSON.parse(pendingStorage.getItem(storageKey)||'null');}catch{}
+      if(explicitCloseOnly&&record.pending?.some(op=>op.action==='close'))throw Object.assign(Error('A retained legacy Close needs navigation review. Its original receipt was preserved.'),{code:'NAVIGATION_CONFLICT'});
       const initial=remote.revision===0?tabChanges([],local,{navigation,seed:true}):tabChanges(remote.tabs,[...remote.tabs.map(tab=>local.find(item=>item.id===tab.id&&item.navigationPending)||tab),...local.filter(tab=>tab.navigationPending&&!remote.tabs.some(item=>item.id===tab.id))],{navigation});
       const retrying=!!record.pending;
-      const operations=record.pending||(record.baseline===null?initial:changesAfterOwnerUpdates(record.baseline,local,remote.tabs,navigation));
+      const operations=record.pending||viewChanges(record.baseline||[],local,record.baseline===null?initial:changesAfterOwnerUpdates(record.baseline,local,remote.tabs,navigation));
       let captured=local;
       if(operations.length){
         // Do not publish a close computed before the user replaced/moved a tab.
@@ -301,6 +368,25 @@ export function createTabSynchronizer({scopes,readLocal,apply,acknowledge=async(
     record.pending=null;record.conflict=false;record.again=false;record.retry=null;record.baseline=structuredClone(remote.tabs);record.revision=remote.revision;
     record.request=null;pendingStorage?.removeItem('proteus.navigation.pending:'+id);pendingStorage?.removeItem('proteus.navigation.request:'+id);
   }
+  function close(scope,tabId){
+    const storageKey='proteus.navigation.closes:'+key(scope);
+    const ids=JSON.parse(pendingStorage?.getItem(storageKey)||'[]');
+    if(!ids.includes(tabId))ids.push(tabId);
+    if(ids.length>1000)throw Error('Too many queued tab closes. Reconnect before closing more tabs.');
+    pendingStorage?.setItem(storageKey,JSON.stringify(ids));
+    // In-memory storage also supports callers without a persistent adapter.
+    if(!pendingStorage)throw Error('Closing shared tabs requires durable intent storage.');
+  }
+  async function reopen(scope,tab){
+    // An immediate Undo may race its own queued Close. Settle that intent first;
+    // a later reopen must refer to the resulting owner closing revision.
+    const closeKey='proteus.navigation.closes:'+key(scope);
+    if(JSON.parse(pendingStorage?.getItem(closeKey)||'[]').includes(tab.id))await sync(scope);
+    const remote=await request(scope,'get',{historyLimit:200}),closedRevision=Object.hasOwn(remote.closed||{},tab.id)?remote.closed[tab.id]:null;
+    if(!closedRevision)return false;
+    await request(scope,'mutate',{expectedRevision:remote.revision,operations:[{action:'reopen',closedRevision,tab}]},{id:crypto.randomUUID(),issuedAt:new Date().toISOString()});
+    await sync(scope);return true;
+  }
   function forgetKey(id){records.delete(id);for(const cacheKey of navigationCache.keys())if(cacheKey.startsWith(id+':'))navigationCache.delete(cacheKey);}
-  return {sync,checkpoint,resolve,hasConflict:scope=>records.get(key(scope))?.conflict===true,forget(scope){forgetKey(key(scope));},forgetHost(hostId){backoff.delete(hostId);for(const id of records.keys())if(JSON.parse(id)[0]===hostId)forgetKey(id);},async all(){const groups=new Map();for(const scope of scopes()){const owner=hostKey(scope);if(!groups.has(owner))groups.set(owner,[]);groups.get(owner).push(scope);}await Promise.all([...groups.values()].map(async group=>{for(const scope of group)await sync(scope);}));}};
+  return {sync,checkpoint,resolve,close,reopen,hasConflict:scope=>records.get(key(scope))?.conflict===true,forget(scope){forgetKey(key(scope));},forgetHost(hostId){backoff.delete(hostId);for(const id of records.keys())if(JSON.parse(id)[0]===hostId)forgetKey(id);},async all(){const groups=new Map();for(const scope of scopes()){const owner=hostKey(scope);if(!groups.has(owner))groups.set(owner,[]);groups.get(owner).push(scope);}await Promise.all([...groups.values()].map(async group=>{for(const scope of group)await sync(scope);}));}};
 }

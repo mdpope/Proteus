@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import {chatAccessScope,matchesChatAccess} from './chat-access-rule.js';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { atomicJSON, readJSON } from '../../shared/files.js';
@@ -58,13 +59,14 @@ const protectedRequest = request => request.managedApprovalRequired === true || 
 const requestedPath = (request, context) => canonicalPath(request.resolvedPath || (request.kind === 'read' ? request.path : request.fileName), context.cwd);
 
 export function operationRule(request) {
+  if(request.kind==='chat-access'){const scope=request.toolName==='proteus_chats'&&chatAccessScope(request.args?.scope);return scope?{kind:'chat-access',tool:'proteus_chats',scope}:null;}
   if (request.kind === 'shell' && typeof request.fullCommandText === 'string') return { kind: 'shell', command: request.fullCommandText };
   if (request.kind === 'mcp' && request.serverName && request.toolName) return { kind: 'mcp', server: request.serverName, tool: request.toolName, ...(typeof request.args?.action === 'string' ? { action: request.args.action } : {}) };
   if (request.kind === 'custom-tool' && request.toolName) return { kind: 'custom-tool', tool: request.toolName, ...(typeof request.args?.action === 'string' ? { action: request.args.action } : {}) };
   if (request.kind === 'url') { try { const url = new URL(request.url); if (['https:', 'http:'].includes(url.protocol)) return { kind: 'url', origin: url.origin }; } catch { /* No repeatable rule. */ } }
   return null;
 }
-export const ruleLabel = rule => rule.kind === 'shell' ? `Exact command: ${rule.command}` : rule.kind === 'url' ? rule.origin : `${rule.server ? `${rule.server} / ` : ''}${rule.tool}${rule.action ? ` / ${rule.action}` : ''}`;
+export const ruleLabel = rule => rule.kind==='chat-access'?`Proteus conversations: ${rule.scope.actions.join(', ')} on ${rule.scope.hostId}`:rule.kind === 'shell' ? `Exact command: ${rule.command}` : rule.kind === 'url' ? rule.origin : `${rule.server ? `${rule.server} / ` : ''}${rule.tool}${rule.action ? ` / ${rule.action}` : ''}`;
 
 // Read-only display logic shared with the state worker. It has no file writer,
 // approval methods or provider sessions; the owner retains those capabilities.
@@ -181,7 +183,7 @@ export class PermissionStore extends PermissionProjection {
       if (!profile?.id || !permissionModes.includes(profile.mode) || !Array.isArray(profile.folders) || !Array.isArray(profile.rules)) throw new Error('Invalid workspace permission profile.');
       for (const folder of profile.folders) if (!path.isAbsolute(folder.path || '') || !['read', 'read-write'].includes(folder.access)) throw new Error('Invalid trusted folder.');
       for (const rule of profile.rules) {
-        if (!['shell','mcp','custom-tool','url'].includes(rule.kind) || (rule.kind === 'shell' && typeof rule.command !== 'string') || (rule.kind === 'url' && typeof rule.origin !== 'string') || (['mcp','custom-tool'].includes(rule.kind) && typeof rule.tool !== 'string') || (rule.kind === 'mcp' && typeof rule.server !== 'string')) throw new Error('Invalid saved tool rule.');
+        if (!['shell','mcp','custom-tool','url','chat-access'].includes(rule.kind) || (rule.kind==='chat-access'&&(!chatAccessScope(rule.scope)||rule.tool!=='proteus_chats')) || (rule.kind === 'shell' && typeof rule.command !== 'string') || (rule.kind === 'url' && typeof rule.origin !== 'string') || (['mcp','custom-tool'].includes(rule.kind) && typeof rule.tool !== 'string') || (rule.kind === 'mcp' && typeof rule.server !== 'string')) throw new Error('Invalid saved tool rule.');
       }
     }
     return { ...value, file: this.file, revision: revision(value) };
@@ -261,7 +263,8 @@ export class PermissionStore extends PermissionProjection {
     return { path: folder, access: request.kind === 'write' ? 'read-write' : 'read' };
   }
   choices(schedule, request) {
-    if (protectedRequest(request) || request.kind === 'chat-access') return [];
+    if (protectedRequest(request)) return [];
+    if(request.kind==='chat-access')return operationRule(request)?[...(this.preserveInheritedDefaults?[{value:'always-tool-chat',label:'Remember this conversation access scope for this chat'}]:[]),{value:'always-tool',label:'Remember this conversation access scope for this workspace or schedule'}]:[];
     const choices = [];
     const folder = this.folderOffer(schedule, request);
     if (folder) choices.push({ value: 'trust-folder-chat', label: `Allow ${folder.access === 'read' ? 'reads' : 'reads and writes'} in ${folder.path} for this chat` });
@@ -292,8 +295,9 @@ export class PermissionStore extends PermissionProjection {
     // The owner creates this request for an exact durable chat scope. A generic
     // saved tool invocation must never turn into permission to grant new scopes.
     if (request.kind === 'chat-access') {
-      const allowed = request.toolName === 'proteus_chats' && profile.mode === 'autopilot';
-      return { allowed, reason: allowed ? (profile.source === 'chat' ? 'Chat-only auto-approval' : 'Workspace auto-approval') : 'Chat access scope requires approval', mode: profile.mode };
+      const scope=request.toolName==='proteus_chats'&&chatAccessScope(request.args?.scope);
+      const automatic=!!scope&&profile.mode==='autopilot',remembered=!!scope&&profile.mode!=='ask'&&profile.rules.some(rule=>matchesChatAccess(rule,scope));
+      return {allowed:automatic||remembered,reason:remembered?'Saved conversation scope approval':automatic?(profile.source==='chat'?'Chat-only auto-approval':'Workspace auto-approval'):'Chat access scope requires approval',mode:profile.mode};
     }
     if(['read','write'].includes(request.kind)){
       const target=requestedPath(request,profile),folder=(profile.automaticFolders||[]).find(folder=>folder.source==='provider'&&canonicalPath(folder.path,profile.cwd)===folder.path&&target&&within(target,folder.path));

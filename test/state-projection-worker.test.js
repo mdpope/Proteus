@@ -56,16 +56,20 @@ test('blocked worker leaves owner responsive, bounds queued snapshots, and clone
   const client = new StateProjectionClient({ workerURL, maxPending: 1 });
   const gate = new Int32Array(new SharedArrayBuffer(4)), input = empty(); input.state.gate = gate.buffer; input.state.version = 'captured';
   try {
-    const result = client.serialize(input); input.state.version = 'changed';
+    const result = client.serialize(input); void result.catch(() => {}); input.state.version = 'changed';
     await entered(gate);
     await assert.rejects(client.serialize(empty()), /busy/);
     let pulses = 0; const timer = setInterval(() => pulses++, 5);
-    await delay(50); clearInterval(timer);
+    // A 50 ms sleep can outrun Windows timer callbacks under the full native
+    // suite. Require actual owner-loop pulses while the worker stays blocked.
+    const deadline = Date.now() + 2000;
+    while (pulses < 3 && Date.now() < deadline) await delay(5);
+    clearInterval(timer);
     assert.ok(pulses >= 3, 'owner event loop keeps running while worker is blocked');
     assert.equal(Atomics.load(gate, 0), 1);
     Atomics.store(gate, 0, 2); Atomics.notify(gate, 0);
     assert.equal(JSON.parse(await result).version, 'captured');
-  } finally { await client.close(); }
+  } finally { Atomics.store(gate, 0, 2); Atomics.notify(gate, 0); await client.close(); }
 });
 
 test('timeout and worker crash reject pending work, terminate, and permit a clean later worker', async () => {

@@ -1,26 +1,90 @@
 # October 30 release plan
 
-**Stage: collecting bug reports and feature requests only.** Started October 29, 2026 for the
-October 30 release. Implementation, builds, installation and publication are on hold until
-explicitly requested. The request to implement Copilot Fusion is recorded as future release
-scope under that hold. Release version, final priorities and platform rollout are unassigned.
+**Stage: implementation and Mac rollout authorized October 30.** The October thirtieth release
+remains version 0.2.39. R1–R14 are authorized for implementation and validation. Build/install on
+Build Mac and Work Mac first. Build and deploy applicable iOS/web/Linux/Windows work only after
+Work Mac is updated and verified. Preserve data, ongoing work and two verified recovery generations.
+
+Standing process: [named releases](release-process.md). Current record:
+[release.json](releases/2026-10-30/release.json), [implementation](releases/2026-10-30/implementation.md),
+and [machine rollout](releases/2026-10-30/rollout.md).
 
 ## Request register
 
 | ID | Type | Request | Status |
 | --- | --- | --- | --- |
-| R1 | Feature | Integrate Copilot Fusion using supported provider capabilities | Collected; capability discovery required |
-| R2 | Feature | Catalog Emerald Canopy and add Daylight in Engine Room → Colors, with durable theme selection | Collected; current palette cataloged below |
-| R3 | Improvement | Reduce notification volume and provide useful notification controls | Collected; quieter behavior proposed below |
-| R4 | Bug report | False or stale “Needs you” alerts with no apparent question to answer | Reported; cause unconfirmed |
-| R5 | Bug report | Duplicate notifications and repeated interruptions | Reported; cause unconfirmed |
-| R6 | Bug report | Alerts appear stuck instead of dismissing after five seconds; closing one exposes a series | Reported; expiry versus queue backlog needs reproduction |
-| R7 | Feature | Clear the entire Needs attention list with one button instead of opening each chat | Collected; bulk acknowledgement only |
-| R8 | Bug report | Browser videos autoplay despite the enabled block-video-autoplay setting | Reported October 30; cause unconfirmed |
-| R9 | Improvement | Apply Auto-approve tools and remembered approvals to Proteus actions such as proteus_chats | Collected October 30; audit invocation and owner access gates |
+| R1 | Feature | Integrate Copilot Fusion using supported provider capabilities | Source integration; refreshed account advertises no Fusion model |
+| R2 | Feature | Catalog Emerald Canopy and add Daylight in Engine Room → Colors, with durable theme selection | Source implemented; two-window/restart UI verified |
+| R3 | Improvement | Reduce notification volume and provide useful notification controls | Source implemented; quiet-completion UI verified |
+| R4 | Bug report | False or stale “Needs you” alerts with no apparent question to answer | Source uses actionable request identities and deduplicates them |
+| R5 | Bug report | Duplicate notifications and repeated interruptions | Source uses actionable request identities and deduplicates them |
+| R6 | Bug report | Alerts appear stuck instead of dismissing after five seconds; closing one exposes a series | Source bounds queue/age; expiry tests pass |
+| R7 | Feature | Clear the entire Needs attention list with one button instead of opening each chat | Source implemented; actual UI preserves waits and new-event attention |
+| R8 | Bug report | Browser videos autoplay despite the enabled block-video-autoplay setting | Source implemented; real-media manual Play and unrelated-click regression pass |
+| R9 | Improvement | Apply Auto-approve tools and remembered approvals to Proteus actions such as proteus_chats | Source implemented; scope matching/revocation tested |
+| R10 | Bug | Shared workspace/project tab lists, counts and content diverge between windows, including after Close | Conflict quarantine froze owner synchronization; actual two-window Close regression passes |
+| R11 | Feature and process | Named/versioned releases, command-center updates, native first builders, current-only publication and bounded retention | Source implemented and validated; packaging/rollout not performed |
+| R12 | Performance | Configurable chat/document residency, idle eviction and exact reading-position restoration across local and paired-host tabs | Source implemented; synthetic native UI verifies historical anchor, draft preservation and saved settings |
+| R13 | Integration | Route actual website-generated notifications, including sites such as Slack, through Proteus and forward to an iPhone connected to the desktop | Desktop source/testing underway; server and iOS integration after HC verification |
+| R14 | Bug | Open intranet sites on custom HTTPS ports, including single-label host:port input, and provide usable network/certificate errors | Source and exact-package one-click/theme tests pass; original network failure remains open |
 
-Existing October 29 implementation and rollout records retain their own status. This collection
-does not reauthorize those deployments or imply that every earlier pending item is in this release.
+R14 distinguishes address parsing from connectivity and HTTPS trust. Explicit HTTPS addresses
+already preserve custom ports; omitted-scheme single-label host:port input needs correction.
+Keep ordinary single-word searches and credential/path rejection. Show the failed host and port,
+include actionable network permission guidance, and declare local-network use in Mac bundles.
+Untrusted certificates offer **Accept certificate and continue** directly on the error page,
+with no additional confirmation or menu. Acceptance follows Chromium’s transient profile/host/
+certificate scope and ends at app restart. Other profiles and changed certificates stay blocked.
+Error pages follow the saved app palette, including live Emerald Canopy/Daylight changes.
+Add **View certificate information** directly on the bad-certificate page, showing observed
+identity, issuer, validity and fingerprint without accepting it. Notification banners keep
+their original colors; the operator explicitly rejects extending app-theme colors to them.
+
+Existing October 29 implementation and rollout records retain their own status. Current October 30
+authorization supersedes the earlier collection-only hold for the requests in this register.
+
+## R12 Tab memory and reading positions
+
+Keep lightweight tab/chat summaries for navigation; retrieve transcripts only for selected chats.
+Use one per-window chat budget across local and paired computers, rather than separate four-chat
+caches. Default to four chats and four document bodies, configurable from 1–32 in Engine Room →
+Resources. Release inactive content after ten minutes by default, configurable from 1–120 minutes;
+the idle sweep runs every thirty seconds. A selected view is protected from automatic eviction.
+
+Release transcript pages and detached conversation DOM together. Keep small tab identities, drafts,
+attachment staging, approval routing and reading anchors. Reopening reloads the durable transcript,
+pages back to the saved message and restores its viewport offset; human interaction cancels a
+pending restoration. Local documents restore as metadata without reading all files at startup.
+Paired document eviction drops bytes while retaining exact-version request/authorization metadata.
+The owner applies the same configurable inactive-history count/timeout, retains its existing
+16 MiB encoded-file cache budget, and pins executing/queued/waiting provider work and unsaved writes.
+Terminal sessions retain their existing lifetime; browsers retain their own resource policy.
+
+Synthetic source acceptance uses a 2,507-event conversation and verifies that transcript and DOM
+are evicted, older transport pages reload to the same message/offset, the unsent draft survives,
+and resource controls persist through the settings API. Installation is a separate rollout stage.
+
+## R13 Actual website notification delivery
+
+The operator requests the website's real notifications, not a new style or imitation of Slack.
+Existing page Notification events entered a local-only browser recovery record. Give those events
+the normal Proteus notification identity/history and native delivery, retain their actual title,
+body, source computer/origin and silent-sound option, and deduplicate only the same source event.
+Keep source-page click callbacks on the owner. Do not forward private page URLs, browser profiles,
+window/view IDs, activation handles, cookies or browser recovery records to the shared service.
+
+Add explicit device forwarding in Notifications. Foreground delivery uses the existing encrypted
+owner channel. Background iPhone delivery needs a registered push-capable app and the same
+authorized shared account; the server must accept the website event type and deliver it through
+the existing APNs mechanism. Implement/build/deploy server/iOS changes after HC is updated, keeping
+the earlier platform-order instruction. Retain bounded website-event retries while an older server
+rejects the new type, without blocking other event delivery. Verify an actual Slack event separately
+from synthetic page Notification fixtures; service-worker/background Web Push capture remains an
+unverified capability, not an implemented guarantee.
+
+Communication pages must remain loaded to receive live site events; the existing Persisted tab
+choice provides that exception to ordinary memory reclamation. Forwarding text does not forward
+the website's live audio stream: the phone uses its notification sound policy, including silence.
 
 ## R1 Copilot Fusion
 
@@ -60,7 +124,7 @@ Name the familiar heavy green theme **Emerald Canopy**. It remains the applicati
 Add **Daylight**, a conventional white/light theme with restrained green accents, as a built-in
 choice in the existing **Engine Room → Colors** configurator.
 
-Both names are planning names; the current runtime still calls its default palette “Proteus green.”
+Both names are implemented in release source; older installed versions call the default “Proteus green.”
 The catalog below captures the current unadjusted application palette from
 [palette.js](../public/shared/ui/palette.js). Brightness and saturation both default to zero.
 
@@ -273,10 +337,80 @@ Starting points: [shared permission decisions](../src/services/settings/permissi
 [October 29 Auto-approve work](2026-10-29-combined-release.md). Reconcile existing behavior before
 adding another approval mechanism.
 
+## R10 Keep shared tab information consistent across all windows
+
+**Observed October 30:** Two windows showing the same workspace/project display different tab
+sets. Closing a news browser tab in one leaves it present in the other. The follow-up screenshot
+shows project counts of **19 versus 20**, with the extra news tab visible in the lower window's
+tab strip, sidebar and Tabs table. This is a visible synchronization defect. The user requires
+the same shared information regardless of which window is active or being used.
+
+Both screenshots are retained in this chat as evidence. A visible application label reads
+v0.2.38; the exact installed build and owner mutation/event sequence remain to be verified.
+Keep raw screenshots and private workspace, host, URL and tab details outside Git. Establish
+stable host/container/logical-tab identities and trace the first divergence during reproduction.
+
+Expected behavior and acceptance:
+
+- Maintain one canonical content-tab set per owning host and workspace/project. Every window
+  showing that container must agree on membership, order, titles, URL/history, hide/persist state
+  and other shared metadata. The tab strip, sidebar, project/workspace Tabs table and counts must
+  all reflect that same state.
+- Propagate opens, closes, moves, reorders, hide/restore and shared metadata changes automatically,
+  regardless of the originating or focused window. Include inactive roots, another selected
+  child and focused inputs. Convergence must not require clicking, refreshing or reopening each
+  window. Hidden/unloaded tab metadata must synchronize without loading the websites.
+- Closing a logical content tab in any window removes it from all observing windows and their
+  list/count projections. Apply owner Close despite delayed metadata, stale window snapshots,
+  queued synchronization, focus changes, reconnect or restart. A stale mirror must not retain or
+  recreate the tab. Preserve revision conflict handling and expose failed actions accurately.
+- Match owning host, container and logical tab identity. Distinct tabs with identical names or
+  URLs remain distinct. Preserve each window's local selection, focus, draft and reading position;
+  choose a valid local fallback when its selected tab closes.
+- Retain existing resource lifetime rules: closing a top-level workspace/project navigation
+  representation affects that window, and closing a chat content tab does not archive, delete
+  or cancel its conversation.
+
+Reproduce the screenshot sequence in both directions with two windows, then three. Compare
+actual canonical identities and ordered descriptors with every UI projection after each mutation,
+rather than accepting equal counts alone. Exercise active/inactive containers, repeated focus
+switching, persisted/unloaded tabs, concurrent edits, delayed/out-of-order updates, restart and
+paired views where supported. Demonstrate that the information stays consistent while work
+alternates between windows, with local drafts/selection/scroll preserved.
+
+Related shared-window source work is recorded in [window management](window-management.md),
+[workspace behavior](workspaces.md), and [browser synchronization](browser.md). Diagnose the
+cause of the observed divergence in the installed version; earlier fixture acceptance alone
+does not resolve this report. This remains a collection-only bug in the future plan; the
+previously closed release cycle is not reopened.
+
+## R11 Named releases and command center distribution
+
+The operator authorizes assessing and implementing gaps in Mac/Linux/Windows distribution:
+publish exact signed packages on downloads.proteus.example, start a new local update coordinator on each intended
+destination from this Mac, and observe its download, tests, migration, installation and recovery.
+
+Codify one human release name and version while open; repository plan, implementation and
+per-machine rollout records; first native builders synchronizing pinned repository source;
+subsequent consumers downloading packages without compilation; and closeout that merges PRs/
+branches, synchronizes/pushes main and retires related worktrees. Keep only the current public
+release generation, at most two local application/site recovery generations, one website backup
+on the server, and shared iOS simulators across projects. See [release process](release-process.md)
+and the [implementation ledger](releases/2026-10-30/implementation.md) for concrete behavior.
+
 ## Collection and later implementation
 
 Continue adding requests here with stable IDs. Keep observations, hypotheses and verified results
 distinct. Confirm the Fusion contract and reproduce notification sequences before settling an
 implementation. No runtime settings, provider packages or application behavior change during
-collection. When implementation is authorized, record the final scope, version, required platform
+collection for R1–R10. R11 follows its explicit implementation authorization. Record the final
+scope, version, required platform
 coverage and appropriate validation before any separately authorized rollout.
+
+## R15 - Windows local inference provider (authorized October 31)
+
+Implement the operator-requested llama.cpp server using the existing Qwen model, distinct Proteus provider, approved local tools and remote authenticated API access. Keep version 0.2.39 within this open release. This authorizes this PC's follow-up build/install; no unrelated rollout is implied. Acceptance includes offline regressions, real fixture tools, desktop menu/model discovery, signed package acceptance and post-install provider verification. LAN firewall administration and external-client acceptance must be recorded separately.
+
+## R16 - shared local providers through the relay (authorized October 31)
+
+Implement opt-in local llama.cpp/MTPLX sharing, per-paired-device grants and consumer imports in Providers. New Chat selects a model labelled with its serving host while its workspace/tools/history remain local. Reuse encrypted relay transport across LANs and networks; no relay-server deployment, port forwarding, API-key transfer or peer-to-peer machinery. Validate active/queued Stop, lost acknowledgements, revocation, restart interruption and bounded transport. Correct the standalone Windows API to the operator-specified primary LAN without enabling its disabled firewall. Other-machine deployment selection is pending the operator's response; current Windows implementation/update remains authorized.

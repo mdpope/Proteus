@@ -40,6 +40,11 @@ for(const provider of ['codex','copilot','claude'])test(provider+' coordinator c
  const response=await fetch(app.origin+'/api/chat',{method:'POST',headers:{authorization:'Bearer '+app.token,'content-type':'application/json'},body:JSON.stringify({purpose:'update',prompt:'Prepare the synthetic requested release'})});const run=await response.json();assert.equal(response.status,200,JSON.stringify(run));
  assert.equal(run.schedule.purpose,'update');assert.equal(run.schedule.context.workspaceId,null);assert.equal(run.schedule.context.agentId,null);assert.deepEqual(run.schedule.context.entries,[]);assert.equal(run.schedule.provider,provider);assert.equal(run.schedule.model,'fixture');assert.equal(run.schedule.serviceTier,'priority');assert.equal(run.projectId??null,null);assert.equal(app.workspaceProjects.get(app.engine).memberships[run.id]?.projectId??null,null);
  app.settings.save({...app.settings.get(),updateCoordinator:{...defaults,reasoningEffort:''}},app.settings.get().revision);assert.equal(app.engine.getRun(run.id).schedule.reasoningEffort,'high');
+ const workspaceId=app.context.get().defaultWorkspaceId;
+ const build=await app.buildChatSchedule({purpose:'build',workspaceId,prompt:'Synthetic OS implementation and packaging'});
+ assert.equal(build.purpose,'build');assert.equal(build.context.workspaceId,workspaceId);assert.equal(build.provider,provider);assert.equal(build.model,'fixture');assert.equal(build.serviceTier,'priority');assert.equal(build.updateAuthorization,undefined,'Source-build work does not inherit installation tool authorization');
+ const override=await app.buildChatSchedule({purpose:'build',workspaceId,prompt:'Explicit build model options',provider,model:'fixture',reasoningEffort:'high',serviceTier:''});
+ assert.equal(override.reasoningEffort,'high');assert.equal(override.serviceTier,'');assert.equal(override.context.workspaceId,workspaceId);
  // The person who started this coordinator is not asked again for its update tool.
  const live=app.engine.getRun(run.id),update=app.engine.decidePermission(live,{kind:'custom-tool',toolName:'proteus_update',args:{action:'status'}});
  assert.equal(update.allowed,true);assert.equal(update.reason,'User-started update coordinator');
@@ -50,4 +55,15 @@ for(const provider of ['codex','copilot','claude'])test(provider+' coordinator c
  const setup=await fetch(app.origin+'/api/desktop-control/setup',{method:'POST',headers:{authorization:'Bearer '+app.token,'content-type':'application/json'},body:'{}'}),guide=await setup.json();assert.equal(setup.status,200,JSON.stringify(guide));
  assert.equal(guide.schedule.purpose,'desktop-control-setup');assert.equal(guide.schedule.updateAuthorization,undefined);assert.equal(guide.schedule.provider,provider);assert.match(guide.schedule.prompt,/Cua Driver/);assert.match(guide.schedule.prompt,/ask me before running any installer/);
  assert.equal(app.engine.decidePermission(app.engine.getRun(guide.id),{kind:'custom-tool',toolName:'proteus_update'}).allowed,false,'Setup chats do not inherit update-tool approval');
+});
+
+
+test('an update captures only saved destination options, including when optional values were not saved',async t=>{
+ const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-update-options-'));
+ const saved={provider:'codex',model:'fixture'};
+ atomicJSON(path.join(home,'settings.json'),{schemaVersion:1,provider:'codex',model:'fixture',reasoningEffort:'high',serviceTier:'priority',timezone:'UTC',workspace:{cwd:home,additionalDirectories:[]},skillDirectories:[],mcpServers:{},updateCoordinator:saved});
+ const app=await startServer({home,port:0,timers:false,providers:{codex:{status:async()=>({available:true,models:[model]}),run:async()=>{}}}});
+ t.after(async()=>{await app.close();fs.rmSync(home,{recursive:true,force:true});});
+ const schedule=await app.buildChatSchedule({purpose:'update',prompt:'Synthetic defaults isolation',provider:'copilot',model:'other',reasoningEffort:'invented',contextTier:'long_context',serviceTier:'invented'});
+ assert.equal(schedule.provider,'codex');assert.equal(schedule.model,'fixture');assert.equal(schedule.reasoningEffort,'');assert.equal(schedule.contextTier,'default');assert.equal(schedule.serviceTier,'');
 });

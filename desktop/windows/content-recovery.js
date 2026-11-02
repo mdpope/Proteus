@@ -90,7 +90,7 @@ export class WindowContentRecovery{
     receipt.phase='mutation-intent';receipt.intent={scope:item.scope,id:item.id,tabId:item.tab.id,expectedRevision:current.revision};atomicJSON(file,receipt);
     // mutateAsync guards the fresh revision and seeds only a previously absent
     // identity. In particular, it cannot replace a current navigation stack.
-    const result=await this.service.mutateContentTabs({scope:item.scope,id:item.id,expectedRevision:current.revision,operations:[{action:'open',tab:item.tab}]});revisions.set(key,result.revision);restored.push(item.tab.id);receipt.phase='mutation-confirmed';receipt.intent=null;atomicJSON(file,receipt);
+    const result=await this.service.mutateContentTabs({scope:item.scope,id:item.id,expectedRevision:current.revision,operations:[{action:current.closed?.[item.tab.id]?'reopen':'open',...(current.closed?.[item.tab.id]?{closedRevision:current.closed[item.tab.id]}:{}),tab:item.tab}]});revisions.set(key,result.revision);restored.push(item.tab.id);receipt.phase='mutation-confirmed';receipt.intent=null;atomicJSON(file,receipt);
    }
    receipt.phase='complete';receipt.completedAt=new Date().toISOString();atomicJSON(file,receipt);
    return {restored,qualification:plan.qualification};

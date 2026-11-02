@@ -9,7 +9,11 @@ import {activityEntries} from './activity-notes.js';
 import {mountProviderActivity} from './provider-activity-view.js';
 import {mountChatRecovery} from './chat-recovery-controls.js';
 import { agentName, assistantName } from './agent-name.js';
+import {viewResidency} from '../../models/view-residency.js';
+import {savedConversationPosition,trackViewPosition} from '../../shared/navigation/view-position.js';
 import { sentAttachmentPreview, openSentAttachmentPreview, openStoredAttachment } from './chat-attachments.js';
+import { fusionTurnFor, fusionAttributionHTML } from './copilot-fusion.js';
+const escapeHTML=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const views = new Map();
 const viewIn=root=>[...views.values()].find(view=>view.shell.isConnected&&(root===view.scroll||root===view.shell||root?.contains(view.scroll)));
 const eventIndex=key=>{const match=String(key||'').match(/^(?:activity-)?event-(\d+)$/);return match?Number(match[1]):null;};
@@ -34,10 +38,15 @@ export async function applyConversationPosition(root,position,{current:isCurrent
   if(position.follow){view.following=true;view.position();return true;}
   view.following=false;
   const index=Number.isSafeInteger(position.index)&&position.index>=0?position.index:eventIndex(position.key);
+  let stalled=0;
   while(current()&&index!==null&&index<view.eventStart){
    if(view.paging||view.prefetching){await new Promise(resolve=>setTimeout(resolve,16));continue;}
    const before=view.eventStart;if(!view.more||!view.fetchEarlier||view.pageError)return false;
-   if(!await wait(view.loadEarlier(true))||!current()||view.eventStart===before)return false;
+   if(!await wait(view.loadEarlier(true))||!current())return false;
+   // A simultaneous prefetch/live refresh can finish without advancing the
+   // rendered window. Retry from its current transport position, without
+   // acknowledging an anchor that has not actually been restored.
+   if(view.eventStart===before){if(view.pageError||++stalled>3)return false;await new Promise(resolve=>setTimeout(resolve,16));}else stalled=0;
   }
   if(!current())return false;
   const nodes=[...view.messages.children];
@@ -78,8 +87,8 @@ function rememberDisclosures(body,states){
 export function conversation(target, run, options) {
   mountSubagentViewer(target,run,options);
   let view = views.get(run.id);
+  const created=!view;
   if(view){views.delete(run.id);views.set(run.id,view);}
-  for(const [id,cached] of views)if(views.size>=4&&id!==run.id&&!cached.shell.isConnected)forgetConversation(id);
   if (!view) {
     const shell = document.createElement('div'); shell.className = 'conversation-shell';
     shell.innerHTML = '<div class="conversation" id="conversation" tabindex="0" aria-label="Conversation"><div class="conversation-messages"></div></div><button class="jump-latest" hidden>↓ Jump to latest</button>';
@@ -126,6 +135,7 @@ export function conversation(target, run, options) {
     view.observer = new ResizeObserver(position); view.observer.observe(messages); view.observer.observe(scroll);
   }
   view.run=run;view.options=options;view.target=target;
+  viewResidency.retain('chat:'+run.id,'chat','conversation',{active:()=>view.shell.isConnected,dispose:()=>forgetConversation(run.id)});
   const transportStart=run.eventStart||0;
   view.renderStart=Math.max(transportStart,view.renderStart??transportStart+chatHistoryWindowStart(run.events));
   view.more=view.renderStart>0;view.fetchEarlier=options.loadEarlier;
@@ -267,6 +277,9 @@ export function conversation(target, run, options) {
         files.append(chip);
       }
     }else files?.remove();
+    // Fusion attribution updates in place as routing, phases and completion arrive.
+    const fusionTurn=entry.role==='assistant'?fusionTurnFor(run,entry.data?.fusion?.fusionId):null;let fusionNode=node.querySelector(':scope>.fusion-attribution-host');
+    if(fusionTurn){const html=fusionAttributionHTML(run,fusionTurn,escapeHTML);if(!fusionNode){fusionNode=document.createElement('div');fusionNode.className='fusion-attribution-host';(node.querySelector('.message-attachments')||body).after(fusionNode);}if(fusionNode.fusionHTML!==html){const open=fusionNode.querySelector('details')?.open;fusionNode.innerHTML=html;fusionNode.fusionHTML=html;if(open)fusionNode.querySelector('details').open=true;}}else fusionNode?.remove();
     const completed=entry.role==='assistant'&&!entry.streaming&&!entry.data?.reasoning&&!['reasoning','thinking','analysis'].includes(entry.data?.phase||entry.phase||entry.type)&&entry.text?.trim();
     if(completed){
       let actions=node.querySelector('.message-actions');if(!actions){actions=document.createElement('div');node.append(actions);}
@@ -278,7 +291,9 @@ export function conversation(target, run, options) {
   for (const node of nodes.values()){node.messageActions?.destroy();node.remove();}
   if(oldStart!==undefined&&view.eventStart<oldStart&&!view.following)view.top=oldTop+view.scroll.scrollHeight-oldHeight;
   view.position();requestAnimationFrame(()=>void view.loadEarlier());
+  const root=target.closest('#main'),positionKey=root?.dataset.viewKey;
+  if(root&&positionKey){trackViewPosition(root,positionKey);if(created){const saved=savedConversationPosition(positionKey);if(saved)restoreConversationPosition(view.scroll,saved);}}
 }
-export function forgetConversation(id) { const view = views.get(id); view?.observer.disconnect();disposeRuntimeTimers(view?.shell);view?.messages.querySelectorAll('.message').forEach(node=>node.messageActions?.destroy()); if (view) cancelAnimationFrame(view.frames); views.delete(id); }
+export function forgetConversation(id) { const view = views.get(id); view?.observer.disconnect();disposeRuntimeTimers(view?.shell);view?.messages.querySelectorAll('.message').forEach(node=>node.messageActions?.destroy()); if (view) cancelAnimationFrame(view.frames); views.delete(id);viewResidency.release('chat:'+id,'conversation'); }
 
 export function setConversationVerified(id,verified){const view=views.get(id);if(view){view.verified=verified;refreshRuntimeTimers(view.shell);refreshRuntimeTimers(document.querySelector('[data-runtime-total]')?.parentElement);}}

@@ -323,7 +323,7 @@ struct NewChatView: View {
     private var supportedAttachmentTypes: [String] { internet ? Array(Set(store.state["attachmentMediaTypes"].object.values.flatMap { $0.array.map(\.string) })) : store.state["attachmentMediaTypes"][provider].array.map(\.string) }
     private var attachmentsEnabled: Bool { store.state["capabilities"].array.contains(.string("chat.attachments.v1")) && !supportedAttachmentTypes.isEmpty }
     private var hasUnsupportedAttachment: Bool { !attachments.isEmpty && supportedAttachmentTypes.isEmpty }
-    private var providerName: String { provider == "copilot" ? "GitHub Copilot" : provider == "codex" ? "Codex" : provider == "claude" ? "Claude" : provider }
+    private var providerName: String { nativeProviderName(provider) }
     private func submitPrompt() {
         guard !sending, !loading, !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         if attachments.isEmpty { start() } else { confirmAttachmentStart = true }
@@ -345,7 +345,7 @@ struct NewChatView: View {
                     if store.supportsProjects {
                         Picker("Project", selection: $project) { ForEach(store.projectCatalog.projects(in: workspace), id: \.self) { Text($0["name"].string).tag($0["id"].string) } }.disabled(lockedProjectID != nil).accessibilityIdentifier("new-chat-project")
                     }
-                    if !internet { Picker("Provider", selection: $provider) { Text("GitHub Copilot").tag("copilot"); Text("Codex").tag("codex"); Text("Claude").tag("claude"); Text("Local rehearsal").tag("rehearsal") }.accessibilityIdentifier("chat-provider")
+                    if !internet { Picker("Provider", selection: $provider) { ForEach(nativeProviderIDs(store.providerStatuses, selected: provider), id: \.self) { id in Text(nativeProviderName(id)).tag(id) } }.accessibilityIdentifier("chat-provider")
                     if provider != "rehearsal" {
                         ProviderModelPicker(model: $model, effort: $effort, contextTier: $contextTier, serviceTier: $serviceTier, provider: provider)
                     }
@@ -737,13 +737,7 @@ struct ChatView: View {
     #endif
     private var run: JSON { store.chats[id] ?? .null }
     private var providerName: String {
-        switch run["schedule"]["provider"].string {
-        case "copilot": "Copilot"
-        case "codex": "Codex"
-        case "claude": "Claude"
-        case "rehearsal": "Local rehearsal"
-        default: "Proteus"
-        }
+        nativeProviderName(run["schedule"]["provider"].string)
     }
     private var mcpControlsAvailable: Bool {
         let provider = run["schedule"]["provider"].string
@@ -1072,6 +1066,9 @@ NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs
                         } else if event["role"].string != "assistant" || !event["text"].string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                             if !event["data"]["delivery"]["state"].string.isEmpty { Text(event["data"]["delivery"]["state"].string.capitalized).font(.caption2).foregroundStyle(.teal) }
                             MessageView(role: event["role"].string == "assistant" ? assistantName(event) : event["role"].string, text: event["text"].string, runID: id, timestamp: event["timestamp"].string.isEmpty ? event["at"].string : event["timestamp"].string, turn: event["role"].string == "assistant" ? messageTurn(at: index) : .null, actionID: MessageActions.eligible(event) ? "\(store.connection?.hostId ?? "local"):\(id):\(absoluteIndex):\(event["at"].string)" : nil, sentAttachments: event["data"]["attachments"].array, onDocumentLink: event["role"].string == "assistant" ? { source in openDocument(source) } : nil, onResize: { Task { @MainActor in await Task.yield(); if followLatest && !userReadingGesture && !restoringConversation && pageSearch.query.isEmpty { proxy.scrollTo("chat-end", anchor: .bottom) } } }, search: pageSearch, searchKey: absoluteIndex, viewport: CGRect(x: 0, y: conversationViewportTop, width: conversationViewportWidth, height: max(1, composerAvailableHeight)))
+                            if event["role"].string == "assistant", let turn = NativeFusion.turn(run, id: event["data"]["fusion"]["fusionId"].string) {
+                                NativeFusionAttribution(run: run, turn: turn).padding(.horizontal, 4).padding(.bottom, 6)
+                            }
                             ForEach(NativeUserQuestion.read(run).filter { $0.eventIndex == absoluteIndex }) { question in
                                 NativeUserQuestionCard(question: question) { value, messageID in
                                     _ = try await store.request(question.blocking ? "chat.reply" : "chat.answer-question", ["id": .string(id), "answer": .string(value), "messageId": .string(messageID), question.blocking ? "requestId" : "questionId": .string(question.id)])

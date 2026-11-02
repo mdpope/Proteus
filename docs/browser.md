@@ -1,3 +1,37 @@
+## Nov 1 — extension window and authentication lifecycle
+
+Extension adapter records hold concrete native windows, never the window-selection proxy. Action
+popups resolve currentWindow to their captured parent; lastFocusedWindow filters the actual profile
+window. Every browser window retains its own active tab. Extension-created authentication windows
+use that profile/session and support graceful close, returning to the original action popup. Normal
+host activation does not replay a stale extension selection. Synthetic multiwindow authentication,
+autofill, profile isolation and install/disable/update checks pass; actual vault acceptance is separate.
+
+## November 1 — browser surface geometry and native Close
+
+Observe the mounted browser content area as well as the outer workspace so nested layout changes update native view bounds without a tab switch. Native browser Close commits owner membership before destroying its view. Closing a window and passive mirror reconciliation preserve the owner tab. URL/history synchronization continues to share content while local scrolling stays independent. These corrections are in the local Nov 1 candidate; no installed-device acceptance is claimed.
+
+## October 30 — intranet sites and custom ports
+
+Both explicit HTTP(S) URLs and omitted-scheme single-label `consolefixture:8006` addresses retain the
+port. Single-word input remains a search. Non-web schemes, credentials and local paths remain
+blocked. Network error documents display host and port and distinguish network-access failures
+from DNS and TLS failures. Mac bundles explain local-network use in their privacy declaration;
+this does not grant permission or bypass a denial.
+
+Failed main-frame certificates offer **Accept certificate and continue** on the error page.
+An adjacent **View certificate information** disclosure shows subject, issuer, validity dates,
+alternative names, serial number and SHA-256 fingerprint from the failed connection. Viewing
+details does not accept the certificate. Notification banners retain their original colors.
+A direct trusted click is required; a page-script click cannot grant an exception. There is no
+extra menu or confirmation. The native owner validates the exact main frame, error document and
+certificate token before retrying. Chromium shares the exact hostname/certificate decision within
+that profile for the app session, including other tabs and ports; unloading a tab does not revoke
+it. Other profiles and changed certificates stay blocked. Restart clears it. Saved palette changes
+update existing error pages; OS light mode cannot override Emerald Canopy's green background.
+Synthetic native tests verify these behaviors. The reported installed-browser network failure
+still needs live acceptance after installation.
+
 ## October 30 — preserve browser stacks through shared-window synchronization
 
 Local content-tab HTTP responses preserve the existing typed navigation-conflict/closed-tab codes.
@@ -18,6 +52,27 @@ acknowledged without dispatching browser commands. A finishing renderer checkpoi
 cannot create a rejection/notification cycle during shutdown. Frame validation still happens
 first; navigation, history, tab changes and every other command remain rejected. This does not
 alter saving, checkpoint order or browser disposal.
+
+## October 30 — actual website events in Proteus notifications
+
+Page-generated Notification events from permitted origins now use the normal Proteus notification
+history/native route. Their actual title/body, origin, source host and silent-sound intent survive;
+the exact source event deduplicates. A notification click returns to its original owner tab/event.
+Local browser recovery/activation references remain private to that owner. The transient page event
+does not create a second alert alongside its persisted history entry.
+
+Notifications has an explicit device-forwarding preference. Portable website events use the existing
+encrypted owner channel and account-bound shared outbox; old-server type rejections retain bounded
+retry receipts without starving ordinary notifications. The shared service now validates the website
+event type and safe origin, keeps site sound intent and deduplicates replayed events. Suppressed
+events remain history without push; stale website push jobs expire after five minutes. Native
+iPhone/iPad routes retain the original event ID across APNs and encrypted-host delivery, display
+site text/origin in history, and activate the original tab through the paired owner's authenticated
+operation. Offline or missing targets lead back to Notifications with a useful explanation.
+Targeted API and simulator tests pass; deployment and physical iPhone delivery remain pending.
+No real Slack or background push success is claimed from
+the page fixture. Worker-generated/background Web Push capture remains unverified. A loaded source
+page is required; mark a communication tab Persisted to retain it during inactivity.
 
 ## October 26 — five-second notification lifetime
 

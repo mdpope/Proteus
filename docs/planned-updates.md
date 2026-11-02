@@ -1,3 +1,178 @@
+## Nov 1 closed; Nov 2 handoff
+
+Nov 1 / 0.2.40 is closed by the operator with deployed outcomes and qualifications in
+[the closeout](releases/2026-11-01/closeout.md). All five desktops, the website and both physical
+mobile apps received the release. Secondary-Mac maintenance completed with two verified recoveries.
+Browser sizing, real vault lifecycle, closed-popup control, machine-specific model choices and
+mobile in-tab New chat move to [Nov 2](2026-11-02-release-plan.md), in a new chat.
+Do not reopen Nov 1 or relabel installed packages. Further local deletion is held for the
+operator's requested full-path disk review. Earlier entries below are historical checkpoints.
+
+## November 1 — 0.2.40 rollout authorized
+
+Post-install checksum attention now has a separately verified reconciliation receipt and a bounded
+older-client maintenance adapter. No journal rewrite, continuation replay or checksum waiver is
+used. Source validation and actual HC application/rotation are separate gates; the installed
+`11ca09b` binary does not gain this API until a later accepted package. See the reconciliation doc.
+
+Recovery verification now has a copy-only SQLite inspection helper and preservation regressions.
+This is release-operation tooling after the frozen `11ca09b` application pin, not a relabelled
+native package. A Windows post-install diagnostic created two extra SQLite sidecars; exact
+in-memory exclusion restored the original checksum. Guarded quarantine and full owner verification
+remain distinct from the successful installation; preserve incident and repair receipts.
+
+The native Linux gate additionally reproduced N11: an older membership-only response could delete
+a newly opened local terminal. The corrected shared renderer removes only owner-confirmed IDs.
+A deterministic real Electron overlap fails on the prior source and passes with the fix, including
+owner convergence, retained selection, canvas keyboard/output and restart. Full source validation
+passes 1,407 tests with four skips. Earlier desktop packages are superseded; corrective native
+packages and destination installations must pass before closing the release.
+
+The operator lifted the hold and included desktop/web/iOS deployment. N8–N10 add canonical iPad
+tab membership, durable offline transactions, age-aware deduplicated notifications, extension
+window/authentication/autofill and persisted owner-scoped updater preflight permission. Native
+focused tests pass 44 cases; package, actual device and production acceptance remain required.
+The initial local checkpoint below is historical. Do not treat remote preflight as installation.
+
+## November 1 expanded scope — historical source/local review
+
+Distribution roles are private; [N5–N7](2026-11-01-release-plan.md) add captured-default build chats, automatic canonical navigation preservation, short release dates and native shared/local-provider choices. Installation still uses receiving-device updater defaults. All-target rollout/automatic release closeout are standing policy; Nov 1 remains held for more bugs.
+
+## November 1 — local candidate authorized, rollout held
+
+The operator authorizes local implementation/build/test for [N1–N4](2026-11-01-release-plan.md): integration-health stalls, shared project membership/permanent Close and browser surface sizing. N2 state-projection caching stays deferred. Current local changes preserve independent window selection/scroll and existing paired follow. No destination installation or publication is authorized.
+
+# November 1 — profiled desktop responsiveness correction
+
+The [November 1 release plan](2026-11-01-release-plan.md) records the confirmed background
+integration scan/microtask starvation mechanism, live CPU evidence, synthetic reproduction,
+required scoped/batched correction and personal-Mac acceptance gates. N1 is the release blocker;
+N2 is a separately measured state-projection target. Diagnosis/probe only: production code and
+installed apps are unchanged. Preserve the current 0.2.39 merged baseline and other release holds.
+
+## October 31 — combined release validation
+
+Fusion/layout O14–O17 and shared local model R15/R16 are combined at the operator’s instruction. Source validation and a new immutable pin precede package builds and owner handoffs; version remains0.2.39. Linux multiwindow acceptance passed with an external adapter for the current documented close/recover behavior, retaining the original stale-fixture failures. iPad is deferred; iPhone remains an intended target.
+
+# October 31 deployment operation
+
+The open October thirtieth release remains 0.2.39 with c54406cc as its application source. A separately validated maintenance helper supports exact-byte cross-platform publisher signing. Native build, transfer, publication, installation and live verification remain separate ledger states. Linux close-window acceptance is unresolved; do not substitute a runtime source patch or mark that gate passed from synthetic tests.
+
+## October 30 — deployed web, Windows publication and SSH access
+
+The website now serves the accepted 0.2.39 archive: 9,221 deployed files, nine complete HTTPS
+asset hashes and fourteen endpoints verify. Schema, configuration and nutrition are preserved.
+Ordinary isolated restore failed; the retained captured-state verifier passed, and deployment
+explicitly used that qualified mode. Two verified local recovery generations and one server
+generation remain, with minimum receipts and the matching recovery code companion.
+
+The operator rejects browser file uploads and authorizes proper agent deployment permissions.
+The documented SSH identity works with its explicit credential-provider option. Scoped public
+download-directory access and a fixed read-only hosting audit now verify through SSH; existing
+keys and website updater grants remain. Six private operational boundary checks pass.
+Windows public installer/archive downloads, trusted signature and current catalogs/pages verify.
+Pending targets receive empty catalogs. Both physical devices are installed with their recorded
+preservation/launch qualifications; corrective Macs, Linux/Ian and final closeout remain pending.
+
+## October 31 - shared local model providers (R16)
+
+The operator authorizes relay-only sharing of local llama.cpp and MTPLX providers, automatic paired connection details, per-device grants and locally owned consuming chats. Implemented source includes encrypted discovery/streaming, opt-in provider imports, queueing, cancellation and no-replay recovery. Direct LAN optimization is deferred. Source desktop/relay acceptance passes; native packages and actual separate-machine rollout remain distinct. See [shared models](shared-models.md).
+
+## October 31 - authorized llama.cpp provider
+
+The operator requests a dedicated Windows server using the existing Qwen3.8 27B quant, Proteus provider integration, remote application access and latest Proteus. This follow-up is authorized independently of prior held work. Implemented in an isolated checkout based on the installed 0.2.39 source; package/install and cross-device verification remain separate. See [setup](llama-cpp.md).
+
+## October 30 — final native qualification
+
+Windows package acceptance passes on frozen application source `3422822`. Corresponding-source
+verification then found that a Mac-exported archive cannot reproduce its CRLF bytes or generated
+terminal guardian, and omitted native C# build source. The source exporter now includes `native/`
+and accepts an explicit accepted-package provenance to bind generated inputs and preserve their
+exact bytes. Changed inputs, unsafe paths and environment secrets remain excluded or rejected.
+Exporting a companion does not rebuild or change the accepted application. Native export remains
+a separate verification step; public activation and live device installation are still pending.
+
+The signed Mac candidate from `5bcbd89` passes official extraction/source verification and
+exact-package TLS/original notification-color fixtures. Its full Node suite passes 1,353 tests
+with four skips. Native Windows qualification exposed a helper-fixture cleanup race twice;
+cleanup now waits for confirmed process exit before removing the fixture, retaining every
+readiness assertion. Focused updater tests (32) and static checks pass; native requalification
+and actual installation remain required. No changed-package integrity check is bypassed.
+The corrected cleanup passes on Windows; a separate native run exposed concurrent Electron
+lazy installers. The release runner now verifies its pinned binary serially before parallel tests.
+Native package acceptance remains pending, with all failed attempts retained as evidence.
+
+Isolated phone tests (157 units plus notification-route UI) and targeted iPad checks pass.
+The normal phone cold reconnect to the real owner is verified after guided pairing repair;
+the earlier lost cache is not claimed restored. The signed physical build is ready, awaiting
+unlocked devices. The website archive is privately staged; production remains unchanged.
+
+## October 30 — web/mobile notification delivery follow-up
+
+The operator authorizes all intended desktops, Ian's laptop, website and iPhone/iPad. Website
+events now pass shared-service validation with safe origins, sound intent, event deduplication
+and no private owner activation metadata. Native routes retain event identity and open the source
+desktop tab through its authenticated owner; suppressed/stale events do not produce new alerts.
+Targeted web and simulator tests pass; live server/APNs/physical-device acceptance remains pending.
+The simulator launcher now selects a separate test application identity before fixture installation;
+its new installation guard still needs native revalidation. The earlier normal-identity fixture
+reset the iPhone simulator's saved destinations; recovery/reconnection remains outstanding. No
+physical app/data was changed. Apple work awaits an unlocked command-center Mac.
+
+Windows completed an accepted build of frozen `df8f070` after the reviewed Node-only repair and
+handed off to its idle barrier. Actual installed identity is pending. Both Macs run the earlier
+accepted 0.2.39; their certificate/color correction coordinators and Linux/Ian tasks await normal
+destination approvals. Exact receipts stay outside Git; the release remains open.
+
+## October 30 browser/custom-port follow-up
+
+The Windows first builder found a removed provider-runtime path. A reviewed source CLI now
+plans and applies a hash-bound refresh to the currently signed Node in the same provider family,
+changing no other builder references. Native dry-run/apply verification is still required.
+
+The operator adds direct certificate-information disclosure and rejects notification recoloring.
+Show the observed failed certificate on the error page; keep acceptance one click and restore
+the original light-green notification banners. App-theme colors still apply to browser errors.
+Linux/Windows remain on preflight until this correction has a validated full source pin.
+
+R14 adds intranet address parsing and usable network/certificate failures to the authorized
+0.2.39 release. The replacement signed/extracted package passes five native UI fixtures and source validation.
+Build Mac prepared it; HC verified the exact private delivery and handed off its candidate.
+Actual installed identities and post-restart checks remain pending. Both preflights are complete; Build Mac remains on 0.2.33
+and Work Mac on 0.2.38. Other-platform work still follows verified HC installation.
+
+## October 30 full release and tab-memory implementation authorized
+
+R1–R12 are authorized on Build Mac and Work Mac; other platform builds/rollout follow verified
+HC installation. The new Resources settings bound chat/document content across local and paired
+hosts, with idle eviction and durable reading anchors. Synthetic Electron acceptance restores a
+historical message after cache eviction, preserves the draft and saves controls through the API.
+See [release plan](2026-10-30-release-plan.md) and [chat rendering](chat-rendering.md).
+Earlier collection holds below are historical; deployment remains separately verified.
+
+## October 30 release process and distribution implementation authorized
+
+R11 is active implementation in the [0.2.39 named release](releases/2026-10-30/release.json).
+R1–R10 remain collected/held. The [standing release process](release-process.md) covers one version
+per name, implementation/rollout documents, pinned native source builds and package reuse,
+current-only downloads.proteus.example payloads, backup/simulator limits and integration/push/worktree closeout.
+The previously closed October 27 cycle remains closed. No device rollout or server mutation
+is established by this source implementation.
+## October 30 — taskbar startup failure diagnosed
+
+Captured the main-process `ensurePrivateHome` error from the actual taskbar launch.
+The pinned and Start-menu shortcuts target the correct executable without arguments.
+Native Windows security inspection reveals an inherited CodexSandboxUsers profile read
+grant omitted by the shell filesystem view. A scoped authorized profile DACL repair
+removes that grant and retains owner/SYSTEM/Administrators access; no runtime policy,
+credentials, profile contents or installed package changes. Verification must use the
+actual taskbar shortcut rather than treating direct agent startup as equivalent.
+After normal owner shutdown, the unchanged pinned shortcut cold-starts the installed
+0.2.36 successfully with a healthy authenticated service and no error dialog. Native
+inspection confirms the profile DACL is protected and contains only the three intended
+principals. The original security descriptor and error details remain private.
+This local repair is separate from the closed release and future implementation hold.
+
 ## October 30 — prior release closed; future request collection preserved
 
 The October 27 release cycle is permanently closed by the operator. Device rollout and retained
@@ -5,7 +180,7 @@ HC recovery review are not release-completion gates. All implemented development
 obsolete branches/worktrees/build staging are retired with preserved evidence. See
 [closeout](2026-10-30-release-closeout.md).
 
-The [October 30 R1–R9 register](2026-10-30-release-plan.md) remains a separate collection-only
+The [October 30 R1–R10 register](2026-10-30-release-plan.md) remains a separate collection-only
 effort. Committing its notes does not authorize implementation or another build/deployment.
 
 ## October 30 — shared-window membership/order source correction accepted
@@ -34,7 +209,9 @@ cataloged there. R8 records the October 30 report that enabled video-autoplay bl
 respected in the browser; reproduction and cause remain unconfirmed. R9 requests Auto-approve
 tools and scope-aware remembered approvals for Proteus actions such as `proteus_chats`. Fusion's
 experimental bundled-runtime events are an integration lead; supported activation and account
-availability still need verification.
+availability still need verification. R10 records visible shared tab-list divergence across
+two windows, including counts of 19 versus 20 and an extra tab after Close. Shared tab strips,
+sidebars, Tabs tables and counts must agree regardless of which window is being used.
 No runtime, settings, package, build, installation or publication change is authorized by this
 collection. Earlier release/rollout entries retain their separate status.
 

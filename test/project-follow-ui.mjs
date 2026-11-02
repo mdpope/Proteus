@@ -162,7 +162,7 @@ try{
  // Membership/navigation metadata now stays current for every open project;
  // the local presentation above must still remain Home. Unloaded residency is
  // independently exercised by the two-window Persist/mirror regression.
- assert.equal(await b.page.evaluate(()=>followFixture.state.tabs.find(tab=>tab.type==='browser')?.info?.url?.endsWith('/four')),true,'inactive project receives canonical navigation without changing selection');
+ await until(()=>b.page.evaluate(()=>followFixture.state.tabs.find(tab=>tab.type==='browser')?.info?.url?.endsWith('/four')),'inactive project receives canonical navigation');assert.equal(await b.page.evaluate(()=>followFixture.state.tab),'overview','inactive metadata catch-up cannot change local selection');
  await b.page.evaluate(({owner,hostId})=>{followFixture.openTab(followFixture.state.tabs.find(tab=>tab.projectId===owner.projectId&&tab.hostId===hostId));},{owner,hostId:pairing.hostId});
  await until(()=>b.page.evaluate(()=>followFixture.state.tabs.find(tab=>tab.id===followFixture.state.tab)?.info?.url?.endsWith('/four')),'catch up on re-entry');
  const chat=await a.page.evaluate(async owner=>{const response=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...owner,provider:'rehearsal',prompt:'Synthetic follow-along chat'})});if(!response.ok)throw Error(await response.text());const run=await response.json();await followFixture.refresh(true);const parent=followFixture.state.tabs.find(tab=>tab.projectId===owner.projectId&&!tab.hostId);const tab={id:parent.id+':chat:'+run.id,type:'run',runId:run.id,parentId:parent.id,label:'Synthetic follow chat'};followFixture.openTab(tab);return tab.id;},owner);

@@ -114,7 +114,11 @@ test('owner chat access follows Auto-approve, never generic saved tool rules or 
     const store=new PermissionStore(home),s=schedule(home),request={kind:'chat-access',toolName:'proteus_chats',args:{scope:{hostId:'synthetic-owner',actions:['read']}}};
     store.remember(s,{kind:'custom-tool',toolName:'proteus_chats'},'always-tool');
     for(const mode of ['ask','custom','trusted']){store.setMode(s,mode);assert.equal(store.decide(s,request).allowed,false);}
-    assert.deepEqual(store.choices(s,request),[]);assert.throws(()=>store.remember(s,request,'always-tool'),/not available/);
+    assert.ok(store.choices(s,request).some(choice=>choice.value==='always-tool'));
+    store.remember(s,request,'always-tool');assert.equal(store.decide(s,request).allowed,true);
+    assert.equal(new PermissionStore(home).decide(s,request).allowed,true,'a remembered conversation scope survives restart');
+    assert.equal(store.decide(s,{...request,args:{scope:{hostId:'another-owner',actions:['read']}}}).allowed,false);
+    assert.equal(store.decide(s,{...request,args:{scope:{hostId:'synthetic-owner',actions:['read','dispatch']}}}).allowed,false);
     store.setMode(s,'autopilot');assert.equal(store.decide(s,request).allowed,true);
     for(const protection of [{managedApprovalRequired:true},{requestSandboxBypass:true},{toolName:'unrelated'}])assert.equal(store.decide(s,{...request,...protection}).allowed,false);
     store.setMode(s,'ask');assert.equal(store.decide(s,request).allowed,false);

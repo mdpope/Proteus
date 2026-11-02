@@ -1,3 +1,4 @@
+import {fusionJournal,fusionAvailability,fusionModel,fusionSessionOptions,fusionMessageData,FUSION_MODEL_ID} from './copilot-fusion.js';
 import {subagentJournal} from '../services/chats/subagents.js';
 import {questionAttachmentTools} from '../services/chats/question-attachments.js';
 import {providerActivity} from '../shared/provider-activity.js';
@@ -76,8 +77,11 @@ export class CopilotProvider {
   async models(client) {
     // listModels() retains its first result until disconnect. Use the public RPC
     // to refresh without tearing down a client that owns an active conversation.
-    const result = client.rpc?.models?.list ? (await client.rpc.models.list({})).models : await client.listModels();
-    return uniqueModels(result.map(copilotModel));
+    const value = client.rpc?.models?.list ? await client.rpc.models.list({}) : { models: await client.listModels() };
+    // Copilot Fusion appears only when the runtime advertises a selectable Fusion routing tier.
+    const models = value.models.map(copilotModel), fusion = fusionModel(value.auto);
+    this.fusionAvailability = fusionAvailability(models.concat(fusion ? [fusion] : []), value.auto);
+    return uniqueModels(fusion ? [...models, fusion] : models);
   }
   async status() {
     try {
@@ -90,7 +94,7 @@ export class CopilotProvider {
       if (!auth.isAuthenticated) return { available: false, error: 'Sign in with Copilot CLI, then refresh.', auth };
       const models = await this.models(client);
       return {
-        available: true, auth,
+        available: true, auth, fusion:this.fusionAvailability||fusionAvailability(models),
         models,
         checkedAt: new Date().toISOString()
       };
@@ -203,17 +207,21 @@ export class CopilotProvider {
     this.configurationFingerprint = fingerprint;
     run.providerHome ??= this.dataDirectory();
     const client = await this.connect(run.providerHome);
-    const models = await this.models(client);
+    const models = await this.models(client);run.fusionAvailability=this.fusionAvailability||fusionAvailability(models);
+    if (run.schedule.model === FUSION_MODEL_ID && !models.some(model => model.id === FUSION_MODEL_ID)) throw new Error(`Copilot Fusion is not currently available for this Copilot account. ${run.fusionAvailability.note} Choose another model or refresh models.`);
     if (!models.some(model => model.id === run.schedule.model)) throw new Error(`Model ${run.schedule.model} is unavailable for this Copilot account. Choose a model from the provider panel.`);
     const model = models.find(model => model.id === run.schedule.model);
     validateModelOptions(run.schedule, model);
     run.modelCapabilities = { capturedAt: new Date().toISOString(), id: model.id, controls: model.controls };
     const includeLegacy = snapshot?.includeDefaults !== false;
     const appTools=[...questionAttachmentTools(this,run.id),...browserTools(this.browser,run.id),...integrationTools(this.integrations,run.id),...chatControlTools(this.chatControl,run.id)];captureAppCapabilities(run,appTools,update,managed?[...selectedAgentToolScope(managed),...appTools.map(tool=>tool.name)]:null);
+    // Fusion selects the provider's virtual Auto model with an advertised Fusion tier;
+    // the tier, not a reasoning effort, controls orchestration depth.
+    const fusionOptions = fusionSessionOptions(run.schedule, model);
+    if (fusionOptions) run.fusionSelection = { tier: fusionOptions.autoTier || null, label: model.controls.reasoningEffortLabels?.[fusionOptions.autoTier] || fusionOptions.autoTier || 'Provider default', selectedAt: new Date().toISOString() };
     const config = {
-      model: run.schedule.model, streaming: true,
-      ...((run.schedule.reasoningEffort || model.controls.defaultReasoningEffort) ? { reasoningEffort: run.schedule.reasoningEffort || model.controls.defaultReasoningEffort } : {}),
-      ...(run.schedule.contextTier ? { contextTier: run.schedule.contextTier } : {}),
+      ...(fusionOptions || { model: run.schedule.model, ...((run.schedule.reasoningEffort || model.controls.defaultReasoningEffort) ? { reasoningEffort: run.schedule.reasoningEffort || model.controls.defaultReasoningEffort } : {}) }), streaming: true,
+      ...(run.schedule.contextTier && !fusionOptions ? { contextTier: run.schedule.contextTier } : {}),
       workingDirectory: run.schedule.workspace.cwd,
       additionalDirectories,
       skillDirectories: includeLegacy ? run.schedule.skillDirectories || [] : [],
@@ -239,15 +247,16 @@ export class CopilotProvider {
     let providerError,activitySucceeded=false;
     const capture=providerActivity({provider:'copilot',emit,update});
     const activity = toolActivity({ run, emit, update });
-    const agents=subagentJournal(run,'copilot',update);
+    const agents=subagentJournal(run,'copilot',update),fusion=fusionJournal(run,update);
     const unsubscribe = session.on(event => {
       if(agents.copilot(event)||event.agentId)return;
       capture.receive(event);
+      if(fusion(event))return;
       if (event.type === 'assistant.message_delta') stream?.(event.data.messageId, event.data.deltaContent || '');
       if (event.type === 'assistant.message') {
         const content = event.data.content || run.liveMessages?.[event.data.messageId] || '';
         if (run.liveMessages) delete run.liveMessages[event.data.messageId];
-        if (content.trim()) emit('assistant', content);
+        if (content.trim()) emit('assistant', content, fusionMessageData(event) || undefined);
         else update();
       }
       activity(event);

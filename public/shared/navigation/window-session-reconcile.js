@@ -3,7 +3,7 @@ import {contentTabMetadata,windowContentTabId} from '../../models/content-tab-de
 function identity(tab,descriptors,documentFile,scope,id){
  if(tab.type==='markdown'&&!tab.contentTabId&&documentFile){
   const file=tab.file||tab.markdown?.file;
-  return descriptors.find(row=>row.type==='document'&&documentFile(scope,id,row)===file)?.id||tab.id;
+  return descriptors.find(row=>{if(row.type!=='document')return false;try{return documentFile(scope,id,row)===file;}catch{return false;}})?.id||tab.id;
  }
  return windowContentTabId(tab);
 }
@@ -13,7 +13,8 @@ function newView(descriptor,parentId,scope,id,documentFile){
  if(descriptor.type==='chat')return {...common,id:(parentId?parentId+':':'')+'chat:'+descriptor.chatId,type:'run',runId:descriptor.chatId};
  if(descriptor.type==='terminal')return {...common,id:(parentId?parentId+':':'')+'terminal:'+descriptor.terminalId,type:'terminal',terminal:{id:descriptor.terminalId}};
  if(descriptor.type==='document'){
-  const file=documentFile?.(scope,id,descriptor);if(!file)throw Error('A saved-window document source is unavailable. The original session was preserved.');
+  let file;try{file=documentFile?.(scope,id,descriptor);}catch{}
+  if(!file)return {...common,id:'unavailable:'+descriptor.id,type:'unavailable',unavailableDescriptor:descriptor,unavailableReason:'The document source is unavailable on this owner. Retry after restoring its authorized source.'};
   return {...common,id:'restored:'+crypto.randomUUID(),type:'markdown',file,...(descriptor.chatId?{associationChatId:descriptor.chatId}:{})};
  }
  throw Error('Unsupported saved-window descriptor. The original session was preserved.');

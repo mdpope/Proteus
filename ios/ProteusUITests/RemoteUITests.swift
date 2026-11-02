@@ -69,6 +69,16 @@ private let nativeFixtureRelayOrigin = ProcessInfo.processInfo.environment["PROT
     XCTAssertTrue(pair.waitForExistence(timeout: 5)); pair.tap()
 }
 
+/// Live acceptance may target an already-installed normal/preview app while the
+/// runner and synthetic fixtures retain their separate test identity.
+@MainActor private func nativeLiveSimulatorApplication() throws -> XCUIApplication {
+    guard let bundle = ProcessInfo.processInfo.environment["PROTEUS_LIVE_SIMULATOR_BUNDLE"] else { return XCUIApplication() }
+    guard ["org.proteusapp.proteus.mobile", "org.proteusapp.review.proteus.iphone-preview", "org.proteusapp.review.proteus.ipad-preview"].contains(bundle) else {
+        throw XCTSkip("Live simulator acceptance requires a known explicitly selected Proteus app")
+    }
+    return XCUIApplication(bundleIdentifier: bundle)
+}
+
 final class RemoteUITests: XCTestCase {
     @MainActor func testLiveSimulatorSavedOwnerReconnect() throws {
         guard let bridge = ProcessInfo.processInfo.environment["PROTEUS_LIVE_SIMULATOR_BRIDGE"],
@@ -76,13 +86,18 @@ final class RemoteUITests: XCTestCase {
             throw XCTSkip("Requires explicit live simulator acceptance")
         }
         #if targetEnvironment(simulator)
-        let app = XCUIApplication(); app.launchArguments = []; app.launch()
+        let app = try nativeLiveSimulatorApplication(); app.launchArguments = []; app.launch()
         openNotificationFixtureHome(app)
-        let picker = app.buttons["destination-picker"]
-        XCTAssertTrue(picker.waitForExistence(timeout: 10), "The saved owner remains selected")
-        picker.tap()
-        let manage = app.buttons["Manage computers"]
-        XCTAssertTrue(manage.waitForExistence(timeout: 5)); manage.tap()
+        let pickers = app.buttons.matching(identifier: "destination-picker")
+        XCTAssertTrue(pickers.firstMatch.waitForExistence(timeout: 10), "The saved owner remains selected")
+        let visible: (XCUIElement) -> Bool = { $0.isHittable && $0.frame.minX.isFinite && $0.frame.minY.isFinite && !$0.frame.isEmpty }
+        let picker = try XCTUnwrap(pickers.allElementsBoundByIndex.last(where: visible))
+        picker.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        let menus = app.buttons.matching(NSPredicate(format: "label == %@", "Manage computers"))
+        XCTAssertTrue(menus.firstMatch.waitForExistence(timeout: 5))
+        let manage = try XCTUnwrap(menus.allElementsBoundByIndex.last(where: visible))
+        manage.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        XCTAssertTrue(app.navigationBars["Computers"].waitForExistence(timeout: 10))
         let connected = app.staticTexts.matching(NSPredicate(format: "label == %@", "Connected")).firstMatch
         XCTAssertTrue(connected.waitForExistence(timeout: 30), "A normal cold launch reconnects using the saved pairing")
         #else
@@ -98,7 +113,7 @@ final class RemoteUITests: XCTestCase {
             throw XCTSkip("Requires an explicitly authorized loopback live-owner pairing bridge")
         }
         #if targetEnvironment(simulator)
-        let app = XCUIApplication()
+        let app = try nativeLiveSimulatorApplication()
         app.launchArguments = []
         app.launch()
         // The bridge creates one invitation through the selected running owner's
@@ -1298,6 +1313,19 @@ final class RemoteUITests: XCTestCase {
         let changelog = app.staticTexts["bundled-changelog"]
         XCTAssertTrue(changelog.waitForExistence(timeout: 8))
         XCTAssertTrue(changelog.label.contains("Earlier prototype milestones"), "Home must show release history from the bundled canonical changelog")
+    }
+    @MainActor func testWebsiteNotificationTapKeepsSourceHostAndShowsOfflineRecovery() {
+        let app = nativeFixtureApplication()
+        app.launchArguments = ["--reset-pairing", "--synthetic-destinations", "--synthetic-notification-fixtures", "--synthetic-notification-controls"]
+        app.launch()
+        openNotificationFixtureHome(app)
+        for _ in 0..<5 where !app.buttons["Tap website notification"].exists { app.swipeUp() }
+        XCTAssertTrue(app.buttons["Tap website notification"].waitForExistence(timeout: 12))
+        app.buttons["Tap website notification"].tap()
+        XCTAssertTrue(app.alerts["Proteus"].waitForExistence(timeout: 12))
+        XCTAssertTrue(app.alerts.staticTexts["Reconnect Alpha Mac to open the website notification on that computer."].exists)
+        app.alerts.buttons["OK"].tap()
+        XCTAssertTrue(app.staticTexts["Notifications"].waitForExistence(timeout: 10))
     }
     @MainActor func testNotificationTapRoutesForegroundColdStartBackgroundAndUnavailableTargets() {
         let app = nativeFixtureApplication()

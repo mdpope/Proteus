@@ -22,6 +22,19 @@ function observe(root,key){
   const record={root,key,dispose(){clearTimeout(timer);root.removeEventListener('scroll',save,true);liveViews.delete(record);observed.delete(root);}};
   observed.set(root,record);liveViews.add(record);
 }
+export function trackViewPosition(root,key){if(root&&key)observe(root,key);}
+export function savedConversationPosition(key){
+ const entry=[...(positions.get(key)?.values()||[])].find(entry=>entry.conversation);
+ if(!entry)return null;
+ const anchor=entry.anchor;return {key:anchor?.key||'',offset:anchor?.offset||0,follow:entry.follow};
+}
+export function savedArtifactPosition(key){return positions.get(key)?.get('artifact')?.artifact;}
+export function rememberArtifactPosition(key,version,rows){
+ if(!key||!Array.isArray(rows)||rows.length>24||typeof version!=='string'||!/^[a-f0-9]{64}$/.test(version))return;
+ const values=new Map(positions.get(key)||[]),previous=values.get('artifact')?.artifact;
+ const merged=new Map((previous?.version===version?previous.positions:[]).map(row=>[row.path,row]));for(const row of rows)merged.set(row.path,row);
+ values.set('artifact',{top:0,left:0,artifact:{version,positions:[...merged.values()].slice(-24)}});positions.set(key,values);persist(key,values);
+}
 globalThis.window?.addEventListener('pagehide',()=>{for(const {root,key} of liveViews)if(root.isConnected&&(!root.dataset.viewKey||root.dataset.viewKey===key))rememberView(root,key);});
 const candidates = '[data-key], [data-chat-index], .message, .resource-row, .card, h2, h3';
 function scrollables(root) {
@@ -45,7 +58,11 @@ function anchorFor(node){
 }
 export function rememberView(root,key){
   if(!root||!key)return;
-  const values=new Map();for(const node of scrollables(root))values.set(locator(root,node),{top:node.scrollTop,left:node.scrollLeft,follow:node.matches('.conversation')&&node.scrollHeight-node.clientHeight-node.scrollTop<48,anchor:anchorFor(node)});
+  // Lazy restoration must not replace a durable reading anchor with the
+  // temporary loading screen observed by a refresh or shutdown checkpoint.
+  if(root.dataset.positionLoading===key)return;
+  const values=new Map();for(const node of scrollables(root))values.set(locator(root,node),{top:node.scrollTop,left:node.scrollLeft,conversation:node.matches('.conversation'),follow:node.matches('.conversation')&&node.scrollHeight-node.clientHeight-node.scrollTop<48,anchor:anchorFor(node)});
+  const artifact=positions.get(key)?.get('artifact');if(artifact)values.set('artifact',artifact);
   positions.set(key,values);
   persist(key,values);
 }

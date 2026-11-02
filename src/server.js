@@ -5,6 +5,9 @@ import { permissionDisplaySchedule } from './services/state/state-projection.js'
 import {subagentPage} from './services/chats/subagents.js';
 import {publicAssets} from './shared/public-assets.js';
 import {MtplxProvider} from './providers/mtplx.js';
+import {LlamaCppProvider} from './providers/llama-cpp.js';
+import {SharedLlmProvider} from './providers/shared-llm.js';
+import {SharedInference} from './services/inference/shared-inference.js';
 import {replyWithAttachments,answerQuestionWithAttachments,questionAttachmentMediaTypes} from './services/chats/question-attachments.js';
 import {readMarkdownFile} from './shared/file-metadata.js';
 import {ensurePrivateHome} from './shared/private-paths.cjs';
@@ -28,6 +31,8 @@ import {chatMembership} from '../public/features/chats/chat-membership.js';
 import { agentName } from '../public/features/chats/agent-name.js';
 import { ProviderUsageCache } from './services/telemetry/usage.js';
 import fs from 'node:fs';
+import {AttentionStore} from './services/chats/attention-store.js';
+import {needsAttention} from '../public/features/chats/attention-state.js';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { randomBytes } from 'node:crypto';
@@ -116,8 +121,12 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   // MTPLX is a local Apple-silicon model server. The Mac app registers it so it is
   // available when the server is running; status reports it unavailable otherwise.
   const mtplx=new SessionProvider(()=>new MtplxProvider({}, {context,browser}));
-  const adapters = { ...(providers || (desktopPreview ? { codex, mtplx } : { copilot, codex, claude, ...(process.platform==='darwin'?{mtplx}:{}) })), ...(!desktopPreview ? {'local-process': omi.provider()} : {}) };
+  let sharedInference;
+  const sharedModels=new SessionProvider(()=>new SharedLlmProvider({manager:()=>sharedInference},{context,browser}));
+  const llamaCpp=new SessionProvider(()=>new LlamaCppProvider({}, {context,browser}));
+  const adapters = { ...(providers || (desktopPreview ? { codex, mtplx } : { copilot, codex, claude, 'llama-cpp':llamaCpp, 'shared-llm':sharedModels, ...(process.platform==='darwin'?{mtplx}:{}) })), ...(!desktopPreview ? {'local-process': omi.provider()} : {}) };
   const engine = new Engine(home, adapters, undefined, {permissionControls:true,recoveryBarrier:updateRecovery});
+  engine.historyCache.configure(settings.get().resources);
   const desktopControl=desktopPreview?null:new DesktopControl({active:owner=>owner==='operator'||['running','awaiting_input'].includes(engine.getRun(owner)?.status)});
   if(browser)browser.desktopControl=desktopControl;
   const performanceDiagnostics = new PerformanceDiagnostics({home});
@@ -230,11 +239,18 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   }
   async function buildChatSchedule(value){
     const defaults=settings.get();
-    const updateCoordinator=value.purpose==='update';
+    const updateCoordinator=value.purpose==='update',buildCoordinator=value.purpose==='build';
     if(updateCoordinator&&value.chatType==='internet')throw Error('Update coordinators require an ordinary unassigned chat.');
     if(updateCoordinator){
       const {updateCoordinatorConfiguration,updateCoordinatorPrompt}=await import('./services/updates/update-coordinator.js');
-      value={...value,...await updateCoordinatorConfiguration(defaults,catalogs,value),workspaceId:null,projectId:null,includeDefaults:false,selectedIds:[],agentId:null,skillDirectories:[],mcpServers:{},workspace:defaults.workspace,prompt:updateCoordinatorPrompt(value.prompt||'Check and install the explicitly requested release after required validation.')};
+      value={...value,reasoningEffort:'',contextTier:'default',serviceTier:'',...await updateCoordinatorConfiguration(defaults,catalogs),workspaceId:null,projectId:null,includeDefaults:false,selectedIds:[],agentId:null,skillDirectories:[],mcpServers:{},workspace:defaults.workspace,prompt:updateCoordinatorPrompt(value.prompt||'Check and install the explicitly requested release after required validation.')};
+    }
+    if(buildCoordinator){
+      if(!value.workspaceId&&!value.projectId)throw Error('Choose the designated builder’s existing source workspace or project.');
+      if(value.chatType==='internet')throw Error('Build coordinators require an ordinary workspace chat.');
+      const {updateCoordinatorConfiguration}=await import('./services/updates/update-coordinator.js');
+      const override=value.provider||value.model?{...defaults.updateCoordinator,...Object.fromEntries(['provider','model','reasoningEffort','contextTier','serviceTier'].filter(key=>value[key]!==undefined).map(key=>[key,value[key]]))}:undefined;
+      value={...value,reasoningEffort:'',contextTier:'default',serviceTier:'',...await updateCoordinatorConfiguration(defaults,catalogs,override),prompt:'You are the authorized source/build coordinator on this designated OS builder. Follow this project’s release and validation process. Reuse the exact published OS/architecture artifact when available; consumers do not rebuild. Preserve active work and data. Complete the requested OS changes, source/PR synchronization, native acceptance and authorized publication, then report immutable artifact/source identities. Installation is a separate destination update chat using its saved defaults; never replace the running app from this build chat. Ordinary project permissions and approvals remain in force.\n\nRequested work:\n'+(value.prompt||'')};
     }
     if(value.workspaceId){ const profile = context.scope(value.workspaceId); value = {...profile.defaults,...value}; }
     if(value.chatType==='internet'){
@@ -248,7 +264,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
     const snapshot=context.capture({workspaceId:value.workspaceId,workspace:value.workspace||(!value.workspaceId?defaults.workspace:undefined),selectedIds:value.selectedIds,agentId:value.agentId,includeDefaults:value.includeDefaults});
     if(updateCoordinator)Object.assign(snapshot,{workspaceId:null,workspaceName:null,workspace:structuredClone(defaults.workspace),baseWorkspace:structuredClone(defaults.workspace),includeDefaults:false,selectedIds:[],agentId:null,entries:[]});
     const chatTitle=typeof value.name==='string'?value.name.trim():'';
-    return validateSchedule({schemaVersion:1,id:`chat-${Date.now()}-${randomBytes(4).toString('hex')}`,name:chatTitle||'Workspace chat',chatType:value.chatType==='internet'?'internet':'user',chatTitleManual:!!chatTitle,...(updateCoordinator?{purpose:'update',updateAuthorization:{tool:'proteus_update',grantedAt:new Date().toISOString()}}:{}),enabled:false,cron:'0 9 * * 1-5',timezone:value.timezone||defaults.timezone,provider:value.provider||defaults.provider,model:value.model||defaults.model,reasoningMode:value.reasoningMode,reasoningEffort:value.reasoningEffort??((value.model||defaults.model)===defaults.model&&(value.provider||defaults.provider)===defaults.provider?defaults.reasoningEffort:undefined),contextTier:value.contextTier??((value.model||defaults.model)===defaults.model&&(value.provider||defaults.provider)===defaults.provider?defaults.contextTier:undefined),serviceTier:value.serviceTier??((value.model||defaults.model)===defaults.model&&(value.provider||defaults.provider)===defaults.provider?defaults.serviceTier:undefined),workspace:snapshot.workspace,context:snapshot,skillDirectories:value.skillDirectories||defaults.skillDirectories,mcpServers:value.mcpServers||defaults.mcpServers,editorContext:value.editorContext,misfire:'skip',prompt:value.prompt});
+    return validateSchedule({schemaVersion:1,id:`chat-${Date.now()}-${randomBytes(4).toString('hex')}`,name:chatTitle||'Workspace chat',chatType:value.chatType==='internet'?'internet':'user',chatTitleManual:!!chatTitle,...(buildCoordinator?{purpose:'build'}:{}),...(updateCoordinator?{purpose:'update',updateAuthorization:{tool:'proteus_update',scopeVersion:2,hostId:remote.info().hostId,grantedAt:new Date().toISOString()}}:{}),enabled:false,cron:'0 9 * * 1-5',timezone:value.timezone||defaults.timezone,provider:value.provider||defaults.provider,model:value.model||defaults.model,reasoningMode:value.reasoningMode,reasoningEffort:value.reasoningEffort??((value.model||defaults.model)===defaults.model&&(value.provider||defaults.provider)===defaults.provider?defaults.reasoningEffort:undefined),contextTier:value.contextTier??((value.model||defaults.model)===defaults.model&&(value.provider||defaults.provider)===defaults.provider?defaults.contextTier:undefined),serviceTier:value.serviceTier??((value.model||defaults.model)===defaults.model&&(value.provider||defaults.provider)===defaults.provider?defaults.serviceTier:undefined),workspace:snapshot.workspace,context:snapshot,skillDirectories:value.skillDirectories||defaults.skillDirectories,mcpServers:value.mcpServers||defaults.mcpServers,editorContext:value.editorContext,misfire:'skip',prompt:value.prompt});
   }
   const token = randomBytes(32).toString('hex'); let origin; let remote; const schedulerErrors = []; const eventClients = new Set();
   // All windows share one assembled state per owner generation. Streaming text does
@@ -284,6 +300,10 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       if (url.pathname === '/api/events' && req.method === 'GET') {
         res.writeHead(200, { 'Content-Type': 'text/event-stream', Connection: 'keep-alive' }); res.write(': connected\n\n');
         eventClients.add(res); req.on('close', () => eventClients.delete(res)); return;
+      }
+      if(url.pathname==='/api/shared-inference'){
+        if(req.method==='GET')return json(200,service.sharedInference.info());
+        if(req.method==='POST'){const value=await body(req);return json(200,value.action==='discover'?{...service.sharedInference.info(),available:await service.sharedInference.discover()}:await service.sharedInference.configure(value));}
       }
       if (url.pathname === '/api/remote' && req.method === 'GET') return json(200, remote.info());
       if(url.pathname==='/api/computer-access'){
@@ -339,10 +359,11 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         const read=name=>fs.readFileSync(new URL(name,root),'utf8').slice(0,200_000);
         const metadata=JSON.parse(read('package.json'));
         const supervised=service.updates?.identity().capabilities.prepare===true;
-        return json(200,{version:metadata.version,buildRevision:metadata.buildRevision||'source',readme:read('README.md'),changelog:read('CHANGELOG.md'),update:{available:false,supported:supervised,message:supervised?'Test and stage an exact packaged candidate in Engine Room → Updates.':'Supervised updates require an installed helper-capable desktop package.'}});
+        return json(200,{version:metadata.version,releaseDate:metadata.releaseDate||null,releaseName:metadata.releaseName||null,buildRevision:metadata.buildRevision||'source',readme:read('README.md'),changelog:read('CHANGELOG.md'),update:{available:false,supported:supervised,message:supervised?'Test and stage an exact packaged candidate in Engine Room → Updates.':'Supervised updates require an installed helper-capable desktop package.'}});
       }
       if (url.pathname === '/api/resources' && req.method === 'GET') return json(200, service.resources ? await service.resources.list() : {supported:false,processes:[],tabs:[],observedAt:new Date().toISOString()});
       if (url.pathname === '/api/resources' && req.method === 'POST') {if(!service.resources)throw new Error('Resource controls require the desktop app.');return json(200,await service.resources.action(await body(req)));}
+      if(url.pathname==='/api/attention/clear'&&req.method==='POST')return json(200,await service.attentionStore.clearAll(await body(req)));
       if (url.pathname === '/api/chat-attention' && req.method === 'POST') {const value=await body(req,16000);if(value.action!=='review'||typeof value.id!=='string')throw new Error('Choose a chat failure to review.');return json(200,engine.reviewFailure(value.id,value.expectedFailureEventAt));}
       if(url.pathname.startsWith('/api/desktop-preview')||url.pathname.startsWith('/api/workspace-projects')) {
         if(url.pathname.startsWith('/api/desktop-preview')&&!desktopPreview)return json(404,{error:'Desktop preview is disabled.'});
@@ -374,7 +395,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       if (url.pathname === '/api/chats/index' && req.method === 'GET') {
         const info=remote.info(),lastSyncAt=new Date().toISOString();
         const includeArchived=url.searchParams.get('includeArchived')==='1',projectCatalog=preview?.read();
-        const local=engine.visibleRuns(includeArchived).slice(0,1000).map(r=>({id:r.id,chatId:r.id,hostId:info.hostId,local:true,title:r.title,titleRevision:r.titleRevision,trigger:r.trigger,chatType:r.chatType,provider:r.schedule.provider,status:r.status,createdAt:r.createdAt,updatedAt:r.updatedAt,lastActivityAt:chatActivityAt(r),archivedAt:r.archivedAt||null,archived:!!r.archivedAt,unansweredQuestionCount:(r.userQuestions||[]).filter(q=>q.status==='pending').length,attentionRequired:(r.userQuestions||[]).some(q=>q.status==='pending')||r.status==='awaiting_input'||(!r.archivedAt&&['failed','interrupted'].includes(r.status)&&!r.failureReviewedAt),failureEventAt:['failed','interrupted'].includes(r.status)?r.failureEventAt||r.updatedAt:null,failureReviewedAt:r.failureReviewedAt||null,...chatMembership(r),...(preview?preview.membership(r,projectCatalog):{}),scheduleName:r.trigger==='chat'?'':r.schedule.name,destinationName:info.label}));
+        const local=engine.visibleRuns(includeArchived).slice(0,1000).map(r=>({id:r.id,chatId:r.id,hostId:info.hostId,local:true,title:r.title,titleRevision:r.titleRevision,trigger:r.trigger,chatType:r.chatType,provider:r.schedule.provider,status:r.status,createdAt:r.createdAt,updatedAt:r.updatedAt,lastActivityAt:chatActivityAt(r),archivedAt:r.archivedAt||null,archived:!!r.archivedAt,unansweredQuestionCount:(r.userQuestions||[]).filter(q=>q.status==='pending').length,attentionRequired:needsAttention(r),failureEventAt:['failed','interrupted'].includes(r.status)?r.failureEventAt||r.updatedAt:null,failureReviewedAt:r.failureReviewedAt||null,...chatMembership(r),...(preview?preview.membership(r,projectCatalog):{}),scheduleName:r.trigger==='chat'?'':r.schedule.name,destinationName:info.label}));
         const peer=service.peers?await service.peers.index():{items:[],hosts:[],partial:false};
         const items=[...local,...peer.items.filter(item=>includeArchived||!item.archivedAt)].sort((a,b)=>String(b.updatedAt).localeCompare(String(a.updatedAt))||a.hostId.localeCompare(b.hostId)||a.chatId.localeCompare(b.chatId));
         return json(200,{items,hosts:[{id:info.hostId,name:info.label,online:true,lastSyncAt},...peer.hosts],partial:peer.partial});
@@ -448,6 +469,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
           validateModelOptions(options,model);
         }
         const saved = settings.save(value.settings, value.expectedRevision);
+        engine.historyCache.configure(saved.resources);
         if (JSON.stringify(old.workspace) !== JSON.stringify(saved.workspace)) {
           const config = context.config();
           context.mutate(config => Object.assign(config.workspaces.find(w => w.id === config.defaultWorkspaceId), saved.workspace), config.revision);
@@ -696,7 +718,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         const value=await body(req);
         if(value.action==='favorite'){const workspace=context.config().workspaces.find(row=>context.get(row.id).entries.some(entry=>entry.id===value.id));if(!workspace)throw Error('This source is no longer in the source library.');context.favorite(value.id,value.enabled,value.expectedRevision,workspace.id);notify();return json(200,integrations.snapshot());}
         if(value.action==='refresh-sources'){await context.refreshAsync({});notify();return json(200,integrations.snapshot());}
-        if(value.action==='save')return json(200,integrations.save(value.id,value.profile,value.expectedRevision));
+        if(value.action==='save')return json(200,await integrations.save(value.id,value.profile,value.expectedRevision));
         if(['check','recover'].includes(value.action))return json(200,await integrations.check(value.id,{recover:value.action==='recover'}));
         throw new Error('Unknown integration action.');
       }
@@ -751,9 +773,9 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   origin = `http://127.0.0.1:${server.address().port}`;
   atomicJSON(path.join(home, 'connection.json'), { origin, token, pid: process.pid });
   const timer = timers ? setInterval(() => { void performanceDiagnostics.measure('scheduler.tick', () => engine.tick()).catch(error => engine.emit('scheduler-error', { error: error.message, at: new Date().toISOString() })); }, 1000) : null;
-  const service = { readChatAttachment, desktopControl,workspaceProjects:preview, desktopPreview:desktopPreview?preview:null, performanceDiagnostics, notify, desktopAttention:()=>[...(service.browserAttention?.()||[]),...remote.documents.list().filter(item=>!item.approvedAt).map(item=>({id:'document:'+item.requestId,kind:'document',title:item.deviceName+' requests '+item.title,requestId:item.requestId,path:item.path,at:new Date(Date.parse(item.expiresAt)-600000).toISOString()})),...service.attention()], attention:()=>[...integrations.consumers().filter(item=>['needs-auth','failed'].includes(item.connection)).map(item=>({id:'integration:'+item.id,kind:'connection',title:(item.profile.label||item.server)+' needs attention',section:'integrations',at:item.checkedAt})),...activity.notifications().items.filter(item=>!item.readAt).map(item=>({id:'notification:'+item.id,notificationId:item.id,kind:'notification',title:item.title,body:item.body,chatId:item.chatId,...(item.browserIssue?{browserIssue:item.browserIssue,silent:true}:{}),at:item.createdAt}))], browserProfiles, integrations, engine, settings, context, standup, omi, life, account, activity, workspaceFiles, attachments, buildChatSchedule, usage, catalog, catalogs, origin, token, home, url: `${origin}/?token=${token}`, async close() {
+  const service = { readChatAttachment, desktopControl,workspaceProjects:preview, desktopPreview:desktopPreview?preview:null, performanceDiagnostics, notify, desktopAttention:()=>[...(service.browserAttention?.()||[]),...remote.documents.list().filter(item=>!item.approvedAt).map(item=>({id:'document:'+item.requestId,kind:'document',title:item.deviceName+' requests '+item.title,requestId:item.requestId,path:item.path,at:new Date(Date.parse(item.expiresAt)-600000).toISOString()})),...service.attention()], attention:()=>[...integrations.consumers().filter(item=>['needs-auth','failed'].includes(item.connection)).map(item=>({id:'integration:'+item.id,kind:'connection',title:(item.profile.label||item.server)+' needs attention',section:'integrations',at:item.checkedAt})),...activity.notifications().items.filter(item=>!item.readAt).map(item=>({id:'notification:'+item.id,notificationId:item.id,kind:'notification',title:item.title,body:item.body,chatId:item.chatId,silent:item.silent===true,...(item.browserIssue?{browserIssue:item.browserIssue,silent:item.silent===true}:{}),at:item.createdAt}))], browserProfiles, integrations, engine, settings, context, standup, omi, life, account, activity, workspaceFiles, attachments, buildChatSchedule, usage, catalog, catalogs, origin, token, home, url: `${origin}/?token=${token}`, async close() {
     await stateProjection.close();await service.updates?.close();await service.chatControl?.close();await desktopControl?.close();
-    activity.log('info','app.stopping','Proteus is shutting down.');clearInterval(integrationTimer);await integrations.close(); if(activityTimer)clearInterval(activityTimer); if (timer) clearInterval(timer); if (catalogTimer) clearInterval(catalogTimer); await Promise.all(Object.values(catalogs).map(c => c.pending)); await providerAuth.close(); await remote.close(); let engineCloseError; try { await engine.close(); } catch (error) { engineCloseError=error; } await attachments.close(); await copilot.close(); await codex.close(); await claude.close(); await life.close?.(); await service.browserHistory?.close(); let activityCloseError; try { await activity.close(); } catch (error) { activityCloseError=error; }
+    activity.log('info','app.stopping','Proteus is shutting down.');clearInterval(integrationTimer);await integrations.close(); if(activityTimer)clearInterval(activityTimer); if (timer) clearInterval(timer); if (catalogTimer) clearInterval(catalogTimer); await Promise.all(Object.values(catalogs).map(c => c.pending)); await providerAuth.close(); await service.sharedInference.close(); await remote.close(); let engineCloseError; try { await engine.close(); } catch (error) { engineCloseError=error; } await attachments.close(); await copilot.close(); await codex.close(); await claude.close(); await life.close?.(); await service.browserHistory?.close(); let activityCloseError; try { await activity.close(); } catch (error) { activityCloseError=error; }
     for (const client of eventClients) client.end(); eventClients.clear();
     await new Promise(resolve => {
       server.close(resolve);
@@ -765,6 +787,10 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
     if (engineCloseError) throw engineCloseError;
     if (activityCloseError) throw activityCloseError;
   } };
+  service.attentionStore=new AttentionStore(service);
+  const rawAttention=service.attention,rawDesktopAttention=service.desktopAttention;
+  service.attention=()=>service.attentionStore.visible(rawAttention());
+  service.desktopAttention=()=>service.attentionStore.visible(rawDesktopAttention());
   service.computerAccess=computerAccess;computerAccess.on('change',()=>{service.notify();service.remote?.changed();});
   service.browserHistory=new BrowserHistory(home,{hostId:()=>service.remote?.info().hostId});
   service.contentTabs=new ContentTabs(home,{history:service.browserHistory,profiles:()=>browserProfiles.list().items,onChange:result=>{const metadata={scope:result.scope,id:result.id,revision:result.revision};for(const client of eventClients)client.write('event: content-tabs\ndata: '+JSON.stringify(metadata)+'\n\n');notify();remote?.broadcast('tabs',metadata,result.scope==='chat'?result.id:undefined);}});
@@ -787,6 +813,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
     return result;
   };
   service.previews=new ChatPreviews(service);
+  sharedInference=service.sharedInference=new SharedInference(service);
   remote = service.remote = new RemoteHost(service); activity.attach(engine,()=>remote.info().hostId,()=>remote.info().label); activity.log('info','app.started','Proteus started.'); await remote.start();
   service.chatControl=new ChatControl(service);
   for(const adapter of Object.values(adapters))adapter.chatControl=service.chatControl;

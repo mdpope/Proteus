@@ -7,6 +7,8 @@ import {randomUUID} from 'node:crypto';
 import packages from '../desktop/updates/update-package.cjs';
 import maintenance from '../desktop/updates/update-maintenance.cjs';
 import helper from '../desktop/updates/update-helper.cjs';
+import attention from '../desktop/updates/attention-reconciliation.cjs';
+import {Updates} from '../src/services/updates/updates.js';
 const {atomic,digest,tree,fileDigest}=packages;
 function fixture(t){
  const temp=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'proteus-maintenance-')));t.after(()=>fs.rmSync(temp,{recursive:true,force:true}));
@@ -25,6 +27,76 @@ function fixture(t){
  };
  return {temp,root,options,policy,policyFile,generation,dependencies};
 }
+function attentionFixture(t){
+ const f=fixture(t),old=f.generation(21),middle=f.generation(22),latest=f.generation(23),pid=424242;
+ const previous=packages.readJob(latest.file),preservation=path.join(path.dirname(latest.file),'preservation.json');
+ atomic(preservation,{schemaVersion:1,runs:[]});
+ const candidate={...f.dependencies.inspect(f.options.installation),bundle:previous.candidate.bundle,buildRevision:'synthetic-candidate'};
+ packages.writeJob(latest.file,{phase:'attention',outcome:'updated',error:'Recovery data differs from its receipt.',ordinaryWorkResumedAt:'2026-10-23T01:00:00Z',candidate,preservationHash:fileDigest(preservation),health:{at:'2026-10-23T00:00:00Z',preservation:{runs:0,events:0},identity:{packaged:true,pid,home:f.options.home,installation:f.options.installation,sourceFingerprint:candidate.sourceFingerprint,buildRevision:candidate.buildRevision}}});
+ atomic(path.join(f.options.home,'connection.json'),{pid});fs.writeFileSync(path.join(f.options.home,'runner.lock'),String(pid));
+ f.dependencies.alive=value=>value===pid;
+ const options={...f.options,id:latest.id,expectedRevision:packages.readJob(latest.file).revision};
+ return {...f,old,middle,latest,options,preservation,pid};
+}
+test('post-install reconciliation preserves the original journal, policy and recoveries, then permits verified two-generation maintenance',t=>{
+ const f=attentionFixture(t),jobBefore=fs.readFileSync(f.latest.file),policyBefore=fs.readFileSync(f.policyFile),dataBefore=tree(f.options.home);
+ const staging=path.join(path.dirname(f.latest.file),'candidate');fs.mkdirSync(staging);fs.writeFileSync(path.join(staging,'synthetic-unused-candidate'),'SYNTHETIC ONLY');
+ assert.equal(maintenance.maintenancePlan(f.root,f.options,f.dependencies).canApply,false);
+ const plan=attention.attentionPlan(f.root,f.options,f.dependencies);
+ assert.equal(plan.canApply,true);assert.equal(plan.uiResponsivenessVerified,false);
+ const receipt=attention.reconcileAttention(f.root,{...f.options,planDigest:plan.planDigest},f.dependencies);
+ assert.equal(receipt.continuationReplayed,false);assert.equal(receipt.originalError,'Recovery data differs from its receipt.');
+ assert.deepEqual(fs.readFileSync(f.latest.file),jobBefore);assert.deepEqual(fs.readFileSync(f.policyFile),policyBefore);assert.equal(tree(f.options.home).hash,dataBefore.hash);
+ assert.ok([f.old,f.middle,f.latest].every(row=>fs.existsSync(row.directory)));
+ assert.equal(attention.reconcileAttention(f.root,{...f.options,planDigest:plan.planDigest},f.dependencies).alreadyApplied,true);
+ assert.throws(()=>attention.reconcileAttention(f.root,{...f.options,expectedRevision:0,planDigest:plan.planDigest},f.dependencies),/changed/);
+ const maintenancePlan=maintenance.maintenancePlan(f.root,f.options,f.dependencies);
+ assert.equal(maintenancePlan.canApply,true,JSON.stringify(maintenancePlan.issues));assert.deepEqual(maintenancePlan.retire,[f.old.id]);
+ const result=maintenance.applyMaintenance(f.root,{...f.options,planDigest:maintenancePlan.planDigest},f.dependencies);
+ assert.deepEqual(result.retired,[f.old.id]);assert.deepEqual(new Set(result.retained),new Set([f.middle.id,f.latest.id]));
+ assert.equal(fs.existsSync(staging),false);const stagingReceipt=JSON.parse(fs.readFileSync(path.join(path.dirname(f.latest.file),'attention-staging-retirement.json')));assert.equal(stagingReceipt.jobHash,digest(jobBefore));
+ assert.deepEqual(fs.readFileSync(f.latest.file),jobBefore);assert.equal(tree(f.options.home).hash,dataBefore.hash);
+});
+test('reconciliation cannot bless pre-install failure, unreviewed attention, stale health, changed app, active helper or missing owner',t=>{
+ const cases=[
+  f=>packages.writeJob(f.latest.file,{failedBeforeReplacement:true}),
+  f=>packages.writeJob(f.latest.file,{health:null}),
+  f=>packages.writeJob(f.latest.file,{ordinaryWorkResumedAt:null}),
+  f=>packages.writeJob(f.latest.file,{outcome:'rollback'}),
+  f=>packages.writeJob(f.latest.file,{phase:'prepared'}),
+  f=>packages.writeJob(f.latest.file,{error:'Ambiguous provider continuation'}),
+  f=>packages.writeJob(f.latest.file,{helperPid:f.pid}),
+  f=>fs.writeFileSync(f.latest.file+'.helper-lock','123'),
+  f=>fs.writeFileSync(path.join(f.options.installation,'changed-runtime'),'changed'),
+  f=>atomic(path.join(f.options.home,'connection.json'),{pid:f.pid+1}),
+  f=>fs.writeFileSync(path.join(f.options.home,'runner.lock'),String(f.pid+1)),
+  f=>{f.dependencies.alive=()=>false;},
+  f=>fs.writeFileSync(f.preservation,'changed'),
+  f=>fs.writeFileSync(path.join(f.old.directory,'data-0','new-sidecar'),'changed'),
+  f=>packages.writeJob(f.middle.file,{phase:'prepared'})
+ ];
+ for(const change of cases){const f=attentionFixture(t);change(f);const before=fs.readFileSync(f.latest.file),policy=fs.readFileSync(f.policyFile);const options={...f.options,expectedRevision:packages.readJob(f.latest.file).revision};assert.throws(()=>attention.attentionPlan(f.root,options,f.dependencies));assert.equal(fs.existsSync(path.join(path.dirname(f.latest.file),'attention-resolution.json')),false);assert.deepEqual(fs.readFileSync(f.latest.file),before);assert.deepEqual(fs.readFileSync(f.policyFile),policy);}
+});
+test('reconciliation API retains original-chat authorization and rejects stale revisions before worker dispatch',async t=>{
+ const f=attentionFixture(t),job=packages.readJob(f.latest.file);packages.writeJob(f.latest.file,{runId:'original-update'});
+ const calls=[],owner={root:f.root,ownerHome:f.options.home,installation:f.options.installation,browserHome:f.options.browserHome,platform:'win32',packaged:true,owns:Updates.prototype.owns,packageWork:async(...args)=>{calls.push(args);return {canApply:true};}};
+ const request={action:'reconciliation',id:job.id,expectedRevision:packages.readJob(f.latest.file).revision};
+ await assert.rejects(Updates.prototype.handle.call(owner,request,'another-chat'),/original chat/);assert.equal(calls.length,0);
+ await assert.rejects(Updates.prototype.handle.call(owner,{...request,expectedRevision:0},'original-update'),/changed/);assert.equal(calls.length,0);
+ await assert.rejects(Updates.prototype.handle.call(owner,{...request,id:'../../escape'},'original-update'),/exact attention/);assert.equal(calls.length,0);
+ await Updates.prototype.handle.call(owner,request,'original-update');assert.equal(calls[0][0],'attentionPlan');assert.equal(calls[0][1],f.root);assert.equal(calls[0][2].home,f.options.home);assert.equal(owner.busy,false);
+});
+test('changed reconciliation inputs and linked receipts stop before an effect, while a corrupt receipt keeps maintenance blocked',t=>{
+ const f=attentionFixture(t),plan=attention.attentionPlan(f.root,f.options,f.dependencies);
+ fs.writeFileSync(path.join(f.latest.directory,'data-1','changed'),'changed');
+ assert.throws(()=>attention.reconcileAttention(f.root,{...f.options,planDigest:plan.planDigest},f.dependencies));
+ assert.equal(fs.existsSync(path.join(path.dirname(f.latest.file),'attention-resolution.json')),false);
+ const g=attentionFixture(t),target=path.join(path.dirname(g.latest.file),'attention-resolution.json');
+ fs.symlinkSync(path.join(g.temp,'missing'),target);
+ assert.throws(()=>attention.attentionPlan(g.root,g.options,g.dependencies),/symbolic/);
+ fs.unlinkSync(target);atomic(target,{schemaVersion:1,kind:'forged'});
+ assert.equal(maintenance.maintenancePlan(g.root,g.options,g.dependencies).canApply,false);
+});
 test('maintenance reconciles missing history and a fully verified unregistered generation without touching live data',t=>{
  const f=fixture(t),old=f.generation(21),survivor=f.generation(22,{registered:false});fs.rmSync(old.directory,{recursive:true});
  fs.writeFileSync(path.join(f.options.home,'today'),'KEEP CURRENT');const original=fs.readFileSync(f.policyFile),before=tree(f.options.home);

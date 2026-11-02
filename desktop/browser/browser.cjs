@@ -1,5 +1,5 @@
 const {BrowserStateBatch}=require('./browser-state-batch.cjs');
-const {browserErrorDocument}=require('./browser-error.cjs');
+const {browserErrorDocument,errorColors}=require('./browser-error.cjs');
 const {BrowserCertificates}=require('./browser-certificates.cjs');
 const {restoreNavigation,commitNavigation,traverseNavigation,validPendingNavigation,acknowledgesNavigation}=require('./browser-navigation.cjs');
 const {BrowserCookieStore}=require('./browser-cookie-store.cjs');
@@ -27,19 +27,7 @@ const {playwrightMCP,developerMCP,mcpCommand}=require('./browser-mcp.cjs');
 
 function safeFavicon(value) { return typeof value==='string'&&value.length<=98304&&/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(value)?value:''; }
 
-function normalizeURL(input) {
-  const value = String(input || '').trim();
-  if (!value || value.length>4096) throw new Error('Enter a website address or search term.');
-  const explicit=/^https?:\/\//i.test(value);
-  const host=/^(?:localhost|(?:[a-z0-9\p{L}-]+\.)+[a-z0-9\p{L}-]+|\[[a-f0-9:]+\])(?::[0-9]{1,5})?(?:[/?#][^\s]*)?$/iu.test(value);
-  if(!explicit&&!host){
-    if(/^[a-z][a-z0-9+.-]*:/i.test(value)||/^(?:[~/\\]|[a-z]:\\)/i.test(value)||/(?:token|password|secret|api[_-]?key|authorization|code)=/i.test(value))throw new Error('Use a web address or a search term without credentials or local paths.');
-    return 'https://www.google.com/search?q='+encodeURIComponent(value);
-  }
-  const url = new URL(explicit ? value : `https://${value}`);
-  if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password) throw new Error('Use an HTTP or HTTPS address without credentials.');
-  return url.href;
-}
+const {normalizeURL}=require('./browser-address.cjs');
 
 class BrowserTabs {
   reportLoadError(tab, description, url) {
@@ -53,7 +41,7 @@ class BrowserTabs {
     tab.reportedLoadError=true;
     const failedURL=safeHistoryURL(url,this.appOrigin)||safeHistoryURL(tab.pageNavigationURL,this.appOrigin)||safeHistoryURL(tab.logicalHistory?.entries[tab.logicalHistory.index]?.url,this.appOrigin);
     if(failedURL&&tab.view?.webContents&&!tab.view.webContents.isDestroyed()){
-      const documentURL=browserErrorDocument(failedURL,error);tab.errorPage={url:failedURL,documentURL,error};
+      const documentURL=browserErrorDocument(failedURL,error,{certificateToken:this.certificateReview?.token(tab,failedURL),certificateInformation:this.certificateReview?.information(tab,failedURL),palette:this.options.errorPalette?.()});tab.errorPage={url:failedURL,documentURL,error};
       void tab.view.webContents.loadURL(documentURL).catch(()=>{});
     }
     let site='this page';try{site=new URL(url||tab.view?.webContents?.getURL()).host;}catch{}
@@ -64,6 +52,7 @@ class BrowserTabs {
   constructor(window, appOrigin, options = {}) {
     this.options={...options,projects:options.projects===true||options.preview===true};this.history=options.history;this.sessions=new Map();this.certificates=new BrowserCertificates();this.cookieStores=new Map();this.sessionNames=new Map();this.blocker=options.home?new BrowserBlocker(options.home):null;
     this.agentAccess=options.home?new (require('./browser-agent-access.cjs').BrowserAgentAccess)(options.home):null;
+    this.certificateReview=new (require('./browser-certificate-review.cjs').BrowserCertificateReview)(this);
     this.videoPopout=new (require('./browser-video-popout.cjs').BrowserVideoPopout)(this);this.media=new (require('./browser-media.cjs').BrowserMedia)(options.home);this.siteSettings=new BrowserSiteSettings(options.home);this.siteData=new BrowserSiteData(this);
     this.window = window; this.appOrigin = appOrigin; this.tabs = new Map(); this.reloading = new Map(); this.active = null; this.bounds = null; this.overlays = new Set();
     this.rendererEpoch = null; this.rendererStartedAt = -Infinity; this.selectionRevision = -1; this.selectionId = null;
@@ -71,7 +60,7 @@ class BrowserTabs {
     this.thumbnails=options.thumbnails||(options.home?new (require('../documents/thumbnail-cache.cjs').ThumbnailCache)(options.home):null);
     this.thumbnailTimer=setInterval(()=>{if(this.windowRegistry){for(const ctx of this.windowRegistry.contexts.values())this.windowRegistry.run(ctx.id,()=>{const tab=this.tabs.get(this.active);if(tab)this.scheduleThumbnail(tab);});}else{const tab=this.tabs.get(this.active);if(tab)this.scheduleThumbnail(tab);}},20000);this.thumbnailTimer.unref?.();
     this.retentionTimer = setInterval(() => { void this.sweepRetention(); }, 60_000);
-    this.retentionTimer.unref?.();this.profileTimer=setInterval(()=>this.options.diagnostics?this.options.diagnostics.measureSync('browser.profiles.reconcile',()=>this.reconcileProfiles()):this.reconcileProfiles(),1000);this.profileTimer.unref?.();
+    this.retentionTimer.unref?.();this.profileTimer=setInterval(()=>{this.options.diagnostics?this.options.diagnostics.measureSync('browser.profiles.reconcile',()=>this.reconcileProfiles()):this.reconcileProfiles();this.refreshErrorThemes();},1000);this.profileTimer.unref?.();
     this.gestureHandler = (event, direction) => {
       const tab = [...this.tabs.values()].find(tab => tab.view?.webContents === event.sender);
       if(this.shuttingDown || !tab || tab.id !== this.active || event.senderFrame !== event.sender.mainFrame)return;
@@ -134,6 +123,10 @@ class BrowserTabs {
   sessionFor(id='default'){this.profile(id);if(this.sessions.has(id)&&this.sessionNames.get(id)!==(this.options.profiles?.partition(id)||'persist:proteus-browser'))throw new Error('This profile belongs to a different account. Restart Proteus before opening it.');return this.sessions.get(id)||this.configureSession(session.fromPartition(this.options.profiles.partition(id)),id);}
 
   profileAvailable(tab){try{this.profile(tab.profileId);return !this.sessionNames.has(tab.profileId)||this.sessionNames.get(tab.profileId)===(this.options.profiles?.partition(tab.profileId)||'persist:proteus-browser');}catch{return false;}}
+  refreshErrorThemes(){
+    if(!this.options.errorPalette)return;const colors=errorColors(this.options.errorPalette()),signature=JSON.stringify(colors);
+    for(const tab of this.tabs.values()){const wc=tab.view?.webContents,page=tab.errorPage;if(!page||!wc||wc.isDestroyed()||wc.getURL()!==page.documentURL||page.paletteSignature===signature)continue;page.paletteSignature=signature;wc.send('proteus:browser-error-colors',colors);}
+  }
   reconcileProfiles(){
     let changed=false;
     for(const tab of this.tabs.values()){
@@ -324,6 +317,7 @@ class BrowserTabs {
     for(const event of ['media-started-playing','media-paused'])tab.view.webContents.on(event,()=>this.updateThrottling());
     tab.thumbnailId=descriptor.contentTabId||descriptor.thumbnailId||tab.thumbnailId||tab.id;
     const wc = tab.view.webContents;const bind=callback=>this.windowRegistry?this.windowRegistry.bind(tab.windowId,callback):callback;const on=(name,callback)=>wc.on(name,bind(callback));on('did-start-navigation',details=>{if(details.isMainFrame&&!details.isSameDocument)tab.blockedCount=0;});this.extensions?.addTab(profileId,wc);
+    this.certificateReview.bind(tab,wc);
     this.videoPopout.bind(tab);wc.setZoomMode('isolated');
     await this.applySiteMode(tab,this.address(url||'https://example.invalid'),false);
     // Chromium only exposes the current TLS chain while its navigation is in flight.
@@ -476,16 +470,17 @@ class BrowserTabs {
     if(returnRendererFocus)this.window.webContents.focus();
     this.updateThrottling();
   }
-  async close(id,{preserveCache=false}={}) {
-    const owner=this.tabs.get(id)?.windowId;if(this.windowRegistry&&owner&&owner!==this.windowId())return this.windowRegistry.run(owner,()=>this.close(id,{preserveCache}));
+  async close(id,{preserveCache=false,presentationOnly=false}={}) {
+    const owner=this.tabs.get(id)?.windowId;if(this.windowRegistry&&owner&&owner!==this.windowId())return this.windowRegistry.run(owner,()=>this.close(id,{preserveCache,presentationOnly}));
     const tab=this.tabs.get(id);if(!tab)return;
     if(tab.closePromise)return tab.closePromise;
     tab.closePromise=(async()=>{
+      if(!this.shuttingDown&&!preserveCache&&!presentationOnly)await this.options.closeLogicalTab?.(tab);
       if(id===this.active)this.transition?.cancel();this.videoPopout.close(tab);
       tab.shared=false;tab.owner=null;tab.resumeOwner=null;tab.faviconResolver?.close();clearTimeout(tab.thumbnailTimer);if(!this.shuttingDown&&!preserveCache)this.thumbnails?.delete(this.thumbnailKey(tab));
       if(tab.view){const wc=tab.view.webContents;cancelNavigation(wc,'Browser tab closed during navigation.');await this.disconnect(tab);if(!wc.isDestroyed()){this.window.contentView.removeChildView(tab.view);wc.close();}}
       this.tabs.delete(id);if(this.active===id)this.active=null;this.changed();
-    })();return tab.closePromise;
+    })().finally(()=>{if(this.tabs.get(id)===tab)tab.closePromise=null;});return tab.closePromise;
   }
   async unload(id, {hiding=false}={}) {
     const owner=this.tabs.get(id)?.windowId;if(this.windowRegistry&&owner&&owner!==this.windowId())return this.windowRegistry.run(owner,()=>this.unload(id,{hiding}));
@@ -742,7 +737,7 @@ class BrowserTabs {
     }
     if (action === 'show') { if(this.acceptRendererSelection(value,id))this.show(id, value.bounds); return; }
     if (action === 'hide') { if(this.acceptRendererSelection(value,null))this.show(null); return; }
-    if (action === 'close') return this.close(id);
+    if (action === 'close') return this.close(id,{presentationOnly:value.presentationOnly===true});
     if (action === 'navigate') return this.navigate(id, value.url);
     if(action==='restore-history'||action==='apply-history'){
       const tab=this.get(id),history=restoreNavigation(value.history,this.appOrigin);

@@ -7,6 +7,12 @@ import os from 'node:os';
 import path from 'node:path';
 import session from '../desktop/windows/workspace-session.cjs';
 const {WorkspaceSession,normalizeSession}=session;
+test('unavailable document descriptors survive window and Team checkpoints without source grants',()=>{
+ const id='document:'+'a'.repeat(64),tab={id:'unavailable-view',type:'unavailable',contentTabId:id,unavailableReason:'Missing source',unavailableDescriptor:{id,type:'document',documentId:'a'.repeat(64),title:'Synthetic',file:'/private/source',content:'PRIVATE_CONTENT',approved:true}};
+ const saved=normalizeSession({tabs:[tab],team:{active:tab.id,tabs:[tab]}});
+ assert.equal(saved.tabs.find(row=>row.id===tab.id).unavailableDescriptor.documentId,'a'.repeat(64));assert.equal(saved.team.tabs[0].unavailableDescriptor.id,id);assert.equal(saved.team.active,tab.id);
+ assert.doesNotMatch(JSON.stringify(saved),/PRIVATE_CONTENT|private\/source|approved/);
+});
 test('workspace records only descriptors, strips authority, content and startup commands',()=>{
  const value=normalizeSession({active:'web',page:'settings',tabs:[{id:'web',type:'browser',url:'https://example.test/',shared:true,owner:'run',token:'secret'},{id:'md',type:'markdown',file:'/tmp/a.md',content:'private'},{id:'term',type:'terminal',terminal:{id:'terminal-id',profileId:'default',rootId:'root',directory:'a',command:'danger'},output:'private'}]});
  assert.equal(value.active,'web');assert.equal(value.page,'settings');assert.deepEqual(value.tabs.map(t=>t.type),['overview','browser','markdown','terminal']);assert.doesNotMatch(JSON.stringify(value),/secret|private|danger|shared|owner|output/);

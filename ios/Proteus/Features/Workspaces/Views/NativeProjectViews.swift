@@ -245,18 +245,21 @@ struct NativeWorkspaceTree: View {
     }
     private func recents(_ project: JSON, workspace: NativeWorkspaceIdentity, remote: RemoteStore) -> [JSON] {
         let scope = "project:" + workspace.hostID + ":" + project["id"].string
-        var seen = Set<String>()
-        let allChats = (remote.state["runs"].array + remote.allRuns + Array(remote.chats.values)).filter { !$0["id"].string.isEmpty && seen.insert($0["id"].string).inserted }
-        let catalog = remote.projectCatalog // Built and validated once, not per chat.
-        let chats: [JSON] = allChats.filter { !$0["archived"].bool && $0["archivedAt"].string.isEmpty && catalog.membership(for: $0)["projectId"] == project["id"] }.map { run in var row = run.object; row["type"] = .string("chat"); row["chatId"] = run["id"]; row["navigationID"] = .string("chat:" + run["id"].string); return .object(row) }
-        let resources: [JSON] = (shared.workspaceContentDescriptors[scope] ?? resourceRows[scope] ?? []).filter { $0["type"].string != "chat" && !$0["hidden"].bool }.map { tab in var row = tab.object; row["navigationID"] = .string(tab["type"].string == "browser" ? (shared.tabs(in: scope).first { ($0.contentTabId ?? $0.id) == tab["id"].string }?.id ?? "remote:" + tab["id"].string) : "remote:" + tab["id"].string); return .object(row) }
-        return NativeProjectActivity.newestFirst(chats + resources)
+        let rows = shared.workspaceContentDescriptors[scope] ?? resourceRows[scope] ?? []
+        return rows.filter { !$0["hidden"].bool }.map { tab in
+            var row = tab.object
+            if tab["type"].string == "chat" {
+                let run = NativeWorkspaceNavigation.run(tab["chatId"].string, remote: remote)
+                if tab["title"].string.isEmpty { row["title"] = run["title"] }
+                row["chatType"] = run["chatType"]; row["navigationID"] = .string("chat:" + tab["chatId"].string)
+            } else {
+                row["navigationID"] = .string(tab["type"].string == "browser" ? (shared.tabs(in: scope).first { ($0.contentTabId ?? $0.id) == tab["id"].string }?.id ?? "remote:" + tab["id"].string) : "remote:" + tab["id"].string)
+            }
+            return .object(row)
+        }
     }
     private func countLabel(_ items: [JSON], scope: String, remote: RemoteStore) -> String {
-        let resources = shared.workspaceContentDescriptors[scope] ?? resourceRows[scope]
-        let count = items.filter { $0["type"].string == "chat" }.count + (resources?.filter { $0["type"].string != "chat" }.count ?? 0)
-        let complete = remote.allRuns.count >= remote.allRunCount && resources != nil
-        return complete ? String(count) : count == 0 ? "—" : "\(count)+"
+        shared.workspaceContentDescriptors[scope] == nil && resourceRows[scope] == nil ? "—" : String(items.count)
     }
     @ViewBuilder private func resourceIcon(_ item: JSON, selected: Bool) -> some View {
         if item["type"].string == "browser", item["favicon"].string.hasPrefix("data:image/png;base64,"), item["favicon"].string.count < 200_000,
@@ -270,7 +273,7 @@ struct NativeWorkspaceTree: View {
     private func open(_ project: JSON, workspace: NativeWorkspaceIdentity, remote: RemoteStore, item: JSON = .null) {
         expanded.insert(workspace.id); projectExpanded.insert(workspace.hostID + ":" + project["id"].string)
         remote.setDraft("workspace-selected-project:" + workspace.workspaceID, project["id"])
-        if item["type"].string == "chat" { NativeWorkspaceNavigation.openChat(item["chatId"].string, workspaceID: workspace.workspaceID, projectID: project["id"].string, remote: remote) }
+        if item["type"].string == "chat" { NativeWorkspaceNavigation.openChat(item["chatId"].string, workspaceID: workspace.workspaceID, projectID: project["id"].string, remote: remote, shared: shared) }
         else if item != .null {
             Task {
                 let scope = "project:" + workspace.hostID + ":" + project["id"].string

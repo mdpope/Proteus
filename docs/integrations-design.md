@@ -1,5 +1,20 @@
 # Integrations: inventory, machine availability and connection evidence
 
+## Nov 1 local candidate — background work and durability
+
+Background health inventories runs once and skips absent sessions before resolving selections
+or hashing context. Checks revalidate the current run/session/provider/configuration before
+effects and after provider awaits; bounded batches yield to the owner event loop. Manual and
+agent inventories retain their response contracts and scope checks.
+
+Background registry writes use asynchronous fsync and atomic replacement, including bounded
+asynchronous Windows sharing-violation retries. A concurrent manual save joins the same ordered
+snapshot queue and its API response awaits durability. With no async writer active, manual-only
+writes retain immediate durability. Close drains queued writes and reports an outstanding error;
+replacement failure retains the previous file. This avoids input stalls from synchronous fsync
+without weakening permissions, ordering or replacement guarantees. Wider rollout and affected-HC
+five-minute-interval observation remain held; see the [release plan](2026-11-01-release-plan.md).
+
 October 21 implementation, BF-2026-10-21-87. The operator authorized implementation,
 build and update, choosing informational Other computers views. Source now groups discovered
 MCP configurations by source identity/revision with separately preserved consumer records,

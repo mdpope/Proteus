@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import { fileStamp } from '../../shared/file-stamp.js';
 import {safeContentTabURL as safeHistoryURL,normalizeContentTabHistory as normalizeHistory,contentTabTitle as title,sameContentTabs,contentTabMetadata,mergeContentTabMetadata} from '../../../public/models/content-tab-descriptor.js';
 const ID=/^[a-zA-Z0-9_:.\-]{1,256}$/;
+const MAX_CLOSED_TABS=16384;
 export const contentTabMembershipLimits=Object.freeze({scopes:128,tabs:8192});
 export function contentTab(value){
   if(!value||!ID.test(value.id||'')||!['browser','document','chat','terminal'].includes(value.type))throw new Error('Choose a bounded browser or document tab.');
@@ -18,6 +19,7 @@ export function contentTab(value){
 export function workspaceContentScopes(session){
   const descriptor=(child,owner)=>{
     if(child.hostId)return null;
+    if(child.type==='unavailable')return contentTab(child.unavailableDescriptor);
     const common={title:child.customTitle||child.label||child.title,...(child.customTitle?{customTitle:child.customTitle}:{}),...contentTabMetadata(child)};
     if(child.type==='browser'){
       // Preserve navigation identity even when its current URL cannot be shared.
@@ -78,7 +80,7 @@ export class ContentTabs {
         const result=await this.getAsync(scope,id,{historyLimit:value.historyLimit});if(!navigationResult.replayed)this.onChange(result);return result;
       }
       const safe=operations.map(op=>{
-        if(op.action!=='open'||op.tab?.type!=='browser')return op;
+        if(!['open','reopen'].includes(op.action)||op.tab?.type!=='browser')return op;
         const prior=current.tabs.find(tab=>tab.id===op.tab.id);
         if(!prior)return op;
         if((op.tab.profileId||'default')!==(prior.profileId||'default'))throw new Error('Open a separate tab to change browser profiles.');
@@ -90,9 +92,9 @@ export class ContentTabs {
       return result;
     });this.asyncTail=work.catch(()=>{});return work;
   }
-  read(){try{if(fs.statSync(this.file).size>16_000_000)throw new Error();const data=JSON.parse(fs.readFileSync(this.file,'utf8'));if(data.schemaVersion!==1||typeof data.scopes!=='object'||!data.scopes)throw new Error();if(Object.keys(data.scopes).length>1000)throw new Error();for(const [key,row]of Object.entries(data.scopes)){const [scope,...id]=key.split(':');this.key(scope,id.join(':'));if(!/^(chat|team|workspace|project|main):/.test(key)||!row||!Number.isSafeInteger(row.revision)||row.revision<0||!Array.isArray(row.tabs)||row.tabs.length>1000||new Set(row.tabs.map(tab=>contentTab(tab).id)).size!==row.tabs.length)throw new Error();}return data;}catch(error){if(error.code==='ENOENT')return {schemaVersion:1,scopes:{}};throw new Error('Saved content tabs could not be read. The original file was preserved.');}}
+  read(){try{if(fs.statSync(this.file).size>16_000_000)throw new Error();const data=JSON.parse(fs.readFileSync(this.file,'utf8'));if(data.schemaVersion!==1||typeof data.scopes!=='object'||!data.scopes)throw new Error();if(Object.keys(data.scopes).length>1000)throw new Error();for(const row of Object.values(data.scopes))if(row.closed&&(typeof row.closed!=='object'||Array.isArray(row.closed)||Object.keys(row.closed).length>MAX_CLOSED_TABS||Object.entries(row.closed).some(([id,revision])=>!ID.test(id)||!Number.isSafeInteger(revision)||revision<1||revision>row.revision)))throw new Error();for(const [key,row]of Object.entries(data.scopes)){const [scope,...id]=key.split(':');this.key(scope,id.join(':'));if(!/^(chat|team|workspace|project|main):/.test(key)||!row||!Number.isSafeInteger(row.revision)||row.revision<0||!Array.isArray(row.tabs)||row.tabs.length>1000||new Set(row.tabs.map(tab=>contentTab(tab).id)).size!==row.tabs.length)throw new Error();row.tabs=row.tabs.filter(tab=>!Object.hasOwn(row.closed||{},tab.id));}return data;}catch(error){if(error.code==='ENOENT')return {schemaVersion:1,scopes:{}};throw new Error('Saved content tabs could not be read. The original file was preserved.');}}
   key(scope,id){if(!['chat','team','workspace','project','main'].includes(scope)||!ID.test(id||'')||(scope==='team'&&id!=='team'&&!/^window:[a-f0-9-]{36}$/i.test(id))||(scope==='main'&&id!=='main'&&!/^window:[a-f0-9-]{36}$/i.test(id)))throw new Error('Choose an explicit chat or Team tab scope.');return scope+':'+id;}
-  get(scope,id){const key=this.key(scope,id),row=this.read().scopes[key],names=this.profiles?new Map(this.profiles().map(profile=>[profile.id,profile.name])):null;return {scope,id,revision:row?.revision||0,tabs:(row?.tabs||[]).map(value=>{const tab=contentTab(value);return names&&tab.type==='browser'?{...tab,profileName:names.get(tab.profileId||'default')||'Unavailable profile'}:tab;})};}
+  get(scope,id){const key=this.key(scope,id),row=this.read().scopes[key],names=this.profiles?new Map(this.profiles().map(profile=>[profile.id,profile.name])):null;return {scope,id,revision:row?.revision||0,...(Object.keys(row?.closed||{}).length?{closed:row.closed}:{}),tabs:(row?.tabs||[]).map(value=>{const tab=contentTab(value);return names&&tab.type==='browser'?{...tab,profileName:names.get(tab.profileId||'default')||'Unavailable profile'}:tab;})};}
   member(scope,id,tabId){
     const key=this.key(scope,id);
     for(let attempt=0;attempt<2;attempt++){
@@ -126,7 +128,8 @@ export class ContentTabs {
       const data=this.read(),sourceRow=data.scopes[sourceKey],target=data.scopes[targetKey]||{revision:0,tabs:[]};
       if(sourceRow.revision!==expectedRevision||target.revision!==destination.expectedRevision)throw new Error('Content tabs changed. Refresh before moving this tab.');
       if(target.tabs.length>=1000||target.tabs.some(item=>item.id===tab.id))throw new Error('Destination already contains this tab or is full.');
-      sourceRow.tabs=sourceRow.tabs.filter(item=>item.id!==tab.id);sourceRow.revision++;
+      sourceRow.tabs=sourceRow.tabs.filter(item=>item.id!==tab.id);sourceRow.revision++;sourceRow.closed={...sourceRow.closed,[tab.id]:sourceRow.revision};
+      if(target.closed)delete target.closed[tab.id];
       target.tabs.push(tab);target.revision++;data.scopes[targetKey]=target;
       if(tab.type==='document')this.authorizeDocumentPlacement(tab.documentId,destination.scope,destination.id);
       // Copy the complete worker-owned stack, including Forward and paged entries.
@@ -136,26 +139,27 @@ export class ContentTabs {
       return {source:this.get(scope,id),destination:this.get(destination.scope,destination.id),tab};
     });this.asyncTail=task.catch(()=>{});return task;
   }
-  write(data){if(Object.keys(data.scopes).length>1000||Buffer.byteLength(JSON.stringify(data))>16_000_000)throw new Error('Content tab store exceeds its bounded limit.');fs.mkdirSync(path.dirname(this.file),{recursive:true});const temp=this.file+'.tmp';try{fs.writeFileSync(temp,JSON.stringify(data)+'\n',{mode:0o600});fs.chmodSync(temp,0o600);atomicRename(temp,this.file);}finally{try{fs.unlinkSync(temp);}catch{}}}
+  write(data){if(Object.values(data.scopes).some(row=>Object.keys(row.closed||{}).length>MAX_CLOSED_TABS))throw Error('Closed tab identity limit reached. The original registry was preserved.');if(Object.keys(data.scopes).length>1000||Buffer.byteLength(JSON.stringify(data))>16_000_000)throw new Error('Content tab store exceeds its bounded limit.');fs.mkdirSync(path.dirname(this.file),{recursive:true});const temp=this.file+'.tmp';try{fs.writeFileSync(temp,JSON.stringify(data)+'\n',{mode:0o600});fs.chmodSync(temp,0o600);atomicRename(temp,this.file);}finally{try{fs.unlinkSync(temp);}catch{}}}
   mutate({scope,id,expectedRevision,operations}){
     const key=this.key(scope,id),data=this.read(),current=data.scopes[key]||{revision:0,tabs:[]};
     if(!Number.isSafeInteger(expectedRevision)||expectedRevision!==current.revision)throw new Error('Content tabs changed. Refresh before retrying this action.');
     if(!Array.isArray(operations)||operations.length>100)throw new Error('Choose at most 100 tab changes.');
-    let tabs=current.tabs.map(contentTab);
+    let tabs=current.tabs.map(contentTab),closed=Object.assign(Object.create(null),current.closed);
     // Passive snapshots update an existing identity only. A close/move from
     // another window wins; an explicit new open remains a separate operation.
-    for(const op of operations){if(op.action==='open'){const tab=contentTab(op.tab);if(tab.type==='chat'&&!['workspace','project','main'].includes(scope))throw new Error('Chats can appear in workspace or main navigation.');const existing=tabs.findIndex(item=>item.id===tab.id);if(op.updateOnly===true&&existing<0)continue;if(existing<0)tabs.push(tab);else tabs[existing]=mergeContentTabMetadata(tabs[existing],tab);}
-      else if(op.action==='close')tabs=tabs.filter(tab=>tab.id!==op.id);
+    for(let op of operations){if(op.action==='open'||op.action==='reopen'){const tab=contentTab(op.tab);if(Object.hasOwn(closed,tab.id)){if(op.action!=='reopen'||op.closedRevision!==closed[tab.id])continue;delete closed[tab.id];}if(tab.type==='chat'&&!['workspace','project','main'].includes(scope))throw new Error('Chats can appear in workspace or main navigation.');const existing=tabs.findIndex(item=>item.id===tab.id);if(op.updateOnly===true&&existing<0)continue;if(existing<0)tabs.push(tab);else tabs[existing]=mergeContentTabMetadata(tabs[existing],tab);}
+      else if(op.action==='close'){if(!ID.test(op.id||''))throw Error('Choose a bounded tab identity.');tabs=tabs.filter(tab=>tab.id!==op.id);closed[op.id]=current.revision+1;}
       else if(op.action==='rename'){const tab=tabs.find(tab=>tab.id===op.id);if(!tab)throw new Error('Tab is no longer open.');tab.title=title(op.title)||'New tab';tab.customTitle=tab.title;}
       else if(op.action==='visibility'){const tab=tabs.find(tab=>tab.id===op.id);if(!tab||typeof op.hidden!=='boolean')throw new Error('Choose an open tab and visibility.');if(op.hidden)tab.hidden=true;else delete tab.hidden;}
       else if(op.action==='touch'){const tab=tabs.find(tab=>tab.id===op.id);if(!tab)throw new Error('Tab is no longer open.');tab.lastTouchedAt=new Date().toISOString();}
       else if(op.action==='persist'){const tab=tabs.find(tab=>tab.id===op.id);if(tab?.type!=='browser'||typeof op.enabled!=='boolean')throw new Error('Choose a browser persistence preference.');if(op.enabled)tab.persist=true;else delete tab.persist;}
-      else if(op.action==='reorder'){if(!Array.isArray(op.ids)||new Set(op.ids).size!==tabs.length||op.ids.length!==tabs.length||op.ids.some(id=>!tabs.some(tab=>tab.id===id)))throw new Error('Reorder must contain each current tab exactly once.');tabs=op.ids.map(id=>tabs.find(tab=>tab.id===id));}
+      else if(op.action==='reorder'){if(Array.isArray(op.ids))op={...op,ids:op.ids.filter(id=>!Object.hasOwn(closed,id))};if(!Array.isArray(op.ids)||new Set(op.ids).size!==tabs.length||op.ids.length!==tabs.length||op.ids.some(id=>!tabs.some(tab=>tab.id===id)))throw new Error('Reorder must contain each current tab exactly once.');tabs=op.ids.map(id=>tabs.find(tab=>tab.id===id));}
       else throw new Error('Unknown tab change.');
     }
     if(tabs.length>1000)throw new Error('At most 1000 content tabs can be open in one scope.');
-    if(sameContentTabs(tabs,current.tabs))return {scope,id,revision:current.revision,tabs};
-    if(current.revision>=Number.MAX_SAFE_INTEGER)throw new Error('Content tab revision limit reached.');const result={scope,id,revision:current.revision+1,tabs};data.scopes[key]={...current,revision:result.revision,tabs};this.write(data);this.onChange(result);return result;
+    if(Object.keys(closed).length>MAX_CLOSED_TABS)throw Error('Closed tab identity limit reached. The original registry was preserved.');
+    if(sameContentTabs(tabs,current.tabs)&&JSON.stringify(closed)===JSON.stringify(current.closed||{}))return {scope,id,revision:current.revision,...(Object.keys(current.closed||{}).length?{closed:{...closed}}:{}),tabs};
+    if(current.revision>=Number.MAX_SAFE_INTEGER)throw new Error('Content tab revision limit reached.');const result={scope,id,revision:current.revision+1,...(Object.keys(closed).length?{closed:{...closed}}:{}),tabs};data.scopes[key]={...current,closed,revision:result.revision,tabs};this.write(data);this.onChange(result);return result;
   }
   documentSource(chatId,documentId,scope='chat'){if(!this.get(scope,chatId).tabs.some(tab=>tab.documentId===documentId)&&!(scope==='chat'&&this.list({type:'document'}).some(tab=>tab.documentId===documentId&&tab.chatId===chatId)))throw new Error('This document tab is no longer open.');let records;try{if(fs.statSync(this.sourcesFile).size>2_000_000)throw new Error();records=JSON.parse(fs.readFileSync(this.sourcesFile,'utf8'));}catch{throw new Error('This chat document is not available on its host.');}const row=records[documentId];const original=scope==='workspace'?row?.workspaceId===chatId:scope==='chat'?row?.chatId===chatId:row?.scope===scope&&row?.scopeId===chatId;const moved=row?.placements?.includes(this.key(scope,chatId));if((!original&&!moved)||typeof row?.file!=='string'||!path.isAbsolute(row.file))throw new Error('This document belongs to another chat or its source is unavailable.');return row.file;}
   authorizeDocumentPlacement(documentId,scope,id){const key=this.key(scope,id),records=JSON.parse(fs.readFileSync(this.sourcesFile,'utf8')),row=records[documentId];if(!row)throw new Error('This viewer source is unavailable.');row.placements=[...new Set([...(row.placements||[]),key])];const temp=this.sourcesFile+'.tmp';fs.writeFileSync(temp,JSON.stringify(records)+'\n',{mode:0o600});atomicRename(temp,this.sourcesFile);}
@@ -185,7 +189,7 @@ export class ContentTabs {
       const tabs=(saved?.tabs||[]).map(contentTab),added=[];
       for(const tab of row.tabs){
         if(tab.type==='chat'&&!['main','workspace','project'].includes(row.scope))continue;
-        if(tabs.some(existing=>existing.id===tab.id)||saved?.revision&& !introduced.includes(tab.type))continue;
+        if(Object.hasOwn(saved?.closed||{},tab.id)||tabs.some(existing=>existing.id===tab.id)||saved?.revision&& !introduced.includes(tab.type))continue;
         const index=row.tabs.indexOf(tab),preceding=row.tabs.slice(0,index).reverse().find(item=>tabs.some(existing=>existing.id===item.id));
         const following=row.tabs.slice(index+1).find(item=>tabs.some(existing=>existing.id===item.id));
         let at=preceding?tabs.findIndex(item=>item.id===preceding.id)+1:following?tabs.findIndex(item=>item.id===following.id):tabs.length;
@@ -216,11 +220,11 @@ export class ContentTabs {
       const tabs=target.tabs.filter(tab=>!(tab.type==='chat'&&tab.chatId===chatId));
       if(tabs.length>=1000)throw new Error('The destination workspace has too many tabs.');
       tabs.splice(existing?target.tabs.indexOf(existing):tabs.length,0,descriptor);
-      for(const [key,row]of placements)if(key!==targetKey){row.tabs=row.tabs.filter(tab=>!(tab.type==='chat'&&tab.chatId===chatId));if(!Number.isSafeInteger(++row.revision))throw new Error('Content tab revision limit reached.');changed.add(key);}
-      if(!sameContentTabs(target.tabs,tabs)){target.tabs=tabs;if(!Number.isSafeInteger(++target.revision))throw new Error('Content tab revision limit reached.');data.scopes[targetKey]=target;changed.add(targetKey);}
+      for(const [key,row]of placements)if(key!==targetKey){row.closed={...row.closed,['chat:'+chatId]:row.revision+1};row.tabs=row.tabs.filter(tab=>!(tab.type==='chat'&&tab.chatId===chatId));if(!Number.isSafeInteger(++row.revision))throw new Error('Content tab revision limit reached.');changed.add(key);}
+      if(!sameContentTabs(target.tabs,tabs)){target.tabs=tabs;if(target.closed)delete target.closed[descriptor.id];if(!Number.isSafeInteger(++target.revision))throw new Error('Content tab revision limit reached.');data.scopes[targetKey]=target;changed.add(targetKey);}
     }
     if(changed.size){this.write(data);for(const key of changed){const [scope,...id]=key.split(':');this.onChange(this.get(scope,id.join(':')));}}
   }
-  clearScopes(scopes){const data=this.read();for(const {scope,id}of scopes){const key=this.key(scope,id),row=data.scopes[key]||{revision:0,tabs:[]};row.tabs=[];row.revision++;data.scopes[key]=row;}this.write(data);for(const {scope,id}of scopes)this.onChange(this.get(scope,id));}
+  clearScopes(scopes){const data=this.read();for(const {scope,id}of scopes){const key=this.key(scope,id),row=data.scopes[key]||{revision:0,tabs:[]};row.closed={...row.closed,...Object.fromEntries(row.tabs.map(tab=>[tab.id,row.revision+1]))};row.tabs=[];row.revision++;data.scopes[key]=row;}this.write(data);for(const {scope,id}of scopes)this.onChange(this.get(scope,id));}
   removeChat(id){const data=this.read(),key=this.key('chat',id);if(data.scopes[key]){delete data.scopes[key];this.write(data);}}
 }

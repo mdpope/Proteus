@@ -8,16 +8,36 @@ import Security
     @Published var status = "Notifications are off"
     @Published var deviceToken: String?
     @Published var route: NotificationRoute?
-    struct Banner: Identifiable { let id = UUID(); let message: String; let destination: NotificationRoute }
+    struct Banner: Identifiable { let id: UUID; let message: String; let destination: NotificationRoute; let expiresAt: Date }
     @Published var banner: Banner?
-    private var bannerQueue: [Banner] = []
     private var bannerTask: Task<Void, Never>?
-    func presentBanner(_ message: String, destination: NotificationRoute) { let value = Banner(message: message, destination: destination); if banner != nil { if bannerQueue.count < 30 { bannerQueue.append(value) }; return }; banner = value; bannerTask?.cancel(); bannerTask = Task { try? await Task.sleep(for: .seconds(5)); if !Task.isCancelled && banner?.id == value.id { dismissBanner() } } }
-    func dismissBanner() { bannerTask?.cancel(); banner = nil; if !bannerQueue.isEmpty { let next = bannerQueue.removeFirst(); presentBanner(next.message, destination: next.destination) } }
+    func presentBanner(_ message: String, destination: NotificationRoute) {
+        expireBanner()
+        if let current = banner {
+            // Coalesce a burst into the same five-second window; never replay a backlog.
+            banner = Banner(id: current.id, message: message, destination: destination, expiresAt: current.expiresAt)
+            return
+        }
+        let value = Banner(id: UUID(), message: message, destination: destination, expiresAt: Date().addingTimeInterval(5))
+        banner = value; bannerTask?.cancel()
+        bannerTask = Task { try? await Task.sleep(for: .seconds(5)); if !Task.isCancelled && banner?.id == value.id { dismissBanner() } }
+    }
+    func expireBanner(now: Date = Date()) { if let banner, banner.expiresAt <= now { dismissBanner() } }
+    func dismissBanner() { bannerTask?.cancel(); bannerTask = nil; banner = nil }
 
     @AppStorage("notificationsEnabled") var enabled = false
     @AppStorage("notificationDeviceID") var deviceID = UUID().uuidString.lowercased()
-    private var delivered = Set<String>()
+    private let defaults: UserDefaults
+    private var delivered: [String: Double]
+    private static let deliveredKey = "proteus.notification-receipts.v2"
+    private func claim(_ host: String, _ event: String, now: Date = Date(), persist: Bool = true) -> Bool {
+        guard UUID(uuidString: event) != nil else { return false }
+        let key = host + ":" + event
+        guard delivered[key] == nil else { return false }
+        delivered[key] = now.timeIntervalSince1970
+        if delivered.count > 2000 { delivered = Dictionary(uniqueKeysWithValues: delivered.sorted { $0.value > $1.value }.prefix(1500).map { ($0.key, $0.value) }) }
+        if persist { defaults.set(delivered, forKey: Self.deliveredKey) }; return true
+    }
     private var baselineHosts = Set<String>()
     private var life: LifeStore?
     @AppStorage("pushSubscriptionID") private var subscriptionID = ""
@@ -27,6 +47,7 @@ import Security
         let chatID: String
         let scheduleID: String
         let type: String
+        var notificationID: String = ""
         static func from(_ payload: [AnyHashable: Any]) -> Self {
             func field(_ key: String) -> String {
                 guard let value = payload[key] as? String, value.count <= 128,
@@ -34,11 +55,18 @@ import Security
                 return value
             }
             let host = field("hostId")
+            let notification = field("notificationId")
             return Self(hostID: UUID(uuidString: host) == nil ? "" : host,
-                        chatID: field("chatId"), scheduleID: field("scheduleId"), type: field("type"))
+                        chatID: field("chatId"), scheduleID: field("scheduleId"), type: field("type"),
+                        notificationID: UUID(uuidString: notification) == nil ? "" : notification)
         }
     }
-    override init() { super.init(); UNUserNotificationCenter.current().delegate = self }
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults; delivered = defaults.dictionary(forKey: Self.deliveredKey) as? [String: Double] ?? [:]
+        super.init(); UNUserNotificationCenter.current().delegate = self
+        NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { [weak self] _ in Task { @MainActor in self?.dismissBanner() } }
+        NotificationCenter.default.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in Task { @MainActor in self?.expireBanner() } }
+    }
     func attach(_ life: LifeStore) { self.life = life; if enabled { UIApplication.shared.registerForRemoteNotifications() } }
     func enable() async {
         do { let allowed = try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]); enabled = allowed; status = allowed ? "Registering with Apple…" : "Permission denied; change notifications in iOS Settings."; if allowed { UIApplication.shared.registerForRemoteNotifications() } }
@@ -62,21 +90,35 @@ import Security
             status = response["configured"].bool ? "Registered with Apple and the shared service" : "Registered with Apple; server APNs credentials are not configured. Background delivery is unavailable."
         } catch { status = life.display(error) }
     }
-    func observe(_ items: [JSON], hostID: String) {
+    func observe(_ items: [JSON], hostID: String, now: Date = Date()) {
         // First sync is history, not new activity. Do not notify an old backlog after reconnect.
         let first = baselineHosts.insert(hostID).inserted
+        var changed = false
+        defer { if changed { defaults.set(delivered, forKey: Self.deliveredKey) } }
         for item in items {
             let id = hostID + ":" + item["id"].string
-            guard delivered.insert(id).inserted, !first, item["readAt"] == .null else { continue }
-            if UIApplication.shared.applicationState == .active { presentBanner(Self.notificationBody(item), destination: NotificationRoute(hostID: hostID, chatID: item["chatId"].string, scheduleID: item["scheduleId"].string, type: item["type"].string)); continue }
+            guard Self.shouldAlert(item, now: now), claim(hostID, item["id"].string, now: now, persist: false) else { continue }
+            changed = true
+            guard !first else { continue }
+            let destination = NotificationRoute.from(["hostId": hostID, "chatId": item["chatId"].string, "scheduleId": item["scheduleId"].string, "type": item["type"].string, "notificationId": item["id"].string])
+            if UIApplication.shared.applicationState == .active { presentBanner(Self.notificationBody(item), destination: destination); continue }
             guard enabled else { continue }
             // Same text the computer published: chat title, preview and source computer.
-            let content = UNMutableNotificationContent(); content.title = item["title"].string.isEmpty ? "Proteus" : String(item["title"].string.prefix(160)); content.subtitle = String(item["hostName"].string.prefix(80)); content.body = Self.notificationBody(item, includeTitle: false); content.sound = .default; content.threadIdentifier = item["chatId"].string
+            let content = UNMutableNotificationContent(); content.title = item["title"].string.isEmpty ? "Proteus" : String(item["title"].string.prefix(160)); content.subtitle = String(item["hostName"].string.prefix(80)); content.body = Self.notificationBody(item, includeTitle: false); content.sound = Self.shouldPlaySound(item) ? .default : nil; content.threadIdentifier = item["chatId"].string
             content.userInfo = ["hostId": hostID, "chatId": item["chatId"].string,
-                                "scheduleId": item["scheduleId"].string, "type": item["type"].string]
+                                "scheduleId": item["scheduleId"].string, "type": item["type"].string, "notificationId": destination.notificationID]
             UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: id, content: content, trigger: nil))
         }
-        if delivered.count > 2000 { delivered = Set(delivered.suffix(1000)) }
+    }
+    static func shouldPlaySound(_ item: JSON) -> Bool { item["sound"] != .bool(false) }
+    static func shouldAlert(_ item: JSON, now: Date = Date()) -> Bool {
+        guard item["readAt"] == .null, item["silent"] != .bool(true) else { return false }
+        do {
+            let formatter = ISO8601DateFormatter(); formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            let created = formatter.date(from: item["createdAt"].string) ?? ISO8601DateFormatter().date(from: item["createdAt"].string)
+            guard let created, now.timeIntervalSince(created) <= 300, now.timeIntervalSince(created) >= -60 else { return false }
+        }
+        return true
     }
     static func notificationBody(_ item: JSON, includeTitle: Bool = true) -> String {
         // Content arrived through the authenticated/decrypted owner channel.
@@ -87,7 +129,7 @@ import Security
         return preview.isEmpty ? safeBody(item["type"].string) : String(preview.prefix(500))
     }
     static func safeBody(_ type: String) -> String {
-        switch type { case "chat.completed": "A chat finished."; case "review.required", "approval.required": "A chat needs your review."; case "schedule.completed": "A schedule finished."; case "device.added": "A device was added."; case "device.reconnected": "A computer reconnected."; default: "New activity is available." }
+        switch type { case "chat.completed": "A chat finished."; case "review.required", "approval.required": "A chat needs your review."; case "schedule.completed": "A schedule finished."; case "device.added": "A device was added."; case "device.reconnected": "A computer reconnected."; case "website.notification": "A website sent a notification."; default: "New activity is available." }
     }
     func receivedTap(_ payload: [AnyHashable: Any]) {
         route = NotificationRoute.from(payload)
@@ -104,7 +146,7 @@ import Security
         let content = UNMutableNotificationContent()
         content.title = "Proteus route fixture"
         content.body = "Tap to open the fixture chat."
-        content.userInfo = ["hostId": "10000000-0000-4000-8000-000000000001", "chatId": "notification-chat", "type": "chat.completed"]
+        content.userInfo = ["hostId": "10000000-0000-4000-8000-000000000001", "chatId": "notification-chat", "type": "chat.completed", "notificationId": UUID().uuidString.lowercased(), "createdAt": ISO8601DateFormatter().string(from: Date())]
         // Give XCTest time to background the app after the scheduling acknowledgement.
         // Foreground fixtures keep their original timing and delivery path.
         let delay: TimeInterval = ProcessInfo.processInfo.arguments.contains("--synthetic-background-notification") ? 10 : 4
@@ -116,17 +158,21 @@ import Security
         let payload = notification.request.content.userInfo
         let host = payload["hostId"] as? String ?? "", chat = payload["chatId"] as? String ?? "", schedule = payload["scheduleId"] as? String ?? "", type = payload["type"] as? String ?? ""
         let eventID = payload["notificationId"] as? String ?? ""
+        let content = notification.request.content
+        let playSound = content.sound != nil
+        let text = [[content.subtitle, content.title].filter { !$0.isEmpty && $0 != "Proteus" }.joined(separator: " · "), content.body].filter { !$0.isEmpty && $0 != "There is an update in Proteus. Open Notifications to review." }.joined(separator: " — ")
+        let observed: JSON = .object(["createdAt": .string(payload["createdAt"] as? String ?? ""), "readAt": payload["readAt"] is String ? .string(payload["readAt"] as? String ?? "") : .null, "silent": .bool(payload["silent"] as? Bool ?? false), "type": .string(type)])
         DispatchQueue.main.async {
             // Account push and the live encrypted host connection can report
             // the same event. Whichever arrives first owns its foreground alert.
-            if !eventID.isEmpty, UUID(uuidString: eventID) != nil, !self.delivered.insert(host + ":" + eventID).inserted { completionHandler([]); return }
+            // Legacy pushes without event time remain available in history/tap routing.
+            // A transport arrival date is not the original event's creation time.
+            guard Self.shouldAlert(observed), self.claim(host, eventID) else { completionHandler([]); return }
             #if DEBUG
             self.fixtureStatus = "Foreground delivered"
             #endif
             // Use the pushed alert's own text; fall back to the generic label for older servers.
-            let content = notification.request.content
-            let text = [[content.subtitle, content.title].filter { !$0.isEmpty && $0 != "Proteus" }.joined(separator: " · "), content.body].filter { !$0.isEmpty && $0 != "There is an update in Proteus. Open Notifications to review." }.joined(separator: " — ")
-            self.presentBanner(text.isEmpty ? Self.safeBody(type) : String(text.prefix(500)), destination: NotificationRoute.from(["hostId": host, "chatId": chat, "scheduleId": schedule, "type": type])); completionHandler([]) }
+            self.presentBanner(text.isEmpty ? Self.safeBody(type) : String(text.prefix(500)), destination: NotificationRoute.from(["hostId": host, "chatId": chat, "scheduleId": schedule, "type": type, "notificationId": eventID])); completionHandler(playSound ? [.sound] : []) }
     }
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
         let payload = response.notification.request.content.userInfo
@@ -134,8 +180,9 @@ import Security
         let chat = payload["chatId"] as? String ?? ""
         let schedule = payload["scheduleId"] as? String ?? ""
         let type = payload["type"] as? String ?? ""
+        let eventID = payload["notificationId"] as? String ?? ""
         DispatchQueue.main.async {
-            self.receivedTap(["hostId": host, "chatId": chat, "scheduleId": schedule, "type": type])
+            self.receivedTap(["hostId": host, "chatId": chat, "scheduleId": schedule, "type": type, "notificationId": eventID])
             completionHandler()
         }
     }

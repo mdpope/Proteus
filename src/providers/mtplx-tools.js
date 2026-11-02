@@ -42,7 +42,7 @@ export class MtplxTools {
   }
   allowedMcp(server,tool){return this.scope==null||this.scope.includes('mcp:*')||this.scope.includes(server+'/*')||this.scope.includes(server+'/'+tool);}
   definitions(){return this.tools.map(t=>({type:'function',function:{name:t.name,description:t.description,parameters:t.parameters}}));}
-  async permit(details){this.signal.throwIfAborted();const answer=await this.ask({type:'permission',question:'Allow MTPLX to use '+(details.serverName?details.serverName+' / ':'')+details.toolName+'?',details});this.signal.throwIfAborted();if(!['approve','approve-auto'].includes(answer))throw Error('The user declined this operation. Do not retry or bypass the refusal.');}
+  async permit(details){this.signal.throwIfAborted();const answer=await this.ask({type:'permission',question:'Allow '+(this.adapter.label||'MTPLX')+' to use '+(details.serverName?details.serverName+' / ':'')+details.toolName+'?',details});this.signal.throwIfAborted();if(!['approve','approve-auto'].includes(answer))throw Error('The user declined this operation. Do not retry or bypass the refusal.');}
   async gateway(args){
     const selected=this.adapter.selectedMcp(this.run),names=Object.keys(selected);
     if(args.action==='list')return JSON.stringify({servers:names,nextStep:'Choose an exact server and use list-tools to discover its current tool schemas.'});

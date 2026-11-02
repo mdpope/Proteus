@@ -1,3 +1,136 @@
+## Nov 1 closed; Nov 2 handoff
+
+Nov 1 / 0.2.40 is closed by the operator with deployed outcomes and qualifications in
+[the closeout](releases/2026-11-01/closeout.md). All five desktops, the website and both physical
+mobile apps received the release. Secondary-Mac maintenance completed with two verified recoveries.
+Browser sizing, real vault lifecycle, closed-popup control, machine-specific model choices and
+mobile in-tab New chat move to [Nov 2](2026-11-02-release-plan.md), in a new chat.
+Do not reopen Nov 1 or relabel installed packages. Further local deletion is held for the
+operator's requested full-path disk review. Earlier entries below are historical checkpoints.
+
+## November 1 — 0.2.40 rollout authorized, expanded corrections under test
+
+The operator lifted the local hold and requested all-platform rollout plus Work Mac verification.
+Nov 1 now reserves 0.2.40. Added work covers iPad canonical tab membership/offline intent replay,
+stale notification suppression/five-second expiry, extension window/authentication/autofill and
+persisted scoped updater preflight authorization. The earlier accepted 0.2.39 local package is a
+historical checkpoint, not the new deployable pin. See the Nov 1 plan and release ledger. Remote
+preflight is distinct from building, publication, installation and live preservation verification.
+
+## November 1 — historical local synchronization checkpoint
+
+Local implementation/build is authorized; wider rollout is held for additional bugs. Continue from combined 08db248 plus HC handoff 5f55c75. The isolated Nov 1 branch fixes missing-document scope failure, durable Close/reopen, native browser Close and actual browser-surface geometry, and removes repeated global integration scans with bounded event-loop yields. See [the Nov 1 plan](2026-11-01-release-plan.md) for acceptance and remaining package/HC gates. The existing named 0.2.39 release is still open; no new version or production rollout is claimed.
+
+## November 1 — HC responsiveness diagnosis ready for personal-Mac implementation
+
+Read the [November 1 release plan](2026-11-01-release-plan.md). A targeted live CPU sample and
+synthetic inspector profile identify repeated global integration scans in a timer's promise chain.
+The 600-chat synthetic case performs 1,201 scans and starves timers; a one-pass yielding control
+removes that amplification. The committed probe uses synthetic data only. Production correction,
+regressions, signed package and two-interval HC acceptance remain required. Baseline is merged
+0.2.39 source `08db248`, not the older main checkout. No installed state was changed.
+
+## October 30 — web and Windows publication complete over SSH
+
+The 0.2.39 website is deployed: 9,221 file hashes, nine public assets and fourteen endpoints pass,
+with configuration/schema/nutrition preserved. Ordinary restore failed; the existing isolated
+captured-state verifier passed and that qualification remains explicit. Two local recovery
+generations and one server generation remain.
+
+Windows `windows.06ac0b603ae1` is installed/healthy and publicly verified. Original full packages
+transfer through the working deployment SSH identity. Scoped directory access and a fixed read-only
+hosting audit replace browser upload workarounds; private account/key routing stays in the hosting
+workspace. All 25 distribution files and 22 public metadata hashes pass. The current descriptor names
+the October thirtieth release, missing targets have empty catalogs, and seven old public generations
+plus duplicate upload files are retired. Installer Authenticode remains unsigned.
+
+Both physical devices are installed at 0.2.39 / 2610.30.1 with documented preservation/launch timing.
+Final corrective Macs still require normal idle and post-restart verification; Linux/Ian await their
+destination approvals. Keep this release open. Do not rebuild accepted packages or repeat completed
+device/website recovery operations. Private checkpoints carry exact receipts and remaining work.
+
+## October 30 — final native packages accepted, rollout still open
+
+Frozen Mac source `5bcbd89` has an accepted signed package and matching source, with exact-package
+TLS/original notice-color fixtures and unchanged hashes. Its public envelope now independently
+verifies against the trusted publisher and accepted payload. Both installed Macs still run the
+earlier healthy 0.2.39; final corrective coordinators await their normal destination approvals.
+
+Frozen Windows source `3422822` adds serial pinned Electron preparation before parallel tests.
+Native acceptance passes that step, 1,351 tests/six skips, static checks, official extraction,
+synthetic packaged UI/PTY/restart checks, integrity preservation and publisher verification.
+The installer is Authenticode unsigned. The live owner remains 0.2.36, awaiting a normal human
+restart before staging/handoff. Prior integrity and failed build evidence remains preserved.
+
+The signed physical iOS 0.2.39/2610.30.1 candidate verifies with existing paid identities, but both
+devices require unlocking. Both shared simulators are updated with saved selection preservation;
+normal phone authenticated cold reconnect is independently verified. Opt-in menu-touch automation
+still fails separately. Website production and current-only public package activation remain pending.
+See the release implementation/rollout records and private command-center checkpoint for exact pins.
+
+## October 30 release — R14 browser follow-up and Mac rollout
+
+The operator authorizes R1–R14 implementation and installation on Build Mac and Work Mac,
+remaining at 0.2.39. Other-platform builds/deployment still follow verified HC installation.
+Current source adds single-label intranet host:port parsing and a direct **Accept certificate and
+continue** button on the themed error page. No confirmation dialog or menu is required. Chromium
+shares acceptance by browser profile, hostname and exact certificate for the current app session;
+changed certificates and other profiles stay blocked, and restart clears acceptance. Error pages
+use the saved Emerald Canopy/Daylight/custom palette and update when saved colors change.
+Synthetic native acceptance passes custom HTTPS ports, one-click input, script-click rejection,
+profile/session boundaries, changed certificate, restart expiry and live theme changes.
+
+Current accepted source is `0a2b6a425c47bd3a704ffb390a1fdcc6bf6fb864`, build
+`0a2b6a425c47+src.9af8d6057aac`, full installation hash
+`3b100dac4cc38da2d2380560dee3b0bf866ba97e3623275dee0bb0c2111a16bb`.
+Source suite 1,347 pass/four skips and static checks pass. Five exact signed/extracted-package
+UI fixtures pass, with unchanged app/archive hashes. See the implementation record for all pins.
+The broad fixture initially saw transient state-display failures; unchanged package rerun passed
+all assertions with owner diagnostics. Private receipts preserve both outcomes.
+
+Build Mac independently prepared this R14 candidate without handoff and remains on 0.2.33.
+Its superseded preparations were cancelled through their owner coordinators. HC independently verified all asset/source/signing pins using its documented isolated proteus
+context; the initial unscoped CLI failure was not evidence that this context was invalid. It
+prepared and handed off the exact candidate. It restarted on the exact accepted 0.2.39 build, with independent package/Apple identity and owner
+health verified. Saved settings are byte-identical, notification/browser-profile preferences
+match, all prior website records survive and owner preservation covers 577 runs/45,004 events.
+Two verified recoveries remain after policy-compliant rotation; no separate migration outcome
+is recorded. Installed lifecycle/shared-close/site-delivery checks remain limited as documented. Do not copy credentials
+or change global logins. Two recovery
+generations and active work remain preserved. Task duplicate/superseded payload retirement freed
+1,558,646,784 observed bytes, retaining one accepted app/archive/source set plus receipts.
+
+The installed command-center input guard cancels a waiting handoff when another chat receives
+task feedback. Source 24df95f fixes this using private owner-only provenance while preserving
+human-input checkpoint review and all queued/running idle barriers. Final Build Mac bootstrap
+handoff must use notify:false after other feedback settles, followed by normal command-center
+turn completion; no forced idle, unrelated cancellation or journal edits. The new owner observer
+continues update monitoring through restart. Verify actual installation and user-profile behavior.
+
+The reported installed-browser intranet failure is ERR_ADDRESS_UNREACHABLE for hostname and IP.
+Read-only TCP checks reach the port; verified TLS reports an untrusted issuer. macOS shows Local
+Network access enabled; an observed OFF/ON refresh restored that grant but did not resolve the
+failure. Root cause and live resolution remain unverified; neither parser tests
+nor synthetic TLS acceptance alone establish the reported connection fixed.
+
+R12 shared cache/history/draft tests and R13 actual page-generated notifications pass source and
+package fixtures. Real Fusion is unavailable in the refreshed catalog; actual Slack/Web Push,
+server APNs and iPhone acceptance remain pending after HC. Preserve canonical main's earlier
+uncommitted planning notes during eventual integration. The named release remains open in draft
+PR 24; finish all required platform work before merging/syncing/pushing and closing release work.
+
+Earlier entries below are historical checkpoints, not current holds or pending-approval claims.
+
+## October 30 release open as 0.2.39 — distribution implementation
+
+The operator authorizes command-center distribution and codifying named release/version,
+repository plan/implementation/rollout records, current-only public packages, native first builders,
+main/PR/push closeout and bounded app/site/simulator retention. R1–R10 remain on their collection
+hold. See [release process](release-process.md) and [implementation](releases/2026-10-30/implementation.md).
+Work is isolated on codex/oct30-update-command-center; no installed app, existing prepared update,
+server package or remote target was changed. Final Node validation passes 1,324 tests with four
+platform skips; static/diff checks pass. Native package/publication/installation remain unverified.
+
 ## October 30 — October 27 release permanently closed
 
 The operator closes this release regardless of device rollout. All implemented source is merged
@@ -38,8 +171,11 @@ events can reappear, and pending questions/approvals remain intact. The plan inc
 palette values, source investigation leads and future acceptance criteria. R8 records video
 autoplay despite the enabled blocking preference. R9 extends Auto-approve tools and remembered
 approvals to Proteus actions such as `proteus_chats`, including owner access gates and persistent
-scoped rules. Notification/autoplay causes and live Fusion support remain unverified. No runtime, live settings, version, build or
-rollout changed. Earlier implementation and release authorizations below retain their own scope.
+scoped rules. R10 captures visible cross-window divergence in two screenshots: shared project
+counts differ at 19 versus 20, and the closed news tab remains in the other window. The visible
+version is v0.2.38; exact build and root cause still need diagnosis. Shared tab information must
+agree in every window's strip, sidebar and Tabs table, independent of which window is active. Notification/autoplay causes and live Fusion support remain
+unverified. No runtime, live settings, version, build or rollout changed. Earlier implementation and release authorizations below retain their own scope.
 
 ## October 29 — Windows 0.2.37 installer built and privately delivered
 

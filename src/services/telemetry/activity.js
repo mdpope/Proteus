@@ -1,10 +1,11 @@
 import path from 'node:path';
+import {websiteNotification,portableWebsiteNotification} from './website-notification.js';
 import { EventEmitter } from 'node:events';
 import { randomUUID } from 'node:crypto';
 import { atomicJSON, readJSON } from '../../shared/files.js';
 import { RemoteCommandJournal } from '../remote/remote-command-journal.js';
 
-const types = new Set(['chat.completed', 'review.required', 'schedule.completed', 'device.added', 'device.reconnected', 'browser.issue']);
+const types = new Set(['chat.completed', 'review.required', 'schedule.completed', 'device.added', 'device.reconnected', 'browser.issue','website.notification']);
 const sharedLogTypes=new Set(['chat.queued','chat.running','chat.awaiting_input','chat.completed','chat.failed','chat.cancelled','chat.interrupted','chat.deleted','transport.online','transport.offline','transport.device_added','browser.open','browser.unload','app.started','app.stopping','api.failed']);
 const limits = { notifications: 1000, outbox: 500 };
 export function safeLog(value, limit = 1000) {
@@ -40,6 +41,12 @@ function pendingPreview(pending) {
   const action = { shell: 'Run command', write: 'Edit file', read: 'Read files', mcp: 'Use connected tool', url: 'Open website' }[details.kind] || 'Allow app action';
   return action + ': ' + (details.fullCommandText || details.fileName || details.path || details.url || [details.serverName, details.toolName].filter(Boolean).join(' · ') || 'review the request');
 }
+function reviewRequests(run){
+ const requests=new Map(),pending=run.status==='awaiting_input'?run.pending:null;
+ if(pending?.id&&['question','permission'].includes(pending.type))requests.set(pending.id,{id:pending.id,kind:pending.type,preview:pendingPreview(pending)});
+ for(const question of run.userQuestions||[])if(question.status==='pending'&&question.id&&!requests.has(question.id))requests.set(question.id,{id:question.id,kind:'question',preview:'Question: '+(question.question||question.text||question.header||'')});
+ return [...requests.values()];
+}
 export class ActivityStore extends EventEmitter {
   constructor(home, { clock = () => new Date(), identity = () => null, publish } = {}) {
     super(); this.file = path.join(home, 'activity.json'); this.clock = clock; this.identity = identity; this.publish = publish;
@@ -50,12 +57,12 @@ export class ActivityStore extends EventEmitter {
     this.logTail.catch(error => { this.logFailure = error; });
   }
   save() { const persist=()=>atomicJSON(this.file,this.data);return this.performanceDiagnostics?this.performanceDiagnostics.measureSync('activity.persist',persist):persist(); }
-  notifications() { return { items: [...this.data.notifications].reverse(), preferences: { ...this.data.preferences } }; }
+  notifications() { return { items: [...this.data.notifications].reverse(), preferences: { quietMode:true,inAppEnabled:true,...this.data.preferences } }; }
   async logs(value = {}) { await this.logTail; if(this.logFailure)throw this.logFailure; return this.logClient.request('query', typeof value === 'object' && value !== null ? value : {limit:value}); }
   async logDetail(id) { await this.logTail; if(this.logFailure)throw this.logFailure; return this.logClient.request('detail',id); }
   preferences(value) {
     for (const [key, enabled] of Object.entries(value || {})) {
-      if ((!types.has(key) && key !== 'systemEnabled') || typeof enabled !== 'boolean') throw new Error('Choose valid notification preferences.');
+      if ((!types.has(key) && !['systemEnabled','quietMode','inAppEnabled','forwardWebsiteNotifications'].includes(key)) || typeof enabled !== 'boolean') throw new Error('Choose valid notification preferences.');
     }
     Object.assign(this.data.preferences, value); this.save(); return this.notifications();
   }
@@ -81,6 +88,14 @@ export class ActivityStore extends EventEmitter {
     // Browser recovery references belong to this host/window; do not publish them to account activity.
     return item;
   }
+  websiteNotification(detail){
+    const value=websiteNotification(detail),previous=this.data.notifications.find(item=>item.type===value.type&&item.browserIssue?.siteNotificationId===value.browserIssue.siteNotificationId&&item.origin===value.origin&&item.browserIssue?.profileId===value.browserIssue.profileId);
+    if(previous)return previous;
+    const item={id:randomUUID(),createdAt:this.clock().toISOString(),...value,silent:this.data.preferences.inAppEnabled===false||this.data.preferences[value.type]===false};
+    this.data.notifications.push(item);this.data.notifications=this.data.notifications.slice(-limits.notifications);this.save();this.emit('notification',item);
+    if(this.data.preferences.forwardWebsiteNotifications===true&&this.data.preferences[value.type]!==false)this.queue('notifications',portableWebsiteNotification(item));
+    return item;
+  }
   log(level, event, message, extra = {}) {
     if (!['info', 'warning', 'error'].includes(level) || !/^[a-z][a-z0-9_.-]{0,79}$/.test(event || '')) throw new Error('Invalid log event.');
     const full = message instanceof Error ? message.stack || message.message : String(message || '');
@@ -104,9 +119,13 @@ export class ActivityStore extends EventEmitter {
     const offlineSeconds = Math.max(0, Math.floor(Number(detail.offlineSeconds) || 0));
     // Useful text: the chat's title, what happened, and which computer it came from.
     const chatTitle = notificationText(detail.chatTitle, 120), preview = notificationText(detail.preview, 360), hostName = notificationText(detail.hostName, 80);
-    const title = chatTitle ? (type === 'review.required' ? 'Needs you · ' : type === 'schedule.completed' ? 'Schedule done · ' : '') + chatTitle : generic;
+    const requestKey=type==='review.required'&&detail.requestId?[detail.hostId,detail.chatId,detail.requestId].join(':'):null;
+    if(requestKey){const previous=this.data.notifications.find(item=>item.requestKey===requestKey);if(previous)return previous;}
+    const title = chatTitle ? (type === 'review.required' ? (detail.requestKind==='permission'?'Approval required · ':detail.requestKind==='question'?'Question · ':'Needs attention · ') : type === 'schedule.completed' ? 'Schedule done · ' : '') + chatTitle : generic;
     const body = type === 'device.reconnected' ? `Connected to the relay after approximately ${offlineSeconds < 60 ? offlineSeconds + ' seconds' : Math.round(offlineSeconds / 60) + ' minutes'} offline.` : preview || (chatTitle ? generic + '.' : 'Open Proteus to view the details.');
     const item = { id: randomUUID(), type, title, body, ...(hostName ? { hostName } : {}), createdAt: this.clock().toISOString(), ...Object.fromEntries(['hostId', 'chatId', 'scheduleId', 'deviceId'].filter(key => typeof detail[key] === 'string').map(key => [key, detail[key].slice(0, 128)])), ...(type === 'device.reconnected' ? { offlineSeconds } : {}) };
+    if(requestKey)Object.assign(item,{requestKey,requestId:detail.requestId,requestKind:detail.requestKind});
+    item.silent=this.data.preferences.inAppEnabled===false||this.data.preferences[type]===false||(this.data.preferences.quietMode!==false&&['chat.completed','schedule.completed','device.added','device.reconnected'].includes(type));
     this.data.notifications.push(item); this.data.notifications = this.data.notifications.slice(-limits.notifications);
     this.save(); this.emit('notification', item);this.queue('notifications',item);return item;
   }
@@ -114,19 +133,24 @@ export class ActivityStore extends EventEmitter {
     if(!['notifications','logs','history'].includes(kind))throw new Error('Unsupported shared activity.');
     const identity=this.identity();if(!identity||!this.publish)return;
     this.data.outbox.push({kind,item,accountId:identity.accountId,workspaceId:identity.workspaceId,origin:identity.origin});
+    while(this.data.outbox.filter(row=>row.item.type==='website.notification').length>100)this.data.outbox.splice(this.data.outbox.findIndex(row=>row.item.type==='website.notification'),1);
     this.data.outbox=this.data.outbox.slice(-limits.outbox);this.save();void this.flush();
   }
   attach(engine, hostId, hostName = () => '') {
     const describe = run => ({ hostId: hostId(), hostName: hostName(), chatId: run.id, chatTitle: run.title || run.schedule?.name || '' });
-    const snapshot = run => ({ status: run.status, pending: run.pending?.id, questions:(run.userQuestions||[]).filter(question=>question.status==='pending').map(question=>question.id) });
-    for (const run of engine.listRuns()) this.states.set(run.id, snapshot(run));
+    const snapshot = run => ({ status: run.status, pending:reviewRequests({...run,userQuestions:[]})[0]?.id, questions:(run.userQuestions||[]).filter(question=>question.status==='pending').map(question=>question.id) });
+    const reconcile=run=>{
+      const active=new Set(reviewRequests(run).map(request=>request.id));let changed=false;
+      for(const item of this.data.notifications)if(item.type==='review.required'&&item.chatId===run.id&&!item.readAt&&(!item.requestId||!active.has(item.requestId))){item.resolvedAt=this.clock().toISOString();item.readAt=item.resolvedAt;changed=true;}
+      if(changed)this.save();
+    };
+    for (const run of engine.listRuns()){this.states.set(run.id, snapshot(run));reconcile(run);}
     this.listener = (run,change) => {
       if (!run?.id||change?.stream) return;
-      if(run.deleted){this.states.delete(run.id);this.log('info','chat.deleted',`Chat ${run.id} deleted from Proteus.`,{hostId:hostId()});return;}
+      if(run.deleted){reconcile({...run,pending:null,userQuestions:[]});this.states.delete(run.id);this.log('info','chat.deleted',`Chat ${run.id} deleted from Proteus.`,{hostId:hostId()});return;}
       const before = this.states.get(run.id); this.states.set(run.id, snapshot(run));
-      if (run.status === 'awaiting_input' && run.pending?.id && before?.pending !== run.pending.id) this.add('review.required', { ...describe(run), preview: pendingPreview(run.pending) });
-      const question=(run.userQuestions||[]).find(question=>question.status==='pending'&&!before?.questions?.includes(question.id));
-      if(question)this.add('review.required',{...describe(run),preview:'Question: '+(question.question||question.text||question.header||'')});
+      reconcile(run);
+      for(const request of reviewRequests(run))if(before?.pending!==request.id&&!before?.questions?.includes(request.id))this.add('review.required',{...describe(run),requestId:request.id,requestKind:request.kind,preview:request.preview});
       if (run.status === 'completed' && before?.status !== 'completed') {
         const scheduled = run.trigger !== 'chat';
         if (!scheduled || run.schedule.notifications?.onCompletion === true) this.add(scheduled ? 'schedule.completed' : 'chat.completed', { ...describe(run), preview: lastReply(run), ...(scheduled ? { scheduleId: run.schedule.id } : {}) });
@@ -139,12 +163,24 @@ export class ActivityStore extends EventEmitter {
     if (this.flushing || !this.publish || this.closed) return;
     const identity = this.identity(); if (!identity) return;
     this.flushing = true;
+    const deferred=new Set();
     try {
       while (this.data.outbox.length && !this.closed) {
         const row = this.data.outbox[0], current = this.identity();
+        if(deferred.has(row))break;
         if (!current || current.accountId !== identity.accountId || current.workspaceId !== identity.workspaceId || current.origin !== identity.origin) break;
-        if (row.accountId !== current.accountId || row.workspaceId !== current.workspaceId || row.origin !== current.origin || this.clock().getTime() - Date.parse(row.item.createdAt) > 7 * 86400000) { this.data.outbox.shift(); this.save(); continue; }
-        try { await this.publish(row.item, current,row.kind||'notifications'); } catch (error) {
+        const lifetime=row.item.type==='website.notification'?5*60000:7*86400000;
+        if (row.accountId !== current.accountId || row.workspaceId !== current.workspaceId || row.origin !== current.origin || this.clock().getTime() - Date.parse(row.item.createdAt) > lifetime) { this.data.outbox.shift(); this.save(); continue; }
+        const saved=(row.kind||'notifications')==='notifications'?this.data.notifications.find(item=>item.id===row.item.id):null;
+        const historical=(row.kind||'notifications')==='notifications'&&(saved?.readAt||saved?.resolvedAt||this.clock().getTime()-Date.parse(row.item.createdAt)>300000);
+        // Preserve history, but delayed upload must not turn an old/resolved
+        // event into a fresh alert on another device.
+        const item=historical?{...row.item,silent:true}:row.item;
+        try { await this.publish(item, current,row.kind||'notifications'); } catch (error) {
+          // Older servers do not accept website events yet. Keep those bounded
+          // retry receipts until the coordinated web rollout, while allowing
+          // ordinary notifications behind them to continue.
+          if(row.item.type==='website.notification'&&[400,422].includes(error.status)){this.data.outbox.push(this.data.outbox.shift());deferred.add(row);this.save();continue;}
           // Permanently invalid events must not starve unrelated delivery. Authentication,
           // throttling and server outages remain retryable until their owner resolves them.
           if([400,413,422].includes(error.status)){this.data.outbox.shift();this.save();continue;}

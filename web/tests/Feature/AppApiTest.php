@@ -210,6 +210,63 @@ class AppApiTest extends TestCase
         }
     }
 
+    public function test_website_notifications_preserve_safe_origin_and_reject_owner_references(): void
+    {
+        Passport::actingAs($this->owner(), ['app:read', 'app:write']);
+        $event = ['id' => (string) Str::uuid(), 'hostId' => (string) Str::uuid(), 'type' => 'website.notification', 'origin' => 'https://messages.example.test:8443', 'title' => 'A website message', 'body' => 'The site supplied this text', 'sound' => false, 'silent' => false, 'browserIssue' => ['tabId' => 'PRIVATE-TAB', 'profileId' => 'PRIVATE-PROFILE'], 'url' => 'https://messages.example.test/private'];
+        $first = $this->postJson('/api/v1/app/notifications', $event)->assertCreated()->assertJsonPath('eventId', $event['id'])->assertJsonPath('origin', $event['origin'])->assertJsonPath('sound', false)->assertJsonMissingPath('browserIssue')->assertJsonMissingPath('url')->json();
+        $this->postJson('/api/v1/app/notifications', $event)->assertCreated()->assertJsonPath('id', $first['id']);
+        foreach (['https://user:secret@example.test', 'https://example.test/path', 'https://example.test?token=secret', 'https://example.test#fragment', 'file:///private', 'https://example .test'] as $origin) {
+            $this->postJson('/api/v1/app/notifications', array_replace($event, ['id' => (string) Str::uuid(), 'origin' => $origin]))->assertUnprocessable();
+        }
+        $this->getJson('/api/v1/app')->assertJsonCount(1, 'notifications');
+        Passport::actingAs($this->owner(), ['app:read', 'app:write']);
+        $this->getJson('/api/v1/app')->assertJsonCount(0, 'notifications');
+    }
+
+    public function test_website_push_keeps_site_sound_choice_and_suppressed_events_do_not_alert(): void
+    {
+        Http::preventStrayRequests();
+        $path = tempnam(sys_get_temp_dir(), 'proteus-test-push-');
+        $key = openssl_pkey_new(['private_key_type' => OPENSSL_KEYTYPE_EC, 'curve_name' => 'prime256v1']);
+        openssl_pkey_export($key, $pem);
+        file_put_contents($path, $pem);
+        try {
+            config(['push.apns_key_path' => $path, 'push.apns_key_id' => 'SYNTHETIC', 'push.apns_team_id' => 'TEAM', 'push.apns_topic' => 'org.proteusapp.review.proteus']);
+            Http::fake(['api.sandbox.push.apple.com/*' => Http::response([], 200)]);
+            Passport::actingAs($this->owner(), ['app:read', 'app:write']);
+            $this->postJson('/api/v1/app/push-subscriptions', ['deviceId' => (string) Str::uuid(), 'platform' => 'apns', 'token' => str_repeat('c', 64), 'environment' => 'sandbox'])->assertOk();
+            $event = ['id' => (string) Str::uuid(), 'hostId' => (string) Str::uuid(), 'type' => 'website.notification', 'origin' => 'https://messages.example.test', 'title' => 'Website message', 'sound' => false];
+            $this->postJson('/api/v1/app/notifications', $event)->assertCreated();
+            $this->postJson('/api/v1/app/notifications', $event)->assertCreated();
+            $this->postJson('/api/v1/app/notifications', array_replace($event, ['id' => (string) Str::uuid(), 'silent' => true]))->assertCreated();
+            $this->assertSame(1, DB::table('app_records')->where('kind', 'push-outbox')->count());
+            $this->artisan('proteus:deliver-push')->assertSuccessful();
+            Http::assertSentCount(1);
+            Http::assertSent(fn ($request) => $request['type'] === 'website.notification' && $request['notificationId'] === $event['id'] && $request['hostId'] === $event['hostId'] && ! isset($request['aps']['sound']) && ! isset($request['origin']) && ! isset($request['tabId']));
+            $push = app(PushDelivery::class);
+            $this->assertSame('obsolete', $push->deliver(['platform' => 'apns'], $event + ['createdAt' => now()->subMinutes(6)->toIso8601String()]));
+            $this->assertSame('obsolete', $push->deliver(['platform' => 'apns'], $event + ['silent' => true]));
+            Http::assertSentCount(1);
+        } finally {
+            unlink($path);
+        }
+    }
+
+    public function test_delayed_chat_upload_preserves_event_age_and_does_not_replay_push(): void
+    {
+        Http::preventStrayRequests();
+        Passport::actingAs($this->owner(), ['app:read', 'app:write']);
+        $occurred = now()->subDays(2)->toIso8601String();
+        $event = ['id' => (string) Str::uuid(), 'hostId' => (string) Str::uuid(), 'type' => 'chat.completed', 'createdAt' => $occurred];
+        $saved = $this->postJson('/api/v1/app/notifications', $event)->assertCreated()->assertJsonPath('occurredAt', $occurred)->json();
+        $push = app(PushDelivery::class);
+        $this->assertSame('obsolete', $push->deliver(['platform' => 'apns'], $saved));
+        $this->assertSame('obsolete', $push->deliver(['platform' => 'apns'], ['type' => 'approval.requested', 'createdAt' => now()->subMinutes(6)->toIso8601String()]));
+        $this->assertSame('obsolete', $push->deliver(['platform' => 'apns'], ['type' => 'chat.completed', 'createdAt' => now()->toIso8601String(), 'readAt' => now()->toIso8601String()]));
+        Http::assertNothingSent();
+    }
+
     public function test_push_outbox_drops_deleted_notifications_without_revoking_the_phone(): void
     {
         Http::preventStrayRequests();

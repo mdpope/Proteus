@@ -1,3 +1,13 @@
+## Shared local inference
+
+llama.cpp and MTPLX may be shared with explicitly selected paired devices. SharedLlmProvider keeps the local agent/tool loop and delegates inference over encrypted peer RPC. See [shared models](shared-models.md) for setup, ownership, queueing, cancellation and recovery.
+
+## Windows llama.cpp provider
+
+The llama-cpp provider uses the existing local serial tool loop, selected-source/MCP boundaries, ordinary approvals, cancellation and persisted delivered history. It discovers loaded model identity/context and reasoning efforts from /v1/models and /props. Template/tokenizer endpoints account for current sources, tool schemas and complete old turns before admission; unknown limits fail explicitly. The server owns inference scheduling. There is no cloud fallback or claimed subscription allowance.
+
+See [llama.cpp setup](llama-cpp.md) for authenticated HTTPS and remote clients.
+
 ## October 26 — Linux Codex executable discovery
 
 Linux honors `PROTEUS_CODEX_PATH`, then executable PATH entries, followed by the desktop bundle at
@@ -576,3 +586,17 @@ Applicable adapters expose mandatory owner tools even when optional sources are 
 Codex, Copilot and Claude provider-owned lifecycle events populate a separate child journal. Restored transcript history alone grants no current-turn authority. Child completions do not settle the parent's turn. Native journals retain up to 128 children and 200 events/256 KiB per child, with 16,000-character event/live-text bounds and an explicit truncation indication. Only text/tool output is shown; reasoning is excluded. A provider may expose status without transcript. The real Codex CLI regression passes; live non-Codex acceptance remains recorded separately.
 
 Any attached file can be stored with exact original bytes. Native supported media is sent normally; other binary or large text becomes a descriptor for `proteus_attachments`, a bounded reader for this active turn's original files. Reads are byte-paged and UTF-8 boundaries are preserved. This does not give arbitrary filesystem access or promise universal extraction support.
+
+## Copilot Fusion (October 31)
+
+Copilot Fusion appears as **Copilot Fusion** in Copilot model pickers only when the signed-in
+account's runtime advertises a selectable Fusion routing tier (SDK 1.0.28 `ModelList.auto.tiers`).
+The effort control lists the advertised tiers by name; disabled tiers are explained, not offered.
+A Fusion chat runs the provider's virtual `auto` model with the chosen `autoTier`. Context tier and
+reasoning effort do not apply.
+
+Each Fusion turn records its plan, executed phases, per-model requests/usage, final answering model
+and totals from provider events (`session.fusion_*`, `assistant.fusion_phase_*`, and `fusion`
+attribution on messages/usage). Absent values are shown as not reported. Billing is per model at
+standard rates; the provider may advertise a time-limited promotion. Discarded Fusion drafts can
+already have edited workspace files, so review changes before committing.

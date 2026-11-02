@@ -1,6 +1,8 @@
 import {verifyRelease,extractRelease} from './desktop-releases.js';
 import {DesktopReleaseFeed} from './desktop-release-feed.js';
 import {initializeFreshRecovery} from './recovery-inventory.js';
+import {captureNavigation,verifyNavigation} from './navigation-preservation.js';
+import {taskFeedbackDelivery} from '../chats/task-feedback-kind.js';
 import {ensurePrivateHome} from '../../shared/private-paths.cjs';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -11,6 +13,7 @@ import {atomicJSON} from '../../shared/files.js';
 import {packageOperation} from './update-package-worker.js';
 const require=createRequire(import.meta.url);
 const {inspectPackage,compatible,spaceBudget,readJob,writeJob,digest,recoveryPolicy}=require('../../../desktop/updates/update-package.cjs');
+const {helperEnvironment}=require('../../../desktop/updates/helper-environment.cjs');
 const active=new Set(['queued','running','awaiting_input']);
 const terminal=new Set(['complete','cancelled','attention']);
 export function pendingUpdate(home,installation){
@@ -28,7 +31,7 @@ export class Updates {
    require('../../../desktop/updates/windows-installation.cjs').verifyRegistration(this.installation,this.inspect(this.installation).version);
    initializeFreshRecovery(this.policyFile,{home:this.ownerHome,installation:this.installation});
   }catch(error){this.error=error.message;}
-  service.engine.updateGuard=()=>this.newInput();
+  service.engine.updateGuard=input=>this.newInput(input);
   const file=process.env.PROTEUS_UPDATE_JOB;
   if(file&&this.owns(file)){const job=readJob(file);if(!terminal.has(job.phase)){this.file=file;service.engine.updateBarrier=true;}}
   if(!this.file)try{const ref=JSON.parse(fs.readFileSync(this.pointer,'utf8'));if(this.owns(ref.file))this.file=ref.file;}catch(error){if(error.code!=='ENOENT')this.error='The saved update reference needs inspection; it was preserved.';}
@@ -41,12 +44,16 @@ export class Updates {
  inspectAsync(bundle){return this.inspect===inspectPackage?this.packageWork('inspectPackage',bundle,{platform:this.platform}):Promise.resolve().then(()=>this.inspect(bundle));}
  refreshIdentity(){if(this.runningIdentity)return Promise.resolve(this.runningIdentity);if(this.identityPending)return this.identityPending;this.identityPending=this.inspectAsync(this.installation).then(value=>{this.runningIdentity=value;this.service.notify?.();return value;}).catch(error=>{this.error=error.message;throw error;}).finally(()=>{this.identityPending=null;});return this.identityPending;}
  identity(){let packaged=this.runningIdentity;try{if(this.packaged&&!packaged){if(this.inspect!==inspectPackage)packaged=this.runningIdentity=this.inspect(this.installation);else if(!this.identityPending&&!this.closed&&!this.error)void this.refreshIdentity().catch(()=>{});}}catch(error){this.error=error.message;}return {protocol:1,sessionId:this.sessionId,platform:this.platform,arch:process.arch,pid:process.pid,packaged:this.packaged,installation:this.installation||null,home:this.ownerHome,buildRevision:packaged?.buildRevision||(this.packaged?'checking':'source'),sourceFingerprint:packaged?.sourceFingerprint||null,identityPending:!!this.identityPending,barrier:this.service.engine.updateBarrier===true,capabilities:{prepare:this.packaged&&['darwin','linux','win32'].includes(this.platform),compatibleRollback:!!packaged}};}
- status(){let job;try{job=this.job();}catch(error){this.error=error.message;}return {identity:this.identity(),error:this.error||null,download:this.download||null,job:job?{id:job.id,revision:job.revision,phase:job.phase,runId:job.runId,version:job.candidate?.version,buildRevision:job.candidate?.buildRevision,outcome:job.outcome||null,error:job.error||job.preInstallFailure?.error||job.failureHistory?.at(-1)?.error||null,failureHistory:job.failureHistory||[],blocker:['complete','cancelled'].includes(job.phase)?null:job.blocker||null,health:job.health?{verified:true,at:job.health.at}:null,continuation:job.continuation||null,freeSpaceChange:job.freeSpaceAfter===undefined?null:job.freeSpaceAfter-job.freeSpaceBefore}:null};}
+ status(){
+  let job,resolution;try{job=this.job();if(job?.phase==='attention')resolution=require('../../../desktop/updates/attention-reconciliation.cjs').readAttentionResolution(job);}catch(error){this.error=error.message;}
+  return {identity:this.identity(),error:this.error||null,download:this.download||null,job:job?{id:job.id,revision:job.revision,phase:job.phase,runId:job.runId,version:job.candidate?.version,buildRevision:job.candidate?.buildRevision,outcome:job.outcome||null,error:job.error||job.preInstallFailure?.error||job.failureHistory?.at(-1)?.error||null,failureHistory:job.failureHistory||[],blocker:['complete','cancelled'].includes(job.phase)||resolution?null:job.blocker||null,health:job.health?{verified:true,at:job.health.at}:null,ordinaryWorkResumedAt:job.ordinaryWorkResumedAt||null,attentionResolution:resolution?{at:resolution.at,receiptHash:resolution.receiptHash,originalError:resolution.originalError,continuationReplayed:false}:null,continuation:job.continuation||null,freeSpaceChange:job.freeSpaceAfter===undefined?null:job.freeSpaceAfter-job.freeSpaceBefore}:null};
+ }
  readRecoveryPolicy(){try{return recoveryPolicy(this.policyFile,{home:this.ownerHome,installation:this.installation});}catch(error){if(error.code==='ENOENT')throw Error('The installer must inventory this installation’s existing recovery generations before supervised restart. See the Updates recovery setup instructions.');throw error;}}
  context(run){return digest(JSON.stringify({provider:run.schedule.provider,providerSessionId:run.providerSessionId,workspace:run.schedule.workspace,context:run.schedule.context,permissions:run.schedule.permissions,chatPermissionRevision:run.chatPermissionRevision,model:run.schedule.model,effort:run.schedule.reasoningEffort}));}
  preservation(){
   const runs=this.service.engine.listRuns().map(run=>({id:run.id,eventCount:run.events.length,eventHash:digest(JSON.stringify(run.events)),contextHash:this.context(run)}));
-  const receipt={schemaVersion:1,at:new Date().toISOString(),runs},file=path.join(path.dirname(this.file),'preservation.json');
+  const navigation=captureNavigation(this.service);
+  const receipt={schemaVersion:1,at:new Date().toISOString(),runs,...(navigation?{navigation}:{})},file=path.join(path.dirname(this.file),'preservation.json');
   atomicJSON(file,receipt);return digest(fs.readFileSync(file));
  }
  verifyPreservation(job){
@@ -55,7 +62,7 @@ export class Updates {
   const receipt=JSON.parse(fs.readFileSync(file,'utf8'));
   if(receipt.schemaVersion!==1||!Array.isArray(receipt.runs))throw Error('The pre-restart chat preservation receipt is invalid.');
   for(const row of receipt.runs){const run=this.service.engine.runs.get(row.id);if(!run||run.events.length<row.eventCount||digest(JSON.stringify(run.events.slice(0,row.eventCount)))!==row.eventHash||this.context(run)!==row.contextHash)throw Error('A pre-restart chat, event history or effective configuration changed. Preserve the recovery data for inspection.');}
-  return {runs:receipt.runs.length,events:receipt.runs.reduce((sum,row)=>sum+row.eventCount,0)};
+  return {runs:receipt.runs.length,events:receipt.runs.reduce((sum,row)=>sum+row.eventCount,0),...(receipt.navigation?{navigation:verifyNavigation(receipt.navigation,captureNavigation(this.service))}:{})};
  }
  async handle(value={},runId){
   if(value.action==='status'||value.action==='identity'||!value.action)return this.status();
@@ -67,6 +74,16 @@ export class Updates {
    return require('../../../desktop/updates/windows-builder.cjs').startBuild(this.root,value);
   }
   if(value.action==='storage')return this.packageWork('inventoryStorage',this.root,{home:this.ownerHome,installation:this.installation});
+  if(value.action==='reconciliation'||value.action==='reconcile'){
+   if(!this.packaged||this.busy||this.downloading)throw Error('Reconciliation requires an idle installed updater.');
+   if(!/^[-a-f0-9]{36}$/.test(value.id||''))throw Error('Choose one exact attention job.');
+   const file=path.join(this.root,'jobs',value.id,'job.json'),job=readJob(file);
+   if(!this.owns(file)||job.id!==value.id||job.home!==this.ownerHome||job.installation!==this.installation||job.revision!==value.expectedRevision)throw Error('The update changed. Refresh its status before reconciliation.');
+   if(runId&&job.runId!==runId)throw Error('Reconcile this update from its original chat.');
+   this.busy=true;
+   try{return await this.packageWork(value.action==='reconciliation'?'attentionPlan':'reconcileAttention',this.root,{home:this.ownerHome,installation:this.installation,browserHome:this.browserHome,platform:this.platform,id:job.id,expectedRevision:job.revision,planDigest:value.planDigest});}
+   finally{this.busy=false;}
+  }
   if(value.action==='maintenance'||value.action==='maintain'){
    if(!this.packaged)throw Error('Maintenance requires an installed desktop app.');
    if(this.busy||this.downloading)throw Error('Another update operation is running.');
@@ -120,7 +137,7 @@ export class Updates {
   if(!/^\d+\.\d+\.\d+(?:[-+][A-Za-z0-9.-]+)?$/.test(value.version||'')||value.sourceFingerprint!==undefined&&!/^[a-f0-9]{64}$/.test(value.sourceFingerprint)||value.sourceCommit!==undefined&&!/^[a-f0-9]{40,64}$/.test(value.sourceCommit))throw Error('Specify the requested version and, when known, exact source fingerprint or commit.');
   const {releases}=await this.releases(value.channel),matches=releases.filter(row=>row.version===value.version&&(!value.sourceFingerprint||row.sourceFingerprint===value.sourceFingerprint)&&(!value.sourceCommit||row.sourceCommit===value.sourceCommit));
   if(matches.length>1)throw Error('More than one release matches. Select an exact source fingerprint or release ID.');
-  return {resolution:matches.length?'published':'build-required',platform:this.platform,arch:process.arch,requested:{version:value.version,sourceFingerprint:value.sourceFingerprint||null,sourceCommit:value.sourceCommit||null},release:matches[0]||null,note:matches.length?'Reuse the signed published release.':'Only the designated Windows build machine builds missing Windows releases; consumer machines wait for publication. A failed catalog request is never treated as a missing release.'};
+  return {resolution:matches.length?'published':'build-required',platform:this.platform,arch:process.arch,requested:{version:value.version,sourceFingerprint:value.sourceFingerprint||null,sourceCommit:value.sourceCommit||null},release:matches[0]||null,note:matches.length?'Reuse the signed published release.':'Only the designated builder for this OS/architecture builds a missing release. Consumer machines wait for its signed publication on downloads.proteus.example. A failed catalog request is never treated as a missing release.'};
  }
  async stageRelease(value,runId){
   if(this.busy||this.downloading)throw Error('Another update check is running.');
@@ -177,9 +194,13 @@ export class Updates {
    atomicJSON(file,job);atomicJSON(this.pointer,{schemaVersion:1,file});this.file=file;persisted=true;this.error=null;this.service.notify?.();return this.status();
   }finally{if(preparing&&!persisted)await fs.promises.rm(preparing,{recursive:true,force:true});this.busy=false;}
  }
- newInput(){
+ newInput({runId,source}={}){
   if(this.delivering)return;
   const job=this.job();if(!job||terminal.has(job.phase)||job.phase==='prepared')return;
+  // Status from another task is data rather than a new human instruction.
+  // Its work still blocks idle through waiting(); input into the updating chat
+  // itself continues to require a fresh checkpoint, regardless of provenance.
+  if(source===taskFeedbackDelivery&&runId&&runId!==job.runId)return;
   if(job.phase==='waiting-for-idle'){writeJob(this.file,{phase:'prepared',blocker:'New user input arrived. Review the checkpoint and hand off again.'});this.service.engine.updateBarrier=false;return;}
   // During verified restart, Engine persists queued input behind the barrier.
   // Recovery appends its single continuation after those messages.
@@ -212,7 +233,7 @@ export class Updates {
  spawnHelper(job,arm=false){
   if(this.launchHelper)return this.launchHelper(job);
   const log=fs.openSync(path.join(path.dirname(job.file),'helper.log'),'a',0o600);
-  const child=spawn(job.candidate.executable,[path.join(job.candidate.bundle,this.platform==='darwin'?'Contents/Resources/app':'resources/app','desktop/updates/update-helper.cjs'),arm?'arm':'supervise',job.file],{detached:true,stdio:['ignore',log,log,'ipc'],env:{...process.env,ELECTRON_RUN_AS_NODE:'1'}});fs.closeSync(log);child.unref();child.channel?.unref();
+  const child=spawn(job.candidate.executable,[path.join(job.candidate.bundle,this.platform==='darwin'?'Contents/Resources/app':'resources/app','desktop/updates/update-helper.cjs'),arm?'arm':'supervise',job.file],{detached:true,cwd:path.dirname(job.file),stdio:['ignore',log,log,'ipc'],env:helperEnvironment()});fs.closeSync(log);child.unref();child.channel?.unref();
   if(!arm){child.on('error',error=>{this.error='The independent helper could not start: '+error.message;});return;}
   return new Promise((resolve,reject)=>{const timer=setTimeout(()=>{child.kill();finish(Error('The independent helper did not acknowledge readiness. Proteus stayed open.'));},15000);const finish=(error)=>{clearTimeout(timer);child.removeListener('error',failed);child.removeListener('exit',exited);child.removeListener('message',ready);if(child.connected)child.disconnect();child.channel?.unref();error?reject(error):resolve();};const failed=error=>finish(error),exited=()=>finish(Error('The independent helper exited before handoff. Proteus stayed open.')),ready=message=>{if(message?.ready===job.id)finish();else finish(Error('The helper acknowledged another job.'));};child.once('error',failed);child.once('exit',exited);child.once('message',ready);});
  }
@@ -242,4 +263,4 @@ export class Updates {
  }
  close(){this.closed=true;clearInterval(this.timer);return this.packageQueue?.catch(()=>{});}
 }
-export function updateTools(controller,runId){return controller?[{name:'proteus_update',defer:'auto',description:'Inspect this running Proteus installation or supervise its own authorized update. Use maintenance to inspect bound application/backup folders and full recovery receipts, then maintain with its unchanged planDigest to reconcile missing records and retire eligible staging/backups. No arbitrary paths or elevated shell. Resolve the exact requested version through resolve-release before building; reuse matching signed releases. List published releases, then stage the selected release ID and manifest digest, or import an offline signed release manifest. The owner verifies publisher signature, target, archive hashes and isolated UI startup. Local developer candidates retain their explicit source-fingerprint flow on Mac/Linux. Handoff records completed/remaining work and returns before shutdown: finish this turn so the idle barrier can start the independent helper. It never cancels unrelated work. Compatible restart/rollback automatically continues this same chat with one durable delivery ID. Refresh status/revision before handoff/cancel; source mode is reported honestly.',parameters:{type:'object',properties:{action:{type:'string',enum:['status','identity','build-release','build-status','cancel-build','storage','maintenance','maintain','releases','resolve-release','stage-release','import-release','prepare','handoff','cancel']},channel:{type:'string',enum:['stable','preview']},operationId:{type:'string'},buildRequestHash:{type:'string'},version:{type:'string'},sourceCommit:{type:'string'},planDigest:{type:'string'},releaseId:{type:'string'},manifestDigest:{type:'string'},manifest:{type:'string'},candidate:{type:'string'},sourceFingerprint:{type:'string'},checkpoint:{type:'string'},id:{type:'string'},expectedRevision:{type:'integer'}},required:['action'],additionalProperties:false},handler:async args=>JSON.stringify(await controller.handle(args,runId))}]:[];}
+export function updateTools(controller,runId){return controller?[{name:'proteus_update',defer:'auto',description:'Inspect this running Proteus installation or supervise its own authorized update. Use maintenance to inspect bound application/backup folders and full recovery receipts, then maintain with its unchanged planDigest to reconcile missing records and retire eligible staging/backups. No arbitrary paths or elevated shell. Resolve the exact requested version through resolve-release before building; reuse matching signed releases. List published releases, then stage the selected release ID and manifest digest, or import an offline signed release manifest. The owner verifies publisher signature, target, archive hashes and isolated UI startup. Local developer candidates retain their explicit source-fingerprint flow on Mac/Linux. Handoff records completed/remaining work and returns before shutdown: finish this turn so the idle barrier can start the independent helper. It never cancels unrelated work. Compatible restart/rollback automatically continues this same chat with one durable delivery ID. Refresh status/revision before handoff/cancel; source mode is reported honestly.',parameters:{type:'object',properties:{action:{type:'string',enum:['status','identity','reconciliation','reconcile','build-release','build-status','cancel-build','storage','maintenance','maintain','releases','resolve-release','stage-release','import-release','prepare','handoff','cancel']},channel:{type:'string',enum:['stable','preview']},operationId:{type:'string'},buildRequestHash:{type:'string'},version:{type:'string'},sourceCommit:{type:'string'},planDigest:{type:'string'},releaseId:{type:'string'},manifestDigest:{type:'string'},manifest:{type:'string'},candidate:{type:'string'},sourceFingerprint:{type:'string'},checkpoint:{type:'string'},id:{type:'string'},expectedRevision:{type:'integer'}},required:['action'],additionalProperties:false},handler:async args=>JSON.stringify(await controller.handle(args,runId))}]:[];}

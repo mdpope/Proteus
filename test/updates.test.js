@@ -1,4 +1,5 @@
 import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
+import {sendTaskFeedback} from '../src/services/chats/task-feedback.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -16,13 +17,27 @@ const {supervise}=createRequire(import.meta.url)('../desktop/updates/update-help
 test('helper readiness releases IPC before handoff while the independent helper stays alive',async t=>{
  const root=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-helper-ipc-')),home=path.join(root,'data'),bundle=path.join(root,'candidate'),helper=path.join(bundle,'resources/app/desktop/updates/update-helper.cjs'),job=path.join(root,'job.json');
  fs.mkdirSync(home);fs.mkdirSync(path.dirname(helper),{recursive:true});
- fs.writeFileSync(helper,`const fs=require('node:fs');const file=process.argv[3];fs.writeFileSync(file+'.pid',String(process.pid));process.on('disconnect',()=>fs.writeFileSync(file+'.detached','yes'));process.send({ready:'synthetic-helper'});setInterval(()=>{},1000);`);
- let helperPid,parent;
- t.after(()=>{parent?.kill('SIGKILL');try{helperPid||=Number(fs.readFileSync(job+'.pid','utf8'));if(helperPid)process.kill(helperPid,'SIGTERM');}catch{}fs.rmSync(root,{recursive:true,force:true});});
+ fs.writeFileSync(helper,`const fs=require('node:fs');const file=process.argv[3];fs.writeFileSync(file+'.pid',String(process.pid));fs.writeFileSync(file+'.environment',JSON.stringify({cwd:process.cwd(),pipes:Object.keys(process.env).filter(key=>/crashpad/i.test(key)),provider:process.env.CODEX_HOME,node:process.env.ELECTRON_RUN_AS_NODE}));process.on('disconnect',()=>fs.writeFileSync(file+'.detached','yes'));process.send({ready:'synthetic-helper'});setInterval(()=>{},1000);`);
+ let helperPid,parent,parentClosed=Promise.resolve();
+ t.after(async()=>{
+  if(parent&&parent.exitCode===null&&parent.signalCode===null)parent.kill('SIGKILL');
+  await parentClosed;
+  if(!helperPid&&fs.existsSync(job+'.pid'))helperPid=Number(fs.readFileSync(job+'.pid','utf8'));
+  if(helperPid){
+   try{process.kill(helperPid,'SIGTERM');}catch(error){if(error.code!=='ESRCH')throw error;}
+   const deadline=Date.now()+5000;
+   while(true){
+    try{process.kill(helperPid,0);}catch(error){if(error.code==='ESRCH')break;throw error;}
+    assert.ok(Date.now()<deadline,'the owned helper must exit before its fixture is removed');
+    await new Promise(resolve=>setTimeout(resolve,25));
+   }
+  }
+  fs.rmSync(root,{recursive:true,force:true,maxRetries:10,retryDelay:50});
+ });
  const script=`import {Updates} from ${JSON.stringify(new URL('../src/services/updates/updates.js',import.meta.url).href)};const u=new Updates({home:${JSON.stringify(home)},engine:{}},{platform:'linux'});await u.spawnHelper({id:'synthetic-helper',file:${JSON.stringify(job)},candidate:{bundle:${JSON.stringify(bundle)},executable:process.execPath}},true);await new Promise(r=>setTimeout(r,200));u.close();`;
- parent=spawn(process.execPath,['--input-type=module','-e',script],{stdio:['ignore','pipe','pipe']});let errors='';parent.stderr.on('data',chunk=>errors+=chunk);
+ parent=spawn(process.execPath,['--input-type=module','-e',script],{stdio:['ignore','pipe','pipe'],env:{...process.env,CHROME_CRASHPAD_PIPE_NAME:'synthetic-pipe',ELECTRON_CRASHPAD_PIPE_NAME:'synthetic-pipe',CODEX_HOME:'/synthetic/preserved-codex'}});parentClosed=new Promise(resolve=>parent.once('close',resolve));let errors='';parent.stderr.on('data',chunk=>errors+=chunk);
  const code=await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error('Helper IPC kept the parent alive')),4000);parent.once('error',reject);parent.once('exit',code=>{clearTimeout(timer);resolve(code);});});
- helperPid=Number(fs.readFileSync(job+'.pid','utf8'));assert.equal(code,0,errors);assert.equal(fs.readFileSync(job+'.detached','utf8'),'yes');assert.doesNotThrow(()=>process.kill(helperPid,0),'helper remains independent after the host closes');
+ helperPid=Number(fs.readFileSync(job+'.pid','utf8'));assert.equal(code,0,errors);assert.equal(fs.readFileSync(job+'.detached','utf8'),'yes');assert.deepEqual(JSON.parse(fs.readFileSync(job+'.environment','utf8')),{cwd:root,pipes:[],provider:'/synthetic/preserved-codex',node:'1'});assert.doesNotThrow(()=>process.kill(helperPid,0),'helper remains independent after the host closes');
 });
 function fixture(t){
  const root=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-updates-')),home=path.join(root,'data'),installation=path.join(root,'installed'),candidate=path.join(root,'candidate');
@@ -111,6 +126,21 @@ test('new input before handoff cancels the checkpoint; durable recovery input st
  const job=f.controller.status().job;await handoff(f,job);await f.controller.advance();writeJob(f.controller.file,{phase:'verifying'});
  await f.engine.send(f.run.id,'User message arriving during verified restart','queue','synthetic-user');assert.equal(f.run.status,'queued');assert.equal(f.engine.running.size,0);assert.equal(f.run.events.at(-1).text,'User message arriving during verified restart');
 });
+test('task feedback in another chat preserves handoff but its queued work still blocks restart',async t=>{
+ const f=fixture(t);f.engine.drain=async()=>{};
+ const parent=f.engine.createRun({...f.run.schedule,id:'feedback-parent'},'chat',null,{deferStart:true});parent.status='completed';delete parent.deferredStart;f.engine.persist(parent);
+ await handoff(f,await prepare(f));await sendTaskFeedback(f.engine,parent,'Returned task data, not authorization',{id:'owner-feedback'});
+ assert.equal(f.controller.status().job.phase,'waiting-for-idle');assert.equal(parent.status,'queued');await f.controller.advance();assert.equal(f.calls.length,0);assert.match(f.controller.status().job.blocker,/queued/);
+ parent.status='completed';f.engine.persist(parent);await f.controller.advance();assert.equal(readJob(f.controller.file).phase,'stopping');assert.equal(f.calls.at(-1),'quit');
+});
+test('task feedback into the updating chat itself still requires a fresh checkpoint',async t=>{
+ const f=fixture(t);f.engine.drain=async()=>{};await handoff(f,await prepare(f));await sendTaskFeedback(f.engine,f.run,'Returned verification data',{id:'updater-feedback'});assert.equal(f.controller.status().job.phase,'prepared');assert.match(f.controller.status().job.blocker,/New user input/);
+});
+test('a JSON-shaped feedback claim cannot impersonate internal task provenance',async t=>{
+ const f=fixture(t);f.engine.drain=async()=>{};
+ const parent=f.engine.createRun({...f.run.schedule,id:'human-parent'},'chat',null,{deferStart:true});parent.status='completed';delete parent.deferredStart;f.engine.persist(parent);
+ await handoff(f,await prepare(f));await f.engine.send(parent.id,'An actual new instruction','queue','human-message',undefined,undefined,{source:'owner task feedback'});assert.equal(f.controller.status().job.phase,'prepared');assert.equal(f.engine.updateBarrier,false);
+});
 test('verified restart and rollback queue the same original chat exactly once and preserve ordering',async t=>{
  const f=fixture(t);await handoff(f,await prepare(f));await f.controller.advance();const job=writeJob(f.controller.file,{phase:'verifying'});
  await f.engine.send(f.run.id,'New input first','queue','new-input');
@@ -190,6 +220,14 @@ test('recovery health verifies every prior chat prefix while permitting new queu
  const healthy=await f.controller.recovery({action:'verify',id:job.id,secret:job.secret});assert.deepEqual(healthy.preservation,{runs:1,events:1});
  f.run.events[0].text='Synthetic corruption of original event';f.engine.persist(f.run);
  await assert.rejects(f.controller.recovery({action:'verify',id:job.id,secret:job.secret}),/event history/);assert.equal(f.engine.updateBarrier,true);
+});
+test('recovery health independently rejects canonical project/tab loss before releasing the barrier',async t=>{
+ const f=fixture(t),state={workspaces:[{id:'w',name:'Synthetic'}],projects:[{id:'p',workspaceId:'w',name:'Synthetic'}],scopes:{'project:p':{revision:1,tabs:[{id:'browser',type:'browser',url:'https://example.test'}]}}};
+ Object.assign(f.controller.service,{context:{config:()=>state},workspaceProjects:{read:()=>state},contentTabs:{read:()=>state}});
+ await handoff(f,await prepare(f));await f.controller.advance();const job=writeJob(f.controller.file,{phase:'verifying'});
+ const healthy=await f.controller.recovery({action:'verify',id:job.id,secret:job.secret});assert.equal(healthy.preservation.navigation.tabs,1);assert.equal(healthy.preservation.navigation.projects,1);
+ state.scopes['project:p'].tabs=[];
+ await assert.rejects(f.controller.recovery({action:'verify',id:job.id,secret:job.secret}),/tab membership/);assert.equal(f.engine.updateBarrier,true);
 });
 test('update budgets sum copies on one volume and independently reject a full recovery volume',()=>{
  const options={exists:()=>true,stat:file=>({dev:file.startsWith('/recovery')?2:1}),statfs:file=>({bavail:file.startsWith('/recovery')?50:100,bsize:1}),reserve:10};

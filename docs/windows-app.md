@@ -4,6 +4,22 @@ See [Windows distribution](windows-distribution.md) for owner maintenance, priva
 
 # Windows desktop
 
+## Taskbar startup permission errors
+
+If taskbar startup shows `ensurePrivateHome` in a main-process JavaScript error,
+inspect both the browser-profile and runner directories before replacing shortcuts.
+A correct shortcut can fail because an inherited grant makes the profile non-private.
+Sandboxed shell filesystem views may omit native inherited grants: compare the native
+Windows security descriptor (for example, the read-only WMI security query) with the
+shell view before concluding that a direct agent launch proves normal startup works.
+
+An observed inherited CodexSandboxUsers read grant caused this failure. An explicitly
+authorized repair of the app-owned profile removed that extra grant and protected its
+DACL while retaining owner, SYSTEM and Administrators access. Preserve contents and
+record the original descriptor privately. Do not weaken the private-storage check or
+silently change unrelated directories. Verify the actual pinned shortcut, including a
+cold launch; direct executable launches alone are insufficient.
+
 Windows source validation uses native paths when launching the legacy updater fixture
 and when comparing a mocked Mac registration bundle. File URL pathnames are not native
 Windows executable arguments; use `fileURLToPath` so drive letters, spaces and escaped

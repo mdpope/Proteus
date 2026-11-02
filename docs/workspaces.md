@@ -1,3 +1,25 @@
+## Nov 1 — iOS canonical membership and offline intent
+
+The native organizational sidebar displays owner content descriptors in owner order, not all chats
+with project membership. A closed chat remains in chat history without appearing as an open tab.
+Explicit open/close/reorder intents persist before delivery. Reconnect replays an uncertain envelope
+unchanged, then rebases later intentions against current closing revisions and concurrent order.
+Known offscreen scopes refresh after reconnect. Legacy inferred deletions retain their original
+envelope for review and are removed from automatic replay. Local windows keep independent selection
+and reading state; remote paired follow remains its separate presentation mechanism.
+
+## November 1 — durable membership and unavailable sources
+
+Project/workspace membership and order belong to their owning host/container; a window retains only its own presentation. Missing local documents appear as unavailable tabs with Retry/Close while other descriptors continue syncing. Explicit local Close is queued independently of history conflicts or first-baseline failure. Owner close/move revisions prevent passive or delayed opens from recreating retired identities; explicit reopen uses the observed closing revision. Window closure preserves the project content. All-platform rollout is authorized; installed acceptance remains separate.
+
+A disappearing local view is never a shared Close or reorder. Parent remounts and historical
+chat aliases must rematerialize retained children from the owner. Only explicit Close intent or
+an owner management operation removes membership. Legacy deletion outboxes require review;
+their uncertain receipt identity remains intact.
+
+Document views are container-scoped. Opening or restoring the same file in a project and one
+of its chats retains separate view IDs and parents; it cannot reparent the other view by path.
+
 ## October 30 — one ordered content set across local windows
 
 Workspace/project content uses the owning host's ordered logical descriptors in every open window,
@@ -712,3 +734,12 @@ October 21 follow-up: sidebar saved expansion state is loaded before capture/sav
 empty in-memory tree overwriting the restored session. The isolated UI regression retains expanded
 workspace/project rows through Engine Room pages and shell reload. MCP source rows show owner
 connection evidence separately from each workspace's enabled/default/off choice.
+
+## November 1 — partial membership reconciliation preserves local opens
+
+An older owner response can confirm a previously known tab closed while a new local tab is still
+waiting to publish. Apply that partial removal only to the owner-confirmed identities. Preserve
+the new tab and its local selection until the normal mutation pass records it in the owner. This
+shared rule covers browsers, terminals, documents and chats in every synchronized container.
+The deterministic Electron regression verifies actual owner convergence, terminal keyboard/output,
+selection through refresh and restart; the earlier package failed that same overlap.

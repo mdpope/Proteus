@@ -4,6 +4,17 @@ import path from 'node:path';
 import {createRequire} from 'node:module';
 import {execFileSync} from 'node:child_process';
 const {environment}=createRequire(import.meta.url)('../desktop/updates/update-helper.cjs');
+const {helperEnvironment}=createRequire(import.meta.url)('../desktop/updates/helper-environment.cjs');
+
+test('helper child drops process-specific Crashpad pipes while preserving ordinary launch context',()=>{
+ const source={CHROME_CRASHPAD_PIPE_NAME:'synthetic-pipe',ELECTRON_CRASHPAD_PIPE_NAME:'synthetic-pipe',chromium_crashpad_pipe_name:'synthetic-pipe',CODEX_HOME:'/synthetic/codex',XDG_CURRENT_DESKTOP:'KDE',PATH:process.env.PATH,SYNTHETIC_PROVIDER_OPTION:'preserved'};
+ const env=helperEnvironment(source);
+ const result=JSON.parse(execFileSync(process.execPath,['-e',"console.log(JSON.stringify({pipes:Object.keys(process.env).filter(key=>/crashpad/i.test(key)),provider:process.env.CODEX_HOME,desktop:process.env.XDG_CURRENT_DESKTOP,option:process.env.SYNTHETIC_PROVIDER_OPTION,node:process.env.ELECTRON_RUN_AS_NODE}))"],{env,encoding:'utf8'}));
+ assert.deepEqual(result,{pipes:[],provider:'/synthetic/codex',desktop:'KDE',option:'preserved',node:'1'});
+ assert.equal(source.CHROME_CRASHPAD_PIPE_NAME,'synthetic-pipe','the live owner context is not mutated');
+ const relaunched=environment('/synthetic/home',false,{CHROME_CRASHPAD_PIPE_NAME:'must-not-override'},source);
+ assert.equal(Object.hasOwn(relaunched,'CHROME_CRASHPAD_PIPE_NAME'),false);
+});
 
 test('update and rollback relaunch keep provider namespaces without copying tokens or helper mode',()=>{
  const source={HOME:'/synthetic/user',PATH:'/synthetic/bin',CLAUDE_CONFIG_DIR:'/synthetic/work-claude',PROTEUS_CLAUDE_PATH:'/synthetic/claude',CODEX_HOME:'/synthetic/work-codex',PROTEUS_CODEX_PATH:'/synthetic/codex',COPILOT_HOME:'/synthetic/work-copilot',COPILOT_CLI_PATH:'/synthetic/copilot',ELECTRON_RUN_AS_NODE:'1',ANTHROPIC_API_KEY:'synthetic-secret',CLAUDE_CODE_OAUTH_TOKEN:'synthetic-secret',GITHUB_TOKEN:'synthetic-secret'};

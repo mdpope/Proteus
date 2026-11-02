@@ -12,7 +12,7 @@ export const performancePhaseNames = Object.freeze([
   'remote.run.serialize', 'remote.sync', 'peer.heartbeat', 'peer.cache.serialize',
   'peer.cache.encrypt', 'peer.cache.disk',
   'remote.state.context', 'remote.state.attention', 'remote.state.schedules', 'remote.state.runs',
-  'integrations.consumers', 'integrations.selected', 'integrations.identity',
+  'integrations.tick', 'integrations.batch', 'integrations.consumers', 'integrations.selected', 'integrations.identity',
   'attachments.cleanup', 'activity.persist',
 ]);
 const allowed = new Set(performancePhaseNames);
@@ -34,7 +34,7 @@ export class PerformanceDiagnostics {
     this.interval = Math.max(10, watchdogIntervalMs); this.lagThreshold = Math.max(1, lagThresholdMs);
     this.slowThreshold = Math.max(1, slowThresholdMs); this.discontinuity = Math.max(1000, discontinuityMs);
     this.createdAt = this.clock.wall(); this.startedMono = this.clock.monotonic();
-    this.metrics = new Map(); this.active = new Map(); this.recentSync = [];
+    this.integrationBatches = []; this.metrics = new Map(); this.active = new Map(); this.recentSync = [];
     this.slowPhases = []; this.eventLoop = []; this.longEventLoop = []; this.started = false; this.closed = false;
     this.dirty = true; this.writeFailures = 0; this.rotated = false; this.lastWriteMono = this.startedMono;
   }
@@ -91,6 +91,11 @@ export class PerformanceDiagnostics {
       this._record(name, 'async', start, end, at, outcome);
     }
   }
+  integrationBackground(values) {
+    if(!this.enabled||this.closed)return;
+    const counts=Object.fromEntries(['runs','candidates','skipped','probed','rejected','globalEnumerations','batches'].map(key=>[key,Math.max(0,Math.min(1000000,Math.trunc(Number(values[key])||0)))]));
+    ring(this.integrationBatches,counts,32);this.dirty=true;
+  }
   snapshot() {
     const phases = [...this.metrics].map(([key, values]) => {
       const split = key.indexOf(':'), totalMs = values.reduce((sum, value) => sum + value, 0);
@@ -100,7 +105,7 @@ export class PerformanceDiagnostics {
     return { version: 1, enabled: this.enabled, started: this.started, closed: this.closed, createdAt: this.createdAt,
       observedAt: this.clock.wall(), uptimeMs: rounded(this.clock.monotonic() - this.startedMono),
       limits: { phaseSamples: 128, slowPhases: 64, eventLoop: 32, longEventLoop: 16, fileBytes: MAX_FILE_BYTES },
-      phases, slowPhases: structuredClone(this.slowPhases), eventLoop: structuredClone(this.eventLoop), longEventLoop: structuredClone(this.longEventLoop),
+      phases, integrationBatches: structuredClone(this.integrationBatches), slowPhases: structuredClone(this.slowPhases), eventLoop: structuredClone(this.eventLoop), longEventLoop: structuredClone(this.longEventLoop),
       activeAsyncPhases: [...this.active].map(([name, value]) => ({ name, count: value.count, elapsedMs: rounded(this.clock.monotonic() - value.startMono) })),
       persistence: { failures: this.writeFailures } };
   }

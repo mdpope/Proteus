@@ -34,6 +34,52 @@ async function fixture(t){
  return {root,origin,owner,hostId,control,caller,grant,command,create,start};
 }
 
+test('remote update coordinators use destination defaults even when the controller has different defaults',async t=>{
+ const f=await fixture(t),{origin,owner,control,caller,command}=f;f.grant();
+ const save=(app,defaults)=>app.settings.save({...app.settings.get(),updateCoordinator:defaults},app.settings.get().revision);
+ save(origin,{provider:'codex',model:'controller-only'});
+ save(owner,{provider:'copilot',model:'fixture',reasoningEffort:'low'});
+ const task=await control.handle(command('create',{purpose:'update',prompt:'Synthetic coordinator configuration check'}),caller.id);
+ assert.equal(task.state,'accepted',JSON.stringify(task));
+ const run=owner.engine.getRun(task.chatId);assert.equal(run.schedule.provider,'copilot');assert.equal(run.schedule.model,'fixture');assert.equal(run.schedule.reasoningEffort,'low');
+ assert.equal(run.schedule.context.workspaceId,null);assert.deepEqual(run.schedule.context.entries,[]);
+ await assert.rejects(control.handle(command('create',{purpose:'update',provider:'codex',model:'controller-only',prompt:'override'}),caller.id),/destination.*saved defaults/);
+});
+
+test('pinned remote update survives uncertain dispatch and observes the local updater beyond its first completed turn',async t=>{
+ const f=await fixture(t),{owner,origin,control,caller,hostId,command}=f;f.grant();
+ owner.settings.save({...owner.settings.get(),updateCoordinator:{provider:'copilot',model:'fixture',reasoningEffort:'low'}},owner.settings.get().revision);
+ owner.engine.drain=async()=>{};
+ const release={id:'synthetic-linux',version:'1.2.3',buildRevision:'fixture-new',sourceFingerprint:'a'.repeat(64),manifestDigest:'b'.repeat(64)};
+ let job=null;
+ owner.updates={packaged:true,close:async()=>{},job:()=>job,identity:()=>({platform:'linux',arch:'x64',packaged:true,buildRevision:'fixture-old'}),releases:async()=>({releases:[release]}),
+  selectedRelease:async selection=>{assert.equal(selection.releaseId,release.id);assert.equal(selection.manifestDigest,release.manifestDigest);return release;},
+  status:()=>({identity:{platform:'linux',arch:'x64',packaged:true,buildRevision:job?.phase==='complete'?'fixture-new':'fixture-old'},job})};
+ const catalog=await control.handle({action:'update-releases',hostId},caller.id);assert.equal(catalog.identity.platform,'linux');assert.equal(catalog.releases[0].id,release.id);
+ const request=command('create',{purpose:'update',prompt:'Verify the synthetic migration receipt after restart.',updateRelease:{releaseId:release.id,manifestDigest:release.manifestDigest,channel:'stable'}});
+ const original=control.request.bind(control);let drop=true;
+ control.request=async(...args)=>{const result=await original(...args);if(args[1]==='chat.start'&&drop){drop=false;throw Error('Synthetic lost response after coordinator creation');}return result;};
+ const uncertain=await control.handle(request,caller.id);assert.equal(uncertain.state,'uncertain');
+ const task=await control.handle(request,caller.id);assert.equal(task.state,'accepted');assert.equal(task.taskId,uncertain.taskId);
+ assert.equal(owner.engine.listRuns().length,1,'no second coordinator after an uncertain response');
+ const run=owner.engine.getRun(task.chatId);assert.equal(run.title,'Proteus 1.2.3 update');assert.equal(run.schedule.updateSession.releaseId,release.id);assert.equal(run.schedule.updateSession.manifestDigest,release.manifestDigest);
+ assert.match(run.schedule.prompt,/same chat after restart/);assert.match(run.schedule.prompt,/synthetic migration receipt/);assert.equal(run.schedule.provider,'copilot');
+ run.status='completed';owner.engine.persist(run);
+ job={id:'fixture-job',runId:run.id,phase:'waiting-for-idle',buildRevision:release.buildRevision,version:release.version};
+ let result=(await control.handle({action:'wait',targets:[{taskId:task.taskId}]},caller.id)).results[0];
+ assert.equal(result.status,'updating');assert.equal(result.feedback.update.job.phase,'waiting-for-idle');assert.equal(result.feedback.update.packageVerified,false);
+ const restored=new ChatControl(origin,{pollMs:0});t.after(()=>restored.close());
+ const retained=restored.tasks.get(task.taskId);retained.deliveryError='Synthetic disconnected before restart';restored.save(retained);
+ job={...job,phase:'complete',outcome:'updated',health:{verified:true},continuation:{at:'synthetic-restart'}};
+ run.status='running';owner.engine.persist(run);
+ result=(await restored.handle({action:'wait',targets:[{taskId:task.taskId}]},caller.id)).results[0];
+ assert.equal(result.deliveryError,undefined,'a recovered observer does not retain a stale disconnect error');
+ assert.equal(result.status,'running','post-install coordinator checks still run after package verification');assert.equal(result.feedback.update.packageVerified,true);
+ run.status='completed';owner.engine.event(run,'assistant','Synthetic post-restart migration and UI checks passed.');owner.engine.persist(run);
+ result=(await restored.handle({action:'wait',targets:[{taskId:task.taskId}]},caller.id)).results[0];assert.equal(result.status,'completed');assert.equal(result.externalOutcomeVerified,false);
+ assert.match(JSON.stringify(result.feedback),/post-restart migration/);
+});
+
 test('encrypted multi-chat dispatch, independent feedback, ordinary answers and cancellation',async t=>{
  const f=await fixture(t),{control,caller,hostId,owner,origin,command}=f;f.grant();
  await origin.peers.connect(hostId);const watched=await f.create(owner,'hold UI selection');await until(()=>watched.pending);await origin.peers.request(hostId,'chat.get',{id:watched.id});
@@ -217,7 +263,7 @@ test('stopping the origin during metadata refresh prevents a later dispatch effe
 test('an explicit human approval grants only the requested originating scope',async t=>{
  const f=await fixture(t),{origin,control,hostId}=f;let result;
  origin.engine.providers.copilot={status:async()=>({available:true,models:[model]}),run:async({run,emit})=>{result=await control.handle({action:'request-access',scope:{hostId,actions:['read']}},run.id);emit('assistant','Synthetic approved grant');}};
- const run=await f.create(origin,'approve synthetic scope');await until(()=>run.pending?.type==='permission');assert.equal(run.pending.details.kind,"chat-access");assert.deepEqual(run.pending.permissionChoices,[]);
+ const run=await f.create(origin,'approve synthetic scope');await until(()=>run.pending?.type==='permission');assert.equal(run.pending.details.kind,"chat-access");assert.ok(run.pending.permissionChoices.some(choice=>choice.value==='always-tool'));assert.ok(run.pending.permissionChoices.every(choice=>choice.label.includes('conversation access scope')));
  origin.engine.reply(run.id,'approve',run.pending.id);await until(()=>run.status==='completed');assert.equal(result.granted,true);assert.equal(result.grant.actor,run.id);assert.deepEqual(result.grant.actions,['read']);assert.equal(result.grant.hostId,hostId);
 });
 

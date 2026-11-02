@@ -222,11 +222,14 @@ struct ProviderModelPicker: View {
     var provider = "copilot"
     private var catalog: JSON { store.providerStatuses[provider] ?? (provider == "copilot" ? store.modelStatus : .null) }
     private var hostName: String { store.displayName }
-    private var providerName: String { ["copilot": "GitHub Copilot", "codex": "Codex", "claude": "Claude"][provider] ?? provider }
+    private var providerName: String { nativeProviderName(provider) }
     private var models: [JSON] { catalog["models"].array }
     var disabled = false
     private var controls: JSON { models.first { $0["id"].string == model }?["controls"] ?? .null }
     private var efforts: [String] { controls["reasoningEfforts"].array.map(\.string) }
+    // Provider-advertised labels (Copilot Fusion tiers) replace opaque effort IDs.
+    private func effortLabel(_ id: String) -> String { let label = controls["reasoningEffortLabels"][id].string; return label.isEmpty ? id : label }
+    private var effortTitle: String { controls["reasoningEffortTitle"].string.isEmpty ? "Thinking effort" : controls["reasoningEffortTitle"].string }
     private var tiers: [JSON] { controls["contextTiers"].array }
     var body: some View {
         Picker("Model", selection: $model) {
@@ -234,9 +237,9 @@ struct ProviderModelPicker: View {
             if !model.isEmpty && !models.contains(where: { $0["id"].string == model }) { Text("\(model) · \(models.isEmpty ? "catalog not loaded" : "unavailable")").tag(model) }
             ForEach(models, id: \.self) { Text($0["name"].string.isEmpty ? $0["id"].string : "\($0["name"].string) · \($0["id"].string)").tag($0["id"].string) }
         }.disabled(disabled).accessibilityIdentifier("model-picker")
-        Picker("Thinking effort", selection: $effort) {
-            Text("Provider default" + (controls["defaultReasoningEffort"].string.isEmpty ? "" : " · " + controls["defaultReasoningEffort"].string)).tag("")
-            ForEach(efforts, id: \.self) { Text($0).tag($0) }
+        Picker(effortTitle, selection: $effort) {
+            Text("Provider default" + (controls["defaultReasoningEffort"].string.isEmpty ? "" : " · " + effortLabel(controls["defaultReasoningEffort"].string))).tag("")
+            ForEach(efforts, id: \.self) { Text(effortLabel($0)).tag($0) }
             if !effort.isEmpty && !efforts.contains(effort) { Text("\(effort) · unavailable (saved)").tag(effort) }
         }.disabled(disabled).accessibilityIdentifier("effort-picker")
         Picker("Context size", selection: $contextTier) {
@@ -439,10 +442,13 @@ struct ComposerModelPicker: View {
     private var models: [JSON] { (store.providerStatuses[provider] ?? (provider == "copilot" ? store.modelStatus : .null))["models"].array }
     private var catalog: JSON { store.providerStatuses[provider] ?? (provider == "copilot" ? store.modelStatus : .null) }
     private var hostName: String { store.displayName }
-    private var providerName: String { ["copilot": "GitHub Copilot", "codex": "Codex", "claude": "Claude"][provider] ?? provider }
+    private var providerName: String { nativeProviderName(provider) }
     private var selected: JSON { models.first { $0["id"].string == model } ?? .null }
     private var controls: JSON { selected["controls"] }
     private var efforts: [String] { controls["reasoningEfforts"].array.map(\.string) }
+    // Provider-advertised labels (Copilot Fusion tiers) replace opaque effort IDs.
+    private func effortLabel(_ id: String) -> String { let label = controls["reasoningEffortLabels"][id].string; return label.isEmpty ? id : label }
+    private var effortTitle: String { controls["reasoningEffortTitle"].string.isEmpty ? "Thinking effort" : controls["reasoningEffortTitle"].string }
     private var tiers: [JSON] { controls["contextTiers"].array }
     private var speeds: [JSON] { controls["serviceTiers"].array }
     var body: some View {
@@ -471,7 +477,7 @@ struct ComposerModelPicker: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     compactSection("Model", selected: model, choices: [("", "Provider default")] + models.map { ($0["id"].string, $0["name"].string.isEmpty ? $0["id"].string : $0["name"].string) }) { model = $0 }
-                    if !efforts.isEmpty || !effort.isEmpty { compactSection("Level", selected: effort, choices: [("", "Provider default")] + efforts.map { ($0, $0.capitalized) }) { effort = $0 } }
+                    if !efforts.isEmpty || !effort.isEmpty { compactSection("Level", selected: effort, choices: [("", "Provider default")] + efforts.map { ($0, controls["reasoningEffortLabels"][$0].string.isEmpty ? $0.capitalized : effortLabel($0)) }) { effort = $0 } }
                     if !speeds.isEmpty || !serviceTier.isEmpty { compactSection("Speed", selected: serviceTier, choices: [("", "Provider default")] + speeds.map { ($0["id"].string, $0["name"].string) }) { serviceTier = $0 } }
                     if tiers.count > 1 || contextTier != "default" { compactSection("Context", selected: contextTier, choices: tiers.map { ($0["id"].string, modelContextLabel($0)) }) { contextTier = $0 } }
                     Button("Refresh models") { Task { await store.loadModels(force: true, provider: provider) } }.font(.caption)
@@ -503,8 +509,8 @@ struct ComposerModelPicker: View {
                 } label: { label(selected["name"].string.isEmpty ? (model.isEmpty ? "Model" : model) : selected["name"].string, name: "Model") }.accessibilityIdentifier("composer-model")
                 if !efforts.isEmpty || !effort.isEmpty {
                     Menu {
-                        Picker("Thinking effort", selection: $effort) {
-                            Text("Provider default").tag(""); ForEach(efforts, id: \.self) { Text($0).tag($0) }
+                        Picker(effortTitle, selection: $effort) {
+                            Text("Provider default").tag(""); ForEach(efforts, id: \.self) { Text(effortLabel($0)).tag($0) }
                             if !effort.isEmpty && !efforts.contains(effort) { Text(effort + " · unavailable").tag(effort) }
                         }
                     } label: { label(effort.isEmpty ? "Default" : effort.capitalized, name: "Level") }.accessibilityIdentifier("composer-effort")
@@ -624,5 +630,119 @@ struct NativeChatUsageView: View {
             if partialClaudeInput { Text("Earlier Claude input counts may omit cached tokens. This partial total has not been estimated or backfilled.").font(.caption).foregroundStyle(.secondary) }
             Text(run["usage"]["observed"].bool ? "Observed provider usage." : "Provider usage unavailable.").font(.caption).foregroundStyle(.secondary)
         }.multilineTextAlignment(.center).accessibilityIdentifier("chat-usage-summary")
+    }
+}
+
+/// Copilot Fusion attribution, matching the shared web presentation. Values come
+/// only from provider Fusion events; planned models are never shown as used and
+/// absent values read “not reported”.
+enum NativeFusion {
+    static func turn(_ run: JSON, id: String) -> JSON? {
+        guard !id.isEmpty else { return nil }
+        return run["fusionTurns"].array.first { $0["fusionId"].string == id } ?? (run["fusion"]["fusionId"].string == id ? run["fusion"] : nil)
+    }
+    static func number(_ value: JSON) -> Double? { if case .number(let v) = value { return v }; return nil }
+    static func title(_ value: String) -> String {
+        let spaced = value.replacingOccurrences(of: "_", with: " ").replacingOccurrences(of: "-", with: " ")
+        return spaced.prefix(1).uppercased() + spaced.dropFirst()
+    }
+    static func effortLabel(_ run: JSON, _ turn: JSON) -> String {
+        let selection = run["fusionSelection"], policy = turn["policy"].string
+        if !selection["label"].string.isEmpty && (policy.isEmpty || policy == selection["tier"].string) { return selection["label"].string }
+        return policy.isEmpty ? (selection["label"].string.isEmpty ? "Fusion" : selection["label"].string) : title(policy)
+    }
+    static func finalModel(_ turn: JSON) -> String {
+        let final = turn["final"]["sourceModel"].string
+        return final.isEmpty ? turn["completion"]["finalSourceModel"].string : final
+    }
+    /// Models that actually executed, in first-seen order, with their roles.
+    static func usedModels(_ turn: JSON) -> [(model: String, roles: [String])] {
+        var order: [String] = [], roles: [String: [String]] = [:]
+        func add(_ model: String, _ role: String) {
+            guard !model.isEmpty else { return }
+            if roles[model] == nil { order.append(model); roles[model] = [] }
+            if !role.isEmpty && role != "final answer" && !roles[model]!.contains(role) { roles[model]!.append(role) }
+        }
+        for phase in turn["phases"].array where !phase["model"].string.isEmpty && !phase["status"].string.isEmpty {
+            add(phase["model"].string, phase["role"].string.isEmpty ? phase["phaseKind"].string : phase["role"].string)
+        }
+        for (model, value) in turn["models"].object.sorted(by: { $0.key < $1.key }) where value["requests"].int > 0 || value["roles"].array.contains(.string("final answer")) {
+            add(model, ""); for role in value["roles"].array { add(model, role.string) }
+        }
+        if turn["status"].string == "fallback" { add(turn["fallback"]["fallbackModel"].string, "fallback") }
+        add(finalModel(turn), "final answer")
+        return order.map { ($0, roles[$0] ?? []) }
+    }
+    static func plannedOnly(_ turn: JSON) -> [String] {
+        let used = Set(usedModels(turn).map(\.model)), plan = turn["plan"]
+        var seen = Set<String>(), result: [String] = []
+        let planned: [(String, String)] = [("primary", plan["primaryModel"].string), ("review", plan["secondaryModel"].string), ("judge", plan["judgeModel"].string), ("repair", plan["repairModel"].string)] + plan["critics"].array.map { ("critic", $0["model"].string) }
+        for (role, model) in planned where !model.isEmpty && !used.contains(model) && seen.insert(model).inserted { result.append("\(model) (\(role))") }
+        return result
+    }
+    static func summary(_ run: JSON, _ turn: JSON) -> String {
+        var parts = ["Fusion " + effortLabel(run, turn)]
+        if !turn["pattern"].string.isEmpty { parts.append(title(turn["pattern"].string)) }
+        let final = finalModel(turn), status = turn["status"].string
+        if !final.isEmpty { parts.append("answer by " + final) } else if !["routing", "running"].contains(status) { parts.append("answering model not reported") }
+        let others = usedModels(turn).filter { $0.model != final }
+        if !others.isEmpty { parts.append("also used " + others.map { $0.roles.isEmpty ? $0.model : "\($0.model) (\($0.roles.joined(separator: ", ")))" }.joined(separator: ", ")) }
+        if status == "routing" { parts.append("choosing models…") } else if status == "running" { parts.append("running") }
+        if status == "fallback" { parts.append("fallback" + (turn["fallback"]["reason"].string.isEmpty ? "" : ": " + title(turn["fallback"]["reason"].string))) }
+        return parts.joined(separator: " · ")
+    }
+    static func phaseDetail(_ phase: JSON) -> String {
+        let usage = phase["usage"]
+        var parts: [String] = []
+        if !phase["reasoningEffort"].string.isEmpty { parts.append("effort " + phase["reasoningEffort"].string) }
+        if phase["conversationScope"].string == "review" { parts.append("read-only review") }
+        if let ms = number(phase["durationMs"]) { parts.append(ms < 1000 ? "\(Int(ms)) ms" : String(format: "%.1f s", ms / 1000)) }
+        if let input = number(usage["inputTokens"]) { parts.append("\(Int(input)) in") }
+        if let output = number(usage["outputTokens"]) { parts.append("\(Int(output)) out") }
+        if let requests = number(usage["requestCount"]) { parts.append("\(Int(requests)) " + (requests == 1 ? "request" : "requests")) }
+        if let nano = number(usage["totalNanoAiu"]) { parts.append(String(format: "%.4g AI units", nano / 1e9)) }
+        if !phase["verdict"].string.isEmpty { parts.append("verdict " + phase["verdict"].string) }
+        if !phase["reason"].string.isEmpty { parts.append("reason " + title(phase["reason"].string)) }
+        return parts.joined(separator: " · ")
+    }
+    static func totals(_ turn: JSON) -> String {
+        let completion = turn["completion"]
+        var parts: [String] = []
+        if let phases = number(completion["phaseCount"]) { parts.append("\(Int(phases)) phases") }
+        if let requests = number(completion["requestCount"]) { parts.append("\(Int(requests)) requests") }
+        if let input = number(completion["inputTokens"]) { parts.append("\(Int(input)) input tokens") }
+        if let output = number(completion["outputTokens"]) { parts.append("\(Int(output)) output tokens") }
+        if let nano = number(completion["totalNanoAiu"]) { parts.append(String(format: "%.4g AI units", nano / 1e9)) }
+        if let ms = number(completion["durationMs"]) { parts.append(String(format: "%.1f s", ms / 1000)) }
+        return parts.isEmpty ? "Turn totals not reported yet." : "Turn totals: " + parts.joined(separator: " · ")
+    }
+}
+
+struct NativeFusionAttribution: View {
+    let run: JSON
+    let turn: JSON
+    @State private var expanded = false
+    var body: some View {
+        DisclosureGroup(isExpanded: $expanded) {
+            if expanded {
+                VStack(alignment: .leading, spacing: 6) {
+                    if !turn["plan"]["hint"].string.isEmpty { Text(turn["plan"]["hint"].string).font(.caption2).foregroundStyle(.secondary) }
+                    ForEach(Array(turn["phases"].array.enumerated()), id: \.offset) { _, phase in
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("\(NativeFusion.title(phase["role"].string.isEmpty ? phase["phaseKind"].string : phase["role"].string)) · \(phase["model"].string.isEmpty ? "model not reported" : phase["model"].string) · \(NativeFusion.title(phase["status"].string.isEmpty ? "pending" : phase["status"].string))").font(.caption)
+                            let detail = NativeFusion.phaseDetail(phase)
+                            if !detail.isEmpty { Text(detail).font(.caption2).foregroundStyle(.secondary) }
+                        }
+                    }
+                    let planned = NativeFusion.plannedOnly(turn)
+                    if !planned.isEmpty { Text("Planned but not run: " + planned.joined(separator: ", ")).font(.caption2).foregroundStyle(.secondary) }
+                    if turn["fallback"] != .null { Text("Routing fallback to \(turn["fallback"]["fallbackModel"].string.isEmpty ? "a provider model" : turn["fallback"]["fallbackModel"].string)").font(.caption2).foregroundStyle(.secondary) }
+                    Text(NativeFusion.totals(turn)).font(.caption2).foregroundStyle(.secondary)
+                    Text("Discarded drafts can still have edited files; review workspace changes before committing.").font(.caption2).foregroundStyle(.secondary)
+                }.textSelection(.enabled).padding(.top, 4)
+            }
+        } label: {
+            Text(NativeFusion.summary(run, turn)).font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.leading)
+        }.accessibilityIdentifier("fusion-attribution-" + turn["fusionId"].string)
     }
 }

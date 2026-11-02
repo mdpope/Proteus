@@ -1,3 +1,4 @@
+import {portableWebsiteNotification} from '../telemetry/website-notification.js';
 import {activeTimeProviders} from '../../../public/features/chats/chat-recovery-state.js';
 import {subagentSummaries,subagentPage} from '../chats/subagents.js';
 import {replyWithAttachments,answerQuestionWithAttachments,questionAttachmentMediaTypes} from '../chats/question-attachments.js';
@@ -5,6 +6,9 @@ import {countRunningChats} from '../../../public/services/remote/computer-identi
 import {chatPage} from '../chats/chat-control.js';
 import { chatDelta } from '../chats/chat-deltas.js';
 import fs from 'node:fs';
+import {needsAttention} from '../../../public/features/chats/attention-state.js';
+import {updateObservation} from '../updates/update-observation.js';
+import {startUpdateSession} from '../updates/update-session.js';
 import { toolPresentation } from '../../../public/features/chats/tool-presentation.js';
 import { agentName } from '../../../public/features/chats/agent-name.js';
 import os from 'node:os';
@@ -33,18 +37,24 @@ const runContext = run => ({...run.context,...run.schedule?.context});
 const runWorkspace = run => chatMembership(run);
 import {chatActivityAt} from '../chats/run-activity.js';
 export {chatActivityAt} from '../chats/run-activity.js';
-export const runSummary = r => ({lastActivityAt:chatActivityAt(r),...pick(r,['id','title','titleKind','titleRevision','trigger','chatType','status','queueReason','createdAt','updatedAt','failureReviewedAt','progress']),archivedAt:r.archivedAt||null,archived:!!r.archivedAt,failureEventAt:['failed','interrupted'].includes(r.status)?r.failureEventAt||r.updatedAt:null,unansweredQuestionCount:(r.userQuestions||[]).filter(q=>q.status==='pending').length,attentionRequired:(r.userQuestions||[]).some(q=>q.status==='pending')||r.status==='awaiting_input'||(!r.archivedAt&&['failed','interrupted'].includes(r.status)&&!r.failureReviewedAt),provider:r.schedule.provider,...runWorkspace(r),scheduleName:r.trigger==='chat'?'':r.schedule.name});
+export const runSummary = r => ({lastActivityAt:chatActivityAt(r),...pick(r,['id','title','titleKind','titleRevision','trigger','chatType','status','queueReason','createdAt','updatedAt','failureReviewedAt','progress']),archivedAt:r.archivedAt||null,archived:!!r.archivedAt,failureEventAt:['failed','interrupted'].includes(r.status)?r.failureEventAt||r.updatedAt:null,unansweredQuestionCount:(r.userQuestions||[]).filter(q=>q.status==='pending').length,attentionRequired:needsAttention(r),provider:r.schedule.provider,...runWorkspace(r),scheduleName:r.trigger==='chat'?'':r.schedule.name});
 const entryKeys = ['id', 'name', 'description', 'kind', 'path', 'sources', 'roots', 'mode', 'scope', 'warnings', 'unsupportedAgentFields', 'error', 'missing', 'characters', 'transport', 'integrationStatus'];
 const remoteEntry = entry => ({ ...pick(entry, entryKeys), ...(entry.agent ? { userInvocable: entry.agent.userInvocable } : {}) });
 const remoteProjects = service => { const value=service.workspaceProjects.get(service.engine);return {...value,sourceEntries:value.sourceEntries.map(remoteEntry)}; };
-const mutationMethods = new Set(['computer.access.update','chat.retry-without-agents','projects.update','sources.update','browser.live.instruct','browser.history.record','browser.history.delete','browser.history.settings','tabs.mutate','tabs.manage','workspace.delete','chat.start', 'chat.answer-question', 'chat.reply', 'chat.resume', 'chat.recover', 'chat.cancel', 'chat.send', 'chat.steer-queued','chat.edit-queued','chat.remove-queued', 'chat.review', 'chat.archive', 'chat.move', 'chat.delete', 'chat.rename', 'chat.promote', 'chat.documents.request', 'chat.attachments.begin', 'chat.attachments.chunk', 'chat.attachments.finish', 'chat.attachments.authorize', 'schedule.run', 'schedule.save', 'context.update', 'context.refresh', 'context.mode', 'context.favorite', 'context.addFolders', 'chat.context', 'chat.permissions', 'mcp.login','integrations.check','integrations.recover', 'notifications.read', 'resources.action', 'connection.revoke']);
+const mutationMethods = new Set(['inference.start','inference.cancel','computer.access.update','chat.retry-without-agents','projects.update','sources.update','browser.live.instruct','browser.history.record','browser.history.delete','browser.history.settings','tabs.mutate','tabs.manage','workspace.delete','chat.start', 'chat.answer-question', 'chat.reply', 'chat.resume', 'chat.recover', 'chat.cancel', 'chat.send', 'chat.steer-queued','chat.edit-queued','chat.remove-queued', 'chat.review', 'chat.archive', 'chat.move', 'chat.delete', 'chat.rename', 'chat.promote', 'chat.documents.request', 'chat.attachments.begin', 'chat.attachments.chunk', 'chat.attachments.finish', 'chat.attachments.authorize', 'schedule.run', 'schedule.save', 'context.update', 'context.refresh', 'context.mode', 'context.favorite', 'context.addFolders', 'chat.context', 'chat.permissions', 'mcp.login','integrations.check','integrations.recover', 'notifications.read','notifications.open', 'attention.clear', 'resources.action', 'connection.revoke']);
 const canonical = value => Array.isArray(value) ? value.map(canonical) : value && typeof value === 'object' ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value;
 export const ownerChatControls = (run,engine) => ({steering:typeof engine.providers[run.schedule.provider]?.steer==='function',recovery:!!engine.recovery,...(engine.recovery?{scheduledRecovery:true,activeTimeContinuationProviders:activeTimeProviders}:{}),...(engine.allowance?{allowanceContinuation:true}:{}),steeringMediaTypes:engine.providers[run.schedule.provider]?.acceptedSteeringMediaTypes||[]});
+// Fusion attribution for the visible history window plus the latest turn. Each
+// turn is bounded metadata (no draft/critic content); older pages bring their own.
+export function fusionTurnsFor(run,events){
+  const turns=Array.isArray(run.fusionTurns)?run.fusionTurns:[],ids=new Set(events.map(event=>event.data?.fusion?.fusionId).filter(Boolean));
+  return turns.filter((turn,index)=>ids.has(turn.fusionId)||index===turns.length-1);
+}
 export function remoteRun(run, offset = 0, permissions, beforeEvent, chatControls) {
   const events=run.events;
   const end = Number.isSafeInteger(beforeEvent) && beforeEvent >= 0 ? Math.min(events.length, beforeEvent) : Math.max(0, events.length - offset); const start = Math.max(0, end - 100);
   const capturedContext=runContext(run), permissionSnapshot=permissions?.snapshot?.();
-  return { subagents:[...subagentSummaries(run),...(permissions?.delegationSummaries?.(run.id)||[])],...runWorkspace(run),lastActivityAt:chatActivityAt(run),observedAt:new Date().toISOString(), ...(chatControls?{chatControls}:{}), ...(permissions ? { permissionContext: permissions.describeRun?.(run,permissionSnapshot) || permissions.describe(run.schedule,permissionSnapshot), permissionRevision: (permissionSnapshot?.value || permissions.get()).revision } : {}), agentName: agentName(run), ...pick(run, ['userQuestions','progress','appCapabilities','turns','timingPartial','id', 'title', 'titleKind', 'titleRevision', 'trigger', 'chatType', 'status', 'queueReason', 'createdAt', 'updatedAt', 'failureReviewedAt', 'pending', 'usage', 'contextUsage', 'providerSessionId', 'nativeSessionPath', 'automaticApprovals', 'modelCapabilities', 'nextModelOptions', 'modelHistory','capacityRetry','allowanceContinuation','allowanceStatus','activeTimeContinuation']),archivedAt:run.archivedAt||null,archived:!!run.archivedAt,queuedMessages:(run.queuedMessages||[]).map(message=>({...pick(message,['id','prompt','at','modelOptions','editedAt']),hasAttachments:!!message.attachmentDispatch,canSteer:!!chatControls?.steering&&(!message.attachmentDispatch||!!events.find(e=>e.data?.delivery?.id===message.id)?.data?.attachments?.length&&events.find(e=>e.data?.delivery?.id===message.id).data.attachments.every(file=>chatControls.steeringMediaTypes?.includes(file.mediaType)))})),failureEventAt:['failed','interrupted'].includes(run.status)?run.failureEventAt||run.updatedAt:null,unansweredQuestionCount:(run.userQuestions||[]).filter(q=>q.status==='pending').length,attentionRequired:(run.userQuestions||[]).some(q=>q.status==='pending')||run.status==='awaiting_input'||(!run.archivedAt&&['failed','interrupted'].includes(run.status)&&!run.failureReviewedAt),
+  return { fusion:run.fusion,fusionTurns:fusionTurnsFor(run,events.slice(start,end)),fusionSelection:run.fusionSelection,fusionAvailability:run.fusionAvailability,attentionRequired:needsAttention(run),subagents:[...subagentSummaries(run),...(permissions?.delegationSummaries?.(run.id)||[])],...runWorkspace(run),lastActivityAt:chatActivityAt(run),observedAt:new Date().toISOString(), ...(chatControls?{chatControls}:{}), ...(permissions ? { permissionContext: permissions.describeRun?.(run,permissionSnapshot) || permissions.describe(run.schedule,permissionSnapshot), permissionRevision: (permissionSnapshot?.value || permissions.get()).revision } : {}), agentName: agentName(run), ...pick(run, ['userQuestions','progress','appCapabilities','turns','timingPartial','id', 'title', 'titleKind', 'titleRevision', 'trigger', 'chatType', 'status', 'queueReason', 'createdAt', 'updatedAt', 'failureReviewedAt', 'pending', 'usage', 'contextUsage', 'providerSessionId', 'nativeSessionPath', 'automaticApprovals', 'modelCapabilities', 'nextModelOptions', 'modelHistory','capacityRetry','allowanceContinuation','allowanceStatus','activeTimeContinuation']),archivedAt:run.archivedAt||null,archived:!!run.archivedAt,queuedMessages:(run.queuedMessages||[]).map(message=>({...pick(message,['id','prompt','at','modelOptions','editedAt']),hasAttachments:!!message.attachmentDispatch,canSteer:!!chatControls?.steering&&(!message.attachmentDispatch||!!events.find(e=>e.data?.delivery?.id===message.id)?.data?.attachments?.length&&events.find(e=>e.data?.delivery?.id===message.id).data.attachments.every(file=>chatControls.steeringMediaTypes?.includes(file.mediaType)))})),failureEventAt:['failed','interrupted'].includes(run.status)?run.failureEventAt||run.updatedAt:null,unansweredQuestionCount:(run.userQuestions||[]).filter(q=>q.status==='pending').length,attentionRequired:(run.userQuestions||[]).some(q=>q.status==='pending')||run.status==='awaiting_input'||(!run.archivedAt&&['failed','interrupted'].includes(run.status)&&!run.failureReviewedAt),
     events: events.slice(start, end).map(e=>e.data?.tool ? {...e,data:{...e.data,tool:{...e.data.tool,presentation:toolPresentation(e.data.tool)}}}:e), eventStart: start, eventCount: events.length, earlier: start, schedule: pick(run.schedule, scheduleKeys),
     context: { ...pick(capturedContext, ['workspaceId', 'workspaceName', 'selectedIds', 'agentId', 'includeDefaults', 'baseWorkspace', 'sourceWorkspaces', 'capturedAt']), entries: (capturedContext.entries || []).map(remoteEntry) }, liveMessages: structuredClone(run.liveMessages || {}) };
 }
@@ -73,9 +83,9 @@ export function remoteState(service) {
     ...(workspaceProjects?{workspaceProjects}:{}),
     runs: visibleRuns.slice(0, 100).map(run=>({...runSummary(run),...workspaceProjects?.memberships[run.id]})), runCount: visibleRuns.length, runCountIncludingArchived: runs.length,
     runningChatCount: countRunningChats(visibleRuns),
-    attentionCount: visibleRuns.filter(run=>run.status==='awaiting_input'||(['failed','interrupted'].includes(run.status)&&!run.failureReviewedAt)).length,
+    attentionCount: visibleRuns.filter(needsAttention).length,
     context: { ...pick(context, ['revision', 'refreshedAt', 'rootStatus', 'defaultWorkspaceId', 'workspaces', 'universalFolders', 'libraryFolders', 'documents','modes','favorites', 'errors']), entries: context.entries.map(remoteEntry) },
-    defaults: pick(defaults, ['provider', 'model', 'reasoningMode', 'reasoningEffort', 'contextTier', 'serviceTier', 'timezone', 'internetSearches']), providerStatus: service.catalog?.value || null, providerStatuses: Object.fromEntries(Object.entries(service.catalogs || {}).map(([id, catalog]) => [id, catalog.value])),questionAttachmentMediaTypes:Object.fromEntries(['copilot','codex','claude'].map(id=>[id,questionAttachmentMediaTypes.filter(type=>service.engine.providers[id]?.acceptedMediaTypes?.includes(type))])),attachmentMediaTypes:Object.fromEntries(['copilot','codex','claude'].map(id=>[id,service.engine.providers[id]?.acceptedMediaTypes||[]])),mcpStatusProviders:['copilot','codex','claude'].filter(id=>typeof service.engine.providers[id]?.mcpStatus==='function'),mcpLoginProviders:['copilot','codex','claude'].filter(id=>typeof service.engine.providers[id]?.mcpLogin==='function'),capabilities:[...(service.computerAccess?['computer.access.v1']:[]),...(service.projectFollow?['tabs.follow.v1']:[]),'chat.subagents.v1','chat.agent-control.v1','chat.update-coordinator.v1','chat.pages.v1','host.platform.v1',...(service.workspaceProjects?['projects.v1','projects.move.v1','source-library.v1']:[]),'chat.paths.v1','chat.export.v1','chat.previews.v1','content-tabs.v1','chat.index.v1','chat.queue-edit.v1','integrations.health.v1','chat.review.v1','chat.lifecycle.v1','chat.rename.v1','chat.retry-without-agents.v1','chat.attachments.view.v1','chat.internet.v1','workspaces.v1',...(service.engine.permissions?.preserveInheritedDefaults?['chat.permissions.shared.v1']:[]),'chat.permissions.folders.v1','chat.permissions.chat.v1','chat.permissions.pending.v1','chat.documents.v1','chat.attachments.v1','chat.question-attachments.v1','notifications.v1','authenticated-revocation.v1','connection-self-revoke.v1',...(service.browserHistory?['browser.history.v1','browser.navigation.v1']:[]),...(service.liveBrowser?['browser.live.v1']:[]),...(service.resources?['resources.v1']:[])],protocol: 1 };
+    defaults: pick(defaults, ['provider', 'model', 'reasoningMode', 'reasoningEffort', 'contextTier', 'serviceTier', 'timezone', 'internetSearches']), providerStatus: service.catalog?.value || null, providerStatuses: Object.fromEntries(Object.entries(service.catalogs || {}).map(([id, catalog]) => [id, catalog.value])),questionAttachmentMediaTypes:Object.fromEntries(Object.keys(service.engine.providers).map(id=>[id,questionAttachmentMediaTypes.filter(type=>service.engine.providers[id]?.acceptedMediaTypes?.includes(type))])),attachmentMediaTypes:Object.fromEntries(Object.keys(service.engine.providers).map(id=>[id,service.engine.providers[id]?.acceptedMediaTypes||[]])),mcpStatusProviders:Object.keys(service.engine.providers).filter(id=>typeof service.engine.providers[id]?.mcpStatus==='function'),mcpLoginProviders:Object.keys(service.engine.providers).filter(id=>typeof service.engine.providers[id]?.mcpLogin==='function'),capabilities:[...(service.sharedInference?['inference.shared.v1']:[]),...(service.computerAccess?['computer.access.v1']:[]),...(service.projectFollow?['tabs.follow.v1']:[]),'chat.subagents.v1','chat.agent-control.v1','chat.build-coordinator.v1','chat.update-coordinator.v1','chat.update-release.v1','attention.ack.v1','chat.pages.v1','host.platform.v1',...(service.workspaceProjects?['projects.v1','projects.move.v1','source-library.v1']:[]),'chat.paths.v1','chat.export.v1','chat.previews.v1','content-tabs.v1','chat.index.v1','chat.queue-edit.v1','integrations.health.v1','chat.review.v1','chat.lifecycle.v1','chat.rename.v1','chat.retry-without-agents.v1','chat.attachments.view.v1','chat.internet.v1','workspaces.v1',...(service.engine.permissions?.preserveInheritedDefaults?['chat.permissions.shared.v1']:[]),'chat.permissions.folders.v1','chat.permissions.chat.v1','chat.permissions.pending.v1','chat.documents.v1','chat.attachments.v1','chat.question-attachments.v1','notifications.v1',...(service.openWebsiteNotification?['website.notifications.v1']:[]),'authenticated-revocation.v1','connection-self-revoke.v1',...(service.browserHistory?['browser.history.v1','browser.navigation.v1']:[]),...(service.liveBrowser?['browser.live.v1']:[]),...(service.resources?['resources.v1']:[])],protocol: 1 };
   });
 }
 function validateRelayURL(value) {
@@ -146,7 +156,7 @@ export class RemoteHost {
     ws.on('error', error => { if (this.socket === ws) this.error = /Unexpected server response: (401|403)\b/.test(error.message) ? 'The relay rejected this computer’s registration. Check its relay registration token or whether this computer is already connected elsewhere. To connect to another computer, use that computer’s pairing code; incoming access here is not required.' : error.message; });
     ws.on('close', () => {
       if (this.socket !== ws) return;
-      for(const id of this.peers.keys())this.service.projectFollow?.removeActor(id);this.peers.clear(); this.status = 'offline';this.config.offlineSince ||= new Date().toISOString();this.save();this.service.activity?.log('warning','transport.offline','Connection to the relay was interrupted.',{hostId:this.config.hostId});
+      for(const id of this.peers.keys()){this.service.projectFollow?.removeActor(id);this.service.sharedInference?.jobs.disconnect(id);}this.peers.clear(); this.status = 'offline';this.config.offlineSince ||= new Date().toISOString();this.save();this.service.activity?.log('warning','transport.offline','Connection to the relay was interrupted.',{hostId:this.config.hostId});
       clearTimeout(this.stableConnectionTimer);
       if (!this.closed && this.config.enabled) {const delay=Math.min(30000,1000*2**Math.min(this.reconnectAttempt||0,5))*(.75+Math.random()*.5);this.reconnectAttempt=(this.reconnectAttempt||0)+1;this.reconnect = setTimeout(() => this.connect(), delay);}
     });
@@ -156,7 +166,7 @@ export class RemoteHost {
         if (message.type === 'connect') {
           const peer = { id: message.clientId, challenge: secret(), incoming: 0, outgoing: 0, joined: Date.now() };
           this.peers.set(peer.id, peer); this.raw(peer, { type: 'challenge', challenge: peer.challenge });
-        } else if (message.type === 'disconnect') {this.service.projectFollow?.removeActor(message.clientId);this.peers.delete(message.clientId);}
+        } else if (message.type === 'disconnect') {this.service.projectFollow?.removeActor(message.clientId);this.service.sharedInference?.jobs.disconnect(message.clientId);this.peers.delete(message.clientId);}
         else { const peer = this.peers.get(message.clientId); if (peer) void this.receive(peer, message.packet).catch(() => { this.service.projectFollow?.removeActor(peer.id);this.peers.delete(peer.id); this.raw(peer, { type: 'rejected' }); }); }
       } catch { /* Reject malformed routing frames without taking the host down. */ }
     });
@@ -178,6 +188,7 @@ export class RemoteHost {
     return { code, browserURL: `https://proteus.example/remote#pair=${Buffer.from(JSON.stringify(capsule)).toString('base64url')}`, expiresAt, qr: await QRCode.toDataURL(code, { margin: 2, width: 360, errorCorrectionLevel: 'M' }) };
   }
   revoke(id) {
+    this.service.sharedInference?.jobs.revoke(id);
     this.documents.revokeDevice(id);
     this.attachmentConsents.revokeDevice(id);
     void this.service.attachments.revokeDevice(id);
@@ -245,6 +256,7 @@ export class RemoteHost {
   }
   requireCommandGrants(peer, method, args) {
     if (!this.config.devices.some(device => device.id === peer.device?.id)) throw new Error('Unknown paired device.');
+    if(method.startsWith('inference.')&&method!=='inference.catalog'){if(!this.service.sharedInference)throw Error('Shared inference is unavailable.');this.service.sharedInference.authorize(peer.device.id,args.providerId);}
     if (method === 'resources.list' || method === 'resources.action') this.requireResourceAccess(peer);
     if(method==='computer.access.update')this.requireResourceAccess(peer);
     if (method.startsWith('browser.live.')) this.requireBrowserAccess(peer);
@@ -254,6 +266,7 @@ export class RemoteHost {
   async command(peer, message) {
     const { method, args = {} } = message;
     this.requireCommandGrants(peer, method, args);
+    if(method==='inference.start'&&message.id!==args.id)throw Error('Inference start identity must match its durable command identity.');
     if (!mutationMethods.has(method)) return this.execute(peer, method, args);
     if (this.closed) throw new Error('Remote host is closing.');
     this.commandCounts ??= {}; this.commandCounts[method] = (this.commandCounts[method] || 0) + 1;
@@ -309,6 +322,7 @@ export class RemoteHost {
     const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Host request failed.'); return data;
   }
   async execute(peer, method, args) {
+    if(method.startsWith('inference.')){if(!this.service.sharedInference)throw Error('Shared inference is unavailable.');return this.service.sharedInference.handle(peer,method,args);}
     const engine = this.service.engine;
     if(method==='computer.access.get')return this.service.computerAccess.get();
     if(method==='computer.access.update'){this.requireResourceAccess(peer);return this.service.computerAccess.set(args);}
@@ -351,7 +365,10 @@ export class RemoteHost {
     if (method === 'runs.page') return chatPage(this.service,args);
     if (method === 'runs.list') { const offset = Math.max(0, Math.floor(Number(args.offset) || 0)),projectCatalog=this.service.workspaceProjects?.read(); return engine.visibleRuns(args.includeArchived===true).slice(offset, offset + 100).map(run=>({...runSummary(run),...this.service.workspaceProjects?.membership(run,projectCatalog)})); }
     if(method==='connection.revoke'){if(args.deviceId&&args.deviceId!==peer.device.id)throw new Error('Only this connection can be revoked here.');this.revoke(peer.device.id);return {ok:true};}
-    if(method==='notifications.list')return this.service.activity?.notifications()||{items:[],preferences:{}};
+    if(method==='attention.snapshot')return this.service.attentionStore.snapshot();
+    if(method==='attention.clear')return this.service.attentionStore.clearLocal(args.snapshot);
+    if(method==='notifications.list'){const result=this.service.activity?.notifications()||{items:[],preferences:{}};return {...result,items:result.items.filter(item=>item.type!=='website.notification'||result.preferences.forwardWebsiteNotifications===true).map(item=>item.type==='website.notification'?portableWebsiteNotification(item):item)};}
+    if(method==='notifications.open'){if(!this.service.openWebsiteNotification)throw Error('Website notification activation is unavailable on this host.');return this.service.openWebsiteNotification(args.id);}
     if(method==='notifications.read'){const result=this.service.activity.read(args.id);this.service.notify();this.changed();return result;}
     if(method==='logs.list')return this.service.activity?.logs(args)||{items:[]};
     if(method==='logs.get')return this.service.activity.logDetail(args.id);
@@ -399,7 +416,7 @@ export class RemoteHost {
       }else result=await this.service.contentTabs.getAsync(args.scope,args.id,{historyLimit:args.historyLimit});
       return {...result,tabs:result.tabs.filter(tab=>tab.type!=='document'||canDocuments)};
     }
-    if (method === 'chat.get') { const run = engine.getRun(args.id); if(args.agentId)return run.subagents?.some(row=>row.id===args.agentId)?subagentPage(run,args.agentId,args.beforeEvent):engine.delegation.page(run.id,args.agentId,args.beforeEvent); if(args.watch!=='none'){peer.runId = run.id;peer.summaryOnly=args.watch==='summary';} const view={...remoteRun(run, Math.max(0, Math.floor(Number(args.offset) || 0)), engine.permissions, args.beforeEvent,ownerChatControls(run,engine)),...this.service.workspaceProjects?.membership(run)};return args.historyCursor?chatDelta(run,view,args.historyCursor):{...view,...(!args.offset&&args.beforeEvent===undefined?chatDelta(run,view):{})}; }
+    if (method === 'chat.get') { const run = engine.getRun(args.id); if(args.agentId)return run.subagents?.some(row=>row.id===args.agentId)?subagentPage(run,args.agentId,args.beforeEvent):engine.delegation.page(run.id,args.agentId,args.beforeEvent); if(args.watch!=='none'){peer.runId = run.id;peer.summaryOnly=args.watch==='summary';} const view={...remoteRun(run, Math.max(0, Math.floor(Number(args.offset) || 0)), engine.permissions, args.beforeEvent,ownerChatControls(run,engine)),...this.service.workspaceProjects?.membership(run),...(run.schedule.purpose==='update'?{update:updateObservation(this.service,run)}:{})};return args.historyCursor?chatDelta(run,view,args.historyCursor):{...view,...(!args.offset&&args.beforeEvent===undefined?chatDelta(run,view):{})}; }
     if(method==='chat.previews.list'||method==='chat.previews.read'){
       this.requireDocumentAccess(peer);const run=engine.getRun(args.id);
       const result=await(method.endsWith('.list')?this.service.previews.list(run):this.service.previews.read(run,args.documentId));
@@ -453,7 +470,17 @@ export class RemoteHost {
     if (method === 'context.update') { const result = await this.api('/api/context', args); this.changed(); return result; }
     if (method === 'context.refresh') { const result = await this.service.context.refreshAsync({workspaceId:args.workspaceId,root:args.root}); this.changed(); return result; }
     if (method === 'schedule.preview') return this.api('/api/preview', pick(args, ['cron', 'timezone']));
+    if(method==='updates.releases'){
+      if(!this.service.updates)throw Error('Updates are unavailable on this computer.');
+      const identity=this.service.updates.identity();return {identity:pick(identity,['platform','arch','packaged','buildRevision']),...await this.service.updates.releases(args.channel||'stable')};
+    }
     if (method === 'chat.start') {
+      if(args.updateRelease!==undefined){
+        if(args.purpose!=='update'||args.projectId||args.workspaceId||args.commandFolder||args.attachments?.length)throw Error('A pinned update requires an unassigned coordinator without attachments.');
+        const selection=args.updateRelease;
+        if(!selection||typeof selection!=='object'||Array.isArray(selection)||Object.keys(selection).some(key=>!['releaseId','manifestDigest','channel'].includes(key))||typeof selection.releaseId!=='string'||!selection.releaseId||!/^[a-f0-9]{64}$/.test(selection.manifestDigest||'')||selection.channel!==undefined&&!['stable','preview'].includes(selection.channel))throw Error('Choose an exact published release and manifest digest.');
+        const run=await startUpdateSession(this.service,{...selection,operationId:args.operationId,instructions:args.prompt});peer.runId=run.id;return {runId:run.id};
+      }
       const startArgs=pick(args,['purpose','chatType','name','prompt','provider','model','reasoningEffort','contextTier','serviceTier','workspaceId','projectId','selectedIds','agentId','includeDefaults']);
       const project=startArgs.purpose==='update'?null:this.service.workspaceProjects?.projectFor(startArgs);if(project&&(args.projectId||args.workspaceId))startArgs.workspaceId=project.workspaceId;
       if(args.commandFolder){
@@ -557,7 +584,7 @@ export class RemoteHost {
   }
   async stop() {
     clearTimeout(this.reconnect);clearTimeout(this.stableConnectionTimer); this.invite = null;this.documents.clear();
-    const socket = this.socket; this.socket = null; socket?.terminate(); for(const id of this.peers.keys())this.service.projectFollow?.removeActor(id);this.peers.clear();
+    const socket = this.socket; this.socket = null; socket?.terminate(); for(const id of this.peers.keys()){this.service.projectFollow?.removeActor(id);this.service.sharedInference?.jobs.disconnect(id);}this.peers.clear();
     if (this.relay) { await this.relay.close(); this.relay = null; }
     this.status = 'disabled';
   }

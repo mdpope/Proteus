@@ -11,7 +11,7 @@ try{
  // A wheel at an already stationary top must still request the next page.
  while(start>0&&steps++<240){
   await pane.evaluate(p=>{p.scrollTop=0;});await pane.hover();await page.mouse.wheel(0,-600);
-  await page.waitForFunction(prior=>Number(document.querySelector('.conversation').dataset.eventStart)<prior,start);
+  try{await page.waitForFunction(prior=>Number(document.querySelector('.conversation').dataset.eventStart)<prior,start);}catch(error){console.error(JSON.stringify({prior:start,observed:await pane.evaluate(p=>({start:p.dataset.eventStart,top:p.scrollTop,client:p.clientHeight,height:p.scrollHeight,status:p.querySelector('.history-status')?.textContent})),errors}));throw error;}
   start=Number(await pane.getAttribute('data-event-start'));await page.waitForTimeout(270);
  }
  assert.equal(start,0,'Every event must remain reachable, including across host transport pages');
@@ -27,7 +27,7 @@ try{
   const {conversation,captureConversationPosition,applyConversationPosition,restoreConversationPosition,forgetConversation}=await import('/features/chats/conversation.js');
   const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms)),wait=async predicate=>{for(let attempt=0;attempt<200;attempt++){if(predicate())return;await pause(10);}throw Error('Conversation restoration did not settle');};
   const roots=[],ids=[],position=index=>({key:'event-'+index,index,offset:8,follow:false}),events=(start,count)=>Array.from({length:count},(_,index)=>({role:'user',text:'Restoration marker '+(start+index)+' '+'. '.repeat(80)}));
-  const fixture=(name,{start=0,count=240,loadEarlier=async()=>{}}={})=>{const root=document.createElement('section');root.style.cssText='position:fixed;inset:0 auto auto 0;width:600px;height:320px;display:flex;flex-direction:column;z-index:1000;background:white';document.body.append(root);roots.push(root);const id='restoration-'+name;ids.push(id);const run={id,eventStart:start,eventCount:start+count,events:events(start,count)},options={loadEarlier,time:()=>'',copy:()=>{}};return {root,run,mount:()=>conversation(root,run,options)};};
+  const fixture=(name,{start=0,count=240,loadEarlier=async()=>{}}={})=>{const root=document.createElement('section');root.style.cssText='position:fixed;inset:0 auto auto 0;width:600px;height:320px;display:flex;flex-direction:column;z-index:1000;background:white';document.body.append(root);roots.push(root);const id='restoration-'+name;ids.push(id);const run={id,schedule:{provider:'rehearsal'},eventStart:start,eventCount:start+count,events:events(start,count)},options={loadEarlier,time:()=>'',copy:()=>{}};return {root,run,mount:()=>conversation(root,run,options)};};
   try{
    const delayed=fixture('delayed');restoreConversationPosition(delayed.root,position(200));await pause(3100);delayed.mount();await wait(()=>captureConversationPosition(delayed.root)?.key==='event-200');const delayedPosition=captureConversationPosition(delayed.root);
    // Existing DOM is not sufficient: the desired event can arrive in a later update.

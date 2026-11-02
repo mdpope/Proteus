@@ -29,9 +29,13 @@ class PushDelivery
         }
     }
 
-    /** Returns accepted, expired, unavailable, or failed; provider acceptance is not device delivery. */
+    /** Returns accepted, obsolete, expired, unavailable, or failed; provider acceptance is not device delivery. */
     public function deliver(array $subscription, array $notification = []): string
     {
+        $created = strtotime($notification['occurredAt'] ?? $notification['createdAt'] ?? '') ?: 0;
+        if (($notification['silent'] ?? false) || ! empty($notification['readAt']) || ($notification !== [] && ($created < time() - 300 || $created > time() + 60))) {
+            return 'obsolete';
+        }
         $platform = $subscription['platform'];
         if (! ($this->status()[$platform] ?? false)) {
             return 'unavailable';
@@ -55,6 +59,9 @@ class PushDelivery
                 // plain-text preview and the source computer. Transport stays HTTPS to
                 // APNs; Apple can read alert text. Older desktops send no preview fields.
                 $route = array_intersect_key($notification, array_flip(['hostId', 'chatId', 'scheduleId', 'type']));
+                if ($created > 0) {
+                    $route['createdAt'] = gmdate('Y-m-d\TH:i:s\Z', $created);
+                }
                 $eventId = $notification['eventId'] ?? $notification['id'] ?? null;
                 $clean = fn ($value, $limit) => is_string($value) ? mb_substr(trim(preg_replace('/[\x00-\x1f\x7f]+/u', ' ', $value)), 0, $limit) : '';
                 $title = $clean($notification['title'] ?? '', 160);
@@ -64,11 +71,15 @@ class PushDelivery
                 if ($computer !== '') {
                     $alert['subtitle'] = $computer;
                 }
-                $payload = ['aps' => ['alert' => $alert, 'sound' => 'default', 'thread-id' => $route['chatId'] ?? 'proteus']];
+                $aps = ['alert' => $alert, 'thread-id' => $route['chatId'] ?? 'proteus'];
+                if (($notification['sound'] ?? true) !== false) {
+                    $aps['sound'] = 'default';
+                }
+                $payload = ['aps' => $aps];
                 if (is_string($eventId)) {
                     $route['notificationId'] = $eventId;
                 }
-                $headers = ['apns-topic' => config('push.apns_topic'), 'apns-push-type' => 'alert', 'apns-priority' => '10', 'apns-expiration' => (string) (time() + 300)];
+                $headers = ['apns-topic' => config('push.apns_topic'), 'apns-push-type' => 'alert', 'apns-priority' => '10', 'apns-expiration' => (string) ($created > 0 ? $created + 300 : time() + 300)];
                 if (is_string($eventId)) {
                     $headers['apns-collapse-id'] = hash('sha256', $eventId);
                 }

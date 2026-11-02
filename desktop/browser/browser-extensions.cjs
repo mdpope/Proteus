@@ -22,10 +22,21 @@ class BrowserExtensions {
   const folder=path.join(this.home,createHash('sha256').update(session.storagePath).digest('hex'));const file=path.join(folder,'installed.json');let rows=[];try{rows=JSON.parse(fs.readFileSync(file,'utf8'));if(!Array.isArray(rows)||rows.length>50||rows.some(row=>!row||!/^[a-p]{32}$/.test(row.id)||!/^[a-f0-9-]{36}$/.test(row.directory)||typeof row.enabled!=='boolean'))throw new Error('Invalid extension list');}catch(error){if(error.code!=='ENOENT')throw error;}
   const host={profileId,session,folder,file,rows,adapter:null};this.profiles.set(profileId,host);
   host.adapter=new ElectronChromeExtensions({license:'GPL-3.0',session,
-   createTab:async details=>{if(String(details.url||'').startsWith('chrome-extension:')){const popup=this.openPage(host,details.url);return [popup.webContents,popup];}const info=await this.browser.create(details.url||'',null,null,{profileId});const tab=this.browser.get(info.id);if(details.active!==false)this.browser.actions.send({type:'select-tab',info});return [tab.view.webContents,this.browser.window];},
-   selectTab:wc=>{if(host.reflectingSelection)return;const tab=[...this.browser.tabs.values()].find(tab=>tab.view?.webContents===wc);if(tab)this.browser.actions.send({type:'select-tab',info:this.browser.state(tab)});},
-   removeTab:wc=>{const tab=[...this.browser.tabs.values()].find(tab=>tab.view?.webContents===wc);if(tab)void this.browser.close(tab.id);},
+   createTab:async details=>{
+    const context=[...(this.browser.windowRegistry?.contexts.values()||[])].find(ctx=>ctx.window.id===details.windowId);
+    const create=async()=>{if(String(details.url||'').startsWith('chrome-extension:')){const popup=this.openPage(host,details.url,{options:true,toggle:false});return [popup.webContents,popup];}const info=await this.browser.create(details.url||'',null,null,{profileId});const tab=this.browser.get(info.id);if(details.active!==false)this.browser.actions.send({type:'select-tab',info});return [tab.view.webContents,this.ownerWindow()];};
+    return context?this.browser.windowRegistry.run(context.id,create):create();
+   },
+   selectTab:wc=>{if(host.reflectingSelection)return;const tab=[...this.browser.tabs.values()].find(tab=>tab.view?.webContents===wc);if(tab){const select=()=>this.browser.actions.send({type:'select-tab',info:this.browser.state(tab)});if(tab.windowId&&this.browser.windowRegistry)this.browser.windowRegistry.run(tab.windowId,select);else select();}},
+   removeTab:wc=>{const tab=[...this.browser.tabs.values()].find(tab=>tab.view?.webContents===wc);if(tab)void this.browser.close(tab.id);else{const window=[...this.windows].find(window=>!window.isDestroyed()&&window.webContents===wc);if(window&&!window.extensionClosing)window.close();}},
+   removeWindow:window=>{if(!window.isDestroyed())window.close();},
    requestPermissions:async(extension,permissions)=>(await dialog.showMessageBox(this.browser.window,{type:'question',title:extension.name,message:'Allow additional extension permissions?',detail:[...(permissions.permissions||[]),...(permissions.origins||[])].join('\n'),buttons:['Deny','Allow'],defaultId:0,cancelId:0})).response===1
+  });
+  require('./extension-window-context.cjs').installExtensionWindowContext(host,{
+   windowForSender:wc=>BrowserWindow.fromWebContents(wc),
+   ownerForPopup:wc=>[...this.windows].find(window=>!window.isDestroyed()&&window.webContents===wc&&window.extensionActionPopup)?.getParentWindow(),
+   createWindow:(details,extension,parent)=>this.openExtensionWindow(host,details,extension,parent),
+   openPopup:(extension,parent)=>{const action=host.adapter.api.browserAction.getAction(extension.id),page=action.popup||extension.manifest.action?.default_popup||extension.manifest.browser_action?.default_popup;if(page)this.openPage(host,new URL(page,'chrome-extension://'+extension.id+'/').href,{parentWindow:parent,toggle:false});}
   });
   require('./extension-permissions.cjs').installExtensionPermissions(host,()=>this.save(host),(extension)=>{
    if(nativeFailureNotices.has(extension.id))return;nativeFailureNotices.add(extension.id);
@@ -49,25 +60,27 @@ class BrowserExtensions {
  // The adapter calls selectTab for both host bookkeeping and extension requests.
  // Reflecting host state must not enqueue a second, potentially stale UI selection.
  reflectSelection(profileId,update){const host=this.profiles.get(profileId);if(!host)return;host.reflectingSelection=(host.reflectingSelection||0)+1;try{return update(host.adapter);}finally{host.reflectingSelection--;}}
- addTab(profileId,wc){this.reflectSelection(profileId,adapter=>adapter.addTab(wc,this.browser.window));}
+ ownerWindow(){return this.browser.windowRegistry?.current()?.window||this.browser.window;}
+ addTab(profileId,wc){this.reflectSelection(profileId,adapter=>adapter.addTab(wc,this.ownerWindow()));}
  selectTab(profileId,wc){this.reflectSelection(profileId,adapter=>adapter.selectTab(wc));}
- closePages(host,id){for(const window of this.windows)if(!window.isDestroyed()&&window.webContents.session===host.session&&new URL(window.extensionURL).hostname===id)window.destroy();}
- openPage(host,url,{x,y,options=false}={}){
+ closePages(host,id){for(const window of this.windows)if(!window.isDestroyed()&&window.webContents.session===host.session&&(window.extensionOwnerID===id||new URL(window.extensionURL).hostname===id))window.destroy();}
+ openPage(host,url,{x,y,options=false,parentWindow=this.ownerWindow(),toggle=true}={}){
   const target=new URL(url),extension=host.session.extensions.getExtension(target.hostname);
   if(target.protocol!=='chrome-extension:'||!extension)throw new Error('Choose an installed extension page.');
   const applePopup=!options&&target.hostname==='pejdijmoenmkgeppbflobdenhhabjlaj'&&target.pathname==='/page_popup.html';
   if(applePopup)target.searchParams.set('popupWindow','1');
-  const existing=[...this.windows].find(window=>!window.isDestroyed()&&window.extensionURL===target.href&&window.webContents.session===host.session&&window.getParentWindow()===this.browser.window);
-  if(existing){existing.close();return existing;}
-  const parent=this.browser.window.getBounds(),area=screen.getDisplayMatching(parent).workArea;
+  const existing=[...this.windows].find(window=>!window.isDestroyed()&&window.extensionURL===target.href&&window.webContents.session===host.session&&window.getParentWindow()===parentWindow);
+  if(existing){if(toggle)existing.close();else{existing.show();existing.focus();}return existing;}
+  const parent=parentWindow.getBounds(),area=screen.getDisplayMatching(parent).workArea;
   const width=Math.min(options?760:applePopup?400:420,area.width),height=Math.min(options?650:applePopup?220:260,area.height);
-  const popup=new BrowserWindow({parent:this.browser.window,title:extension.name+' · '+(options?'Options':'Extension'),
+  const popup=new BrowserWindow({parent:parentWindow,title:extension.name+' · '+(options?'Options':'Extension'),
    width,height,x:Math.round(Math.max(area.x,Math.min(area.x+area.width-width,parent.x+(Number.isFinite(x)?x:parent.width-width)))),
    y:Math.round(Math.max(area.y,Math.min(area.y+area.height-height,parent.y+(Number.isFinite(y)?y:90)))),
    show:false,backgroundColor:applePopup?'#243128':nativeTheme.shouldUseDarkColors?'#292a2d':'#ffffff',frame:true,closable:true,minimizable:false,maximizable:false,fullscreenable:false,resizable:options,
    webPreferences:pageWebPreferences({session:host.session,enablePreferredSizeMode:!options})});
-  popup.extensionURL=target.href;this.windows.add(popup);
-  popup.on('closed',()=>{this.windows.delete(popup);if(!this.browser.window.isDestroyed())this.browser.window.focus();});
+  popup.extensionURL=target.href;popup.extensionOwnerID=extension.id;popup.extensionActionPopup=!options;this.windows.add(popup);
+  let focused=false;popup.on('close',()=>{focused=popup.isFocused();});
+  popup.on('closed',()=>{this.windows.delete(popup);if(focused&&!this.closing&&!parentWindow.isDestroyed())parentWindow.focus();});
   popup.webContents.setWindowOpenHandler(()=>({action:'deny'}));
   if(!options)popup.webContents.on('preferred-size-changed',(_event,size)=>{
    if(popup.isDestroyed()||!Number.isFinite(size.width)||!Number.isFinite(size.height))return;
@@ -84,6 +97,39 @@ class BrowserExtensions {
   popup.webContents.on('will-navigate',(event,next)=>{try{const url=new URL(next);if(url.protocol!==target.protocol||url.hostname!==target.hostname)event.preventDefault();}catch{event.preventDefault();}});
   const load=()=>popup.loadURL(target.href).catch(async()=>{if(popup.isDestroyed())return;popup.show();const {response}=await dialog.showMessageBox(popup,{type:'error',message:'This extension could not open.',detail:'You can retry or close this window. Your extension and website data are preserved.',buttons:['Close','Retry'],defaultId:0,cancelId:0});if(!popup.isDestroyed()){if(response===1)void load();else popup.close();}});
   void load();return popup;
+ }
+ openExtensionWindow(host,details,extension,parentWindow=this.ownerWindow()){
+  this.host(host.profileId);
+  const urls=Array.isArray(details.url)?details.url:[details.url||'about:blank'];
+  if(urls.length!==1)throw Error('Extension windows currently support one initial tab.');
+  const target=new URL(urls[0]);
+  const allowed=url=>!url.username&&!url.password&&(['http:','https:'].includes(url.protocol)||url.protocol==='chrome-extension:'&&url.hostname===extension.id||url.href==='about:blank');
+  if(!allowed(target)||!host.session.extensions.getExtension(extension.id))throw Error('This extension window destination is unavailable.');
+  parentWindow||=this.ownerWindow();
+  const area=screen.getDisplayMatching(parentWindow.getBounds()).workArea;
+  const dimension=(value,fallback,min,max)=>Number.isFinite(value)?Math.max(min,Math.min(Math.round(value),max)):Math.min(fallback,max);
+  const width=dimension(details.width,520,280,area.width),height=dimension(details.height,680,180,area.height);
+  const window=new BrowserWindow({parent:parentWindow,title:extension.name+' · Window',width,height,
+   x:Math.round(Math.max(area.x,Math.min(Number.isFinite(details.left)?details.left:parentWindow.getBounds().x+40,area.x+area.width-width))),
+   y:Math.round(Math.max(area.y,Math.min(Number.isFinite(details.top)?details.top:parentWindow.getBounds().y+60,area.y+area.height-height))),
+   show:false,webPreferences:pageWebPreferences({session:host.session})});
+  window.extensionURL=target.href;window.extensionOwnerID=extension.id;window.extensionWindowType=details.type==='popup'?'popup':'normal';
+  this.windows.add(window);host.adapter.addTab(window.webContents,window);
+  let focused=false;
+  window.on('close',()=>{focused=window.isFocused();window.extensionClosing=true;if(!window.webContents.isDestroyed())host.adapter.removeTab(window.webContents);});
+  window.on('closed',()=>{
+   this.windows.delete(window);
+   if(!focused||this.closing||parentWindow.isDestroyed())return;
+   parentWindow.focus();host.adapter.api.windows.onFocusChanged(parentWindow.id);
+   const tab=host.adapter.ctx.store.getActiveTabFromWindow(parentWindow);if(tab&&!tab.isDestroyed())host.adapter.selectTab(tab);
+   const popup=[...this.windows].find(value=>!value.isDestroyed()&&value.extensionActionPopup&&value.extensionOwnerID===extension.id&&value.getParentWindow()===parentWindow&&value.webContents.session===host.session);
+   popup?.focus();
+  });
+  window.webContents.on('will-navigate',(event,next)=>{try{if(!allowed(new URL(next)))event.preventDefault();}catch{event.preventDefault();}});
+  window.webContents.setWindowOpenHandler(({url})=>{try{if(allowed(new URL(url)))this.openExtensionWindow(host,{url,type:'popup'},extension,parentWindow);}catch{}return {action:'deny'};});
+  window.once('ready-to-show',()=>{if(!window.isDestroyed()){if(details.focused===false)window.showInactive();else window.show();}});
+  void window.loadURL(target.href).catch(()=>{if(!window.isDestroyed())window.show();});
+  return window;
  }
  async installStore(profileId,host,value){
   const id=storeExtensionId(value.extensionId||value.url),row=host.rows.find(item=>item.id===id);
@@ -158,6 +204,6 @@ class BrowserExtensions {
   for(const tab of this.browser.tabs.values())if(tab.profileId===profileId)tab.captureRevision=(tab.captureRevision||0)+1;
   this.browser.changed();return this.list(profileId);
  }
- close(){for(const window of this.windows)window.close();this.windows.clear();}
+ close(){this.closing=true;for(const window of this.windows)window.close();this.windows.clear();}
 }
 module.exports={BrowserExtensions,storeExtensionId};

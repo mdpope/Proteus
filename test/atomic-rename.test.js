@@ -4,9 +4,20 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {spawn} from 'node:child_process';
-import {atomicRename} from '../src/shared/atomic-rename.cjs';
-import {atomicJSON} from '../src/shared/files.js';
-import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
+import {atomicRename,atomicRenameAsync} from '../src/shared/atomic-rename.cjs';
+import {atomicJSON,atomicJSONAsync} from '../src/shared/files.js';
+import {privateTemporaryDirectory,hasPrivatePermissions} from '../src/shared/private-paths.cjs';
+
+test('asynchronous atomic replacement preserves old bytes through Windows retries and denial',async t=>{
+ const root=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-atomic-async-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+ const current=path.join(root,'state.json'),staged=current+'.tmp';atomicJSON(current,{old:true});fs.writeFileSync(staged,'new');let attempts=0;
+ await atomicRenameAsync(staged,current,{platform:'win32',wait:async()=>{},rename:async(from,to)=>{assert.deepEqual(JSON.parse(fs.readFileSync(current)),{old:true});if(++attempts<3)throw Object.assign(Error('Sharing violation'),{code:'EBUSY'});await fs.promises.rename(from,to);}});
+ assert.equal(fs.readFileSync(current,'utf8'),'new');fs.writeFileSync(staged,'later');
+ await assert.rejects(atomicRenameAsync(staged,current,{platform:'win32',wait:async()=>{},rename:async()=>{throw Object.assign(Error('Denied'),{code:'EACCES'});}}),/Denied/);
+ assert.equal(fs.readFileSync(current,'utf8'),'new');assert.equal(fs.readFileSync(staged,'utf8'),'later');
+ const value={snapshot:1},pending=atomicJSONAsync(current,value);value.snapshot=2;await pending;
+ assert.deepEqual(JSON.parse(fs.readFileSync(current)),{snapshot:1});assert.equal(hasPrivatePermissions(current),true,'Replacement retains private mode or Windows DACL');
+});
 
 test('Windows atomic replacement retries sharing violations without removing the durable file',t=>{
  const root=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-atomic-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));

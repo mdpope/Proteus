@@ -53,7 +53,7 @@ test('document restoration keeps source authorization identity and pending brows
  const result=reconcileWindowSession(input,()=>owner,{documentFile:(scope,id,tab)=>{assert.equal(scope,'workspace');assert.equal(id,'w');return tab.documentId==='existing'?source:'/synthetic/authorized/new.md';}});
  assert.equal(result.tabs.find(tab=>tab.contentTabId==='doc').id,'legacy-doc');assert.equal(result.tabs.find(tab=>tab.contentTabId==='new-doc').file,'/synthetic/authorized/new.md');
  assert.deepEqual(result.tabs.find(tab=>tab.id==='browser-view').history,history);assert.equal(result.tabs.find(tab=>tab.id==='browser-view').navigationPending,true);
- assert.throws(()=>reconcileWindowSession(input,()=>owner),/document source is unavailable/);
+ const unavailable=reconcileWindowSession(input,()=>owner);assert.equal(unavailable.tabs.find(tab=>tab.contentTabId==='new-doc').type,'unavailable');assert.equal(unavailable.tabs.find(tab=>tab.contentTabId==='browser').id,'browser-view');
 });
 test('tab strips expose one logical tab but preserve the selected window-local alias and original data',()=>{
  const tabs=[{id:'a',type:'run',runId:'chat',contentTabId:'old-alias'},{id:'browser-a',type:'browser',contentTabId:'browser',history:{entries:['old']}},{id:'b',type:'run',runId:'chat'},{id:'browser-b',type:'browser',contentTabId:'browser',history:{entries:['new']}}],before=structuredClone(tabs);

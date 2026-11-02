@@ -4,6 +4,10 @@ const { ipcRenderer, contextBridge } = require('electron');
 // The main process verifies the exact sender and origin; notifications additionally
 // require the profile's saved website permission.
 if(process.isMainFrame){
+  // This isolated bridge exposes no callable API. Main also requires its exact
+  // error document, main frame and one-use certificate token.
+  window.addEventListener('click',event=>{const button=event.target?.closest?.('button[data-proteus-certificate-accept]');if(!event.isTrusted||!button||!location.href.startsWith('data:text/html'))return;const token=button.dataset.proteusCertificateAccept;if(/^[a-f0-9-]{36}$/.test(token||''))ipcRenderer.send('proteus:certificate-accept',token);},true);
+  ipcRenderer.on('proteus:browser-error-colors',(_event,colors)=>{if(!location.href.startsWith('data:text/html')||!colors||!['background','text','muted','accent','border','accentText'].every(key=>/^#[a-f0-9]{6}$/i.test(colors[key]||''))||!['light','dark'].includes(colors.scheme))return;const root=document.documentElement;root.style.backgroundColor=colors.background;root.style.color=colors.text;root.style.colorScheme=colors.scheme;for(const code of document.querySelectorAll('code'))code.style.color=colors.muted;for(const button of document.querySelectorAll('a,button,summary')){button.style.backgroundColor=colors.accent;button.style.color=colors.accentText;button.style.borderColor=colors.border;}});
   let scrollTimer,scrollNode,suppressScrollUntil=0,humanScrollUntil=0,pendingScroll,scrollObserver,scrollFrame;
   function stopFollowScroll(){pendingScroll=null;scrollObserver?.disconnect();scrollObserver=null;cancelAnimationFrame(scrollFrame);scrollFrame=null;}
   function applyFollowScroll(){
@@ -37,7 +41,7 @@ if(process.isMainFrame){
   window.addEventListener('pagehide',()=>{clearTimeout(scrollTimer);stopFollowScroll();});
   let interactedAt=0;for(const type of ['pointerdown','wheel'])window.addEventListener(type,event=>{if(event.isTrusted&&Date.now()-interactedAt>=1000){interactedAt=Date.now();ipcRenderer.send('proteus:browser-interaction');}},{capture:true,passive:true});
   for(const type of ['click','keydown','submit'])window.addEventListener(type,event=>{if(event.isTrusted)ipcRenderer.send('proteus:navigation-intent');},true);
-  window.addEventListener('message',event=>{if(event.source!==window)return;if(event.data?.type==='proteus-site-notification-close'){if(typeof event.data.id==='string'&&event.data.id.length<=64)ipcRenderer.send('proteus:site-notification',{close:event.data.id});return;}if(event.data?.type!=='proteus-site-notification')return;const value=event.data.value;if(!value||typeof value.title!=='string'||value.title.length>200||typeof value.body!=='string'||value.body.length>2000||typeof value.id!=='string'||value.id.length>64)return;ipcRenderer.send('proteus:site-notification',value);});
+  window.addEventListener('message',event=>{if(event.source!==window)return;if(event.data?.type==='proteus-site-notification-close'){if(typeof event.data.id==='string'&&event.data.id.length<=64)ipcRenderer.send('proteus:site-notification',{close:event.data.id});return;}if(event.data?.type!=='proteus-site-notification')return;const value=event.data.value;if(!value||typeof value.title!=='string'||value.title.length>200||typeof value.body!=='string'||value.body.length>2000||typeof value.id!=='string'||value.id.length>64||value.silent!==undefined&&typeof value.silent!=='boolean'||value.renotify!==undefined&&typeof value.renotify!=='boolean')return;ipcRenderer.send('proteus:site-notification',value);});
   ipcRenderer.on('proteus:site-notification-event',(_event,value)=>window.postMessage({type:'proteus-site-notification-event',...value},location.origin));
   contextBridge.executeInMainWorld({func:()=>{
     const Original=window.Notification;if(!Original)return;const active=new Map();
@@ -45,7 +49,7 @@ if(process.isMainFrame){
     class SiteNotification extends EventTarget {
       static get permission(){return Original.permission;}
       static requestPermission(callback){return Original.requestPermission(callback);}
-      constructor(title,options={}){super();if(Original.permission!=='granted')throw new DOMException('Notification permission is not granted.','NotAllowedError');this.title=String(title).slice(0,200);this.body=String(options.body||'').slice(0,2000);this.tag=String(options.tag||'').slice(0,100);this.data=options.data;this.id=crypto.randomUUID();active.set(this.id,this);if(active.size>200)active.delete(active.keys().next().value);window.postMessage({type:'proteus-site-notification',value:{id:this.id,title:this.title,body:this.body,tag:this.tag}},location.origin);queueMicrotask(()=>{this.dispatchEvent(new Event('show'));this.onshow?.(new Event('show'));});}
+      constructor(title,options={}){super();if(Original.permission!=='granted')throw new DOMException('Notification permission is not granted.','NotAllowedError');this.title=String(title).slice(0,200);this.body=String(options.body||'').slice(0,2000);this.tag=String(options.tag||'').slice(0,100);this.data=options.data;this.id=crypto.randomUUID();active.set(this.id,this);if(active.size>200)active.delete(active.keys().next().value);window.postMessage({type:'proteus-site-notification',value:{id:this.id,title:this.title,body:this.body,tag:this.tag,silent:options.silent===true,renotify:options.renotify===true}},location.origin);queueMicrotask(()=>{this.dispatchEvent(new Event('show'));this.onshow?.(new Event('show'));});}
       close(){active.delete(this.id);window.postMessage({type:'proteus-site-notification-close',id:this.id},location.origin);this.dispatchEvent(new Event('close'));this.onclose?.(new Event('close'));}
     }
     window.Notification=SiteNotification;

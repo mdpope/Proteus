@@ -604,7 +604,7 @@ struct NativeShell: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ProteusChatWorkspaceMoved"))) { notification in
             guard let host = notification.userInfo?["hostID"] as? String, let chat = notification.userInfo?["chatID"] as? String, let workspace = notification.userInfo?["workspaceID"] as? String, let remote = destinations.remote(for: host), let profile = remote.state["context"]["workspaces"].array.first(where: { $0["id"].string == workspace }) else { return }
-            NativeWorkspaceNavigation.openChat(chat, workspaceID: workspace, remote: remote)
+            NativeWorkspaceNavigation.openChat(chat, workspaceID: workspace, remote: remote, shared: shared)
             openWorkspace(NativeWorkspaceIdentity(hostID: host, hostName: remote.displayName, profile: profile))
         }
         .onChange(of: destinations.deletedChat) { _, event in
@@ -669,10 +669,11 @@ struct NativeShell: View {
             await notifications.syncSubscription()
             while !Task.isCancelled {
                 for destination in destinations.destinations {
+                    if let remote = destinations.remote(for: destination.id), remote.connected { await shared.refreshKnownContentTabs(remote) }
                     if let remote = destinations.remote(for: destination.id), remote.connected, let activity = try? await remote.request("notifications.list") { notifications.observe(activity["items"].array, hostID: destination.id) }
                 }
                 shared.pruneBrowsers()
-                do { try await Task.sleep(for: .seconds(30)) } catch { return }
+                do { try await Task.sleep(for: .seconds(5)) } catch { return }
             }
         }
     }
@@ -1009,6 +1010,15 @@ struct NativeShell: View {
         do { try destinations.select(route.hostID) }
         catch { notificationFallback("This computer’s saved connection is unavailable. Check Manage computers."); return }
         guard let remote = destinations.remote(for: route.hostID) else { notificationFallback(); return }
+        if route.type == "website.notification" {
+            guard !route.notificationID.isEmpty else { notificationFallback("This website notification has no activation reference."); return }
+            guard remote.connected else { notificationFallback("Reconnect \(destinations.selectedLabel) to open the website notification on that computer."); return }
+            do {
+                _ = try await remote.request("notifications.open", ["id": .string(route.notificationID)])
+                notificationFallback()
+            } catch { notificationFallback("The website notification could not be opened on \(destinations.selectedLabel). It may no longer be available.") }
+            return
+        }
         if route.type == "schedule.completed", !route.scheduleID.isEmpty {
             if !remote.state["schedules"].array.contains(where: { $0["id"].string == route.scheduleID }), remote.connected { await remote.refresh() }
             guard remote.state["schedules"].array.contains(where: { $0["id"].string == route.scheduleID }) else {
@@ -1046,7 +1056,7 @@ struct NativeShell: View {
         let workspaceID = membership["workspaceId"].string.isEmpty ? NativeWorkspaceIdentity.workspaceID(run) : membership["workspaceId"].string
         guard !workspaceID.isEmpty, let profile = remote.state["context"]["workspaces"].array.first(where: { $0["id"].string == workspaceID }) else { return false }
         let projectID = membership["workspaceId"].string == workspaceID && !membership["projectId"].string.isEmpty ? membership["projectId"].string : nil
-        NativeWorkspaceNavigation.openChat(entry.run["id"].string, workspaceID: workspaceID, projectID: projectID, remote: remote)
+        NativeWorkspaceNavigation.openChat(entry.run["id"].string, workspaceID: workspaceID, projectID: projectID, remote: remote, shared: shared)
         opened.removeAll { $0.id == entry.id }
         openWorkspace(NativeWorkspaceIdentity(hostID: entry.hostID, hostName: entry.hostName, profile: profile))
         remote.activity(true)
@@ -1122,7 +1132,7 @@ struct NativeShell: View {
     private func sendToWorkspace(_ entry: AggregateChat) {
         guard let remote = destinations.remote(for: entry.hostID), let profile = remote.state["context"]["workspaces"].array.first(where: { $0["id"].string == NativeWorkspaceIdentity.workspaceID(entry.run) }) else { return }
         let workspace = NativeWorkspaceIdentity(hostID: entry.hostID, hostName: entry.hostName, profile: profile)
-        NativeWorkspaceNavigation.openChat(entry.run["id"].string, workspaceID: workspace.workspaceID, remote: remote)
+        NativeWorkspaceNavigation.openChat(entry.run["id"].string, workspaceID: workspace.workspaceID, remote: remote, shared: shared)
         opened.removeAll { $0.id == entry.id }; openWorkspace(workspace)
     }
     private func openSchedule(_ schedule: JSON, hostID: String) {
@@ -1199,6 +1209,13 @@ struct NativeHome: View {
     }
     private var version: String { Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown" }
     private var build: String { Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "Unknown" }
+    private var releaseDate: String {
+        guard let raw = Bundle.main.infoDictionary?["ProteusReleaseDate"] as? String else { return "" }
+        let parser = DateFormatter(); parser.locale = Locale(identifier: "en_US_POSIX"); parser.timeZone = TimeZone(secondsFromGMT: 0); parser.dateFormat = "yyyy-MM-dd"; parser.isLenient = false
+        guard let date = parser.date(from: raw), parser.string(from: date) == raw else { return "" }
+        let display = DateFormatter(); display.locale = Locale(identifier: "en_US"); display.timeZone = parser.timeZone; display.dateFormat = "MMM d"
+        return display.string(from: date)
+    }
     var body: some View {
         NavigationStack {
             if let remote = destinations.selected {
@@ -1207,7 +1224,7 @@ struct NativeHome: View {
                         HStack(spacing: 10) { Text("⤨").font(.system(size: 36, weight: .bold)).foregroundStyle(Color(red: 0.67, green: 0.86, blue: 0.49)); Text("Proteus").font(.largeTitle.bold()) }
                             .accessibilityElement(children: .combine).accessibilityIdentifier("home-intro-title").frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 4)
                         Text("Proteus keeps conversations, schedules and tools connected to your computers. Choose a computer, review work that needs your input, or open a chat.")
-                        Text("Version \(version) (\(build))").font(.caption).foregroundStyle(.secondary)
+                        Text("Version \(version)\(releaseDate.isEmpty ? "" : " · " + releaseDate) (\(build))").font(.caption).foregroundStyle(.secondary)
                         guideLink
                         Button("Future updates and changelog", systemImage: "clock.arrow.circlepath") { updates = true }
                     }
@@ -1242,6 +1259,7 @@ struct NativeHome: View {
                             NativeNotificationProbe()
                             Button("Show in-app notification fixture") { NativeNotifications.shared.presentBanner("A chat finished.", destination: .init(hostID: "10000000-0000-4000-8000-000000000001", chatID: "notification-chat", scheduleID: "", type: "chat.completed")) }
                             Button("Tap chat notification") { NativeNotifications.shared.receivedTap(["hostId": "10000000-0000-4000-8000-000000000001", "chatId": "notification-chat", "type": "chat.completed"]) }
+                            Button("Tap website notification") { NativeNotifications.shared.receivedTap(["hostId": "10000000-0000-4000-8000-000000000001", "type": "website.notification", "notificationId": "20000000-0000-4000-8000-000000000002"]) }
                             Button("Tap schedule notification") { NativeNotifications.shared.receivedTap(["hostId": "10000000-0000-4000-8000-000000000001", "scheduleId": "notification-schedule", "type": "schedule.completed"]) }
                             Button("Tap unavailable notification") { NativeNotifications.shared.receivedTap(["hostId": "10000000-0000-4000-8000-000000000001", "chatId": "missing-chat", "type": "chat.completed"]) }
                             Button("Schedule iOS notification fixture") { Task { do { try await NativeNotifications.shared.scheduleFixtureTap() } catch { NativeNotifications.shared.fixtureStatus = error.localizedDescription; destinations.error = error.localizedDescription } } }
@@ -1342,6 +1360,7 @@ func nativeChatType(_ run: JSON) -> String {
 }
 struct AggregateChatsView: View {
     @EnvironmentObject var destinations: DestinationStore
+    @EnvironmentObject var shared: SharedAppStore
     @Environment(\.timeZone) private var timeZone
     @Environment(\.horizontalSizeClass) private var sizeClass
     var onSelect: ((AggregateChat) -> Void)? = nil
@@ -1482,7 +1501,7 @@ struct AggregateChatsView: View {
             if lockedWorkspaceID == nil, !NativeWorkspaceIdentity.workspaceID(item.run).isEmpty {
                 Button("Send tab to workspace", systemImage: "square") {
                     if let onSendToWorkspace { onSendToWorkspace(item) }
-                    else if let workspace = NativeWorkspaceIdentity.all(destinations).first(where: { $0.hostID == item.hostID && $0.workspaceID == NativeWorkspaceIdentity.workspaceID(item.run) }), let remote = destinations.remote(for: item.hostID) { NativeWorkspaceNavigation.openChat(item.run["id"].string, workspaceID: workspace.workspaceID, remote: remote); selectedWorkspace = workspace }
+                    else if let workspace = NativeWorkspaceIdentity.all(destinations).first(where: { $0.hostID == item.hostID && $0.workspaceID == NativeWorkspaceIdentity.workspaceID(item.run) }), let remote = destinations.remote(for: item.hostID) { NativeWorkspaceNavigation.openChat(item.run["id"].string, workspaceID: workspace.workspaceID, remote: remote, shared: shared); selectedWorkspace = workspace }
                 }
             }
             Button("Copy chat link", systemImage: "link") { UIPasteboard.general.url = NativeChatLink.url(host: item.hostID, id: item.run["id"].string) }
