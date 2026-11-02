@@ -5,8 +5,9 @@ Nov 1 / 0.2.40 is closed by the operator with deployed outcomes and qualificatio
 mobile apps received the release. Secondary-Mac maintenance completed with two verified recoveries.
 Browser sizing, real vault lifecycle, closed-popup control, machine-specific model choices and
 mobile in-tab New chat move to [Nov 2](2026-11-02-release-plan.md), in a new chat.
-Do not reopen Nov 1 or relabel installed packages. Further local deletion is held for the
-operator's requested full-path disk review. Earlier entries below are historical checkpoints.
+Do not reopen Nov 1 or relabel installed packages. Approved A/B/C cleanup is complete; minimal
+evidence and unchanged private note history remain. Active/dirty worktrees and unreviewed paths
+are held separately. Earlier entries below are historical checkpoints.
 
 ## November 1 — 0.2.40 rollout authorized
 

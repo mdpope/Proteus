@@ -4,6 +4,8 @@ Browser sizing, vault lifecycle, closed-popup control, machine-specific local mo
 
 ## Nov 1 — 0.2.40 (closed)
 
+- Normalize private release/test evidence and historical notes; retire approved duplicate payloads/worktrees while retaining shared dependencies and immutable failure receipts.
+
 - Reconcile a reviewed post-install recovery-checksum failure through the owner maintenance
   boundary, preserving its original journal and failure evidence before eligible cleanup.
 
