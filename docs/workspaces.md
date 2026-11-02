@@ -1,3 +1,12 @@
+## Nov 2 — stale native membership review
+
+Empty saved outboxes no longer block every owner refresh. Orphaned request envelopes are retained
+unchanged for review, without replaying them against a new edit. An empty desktop workspace or
+project stays empty; native clients do not bootstrap it from stale local tabs. Simulator tests
+verify empty-to-nine-tab convergence, draft retention and unchanged owner state on phone/tablet.
+The operator chose desktop membership as authoritative and requires emulator review before a
+physical update. The real device's underlying stale-cache cause remains unconfirmed.
+
 ## Nov 1 — iOS canonical membership and offline intent
 
 The native organizational sidebar displays owner content descriptors in owner order, not all chats

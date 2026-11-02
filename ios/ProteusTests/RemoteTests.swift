@@ -1925,6 +1925,59 @@ final class NativeParityTests: XCTestCase {
         XCTAssertEqual(remote.draft("project-navigation:synthetic")["chats"], .array([.string("new")]))
         XCTAssertEqual(remote.draft("project-navigation:synthetic")["selected"].string, "workspace")
     }
+    @MainActor func testEmptyLegacyOutboxAdoptsDesktopProjectWithoutUploadingGhosts() async throws {
+        let (data, _) = try await URLSession.shared.data(from: URL(string: "\(nativeFixtureHTTPOrigin)/pair?projects=1")!)
+        let fixture = try JSONDecoder().decode(JSON.self, from: data)
+        let remote = RemoteStore(); remote.forget(); try remote.pair(fixture["code"].string)
+        defer { remote.forget() }
+        let deadline = Date().addingTimeInterval(15)
+        while !(remote.connected && remote.supportsProjects), Date() < deadline { try await Task.sleep(for: .milliseconds(50)) }
+        XCTAssertTrue(remote.connected && remote.supportsProjects)
+        let name = "Authoritative desktop " + UUID().uuidString
+        let catalog = try await remote.updateProjects(["action": .string("create"), "workspaceId": fixture["workspaceId"], "name": .string(name)])
+        let project = try XCTUnwrap(catalog["projects"].array.first { $0["name"].string == name })["id"].string
+        let host = try XCTUnwrap(remote.connection?.hostId), scope = "project:\(host):\(project)"
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString), key = RemoteCrypto.random()
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let payload: JSON = .object(["contentPending": .object([scope: .array([])])])
+        try Data(RemoteCrypto.seal(payload, key: key, aad: "proteus-mobile-document-tabs-v1").utf8).write(to: root.appendingPathComponent("document-tabs.enc"))
+        let shared = SharedAppStore(cacheWriter: NativeSharedCacheWriter(), cacheRoot: root, cacheKey: { key })
+        XCTAssertNil(shared.contentPending[scope], "An empty restored queue must not block every owner read")
+        shared.browserTabs = [BrowserDescriptor(id: "stale-local", title: "Stale mobile-only tab", url: "https://example.test/stale", scope: scope, contentTabId: "stale-owner")]
+        remote.setDraft("reply:preserved", .string("Unsent draft"))
+        let args: [String: JSON] = ["scope": .string("project"), "id": .string(project)]
+        let before = try await remote.request("tabs.get", args)
+        XCTAssertTrue(before["tabs"].array.isEmpty)
+        await shared.refreshContentTabs(scope: scope, remote: remote, kind: "project", id: project)
+        XCTAssertTrue(shared.tabs(in: scope).isEmpty, "An empty desktop project is authoritative")
+        let after = try await remote.request("tabs.get", args)
+        XCTAssertEqual(after, before, "A read must not upload stale mobile tabs into the desktop")
+        let ownerTabs = (0..<9).map { index in JSON.object(["id": .string("owner-\(index)"), "type": .string("browser"), "title": .string("Desktop tab \(index)"), "url": .string("https://example.test/\(index)")]) }
+        let expected = try await remote.request("tabs.mutate", ["scope": .string("project"), "id": .string(project), "expectedRevision": after["revision"], "operations": .array(ownerTabs.map { .object(["action": .string("open"), "tab": $0]) })])
+        remote.setDraft("project-navigation:" + project, .object(["chats": .array([.string("stale-chat")]), "selected": .string("chat:stale-chat")]))
+        await shared.refreshContentTabs(scope: scope, remote: remote, kind: "project", id: project)
+        XCTAssertEqual(shared.workspaceContentDescriptors[scope], expected["tabs"].array)
+        XCTAssertEqual(shared.tabs(in: scope).compactMap(\.contentTabId), ownerTabs.map { $0["id"].string })
+        XCTAssertTrue(remote.draft("project-navigation:" + project)["chats"].array.isEmpty)
+        XCTAssertEqual(remote.draft("reply:preserved").string, "Unsent draft")
+        let unchangedOwner = try await remote.request("tabs.get", args)
+        XCTAssertEqual(unchangedOwner, expected)
+    }
+    @MainActor func testOrphanedTabReceiptIsQuarantinedWithoutLosingItsBytes() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString), key = RemoteCrypto.random(), scope = "project:fixture:general"
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let receipt: JSON = .object(["id": .string("original-request"), "issuedAt": .string("2026-10-31T20:00:00Z"), "args": .object(["operations": .array([.object(["action": .string("open"), "tab": .object(["id": .string("unknown-tab")])])])])])
+        let payload: JSON = .object(["contentPending": .object([scope: .array([])]), "contentRequests": .object([scope: receipt])])
+        try Data(RemoteCrypto.seal(payload, key: key, aad: "proteus-mobile-document-tabs-v1").utf8).write(to: root.appendingPathComponent("document-tabs.enc"))
+        let shared = SharedAppStore(cacheWriter: NativeSharedCacheWriter(), cacheRoot: root, cacheKey: { key })
+        XCTAssertNil(shared.contentPending[scope]); XCTAssertFalse(shared.hasPendingContent(in: scope))
+        XCTAssertEqual(shared.legacyContentReview[scope]?["request"], receipt)
+        shared.selectChatChild("chat", for: scope); XCTAssertNil(shared.flushCachedState())
+        let restored = SharedAppStore(cacheWriter: NativeSharedCacheWriter(), cacheRoot: root, cacheKey: { key })
+        XCTAssertEqual(restored.legacyContentReview[scope]?["request"], receipt)
+    }
     @MainActor func testTabRebaseHonorsObservedCloseAndKeepsConcurrentOrder() {
         let tab: JSON = .object(["id": .string("chat:one"), "type": .string("chat"), "chatId": .string("one")])
         let snapshot: JSON = .object(["revision": .number(8), "closed": .object(["chat:one": .number(8)]), "tabs": .array([.object(["id": .string("other")])])])

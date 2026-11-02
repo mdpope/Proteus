@@ -1,5 +1,11 @@
 ## Nov 2 — 0.2.41 candidate underway
 
+R10 restores the earlier requested iPhone Chat / Live browser row and repairs stale organizational
+tab projection. The operator requires shared phone/tablet simulator review before further physical
+builds/installations. [The prior-request/branch audit](releases/2026-11-02/prior-release-audit.md)
+keeps the other missing October items visible. Only main and the Nov 2 branch remain; all old
+committed heads are integrated and uncommitted historical work is preserved.
+
 [The Nov 2 plan](2026-11-02-release-plan.md) now includes current GPT/Claude catalogs, distinct
 Copilot Fusion availability, the external Outlook-link selector regression and R9 quick question
 answers without repeated prompts. Source corrections cover R1–R9. Local and synthetic acceptance, exact packages, installation and live workflows are

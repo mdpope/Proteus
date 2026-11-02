@@ -2714,6 +2714,21 @@ final class PhoneSidebarPreviewUITests: XCTestCase {
 
 final class PhoneComposerPreviewUITests: XCTestCase {
     override func setUpWithError() throws { continueAfterFailure = false }
+    @MainActor func testChatLiveBrowserLinksOwnPhoneSecondRow() {
+        let app = openComposerDesignPreview(phone: true)
+        let row = app.descendants(matching: .any).matching(identifier: "phone-chat-navigation").firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 10))
+        let chat = app.buttons["chat-mode-conversation"], live = app.buttons["chat-live-browser"]
+        XCTAssertTrue(chat.exists); XCTAssertTrue(live.exists)
+        XCTAssertEqual(app.buttons.matching(identifier: "chat-live-browser").count, 1)
+        XCTAssertFalse(app.scrollViews["chat-child-tab-strip"].exists)
+        for id in ["chat-tab-overview", "chat-actions"] { XCTAssertEqual(app.buttons[id].frame.midY, chat.frame.midY, accuracy: 3) }
+        XCTAssertEqual(app.buttons["Add chat tab"].frame.midY, chat.frame.midY, accuracy: 3)
+        XCTAssertLessThan(chat.frame.midY, app.scrollViews["chat-conversation-scroll"].frame.minY)
+        live.tap(); XCTAssertTrue(chat.isHittable); chat.tap()
+        XCTAssertTrue(app.scrollViews["chat-conversation-scroll"].waitForExistence(timeout: 10))
+        let proof = XCTAttachment(screenshot: app.screenshot()); proof.name = "iPhone Chat Live browser navigation review"; proof.lifetime = .keepAlways; add(proof)
+    }
     @MainActor func testQuestionQueueChoicesAndCustomAnswerUseOwnerSession() { verifyQuestionQueueAnswers(phone: true) }
     @MainActor func testOneLineComposerExpandsControlsAndPreservesDraft() {
         let app = openComposerDesignPreview(phone: true)

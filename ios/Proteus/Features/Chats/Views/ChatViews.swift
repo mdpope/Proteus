@@ -832,7 +832,7 @@ struct ChatView: View {
             // project/tab bars own navigation. Only compact iPad split views keep Back.
             if sizeClass != .regular && !NativePhonePreview.enabled && !embedded { compactHeader }
             if NativePhonePreview.enabled {
-                if !phoneChrome.controlsHidden { childTabs }
+                if !phoneChrome.controlsHidden { phoneChatNavigation }
             } else if !embedded { childTabs }
             if selectedChild == "chat" && pageSearch.visible { HStack { Spacer(minLength: 0); NativePageFindBar(search: pageSearch, loadedOnly: true) }.padding(8) }
             #if DEBUG
@@ -851,7 +851,7 @@ struct ChatView: View {
             #endif
             Divider()
             if let documentNotice { HStack { ProgressView().controlSize(.small); Text(documentNotice).font(.caption); Spacer(); Button("Cancel") { documentTask?.cancel(); self.documentNotice = nil } }.padding(8).background(NativeTheme.surface) }
-            if !run["subagents"].array.isEmpty {
+            if !NativePhonePreview.enabled && !run["subagents"].array.isEmpty {
                 HStack { Spacer(); Button(selectedAgent == nil ? "Agents \(run["subagents"].array.count)" : "Parent conversation") {
                     selectedAgent = selectedAgent == nil ? run["subagents"].array.first?["id"].string : nil
                 }.accessibilityIdentifier("chat-agents") }.padding(.horizontal)
@@ -860,7 +860,7 @@ struct ChatView: View {
                 NativeSubagentConversation(parentID: id, summaries: run["subagents"].array, selected: Binding(get: { self.selectedAgent ?? selectedAgent }, set: { self.selectedAgent = $0 }))
             }
             else if selectedChild == "chat" { conversation }
-            else if selectedChild == "live" { LiveBrowserView(chatID: id, modeStatus: AnyView(composerStatus)).environment(store) }
+            else if selectedChild == "live" { LiveBrowserView(chatID: id, modeStatus: NativePhonePreview.enabled ? nil : AnyView(composerStatus)).environment(store) }
             else if let tab = shared.browserTabs.first(where: { $0.id == selectedChild && $0.scope == chatBrowserScope }) {
                 TeamBrowserView(scope: chatBrowserScope, showTabs: false, tabID: tab.id, onBackToList: returnToChats).environment(\.nativeTabStep, { direction in
                     let ids = ["chat"] + shared.orderedChatChildren(in: chatBrowserScope, documentIDs: documents.map(\.id))
@@ -975,12 +975,36 @@ struct ChatView: View {
         }))
     }
     private func returnToChats() { if let onBack { onBack() } else { dismiss() } }
+    private var phoneChatNavigation: some View {
+        HStack(spacing: 0) {
+            if !embedded { NativeSidebarButton() }
+            HStack(spacing: 8) {
+                modeLink("Chat", mode: "chat", identifier: "chat-mode-conversation")
+                if store.state["capabilities"].array.contains(.string("browser.live.v1")) {
+                    Text("|").foregroundStyle(.secondary)
+                    modeLink("Live browser", mode: "live", identifier: "chat-live-browser")
+                }
+            }.font(.caption).padding(.horizontal, 8)
+            Spacer(minLength: 0)
+            Button { phoneChrome.showTabs?() } label: { NativeTabOverviewIcon().frame(width: 44, height: 44) }.accessibilityLabel("Tab overview").accessibilityIdentifier("chat-tab-overview")
+            Button { shared.open(nil, scope: chatBrowserScope); selectedChild = shared.selected(in: chatBrowserScope) ?? "chat"; shared.selectChatChild(selectedChild, for: chatBrowserScope) } label: { Image(systemName: "plus").frame(width: 44, height: 44) }.accessibilityLabel("Add chat tab")
+            chatActions
+        }.buttonStyle(.plain).nativeTabBar().accessibilityElement(children: .contain).accessibilityIdentifier("phone-chat-navigation")
+    }
     private var compactHeader: some View {
         HStack(spacing: 4) {
             if !NativePhonePreview.enabled && !embedded { Button { returnToChats() } label: { Image(systemName: "chevron.left").font(.system(size: 19, weight: .medium)).frame(width: 44, height: 44).contentShape(Rectangle()) }.frame(width: 44, height: 44).contentShape(Rectangle()).accessibilityLabel("Back to Chats").accessibilityIdentifier("chat-back") }
             if NativePhonePreview.enabled { Button { phoneChrome.drawer = true } label: { Image(systemName: "sidebar.left").frame(width: 44, height: 44) }.accessibilityLabel("App navigation").accessibilityIdentifier("phone-app-navigation") }
             Text(run["title"].string.isEmpty ? "Conversation" : run["title"].string).font(.subheadline.weight(.medium)).lineLimit(1).truncationMode(.tail).frame(maxWidth: .infinity, alignment: .leading).accessibilityIdentifier("chat-header-title")
+            chatActions
+            if NativePhonePreview.enabled { NativeMainTabAdd() }
+        }.buttonStyle(.plain).padding(.horizontal, NativePhonePreview.enabled || !embedded ? 4 : 12).frame(height: 44).background(NativeTheme.surface)
+    }
+    private var chatActions: some View {
             Menu {
+                if NativePhonePreview.enabled && !run["subagents"].array.isEmpty {
+                    Button(selectedAgent == nil ? "Agents (\(run["subagents"].array.count))" : "Parent conversation", systemImage: "person.2") { selectedAgent = selectedAgent == nil ? run["subagents"].array.first?["id"].string : nil }.accessibilityIdentifier("chat-agents")
+                }
                 ForEach(documents) { document in Button(document.title, systemImage: "doc") { selectedChild = document.id; shared.selectChatChild(document.id, for: chatBrowserScope) } }
                 Button("Copy chat link", systemImage: "link") { UIPasteboard.general.url = NativeChatLink.url(host: store.connection?.hostId ?? "", id: id) }
                 if store.state["capabilities"].array.contains(.string("chat.rename.v1")) { Button("Rename", systemImage: "pencil") { showRename = true } }
@@ -989,8 +1013,6 @@ struct ChatView: View {
                     Button("Delete chat", systemImage: "trash", role: .destructive) { confirmDelete = true }.disabled(chatHasPendingWork(run))
                 }
             } label: { Image(systemName: "ellipsis.circle").font(.system(size: 22)).frame(width: 44, height: 44).contentShape(Rectangle()) }.frame(width: 44, height: 44).contentShape(Rectangle()).accessibilityLabel("Chat actions").accessibilityIdentifier("chat-actions")
-            if NativePhonePreview.enabled { NativeMainTabAdd() }
-        }.buttonStyle(.plain).padding(.horizontal, NativePhonePreview.enabled || !embedded ? 4 : 12).frame(height: 44).background(NativeTheme.surface)
     }
     private var childTabs: some View {
         HStack(spacing: 0) {
@@ -1436,7 +1458,7 @@ NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs
                 if !documents.isEmpty {
                     Menu { ForEach(documents) { document in Button(document.title) { selectedChild = document.id; shared.selectChatChild(document.id, for: chatBrowserScope) } } } label: { Image(systemName: "doc") }.accessibilityLabel("Chat documents")
                 }
-                if store.state["capabilities"].array.contains(.string("browser.live.v1")) {
+                if !NativePhonePreview.enabled && store.state["capabilities"].array.contains(.string("browser.live.v1")) {
                     modeLink("Chat", mode: "chat", identifier: "chat-mode-conversation")
                     Text("|").foregroundStyle(.secondary)
                     modeLink("Live browser", mode: "live", identifier: "chat-live-browser")

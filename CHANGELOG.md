@@ -1,5 +1,8 @@
 ## Nov 2 — 0.2.41 candidate
 
+- Restore the requested iPhone Chat / Live browser navigation row while preserving iPad placement; simulator review precedes physical rollout.
+- Reconcile desktop-owned project membership after empty legacy mobile outboxes, preserve orphaned delivery receipts for review, and prevent stale tabs bootstrapping an empty desktop project.
+
 - Restore full browser layout during same-tab redraws while retaining address drafts.
 - Expose extension action-popup contexts through Chrome's runtime context API, and suppress vendor API payload logging.
 - Settle uncertain desktop input only after the exact missing window is corroborated by a fresh complete process inventory; new input still needs a new observation.

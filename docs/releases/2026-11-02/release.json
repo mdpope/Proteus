@@ -9,5 +9,10 @@
   "implementation": "docs/releases/2026-11-02/implementation.md",
   "rollout": "docs/releases/2026-11-02/rollout.md",
   "closeout": "docs/releases/2026-11-02/closeout.md",
-  "sourceCommit": "f75f98f7f2e623acdb77adedb2a0da7e09785fa7"
+  "sourceCommit": "4456aea8837171ba60f82775859d9ce7f4ec0810",
+  "mobileReviewHold": {
+    "active": true,
+    "reason": "Operator requested shared iPhone/iPad simulator review before further physical builds or installations."
+  },
+  "priorRequestAudit": "docs/releases/2026-11-02/prior-release-audit.md"
 }

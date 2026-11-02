@@ -483,12 +483,13 @@ let nativeFixtureRelayOrigin = ""
         contentHosts[scope] = host
         remote.onAuthenticatedRevocation = { [weak self] in self?.revokeContentHost(host) }
         contentSync[scope] = (remote, kind, id, host)
+        if contentPending[scope]?.isEmpty == true && contentRequests[scope] == nil { contentPending[scope] = nil }
         if contentPending[scope] != nil { await flushContentTabs(scope); return }
         guard !contentBusy.contains(scope) else { return }; contentBusy.insert(scope); defer { contentBusy.remove(scope) }
         do {
             var response = try await remote.request("tabs.get", ["scope": .string(kind), "id": .string(id)])
             guard remote.connection?.hostId == host, remote.connected, contentHosts[scope] == host else { return }
-            if response["revision"].int == 0 && contentSnapshots[scope] == nil {
+            if response["revision"].int == 0 && contentSnapshots[scope] == nil && !Self.isOrganizationalScope(scope) {
                 let retained = localContentTabs(scope)
                 if !retained.isEmpty { response = try await remote.request("tabs.mutate", ["scope": .string(kind), "id": .string(id), "expectedRevision": .number(0), "operations": .array(retained.map { .object(["action": .string("open"), "tab": $0]) })]) }
             }
@@ -748,6 +749,16 @@ let nativeFixtureRelayOrigin = ""
         if let encoded = try? JSONEncoder().encode(payload["browserConflicts"]), let conflicts = try? JSONDecoder().decode([NativeBrowserNavigationConflict].self, from: encoded) { browserConflicts = conflicts }
         contentSnapshots = payload["contentSnapshots"].object; contentPending = payload["contentPending"].object.mapValues { $0.array }; contentRequests = payload["contentRequests"].object; contentHosts = payload["contentHosts"].object.mapValues { $0.string }
         legacyContentReview = payload["legacyContentReview"].object
+        // Old caches can contain an empty outbox. It must not suppress every
+        // owner refresh. An orphaned delivery envelope is retained for review,
+        // never replayed against a new edit or discarded as an empty draft.
+        for scope in Set(contentPending.keys).union(contentRequests.keys) where contentPending[scope]?.isEmpty != false {
+            if let request = contentRequests[scope] {
+                legacyContentReview[scope] = .object(["operations": .array([]), "request": request, "reason": .string("missing-pending-operations")])
+                contentRequests[scope] = nil
+            }
+            contentPending[scope] = nil
+        }
         for (scope, operations) in contentPending where operations.contains(where: { $0["action"].string == "close" && $0["intentId"].string.isEmpty }) {
             // Old clients inferred Close from missing views. Retain the complete
             // original envelope for review; migration cannot authorize deletion.

@@ -1,3 +1,11 @@
+## Nov 2 — mobile navigation review
+
+The iPhone chat row now uses Chat / Live browser text links followed by overview, add-tab and
+chat actions. Child browser/document tabs remain in overview/drawer; phone Agents is in the actions
+menu. The iPhone composer no longer repeats the switcher. iPad retains its existing placement.
+Phone navigation and tablet Live Browser/draft tests pass in shared simulators. Separate native
+review apps use a synthetic owner; physical builds/installations are held for operator review.
+
 ## Nov 2 — redraw geometry, extension contexts and incoming links
 
 Browser redraws restore the browser layout class independently of toolbar reuse. Native bounds

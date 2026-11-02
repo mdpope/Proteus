@@ -113,6 +113,38 @@ Apply the shared desktop/web card behavior and native return-key handling. Verif
 failure and corrected keyboard/choice/draft/retry behavior, including native software-keyboard
 Send. Earlier accepted R1–R8 artifacts do not contain this addition and must not be relabelled.
 
+## R10 — recover the requested iPhone row and reconcile mobile project tabs
+
+The operator reports the installed iPhone still differs from October 31 O7: replace its chat
+child-tab row with Chat / Live browser text links plus overview, add-tab and chat actions; remove
+the duplicate composer switcher on iPhone only. Keep browser/document children reachable through
+overview/drawer and move the floating phone Agents control into the actions menu. iPad retains its
+existing rows and composer switcher.
+
+The operator also reports stale phone/tablet membership in a desktop-owned project and explicitly
+chooses the desktop as source of truth. Repair the native projection through the normal encrypted
+owner protocol, preserving IDs/order/hidden state/history, drafts and uncertain delivery evidence.
+Empty legacy outboxes must not suppress reads; an empty desktop organizational scope must not
+be populated automatically from stale local tabs. Retain orphaned request envelopes for review.
+History-page failure is a separate lead, not an established diagnosis of the physical screenshot.
+
+**Review hold:** validate and present the change in the existing shared iPhone/iPad simulators
+first. No further physical-device builds or installations until the operator reviews that preview.
+The earlier physical 2611.2.1 rollout remains installed. R9 build 2611.2.2 was prepared before this
+hold and has not been installed. Local review uses an independent preview identity and synthetic
+owner; an explicitly supplied desktop membership snapshot may be mirrored without credentials,
+real browser sessions or external page loads.
+
+## R11 — prior request and branch audit
+
+See [the audit](releases/2026-11-02/prior-release-audit.md). All seven prior remote heads were
+strict ancestors of main; they and three old local branch refs were retired with exact-head
+checks, leaving main and Nov 2. Dirty detached worktrees and hashed patches retain original edits;
+one unique browser-host resize regression was recovered and passes. No extra merge was necessary.
+The earlier unimplemented/partial request register remains visible in the audit; it is not a
+claim that every collected October item was delivered. Further product changes remain tracked
+in the open Nov 2 effort.
+
 ## Handoff and acceptance
 
 Start with `docs/handoff.md`, `docs/release-process.md` and the Nov 1 closeout. Private project

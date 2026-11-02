@@ -2,6 +2,32 @@
 
 Version: 0.2.41
 
+Current checkpoint: desktop R9 application/source pin is
+`4456aea8837171ba60f82775859d9ce7f4ec0810`. Its signed Mac package, six exact-package UI checks,
+unchanged integrity, official extraction and all 1,522 corresponding-source hashes verify.
+Publisher/destination approval remains pending. The R9 website is deployed with passing activation
+and endpoint audit, but its new ordinary restore failed; captured-state verification passed with
+live-state comparison not performed. Final asset/retention closeout remains separate.
+
+R10 mobile changes are simulator-only pending operator review. The new phone row, encrypted
+owner empty-project/nine-tab resynchronization and orphan-receipt retention tests pass. The same
+tablet sync and existing Live Browser/composer draft retention checks pass. No further physical build
+or installation is authorized until this review. Existing physical 2611.2.1 stays unchanged;
+2611.2.2 was prepared before the hold and is not installed.
+
+[The prior-request audit](prior-release-audit.md) identifies missing/partial October requests.
+All old committed branch work is already in main. Prior branch refs are retired; dirty detached
+worktrees and hashed patches are preserved. A recovered browser-host resize regression passes.
+Earlier package/deployment checkpoints below retain their original identities and qualifications.
+
+R10 validation: two native owner/cache tests pass on each shared simulator; the phone navigation
+UI case passes, and the tablet Live Browser/composer/draft case passes. Complete Node suite remains
+1,421 passes/four skips; static checks and the recovered Electron host-resize regression pass.
+The first test build exposed fixture-only class selection and private-state access errors; the
+corrected tests use observable behavior and the actual NativeParityTests class. The failed build
+is retained separately and is not counted as acceptance. Production device-cache cause remains
+unconfirmed; the legacy empty-outbox failure has a targeted owner-protocol regression and correction.
+
 R9 was added after the earlier application freeze. Its source fixes restore inline question
 Enter/Send and omit card headings already present in the transcript. The preceding UI fixture
 fails on the repeated heading; corrected shared desktop/web tests, complete Node suite and static
