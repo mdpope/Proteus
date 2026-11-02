@@ -1361,7 +1361,7 @@ let nativeFixtureRelayOrigin = ""
             let key = host + "|" + profileId, threshold = Self.historyCacheStart()
             if query.isEmpty {
                 var seen = Set<String>()
-                historyCache[key] = (response["items"].array + (historyCache[key] ?? [])).filter { item in
+                historyCache[key] = (response["items"].array + (historyCache[key] ?? [])).map { item in var fields = item.object; fields.removeValue(forKey: "favicon"); return JSON.object(fields) }.filter { item in
                     guard Self.historyURL(item["url"].string) != nil, let date = ProviderAllowance.date(item["visitedAt"].string), date >= threshold else { return false }
                     return seen.insert(item["eventId"].string.isEmpty ? item["id"].string : item["eventId"].string).inserted
                 }.sorted { $0["visitedAt"].string > $1["visitedAt"].string }

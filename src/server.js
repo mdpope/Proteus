@@ -21,7 +21,7 @@ import { hostPlatformMetadata } from './shared/host-platform.js';
 import {TabManagement} from './services/workspaces/tab-management.js';
 import {ChatControl} from './services/chats/chat-control.js';
 import { PerformanceDiagnostics } from './services/telemetry/performance-diagnostics.js';
-import {BrowserHistory,browserHistorySettings} from './services/browser/browser-history.js';
+import {BrowserHistory,browserHistorySettings,historyWithSavedIcons} from './services/browser/browser-history.js';
 import {BrowserProfiles} from './services/browser/browser-profiles.js';
 import { SessionProvider } from './providers/session-provider.js';
 import { IntegrationHealth } from './services/integrations/integrations.js';
@@ -336,7 +336,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       if (url.pathname === '/api/app' && req.method === 'POST') return json(200, await account.request(await body(req)));
       if (url.pathname === '/api/team/lists' && req.method === 'GET') return json(200, await account.lists());
       if (url.pathname === '/api/team/lists' && req.method === 'POST') return json(200, await account.team(await body(req)));
-      if(url.pathname==='/api/browser-history'){const value=req.method==='GET'?{action:'query',...Object.fromEntries(url.searchParams)}:await body(req);const action=value.action||'query';if(!['query','record','delete','settings','sync','status'].includes(action))throw new Error('Unknown browser history action.');return json(200,action==='sync'?await service.peers?.syncHistory()||{synced:false}:action==='settings'?await browserHistorySettings(service,value):await service.browserHistory[action](value));}
+      if(url.pathname==='/api/browser-history'){const value=req.method==='GET'?{action:'query',...Object.fromEntries(url.searchParams)}:await body(req);const action=value.action||'query';if(!['suggest','query','record','delete','settings','sync','status'].includes(action))throw new Error('Unknown browser history action.');const result=action==='sync'?await service.peers?.syncHistory()||{synced:false}:action==='settings'?await browserHistorySettings(service,value):await service.browserHistory[action](value);return json(200,['query','suggest'].includes(action)?await historyWithSavedIcons(service,result,value):result);}
       if(url.pathname==='/api/updates/coordinator'&&req.method==='POST')return json(200,await (await import('./services/updates/update-session.js')).startUpdateSession(service,await body(req)));
       if(url.pathname==='/api/updates/recovery'&&req.method==='POST'){if(!service.updates)throw Error('Supervised desktop updates are unavailable.');return json(200,await service.updates.recovery(await body(req)));}
       if(url.pathname==='/api/updates'){if(!service.updates)return json(200,{identity:{packaged:false,capabilities:{prepare:false}},job:null});return json(200,await service.updates.handle(req.method==='GET'?{action:'status'}:await body(req)));}

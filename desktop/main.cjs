@@ -89,6 +89,7 @@ else {
     browser.closeCurrentTab=closeCurrentTab;
 
     windows.current().preview=new ArtifactPreview(firstWindow);preview=windows.proxy('preview');
+    service.browserHistoryIcons = value=>browser.savedIcons(value);
     credentials = new CredentialBroker(service.home);
     const trusted = event => { if (new URL(event.senderFrame.url).origin !== service.origin || event.sender !== window.webContents) throw new Error('Untrusted renderer.'); };
     const configureWindowChrome=installWindowChrome({windows,trusted,Menu,isClosing:()=>closing});

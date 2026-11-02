@@ -1,5 +1,8 @@
 ## Nov 2 — 0.2.41 candidate
 
+- Complete address prefixes with history-ranked website origins: Enter opens, Tab accepts a trailing slash for continued paths.
+- Show saved profile-scoped site icons beside address/history rows without fetching sites.
+
 - Synchronize shared setup slots plus setup/reply text with revision conflict recovery; keep attachments and run choices local.
 - Add window-local tab muting and a live speaker indicator before ×; retain visual website notifications when muted.
 

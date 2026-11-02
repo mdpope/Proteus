@@ -34,6 +34,7 @@ export class BrowserHistory extends EventEmitter {
     this.ready.then(()=>this.scheduleMaintenance()).catch(()=>{});
   }
   async request(method,value={}){if(method==='record'){const rows=value.events || value.visits || (value.eventId?[value]:[]),hostId=typeof this.options.hostId==='function'?this.options.hostId():this.options.hostId;value={...value,events:rows.map(row=>({...row,sourceHostId:row.sourceHostId || row.hostId || row.deviceId || hostId || ''}))};}if(['navigation','seed'].includes(method))value={...value,sourceHostId:value.sourceHostId || (typeof this.options.hostId==='function'?this.options.hostId():this.options.hostId) || ''};const result=await this.client.request(method,value);if((['record','apply','settings'].includes(method)&&result.changed)||(method==='delete'&&result.deleted>0)||(method==='navigation'&&value.action!=='seed'&&!result.replayed))this.emit('changed',{method});if((['record','apply'].includes(method)&&result.inserted>0)||(method==='settings'&&result.changed)||(method==='navigation'&&value.action!=='seed'&&!result.replayed))this.scheduleMaintenance();return result;}
+  suggest(value){return this.request('suggest',value);}
   record(value){return this.request('record',value);} query(value){return this.request('query',value);}
   settings(value){return this.request('settings',value);} delete(value){return this.request('delete',value);}
   sync(value){return this.request('sync',value);} apply(value){return this.request('apply',value);}
@@ -88,4 +89,11 @@ export class BrowserHistory extends EventEmitter {
     this.closing=true;clearInterval(this.timer);clearImmediate(this.maintenanceScheduled);this.maintenanceScheduled=null;
     this.closePromise=(async()=>{try{await this.maintenancePromise;}catch{}await this.client.close();})();return this.closePromise;
   }
+}
+
+// Optional desktop-owned cache lookup; headless owners return globe fallbacks.
+export async function historyWithSavedIcons(service,result,value={}) {
+  if(!service.browserHistoryIcons||!Array.isArray(result.items)||!result.items.length)return result;
+  const {icons}=await service.browserHistoryIcons({profileId:value.profileId||'default',urls:result.items.slice(0,100).map(item=>item.url)});
+  const items=result.items.map(item=>({...item,...(icons[item.url]?{favicon:icons[item.url]}:{})}));return {...result,items,...(result.entries?{entries:items}:{})};
 }

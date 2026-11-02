@@ -121,6 +121,16 @@ async function seedProjectFixture() {
 // Website-service rehearsal shared by both simulator previews; never reads a live account.
 let previewTeamLists = [{id:'preview-team', revision:'1', name:'Platform Services Team', timezone:'America/Denver', instructions:'Review yesterday, today and any blockers.', members:[{id:'p1',name:'Alex',mode:'random'},{id:'p2',name:'Morgan',mode:'fixed'},{id:'p3',name:'Sam',mode:'random'}], links:[{id:'l1',title:'On Call — Operations',url:fixtureHTTPOrigin+'/browser/phone-preview?section=on-call'},{id:'l2',title:'Operational Health',url:fixtureHTTPOrigin+'/browser/one'},{id:'l3',title:'Team Queue',url:fixtureHTTPOrigin+'/browser/two'}]}, {id:'preview-review', revision:'1', name:'Design review', timezone:'UTC', instructions:'Review the current design.', members:[{id:'r1',name:'Taylor',mode:'fixed'}], links:[{id:'r-link',title:'Design notes',url:fixtureHTTPOrigin+'/browser/phone-preview?section=design-notes'}]}];
 const fixture = http.createServer(async (req, res) => {
+  // Review pairing must never reset another preview's active work. Invitations
+  // are issued immediately before use; creating a later one supersedes an unused one.
+  if(req.url==='/review-pair'){const invite=await app.remote.pairing();res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify({code:invite.code}));return;}
+
+  if(req.url==='/completion-fixture'){
+    await app.browserHistory.record({events:Array.from({length:12},(_,i)=>({eventId:'completion-'+i,url:fixtureHTTPOrigin+'/browser/one?visit='+i,visitedAt:new Date(Date.now()-i*1000).toISOString(),profileId:'default',sourceHostId:app.remote.config.hostId,title:'Popular completion fixture'}))});
+    res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify({origin:fixtureHTTPOrigin}));return;
+  }
+  if(req.url==='/'){res.writeHead(200,{'Content-Type':'text/html'});res.end('<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><h1>History completion origin</h1>');return;}
+
   if(req.url==='/draft-text-fixture'&&req.method==='POST'){
     let raw='';for await(const chunk of req){raw+=chunk;if(raw.length>262144)throw Error('Synthetic draft is too large.');}
     res.setHeader('Content-Type','application/json');try{const args=JSON.parse(raw);res.end(JSON.stringify(args.action==='save'?await app.sharedDrafts.save(args):app.sharedDrafts.get(args)));}catch(error){res.statusCode=400;res.end(JSON.stringify({error:error.message}));}return;

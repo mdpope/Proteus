@@ -2863,6 +2863,26 @@ final class TabletComposerPreviewUITests: XCTestCase {
 }
 
 final class NativeReleaseFollowupUITests: XCTestCase {
+    @MainActor func testHistoryGhostEnterFromNewTabAndAddressEditor() async throws {
+        let (_, response) = try await URLSession.shared.data(from: URL(string: nativeFixtureHTTPOrigin + "/completion-fixture")!)
+        XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200)
+        let app = nativeFixtureApplication(); app.launchArguments = ["--reset-pairing", "--native-design-preview", "--phone-preview-fixture", "--synthetic-browser-workspace", "--native-app-fixture"]; app.launch()
+        let plus = UIDevice.current.userInterfaceIdiom == .phone ? app.buttons["phone-new-tab"] : app.buttons["new-main-browser-tab"]
+        XCTAssertTrue(plus.waitForExistence(timeout: 20)); plus.tap()
+        let home = app.textFields["new-tab-address"]; XCTAssertTrue(home.waitForExistence(timeout: 12)); home.tap(); home.typeText("127.0.0.1")
+        try await Task.sleep(for: .seconds(2))
+        let ghost = XCTAttachment(screenshot: app.screenshot()); ghost.name = "History ghost preserves typed prefix"; ghost.lifetime = .keepAlways; add(ghost)
+        XCTAssertEqual(home.value as? String, "127.0.0.1", "Ghost text is never inserted into the draft")
+        home.typeText("\n")
+        XCTAssertTrue(app.webViews.staticTexts["History completion origin"].waitForExistence(timeout: 15), "Enter accepts the retained HTTP origin and port")
+        let editor: XCUIElement
+        if UIDevice.current.userInterfaceIdiom == .phone { app.buttons["browser-address"].tap(); editor = app.textFields["browser-address-editor"] }
+        else { editor = app.textFields["browser-address"]; editor.tap() }
+        XCTAssertTrue(editor.waitForExistence(timeout: 5)); editor.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
+        editor.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: nativeFixtureHTTPOrigin.count + 1)); editor.typeText("127.0.0.1")
+        try await Task.sleep(for: .seconds(2)); editor.typeText("\n")
+        XCTAssertTrue(app.webViews.staticTexts["History completion origin"].waitForExistence(timeout: 15))
+    }
     override func setUpWithError() throws { continueAfterFailure = false }
     @MainActor func testSharedProjectSetupUsesCanonicalSlotAndOwnerText() async throws {
         func request(_ route: String, _ body: [String: Any]? = nil) async throws -> [String: Any] {
@@ -3107,7 +3127,7 @@ final class NativeReleaseFollowupUITests: XCTestCase {
         let second = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", urls[1]), object: address)
         XCTAssertEqual(XCTWaiter.wait(for: [second], timeout: 5), .completed)
         XCTAssertFalse(app.descendants(matching: .any)["browser-address-editor"].exists, "A swipe must not start address editing")
-        XCTAssertEqual(app.buttons["browser-find"].frame.height, 48, accuracy: 1, "Keep the existing touch target")
+        XCTAssertEqual(app.buttons["browser-find"].frame.height, 38, accuracy: 1, "Keep the compact browser row introduced with the clarified navigation")
         XCTAssertLessThanOrEqual(app.frame.maxY - app.buttons["browser-find"].frame.maxY, 40, "Only the system home-indicator safe area remains below the controls")
         XCTAssertLessThanOrEqual(app.buttons["browser-find"].frame.maxY, app.frame.maxY)
         XCTAssertTrue(app.buttons["browser-find"].isHittable)

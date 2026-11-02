@@ -6,7 +6,9 @@ import UIKit
 struct NativeBrowserHistoryIndex: Sendable {
     private struct Row: Sendable { let value: JSON; let search: String }
     private let rows: [Row]
+    let sites: [JSON]
     init(_ items: [JSON]) {
+        sites = NativeAddressCompletion.ranked(items)
         let formatter = ISO8601DateFormatter()
         let fractional = ISO8601DateFormatter(); fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         func date(_ item: JSON) -> Date {

@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		B2F241001122334455660021 = {isa = PBXBuildFile; fileRef = B2F241001122334455660022; };
 		B2F241001122334455660019 /* NativeSharedDraftText.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2F241001122334455660020; };
 		B2F241001122334455660015 = {isa = PBXBuildFile; fileRef = B2F241001122334455660016; };
 		B2F241001122334455660011 /* browser-video-preload.cjs in Resources */ = {isa = PBXBuildFile; fileRef = B2F241001122334455660012; };
@@ -73,6 +74,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		B2F241001122334455660022 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NativeAddressCompletion.swift; path = Proteus/Features/Browser/Views/NativeAddressCompletion.swift; sourceTree = SOURCE_ROOT; };
 		B2F241001122334455660020 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NativeSharedDraftText.swift; path = Proteus/Services/State/NativeSharedDraftText.swift; sourceTree = SOURCE_ROOT; };
 		B2F241001122334455660016 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NativeStoredAttachmentViewer.swift; path = Proteus/Features/Chats/Views/NativeStoredAttachmentViewer.swift; sourceTree = SOURCE_ROOT; };
 		B2F241001122334455660012 = {isa = PBXFileReference; lastKnownFileType = text; name = "browser-video-preload.cjs"; path = "../desktop/browser/browser-video-preload.cjs"; sourceTree = SOURCE_ROOT; };
@@ -564,6 +566,7 @@
 				B2F241001122334455660015 /* NativeStoredAttachmentViewer.swift in Sources */,
 				B2F241001122334455660013 /* NativeAttachmentDelivery.swift in Sources */,
 				B2F241001122334455660019 /* NativeSharedDraftText.swift in Sources */,
+				B2F241001122334455660021 /* NativeAddressCompletion.swift in Sources */,
 				0251FE479F24F5A96EA70F96 /* RemoteStore.swift in Sources */,
 				AF0F1C0D85782B82FE42F56A /* TeamToolsView.swift in Sources */,
 				42B1CE228634AE5F8B512A86 /* EngineRoomView.swift in Sources */,

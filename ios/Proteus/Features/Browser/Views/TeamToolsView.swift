@@ -196,6 +196,7 @@ struct TeamBrowserView: View {
     var newTabOptions: [NativeNewTabAction] = []
     @FocusState private var homeAddressFocused: Bool
     @FocusState private var addressFocused: Bool
+    @State private var addressSites: [JSON] = []
     @State private var editingAddress = false
     private var tabs: [BrowserDescriptor] { shared.tabs(in: scope) }
     private var selectedID: String? { tabID ?? shared.selected(in: scope) }
@@ -212,7 +213,7 @@ struct TeamBrowserView: View {
         guard let remote = historyRemote, let host = remote.connection?.hostId else { return "Choose a computer for owner history. Saved navigation remains on this device." }
         return shared.historyStatus[host] ?? (remote.connected ? "History from " + remote.displayName + ". Each tab keeps its own navigation list." : "Offline · cached last 30 days and saved navigation only")
     }
-    private var historySearchIdentity: String { [selectedID ?? "", text, String(addressFocused), String(historyIndexRevision)].joined(separator: "|") }
+    private var historySearchIdentity: String { [selectedID ?? "", text, String(addressFocused || homeAddressFocused), String(historyIndexRevision)].joined(separator: "|") }
     private var accountRefreshIdentity: String { [scope, selectedID ?? "", life.accountIdentity, String(addressFocused)].joined(separator: ":") }
 
     @ViewBuilder private func browserTabMenu(_ tab: BrowserDescriptor) -> some View {
@@ -304,6 +305,16 @@ struct TeamBrowserView: View {
             }
             if let remote = historyRemote { await shared.flushHistory(remote) }
         }
+        .task(id: "completion:" + historySearchIdentity) {
+            guard addressFocused || homeAddressFocused else { addressSites = []; return }
+            addressSites = historyIndex.sites
+            do { try await Task.sleep(for: .milliseconds(100)) } catch { return }
+            guard let remote = historyRemote, remote.connected else { return }
+            do {
+                let response = try await remote.request("browser.history.suggest", ["query": .string(text), "profileId": .string(selectedTab?.profileId ?? "default"), "limit": .number(100)])
+                guard !Task.isCancelled else { return }; addressSites = response["items"].array
+            } catch { /* Cached retained origins remain available offline. */ }
+        }
         .task(id: historySearchIdentity) {
             guard addressFocused || selectedTab?.url == nil else { return }
             do { try await Task.sleep(for: .milliseconds(200)) } catch { return }
@@ -378,7 +389,8 @@ struct TeamBrowserView: View {
                 if editingAddress {
                     TextField("Search or enter URL", text: $text, axis: .vertical)
                         .textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL).submitLabel(.go)
-                        .focused($addressFocused).onAppear { addressFocused = true }.onSubmit { navigate() }.lineLimit(1...6).fixedSize(horizontal: false, vertical: true)
+                        .focused($addressFocused).onAppear { addressFocused = true }.lineLimit(1...6).fixedSize(horizontal: false, vertical: true)
+                        .modifier(NativeAddressGhost(text: $text, sites: addressSites, focused: addressFocused, submit: { navigate() }))
                         .accessibilityIdentifier("browser-address-editor")
                 } else {
                     Button { editingAddress = true } label: {
@@ -449,7 +461,8 @@ struct TeamBrowserView: View {
                 .frame(width: 44, height: 44).contentShape(Rectangle()).disabled(!navigation.canGoForward).accessibilityLabel("Forward").accessibilityIdentifier("browser-forward")
                 .highPriorityGesture(LongPressGesture(minimumDuration: 0.45).onEnded { _ in historyDirection = false })
             Button { if let id = selectedID { navigation.isLoading ? shared.stopBrowser(id) : shared.refreshBrowser(id) } } label: { Image(systemName: navigation.isLoading ? "xmark" : "arrow.clockwise").frame(minWidth: 44, minHeight: 44) }.frame(width: 44, height: 44).contentShape(Rectangle()).disabled(selectedTab?.url == nil).accessibilityLabel(navigation.isLoading ? "Stop loading" : "Refresh page").accessibilityIdentifier("browser-refresh")
-            TextField("Search or enter URL", text: $text).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL).submitLabel(.go).focused($addressFocused).onSubmit { navigate() }
+            TextField("Search or enter URL", text: $text).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL).submitLabel(.go).focused($addressFocused)
+                .modifier(NativeAddressGhost(text: $text, sites: addressSites, focused: addressFocused, submit: { navigate() }))
                 .font(.system(size: 14)).foregroundStyle(colorScheme == .dark ? Color.white : Color.primary).padding(.horizontal, 10).frame(height: 34).background(field, in: RoundedRectangle(cornerRadius: 6)).accessibilityIdentifier("browser-address")
             Button { if let tab = selectedTab { shared.webView(tab).findInteraction?.presentFindNavigator(showingReplace: false) } } label: { Image(systemName: "magnifyingglass") }.accessibilityLabel("Find in page").keyboardShortcut("f", modifiers: .command).disabled(selectedTab?.url == nil)
             Button(action: { navigate() }) { Image(systemName: "arrow.turn.down.left") }.frame(width: 44, height: 44).contentShape(Rectangle()).disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty).accessibilityLabel("Go to address or search").accessibilityIdentifier("browser-go")
@@ -476,11 +489,11 @@ struct TeamBrowserView: View {
                 else if items.isEmpty, shared.snapshot != .null, life.credential?.appAuthorized == true, shared.error == nil, !shared.busy { Text("No recent sites yet.").foregroundStyle(.secondary).padding(12) }
                 ForEach(items, id: \.self) { item in
                     Button { text = item["url"].string; navigate() } label: {
-                        VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 10) { NativeHistorySiteIcon(item: item); VStack(alignment: .leading, spacing: 4) {
                             Text(item["title"].string.isEmpty ? item["url"].string : item["title"].string).font(.subheadline).lineLimit(1)
                             Text(item["url"].string).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                             Text(BrowserHistoryRows.details(item, timeZone: .current, locale: .current)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                        }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 12).padding(.vertical, 10).contentShape(Rectangle())
+                        }.frame(maxWidth: .infinity, alignment: .leading) }.padding(.horizontal, 12).padding(.vertical, 10).contentShape(Rectangle())
                     }.buttonStyle(.plain).accessibilityIdentifier("browser-recent-" + item["id"].string)
                     Divider()
                 }
@@ -506,7 +519,7 @@ struct TeamBrowserView: View {
                     }
                 }
                 HStack {
-                    TextField("https://example.com", text: $text).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL).submitLabel(.go).focused($homeAddressFocused).onSubmit { navigate() }.accessibilityLabel("Website address or filter history").accessibilityIdentifier("new-tab-address")
+                    TextField("https://example.com", text: $text).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL).submitLabel(.go).focused($homeAddressFocused).modifier(NativeAddressGhost(text: $text, sites: addressSites, focused: homeAddressFocused, submit: { navigate() })).accessibilityLabel("Website address or filter history").accessibilityIdentifier("new-tab-address")
                     Button { navigate() } label: { Image(systemName: "arrow.turn.down.right").frame(width: 44, height: 44) }.disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty).accessibilityLabel("Open address")
                 }.padding(.leading, 14).background(NativeTheme.surface, in: RoundedRectangle(cornerRadius: 12))
                 Picker("Search engine", selection: $engine) { ForEach(["Google", "DuckDuckGo", "Bing"], id: \.self) { Text($0).tag($0) } }.pickerStyle(.segmented)
@@ -540,11 +553,11 @@ struct BrowserHistoryRows: View {
     var body: some View {
         ForEach(Array(items.prefix(limit)), id: \.self) { item in
             Button { open(item) } label: {
-                VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 10) { NativeHistorySiteIcon(item: item); VStack(alignment: .leading, spacing: 4) {
                     Text(item["title"].string.isEmpty ? item["url"].string : item["title"].string)
                     Text(Self.details(item, timeZone: timeZone, locale: locale)).font(.caption).foregroundStyle(.secondary)
                         .accessibilityIdentifier("browser-history-details-" + item["id"].string)
-                }
+                } }
             }
         }
         if items.count > limit { Button("More history") { limit += 25 }.accessibilityIdentifier("browser-history-more") }

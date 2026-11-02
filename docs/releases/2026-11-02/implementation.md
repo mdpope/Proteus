@@ -1,3 +1,37 @@
+## R15/R16 — history ghost completion and saved site icons
+
+Address fields in loaded browsers and New tab pages suggest the most frequently visited matching
+website origin from retained Proteus history for that browser profile. Count distinct visits across
+retained history, break ties by the latest visit and then URL, and update counts after deletion,
+retention pruning or redirects. The derived index lives in the history worker; no UI history scan,
+search-engine suggestion request or external favicon fetch runs while editing.
+
+Ghost text leaves the typed value untouched. Enter accepts the displayed origin; Tab accepts its
+canonical base URL ending in `/`, leaves the caret at the end and keeps focus so a path can follow.
+Typing a path, query, credentials or search terms stops base-origin completion. Explicit recent-row
+selection, middle-of-text editing, Escape and IME keep native editing precedence. Scheme and ports
+are preserved; omitted scheme/`www.` can be hidden in the ghost but accepted URLs stay canonical.
+Desktop requests are debounced and limited to one in-flight lookup per field. Unfocused fields do
+not keep querying. Native uses the owner index when available and retained local history offline.
+
+Address-history dropdowns and New tab history rows show saved PNG site icons on the left with a
+globe fallback. The owner reads its existing account/profile-partition cache, with bounded response
+size; displaying the list never loads a site or requests a favicon. Native displays these cached
+owner icons without embedding repeated image payloads in its durable history cache. Icons remain
+decorative so they do not repeat the URL for accessibility.
+
+Actual desktop UI acceptance passes Enter, Tab plus continued paths, live prefix changes, cursor/
+Escape behavior, unchanged typed values, and native-popup icon placement. Full source suite:
+1,433 passed/four skipped; static checks and web build pass. Native parity plus actual iPhone/iPad
+New tab and address-editor Enter acceptance pass. iPhone multiline editing, tab swipes and compact
+bottom-row/scroll recovery also pass. Failure receipts retain the iOS focus-loss correction and
+an obsolete test selector/height expectation rather than reclassifying them as live acceptance.
+
+R17 scrolling investigation: see [the evidence and proposed correction](scroll-performance.md).
+The live instance has recurring main-loop stalls; no exact callback or deadlock is proven and no
+live performance correction is claimed. Deployment and physical-device builds remain held for
+simulator review.
+
 ## R13/R14 final local validation
 
 - Required source suite: 1,431 passed, four skipped, zero failed; static checks and web build pass.

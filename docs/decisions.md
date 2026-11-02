@@ -1,3 +1,11 @@
+## Nov 2: origin completion uses retained visits and the owner cache
+
+Rank website origins by retained visit count within a profile, then recency and a stable URL tie.
+Keep the derived index in the history worker and never request remote search suggestions. Ghost
+text is presentation until explicit Enter/Tab; Tab accepts the canonical root with a trailing slash.
+Icons use existing per-profile cache and a bounded data payload, with a globe when absent. This
+keeps the new feature separate from the live main-loop hitch under investigation.
+
 ## Nov 2: shared human draft text and local audio state
 
 The operator superseded private project setup drafts with shared empty slots and then explicitly

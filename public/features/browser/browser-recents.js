@@ -1,3 +1,5 @@
+import {savedSiteIcon} from './browser-icons.js';
+import {bindAddressCompletion} from './address-completion.js';
 import { historyTimestamp, historyDevice, browserDefaultEngine, browserSearchEngines, searchTarget } from './browser-home.js';
 const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 // A URL appears once, at its latest visit, with the device that made that visit.
@@ -10,7 +12,7 @@ export function recentBrowserVisits(items, limit = 20, query = '') {
     seen.add(url.href);return true;
   }).filter(item=>!term||(String(item.title||'')+' '+item.url).toLocaleLowerCase().includes(term)).slice(0,limit);
 }
-export function bindBrowserRecents(input, {load, navigate, overlay, timeZone, inline=false, native}) {
+export function bindBrowserRecents(input, {load, navigate, overlay, timeZone, inline=false, native,completion}) {
   if (!input) return;
   const controller = new AbortController(), signal = controller.signal;
   const panel = document.createElement('div');panel.className='browser-recents';panel.hidden=true;
@@ -26,7 +28,7 @@ export function bindBrowserRecents(input, {load, navigate, overlay, timeZone, in
     const query=input.value.trim(),defaultEngine=browserDefaultEngine();
     const choices=/\s/.test(query)&&!/^https?:\/\//i.test(query)?Object.keys(browserSearchEngines).sort((a,b)=>Number(b===defaultEngine)-Number(a===defaultEngine)).map(engine=>({url:searchTarget(query,engine),title:'Search with '+browserSearchEngines[engine]+(engine===defaultEngine?' · Default':''),search:true})):[];
     items=[...choices,...recentBrowserVisits(visits,20,query)];
-    panel.innerHTML=items.map((item,i)=>`<button type="button" role="option" aria-selected="false" id="${panel.id}-${i}" data-recent-index="${i}"><strong>${escape(item.title||item.url)}</strong><span>${escape(item.url)}</span><small>${item.search?'Web search':escape(historyTimestamp(item.visitedAt||item.createdAt||item.at,timeZone))+' · '+escape(historyDevice(item))}</small></button>`).join('')||(query?'<p>No matching recent sites. Press Enter to search.</p>':'<p>No recent sites yet.</p>');
+    panel.innerHTML=items.map((item,i)=>`<button type="button" role="option" aria-selected="false" id="${panel.id}-${i}" data-recent-index="${i}">${savedSiteIcon(item,escape)}<div class="browser-recent-copy"><strong>${escape(item.title||item.url)}</strong><span>${escape(item.url)}</span><small>${item.search?'Web search':escape(historyTimestamp(item.visitedAt||item.createdAt||item.at,timeZone))+' · '+escape(historyDevice(item))}</small></div></button>`).join('')||(query?'<p>No matching recent sites. Press Enter to search.</p>':'<p>No recent sites yet.</p>');
     panel.querySelectorAll('button').forEach((button,i)=>{button.onpointerdown=event=>event.preventDefault();button.onclick=()=>choose(items[i]);});
     selected=-1;input.removeAttribute('aria-activedescendant');publish();
   };
@@ -38,6 +40,7 @@ export function bindBrowserRecents(input, {load, navigate, overlay, timeZone, in
   const open=async()=>{
     if(!input.isConnected||opened)return;opened=true;overlay?.(true);position();panel.hidden=!!native;input.setAttribute('aria-expanded','true');paint();await refresh();
   };
+  if(completion)bindAddressCompletion(input,{load:completion,navigate:url=>choose({url}),disabled:()=>selected>=0});
   input.addEventListener('focus',()=>{input.select();void open();},{signal});
   input.addEventListener('click',()=>void open(),{signal});
   input.addEventListener('blur',()=>{setTimeout(()=>{if(document.activeElement!==input&&!panel.contains(document.activeElement))close();},0);},{signal});
@@ -64,6 +67,7 @@ export function bindDesktopBrowserRecents(input, {api, navigate, toast, profileI
   const unsubscribe=window.desktop.onBrowserAction(value=>{if(value.type==='address-choice'&&value.token===token&&input.isConnected){input.value=value.url;input.blur();void Promise.resolve(navigate(value.url)).catch(error=>toast(error.message));}});
   const cleanup=new MutationObserver(()=>{if(!input.isConnected){unsubscribe();cleanup.disconnect();}});cleanup.observe(document.body,{childList:true,subtree:true});
   bindBrowserRecents(input,{
+    completion:async query=>{const profile=typeof profileId==='function'?profileId():profileId;return (await api('/api/browser-history',{action:'suggest',query,profileId:profile,limit:100})).items||[];},
     load:async query=>{const profile=typeof profileId==='function'?profileId():profileId;const result=await api('/api/browser-history',{action:'query',query,profileId:profile,limit:100});return result.items||[];},
     navigate:url=>void Promise.resolve(navigate(url)).catch(error=>toast(error.message)),
     native:value=>void window.desktop.browser({action:'address-suggestions',token,...value}).catch(error=>toast(error.message))

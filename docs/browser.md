@@ -1,3 +1,16 @@
+## Nov 2 address completion and site icons
+
+Browser and New tab URL fields now offer history-ranked origin ghost text. Enter opens it; Tab
+accepts a canonical URL ending in `/` and keeps focus for a path. Saved site icons appear left of
+history rows, using profile-scoped cache only and a globe fallback. Lookups are debounced, run in
+the history worker and stop outside address editing. Native retains multiline URL editing and
+supports owner history with a cached fallback. Details and verification are in the
+[Nov 2 implementation](releases/2026-11-02/implementation.md).
+
+The separate [scrolling investigation](releases/2026-11-02/scroll-performance.md) records recurring
+main-loop stalls and proposes narrower state updates; it does not claim an identified deadlock or
+live fix. Simulator review and the release hold remain in force.
+
 ## R13 — shared setup slots and composer text
 
 The operator confirmed syncing both setup text and ordinary unsent replies. Shared project and

@@ -1,3 +1,5 @@
+import {savedSiteIcon} from './browser-icons.js';
+import {bindAddressCompletion} from './address-completion.js';
 import {browserAddress} from "../../models/browser-address.js";
 import {addTabIcons} from '../../shared/navigation/add-tab-menu.js';
 import {focusNewTabAddress} from './new-tab-input.js';
@@ -42,7 +44,7 @@ export async function renderBrowserHome(area,options){
       const rows=value.items||[],host=find('#browser-home-history');
       if(reset){host.innerHTML='';shownHistoryIds=new Set();}
       const fresh=rows.filter(item=>{const key=String(item.eventId||item.id);if(shownHistoryIds.has(key))return false;shownHistoryIds.add(key);return true;});
-      host.insertAdjacentHTML('beforeend',fresh.map(item=>`<div class="browser-shared-link"><button class="browser-history-row" data-history-url="${escape(item.url)}"><strong>${escape(item.title||item.url)}</strong><span>${escape(item.url)}</span><time>${escape(historyTimestamp(item.visitedAt||item.at))}</time></button><button data-history-delete="${escape(item.eventId||item.id)}" aria-label="Delete history entry">×</button></div>`).join(''));
+      host.insertAdjacentHTML('beforeend',fresh.map(item=>`<div class="browser-shared-link"><button class="browser-history-row" data-history-url="${escape(item.url)}">${savedSiteIcon(item,escape)}<div class="browser-history-copy"><strong>${escape(item.title||item.url)}</strong><span>${escape(item.url)}</span><time>${escape(historyTimestamp(item.visitedAt||item.at))}</time></div></button><button data-history-delete="${escape(item.eventId||item.id)}" aria-label="Delete history entry">×</button></div>`).join(''));
       if(reset&&!rows.length)host.innerHTML='<p class="note">No retained visits match this filter.</p>';
       host.querySelectorAll('[data-history-url]').forEach(button=>button.onclick=act(()=>options.navigate(button.dataset.historyUrl)));
       host.querySelectorAll('[data-history-delete]').forEach(button=>button.onclick=act(async()=>{await options.api('/api/browser-history',{action:'delete',eventIds:[button.dataset.historyDelete]});await load(true);}));
@@ -62,6 +64,7 @@ export async function renderBrowserHome(area,options){
   find('#browser-history-more').onclick=()=>{void load();};
   const saveHistory=act(async()=>{await options.api('/api/browser-history',{action:'settings',enabled:find('#history-enabled').checked,retentionDays:Number(find('#history-retention').value)});await load(true);});find('#history-enabled').onchange=saveHistory;find('#history-retention').onchange=saveHistory;
   find('#history-clear').onclick=()=>{if(options.showDialog){options.showDialog('<h2>Clear this profile’s history?</h2><p>This deletes retained visits for this profile and propagates removal to configured peers.</p><button id="close-dialog">Cancel</button><button id="dialog-submit">Clear history</button>',async()=>{await options.api('/api/browser-history',{action:'delete',all:true,profileId:options.profileId||'default'});await load(true);});}else if(window.confirm('Clear retained Proteus history on this computer?'))void options.api('/api/browser-history',{action:'delete',all:true,profileId:options.profileId||'default'}).then(()=>load(true));};
+  bindAddressCompletion(find('#browser-home-url'),{load:async query=>(await options.api('/api/browser-history',{action:'suggest',query,profileId:options.profileId||'default',limit:100})).items||[],navigate:url=>void Promise.resolve(options.navigate(url)).catch(error=>options.toast(error.message))});
   focusNewTabAddress(find('#browser-home-url'),options.tabId);
   await Promise.allSettled([load(true),links()]);
 }

@@ -1884,6 +1884,17 @@ extension DestinationTests {
 }
 
 final class NativeParityTests: XCTestCase {
+    func testAddressCompletionRanksRetainedOriginsAndCompletesOnlyHostPrefixes() throws {
+        let rows: [JSON] = (0..<5).map { .object(["eventId": .string("visit-" + String($0)), "url": .string("https://www.example.test/path/" + String($0)), "visitedAt": .string("2026-01-01T00:00:00Z")]) } + [.object(["eventId": .string("recent"), "url": .string("https://elsewhere.test/new"), "visitedAt": .string("2026-11-02T00:00:00Z")])]
+        let sites = NativeBrowserHistoryIndex(rows + rows).sites
+        XCTAssertEqual(sites.first?["url"].string, "https://www.example.test/")
+        XCTAssertEqual(sites.first?["visits"].int, 5)
+        XCTAssertEqual(NativeAddressCompletion.match("Ex", sites: sites), NativeAddressCompletion.Match(url: "https://www.example.test/", suffix: "ample.test/"))
+        XCTAssertNil(NativeAddressCompletion.match("example.test/path", sites: sites))
+        XCTAssertNil(NativeAddressCompletion.match("two words", sites: sites))
+        XCTAssertNil(NativeAddressCompletion.match("http://ex", sites: sites))
+    }
+
     @MainActor func testAddressClassificationAndLocalMainMembership() async throws {
         for input in ["https://consolefixture:8006/#v1:0:=qemu%2F106:4:::::8::", "consolefixture:8006", "nas/", "nas?q=1", "router#status", "[::1]:8080", "bücher.example"] {
             let expected = input.hasPrefix("https://") ? input : "https://" + input

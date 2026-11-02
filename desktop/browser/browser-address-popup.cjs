@@ -5,7 +5,7 @@ function updateAddressPopup(parent,value,{valid,choose}){
  let state=popups.get(parent);
  if(value.visible===false){if(state?.token===value.token)state.close();return;}
  if(typeof value.token!=='string'||value.token.length>100||!Array.isArray(value.items)||value.items.length>30)throw Error('Invalid address suggestions.');
- const items=value.items.map(item=>({title:String(item.title||'').slice(0,1000),url:String(item.url||'').slice(0,8192),detail:String(item.detail||'').slice(0,300)}));
+ const items=value.items.map(item=>({title:String(item.title||'').slice(0,1000),url:String(item.url||'').slice(0,8192),detail:String(item.detail||'').slice(0,300),favicon:typeof item.favicon==='string'&&item.favicon.length<=98304&&/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(item.favicon)?item.favicon:''}));
  for(const item of items){const url=new URL(item.url);if(!['http:','https:'].includes(url.protocol)||url.username||url.password)throw Error('Invalid suggested address.');}
  if(state&&state.token!==value.token)state.close();
  state=popups.get(parent);

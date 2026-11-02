@@ -140,6 +140,14 @@ class BrowserTabs {
   }
 
   protection(tab){let origin;try{origin=new URL(tab.view?.webContents?.getURL()||tab.snapshot?.url).origin;}catch{}let settings;try{settings=this.profile(tab.profileId).settings||{};}catch{settings={blockingEnabled:false};}return {ready:!!this.blocker?.engine,enabled:settings.blockingEnabled!==false,paused:!!origin&&settings.exceptions?.includes(origin)===true,count:tab.blockedCount||0};}
+  savedIcons({profileId='default',urls=[]}={}) {
+    this.profile(profileId);if(!Array.isArray(urls)||urls.length>100)throw Error('Choose at most 100 saved website icons.');
+    const partition=this.options.profiles?.partition(profileId)||'persist:proteus-browser';
+    if(this.sessionNames.has(profileId)&&this.sessionNames.get(profileId)!==partition)throw Error('Browser profile unavailable.');
+    const entries=this.siteSettings?.entries(partition)||{},icons={};let bytes=0;
+    for(const url of urls){const origin=siteOrigin(url),icon=origin&&safeFavicon(entries[origin]?.favicon);if(icon&&bytes+icon.length<=512000){icons[url]=icon;bytes+=icon.length;}}
+    return {icons};
+  }
   agentIdentity(tab){return tab.thumbnailId||tab.id;}
   agentStatus(tab){return {agentPaused:this.agentAccess?this.agentAccess.paused(this.agentIdentity(tab)):tab.agentPaused!==false,agentAccessRevision:this.agentAccess?.revision||0};}
   state(tab, includeHistory=false) {
@@ -668,6 +676,7 @@ class BrowserTabs {
       } catch {return {available:false,host:page.host,reason:'Certificate information is unavailable for this connection.'};}
       finally{lease?.release();}
     }
+    if(action==='saved-icons')return this.savedIcons(value);
     if(action==='address-suggestions'){
       const parent=this.window,tab=this.tabs.get(this.active),context=this.windowRegistry?[...this.windowRegistry.contexts.values()].find(ctx=>ctx.window===parent):null;
       return require('./browser-address-popup.cjs').updateAddressPopup(parent,value,{valid:()=>!parent.isDestroyed()&&!!tab&&this.tabs.get(tab.id)===tab&&(context?context.browserFields.active:this.active)===tab.id,choose:url=>{if(!parent.isDestroyed())parent.webContents.send('proteus:browser-action',{type:'address-choice',token:value.token,url});}});

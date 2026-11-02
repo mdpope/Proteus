@@ -81,7 +81,7 @@ function bindStandupLinks(host,list){
     });
 }
 function bindDeleteLinks(host){host.querySelectorAll('[data-delete-link]').forEach(button=>button.onclick=action(async()=>{const link=state.links.find(item=>item.id===button.dataset.deleteLink);if(!link)throw new Error('This link changed. Refresh before deleting.');await appRequest('/links/'+link.id,'DELETE',{expectedRevision:link.revision});await reload();}));}
-function bindWebRecents(input){bindBrowserRecents(input,{inline:true,load:async()=>{const result=await defaultMacRequest('browser.history.query',{limit:100});return result.items||[];},navigate:url=>{input.value=url;input.form.requestSubmit();}});}
+function bindWebRecents(input){bindBrowserRecents(input,{inline:true,completion:async query=>(await defaultMacRequest('browser.history.suggest',{query,profileId:'default',limit:100})).items||[],load:async()=>{const result=await defaultMacRequest('browser.history.query',{limit:100});return result.items||[];},navigate:url=>{input.value=url;input.form.requestSubmit();}});}
 async function renderBrowser(){
     if(!document.querySelector('#browser-home'))return;
     document.querySelector('#browser-open [name=engine]').value=state.preferences.searchEngine;

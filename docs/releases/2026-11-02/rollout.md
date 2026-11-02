@@ -1,3 +1,18 @@
+# R15/R16 — refreshed simulator review
+
+Both distinct Preview apps are updated with ghost address completion and saved history icons.
+Installed executable hashes match the staged apps; prior destination metadata remains retained.
+The simulator can relocate a data container during installation, so path equality is not the
+preservation criterion.
+The current synthetic review owner is added as another connection without resetting previous
+pairings, so earlier preview connections and drafts remain retained. Normal simulator identities,
+physical devices and desktop installations are unchanged. Source tests and fixture acceptance do
+not imply that the running 0.2.40 desktop has these new controls. Review precedes any further
+physical build or desktop release package/publication/rollout.
+
+The separate scrolling report contains a live baseline and proposed correction, not a deployed
+performance fix. Original failure and earlier review receipts remain private and distinct.
+
 # R13/R14 — simulator review and desktop source changes
 
 R13 adds shared setup/reply text to the clarified R12 navigation. R14 adds desktop audio controls

@@ -27,7 +27,7 @@ import { ChatDocumentApprovals } from '../chats/chat-documents.js';
 import { ChatAttachmentConsents } from '../chats/chat-attachment-consent.js';
 import { chatAttachmentLimits } from '../chats/chat-attachments.js';
 import { RemoteCommandJournal } from './remote-command-journal.js';
-import { browserHistorySettings } from '../browser/browser-history.js';
+import { browserHistorySettings,historyWithSavedIcons } from '../browser/browser-history.js';
 import { hostPlatformMetadata } from '../../shared/host-platform.js';
 
 const timedSync = (diagnostics, name, fn) => diagnostics ? diagnostics.measureSync(name, fn) : fn();
@@ -332,7 +332,8 @@ export class RemoteHost {
     if(method.startsWith('browser.history.')){
       const history=this.service.browserHistory;if(!history)throw new Error('Browser history is unavailable on this computer.');
       const action=method.slice('browser.history.'.length);
-      if(action==='query')return history.query(args);
+      if(action==='suggest')return historyWithSavedIcons(this.service,await history.suggest(args),args);
+      if(action==='query')return historyWithSavedIcons(this.service,await history.query(args),args);
       if(action==='record')return history.record(args);
       if(action==='delete')return history.delete(args);
       if(action==='status')return history.status();

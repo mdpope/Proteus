@@ -1,3 +1,10 @@
+## R17 live profiling follow-up
+
+A live baseline now documents recurring main-loop stalls. The [scrolling report](scroll-performance.md)
+separates measurements from the periodic-state-work hypothesis and proposes narrow projections
+with explicit before/after scrolling acceptance. N2 remains unresolved; no deadlock or live fix is
+claimed by R15/R16 address/icon work.
+
 # Prior request and branch audit — Nov 2
 
 Reviewed the October 30 implementation/closeout, October 31 request register, November 1 plan,
