@@ -1,9 +1,10 @@
-## R17 live profiling follow-up
+## R17 scrolling correction
 
-A live baseline now documents recurring main-loop stalls. The [scrolling report](scroll-performance.md)
-separates measurements from the periodic-state-work hypothesis and proposes narrow projections
-with explicit before/after scrolling acceptance. N2 remains unresolved; no deadlock or live fix is
-claimed by R15/R16 address/icon work.
+The [scrolling report](scroll-performance.md) records the original live baseline and implemented
+profile/activity/stream correction. A controlled Electron workload reduces maximum input-dispatch
+gap from 128 ms to 30 ms. Next-operation account revocation, owning-window isolation, structural
+updates and push-loss fallback remain verified. N2 live post-install acceptance remains open under
+the review hold; no deadlock or complete live hitch attribution is claimed.
 
 # Prior request and branch audit — Nov 2
 

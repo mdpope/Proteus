@@ -1,3 +1,11 @@
+## R17 — scrolling correction implemented in source
+
+Reuse one freshly read account identity per synchronous browser projection; send window-scoped
+activity timestamps without full histories; avoid full owner refreshes for text-only streaming.
+Permission freshness and reconnect/push-loss fallback remain intact. Controlled Electron input gap:
+128 ms before, 30 ms after. See [measurements and live acceptance](releases/2026-11-02/scroll-performance.md).
+Desktop publication/rollout remains held for simulator review.
+
 ## Nov 2 address completion and site icons
 
 Browser and New tab URL fields now offer history-ranked origin ghost text. Enter opens it; Tab
@@ -7,9 +15,8 @@ the history worker and stop outside address editing. Native retains multiline UR
 supports owner history with a cached fallback. Details and verification are in the
 [Nov 2 implementation](releases/2026-11-02/implementation.md).
 
-The separate [scrolling investigation](releases/2026-11-02/scroll-performance.md) records recurring
-main-loop stalls and proposes narrower state updates; it does not claim an identified deadlock or
-live fix. Simulator review and the release hold remain in force.
+The separate [scrolling investigation](releases/2026-11-02/scroll-performance.md) records the live baseline and implemented profile/activity/stream correction, with controlled
+before/after measurements. Live post-install acceptance remains open; no deadlock is claimed. Simulator review and the release hold remain in force.
 
 ## R13 — shared setup slots and composer text
 

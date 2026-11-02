@@ -281,7 +281,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   // chats; `stream:true` means only live transcripts changed, so a window that is not
   // showing one of those chats can skip its full state refresh.
   let notifyTimer=null,notifyRuns=new Set(),notifyStream=true;
-  const flushNotify=()=>{notifyTimer=null;const data=JSON.stringify({runs:[...notifyRuns].slice(0,50),stream:notifyStream});notifyRuns=new Set();notifyStream=true;stateCache.clear();for(const client of eventClients)client.write('event: change\ndata: '+data+'\n\n');};
+  const flushNotify=()=>{notifyTimer=null;const data=JSON.stringify({runs:[...notifyRuns].slice(0,50),stream:notifyStream});notifyRuns=new Set();if(!notifyStream)stateCache.clear();notifyStream=true;for(const client of eventClients)client.write('event: change\ndata: '+data+'\n\n');};
   const notify=(run,change)=>{if(!change?.stream)stateGeneration++;if(run?.id)notifyRuns.add(run.id);notifyStream&&=change?.stream===true;if(!notifyTimer)notifyTimer=setTimeout(flushNotify,change?.stream?120:40);};
   engine.on('change', notify);
   engine.on('scheduler-error', error => { stateGeneration++;stateCache.clear();schedulerErrors.push(error); if (schedulerErrors.length > 20) schedulerErrors.shift(); try { atomicJSON(path.join(home, 'scheduler-errors.json'), schedulerErrors); } catch (failure) { schedulerErrors.at(-1).persistenceError = failure.code || 'IO_ERROR'; } });

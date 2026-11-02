@@ -7,7 +7,7 @@ export class StateProjectionClient {
   constructor({ workerURL = new URL('./state-projection-worker.js', import.meta.url), timeoutMs = 15000, maxPending = 4 } = {}) {
     this.workerURL = workerURL; this.timeoutMs = timeoutMs; this.maxPending = maxPending;
     this.pending = new Map(); this.sequence = 0;
-    this.metrics = { operations: 0, failures: 0, lastDurationMs: 0, maxDurationMs: 0 };
+    this.metrics = { operations: 0, failures: 0, lastDurationMs: 0, maxDurationMs: 0, lastBodyBytes: 0 };
   }
   start() {
     const worker = this.worker = new Worker(this.workerURL, { execArgv: [] });
@@ -17,6 +17,7 @@ export class StateProjectionClient {
       this.pending.delete(message.id); clearTimeout(request.timer);
       this.metrics.operations++;
       this.metrics.lastDurationMs = message.durationMs;
+      this.metrics.lastBodyBytes = Number.isSafeInteger(message.bodyBytes) && message.bodyBytes >= 0 ? message.bodyBytes : 0;
       this.metrics.maxDurationMs = Math.max(this.metrics.maxDurationMs, message.durationMs || 0);
       if (message.error) { this.metrics.failures++; request.reject(new Error(message.error)); }
       else request.resolve(message.body);

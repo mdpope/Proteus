@@ -32,3 +32,22 @@ test('legacy PHP empty settings are normalized on refresh without admitting none
  let settings=[];const identity={origin:'https://account.example',accountId:'synthetic-a'},account={life:{api:{identity:()=>identity}},request:async()=>({items:[{id:'87b334da-2fb8-49c9-8917-5728c7ee2668',name:'Research',settings}]})};
  const store=new BrowserProfiles(home,account);await store.handle({action:'enable',enabled:true});assert.deepEqual(store.get('87b334da-2fb8-49c9-8917-5728c7ee2668').settings,{});settings=['unexpected'];await assert.rejects(store.refresh(),/Invalid browser settings/);assert.equal(store.list().items.length,2);
 });
+
+
+test('display operations load identity once, nesting shares it, and the next operation immediately sees revocation',t=>{
+ const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-profile-display-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
+ let current={origin:'https://account.example',accountId:'synthetic-display'},loaded,reads=0;
+ const profiles=new BrowserProfiles(home,{session:{load(){reads++;loaded=current;},identity:()=>loaded}});
+ const id='87b334da-2fb8-49c9-8917-5728c7ee2668';profiles.data={enabled:true,account:profiles.key(current),items:[{id,name:'Synthetic'}]};
+ profiles.withDisplaySnapshot(()=>{
+  for(let i=0;i<100;i++){assert.equal(profiles.get(id).id,id);assert.match(profiles.partition(id),/^persist:/);assert.equal(profiles.available(),true);}
+  profiles.withDisplaySnapshot(()=>assert.equal(profiles.list().items.length,2));
+ });assert.equal(reads,1);
+ current=null;assert.equal(profiles.withDisplaySnapshot(()=>profiles.list()).available,false);assert.equal(reads,2);assert.throws(()=>profiles.get(id),/unavailable/);
+ current={origin:'https://account.example',accountId:'different-account'};assert.equal(profiles.withDisplaySnapshot(()=>profiles.available()),false);
+ assert.throws(()=>profiles.withDisplaySnapshot(()=>{throw Error('Synthetic failure');}),/Synthetic failure/);
+ assert.equal(profiles.displayDepth,0);assert.equal(profiles.displayIdentity,undefined);
+ assert.throws(()=>profiles.withDisplaySnapshot(()=>profiles.withDisplaySnapshot(()=>Promise.resolve())),/synchronous/);
+ assert.equal(profiles.displayDepth,0);assert.equal(profiles.displayIdentity,undefined);
+ current=null;assert.equal(profiles.list().authenticated,false);
+});

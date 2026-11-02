@@ -1,12 +1,22 @@
-## Nov 2 — R15/R16 preview and R17 scrolling investigation
+## Nov 2 — R17 scrolling correction validated locally
+
+Profile projection shares one current account read per synchronous operation; reading/scrolling
+uses owning-window timestamp IPC; text-only streaming avoids full owner refreshes. Required suite:
+1,436 pass/four skip, static checks and web build pass. Actual Electron activity persistence,
+visible/offscreen streaming, reading position, drafts, mutation/push-loss fallback and address/icon
+controls pass. Controlled maximum input-dispatch gap improves 128 → 30 ms; live desktop remains
+0.2.40 and post-install acceptance is pending. See [the report](releases/2026-11-02/scroll-performance.md).
+Simulator review hold still blocks packaging/publication/physical builds/installations/rollout.
+
+## Nov 2 — R15/R16 preview and R17 scrolling correction
 
 History-ranked origin ghost completion and cached history-row icons are implemented for desktop,
 web address inputs and native browsers. Enter navigates; Tab accepts a trailing slash for a path.
 Both Preview simulators are refreshed without resetting their earlier connections/data. Full suite:
 1,433 pass/four skip; actual desktop Enter/Tab/icons and native phone/tablet Enter cases pass.
-See [implementation](releases/2026-11-02/implementation.md) and the [scrolling evidence/proposal](releases/2026-11-02/scroll-performance.md).
-Physical and desktop release rollout stays held. The main-loop hitch has a baseline, not a claimed
-root cause or fix. Private receipts carry exact owner/app/hash/preservation identities.
+See [implementation](releases/2026-11-02/implementation.md) and the [scrolling correction and measurements](releases/2026-11-02/scroll-performance.md).
+Physical and desktop release rollout stays held. The scrolling correction is implemented and measured synthetically; live post-install
+acceptance remains open. Private receipts carry exact owner/app/hash/preservation identities.
 
 ## Nov 2 — R13 shared drafts / R14 tab audio, simulator review hold
 

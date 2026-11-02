@@ -1631,6 +1631,11 @@ window.desktop?.onDocumentOpened?.(async value=>{
  openTab({...(existing||{}),id:existing?.id||'document-view:'+value.documentId,contentTabId:'document:'+value.documentId,type:'markdown',parentId:parent.id,associationChatId:run.id,label:existing?.customTitle||value.document.file.split('/').pop(),markdown:value.document},placement.afterId||null);
 });
 let browserContentSignature='';
+window.desktop?.onBrowserActivity?.(items=>{
+  if(workspaceRestoring||workspaceClosing)return;
+  for(const info of items){const tab=state.tabs.find(tab=>tab.id===info.id);if(tab?.type==='browser'){Object.assign(tab.info||={}, {lastTouchedAt:info.lastTouchedAt,lastActivityAt:info.lastActivityAt});tab.lastTouchedAt=info.lastTouchedAt;tab.lastActivityAt=info.lastActivityAt;}const team=teamState().tabs.find(tab=>tab.browserId===info.id);if(team){team.lastTouchedAt=info.lastTouchedAt;team.lastActivityAt=info.lastActivityAt;}}
+  if(!browserActivitySaveTimer)browserActivitySaveTimer=setTimeout(()=>{browserActivitySaveTimer=null;saveWorkspace();},15000);
+});
 window.desktop?.onBrowserState(infos=>{
   if(workspaceRestoring||workspaceClosing||transferringTab)return;
   // Activity timestamps remain fresh locally, but do not rewrite full saved
@@ -1871,7 +1876,9 @@ liveEvents.addEventListener('change', event => {
  liveRefreshTimer = setTimeout(() => {
   liveRefreshTimer = null;const streamOnly=liveRefreshStreamOnly,runs=liveRefreshRuns;liveRefreshStreamOnly=true;liveRefreshRuns=new Set();
   if (document.hidden||(document.activeElement?.matches('input,textarea,select') && !$('#conversation-host')) || $('#dialog').open) return;
-  if(streamOnly&&Date.now()-lastStateRefresh<3000){const tab=state.tabs.find(t=>t.id===state.tab),id=tab?.type==='run'?(tab.runId||tab.id):null;if(id&&runs.has(id))void refreshVisibleRun(id).catch(()=>{});return;}
+  // Transcript deltas never need a full catalog reload. The existing push-loss/
+  // fifteen-second fallback and nonstream mutations still refresh owner state.
+  if(streamOnly){const tab=state.tabs.find(t=>t.id===state.tab),id=tab?.type==='run'?(tab.runId||tab.id):null;if(id&&runs.has(id))void refreshVisibleRun(id).catch(()=>{});return;}
   refresh().catch(() => {});
  }, 120);
 });

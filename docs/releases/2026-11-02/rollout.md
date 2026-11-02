@@ -1,3 +1,11 @@
+# R17 — source-only scrolling correction
+
+Required local suite (1,436 pass/four skip), static checks, web build and focused actual Electron
+acceptance pass. Controlled workload reduces synchronous profile projection and input-dispatch
+stalls. No desktop release package, website activation or physical-device build/install is performed
+for R17. Both previously refreshed Preview simulators remain available; native source is unchanged.
+The live 0.2.40 desktop still needs post-install scrolling acceptance after the review hold is lifted.
+
 # R15/R16 — refreshed simulator review
 
 Both distinct Preview apps are updated with ghost address completion and saved history icons.
@@ -10,8 +18,8 @@ physical devices and desktop installations are unchanged. Source tests and fixtu
 not imply that the running 0.2.40 desktop has these new controls. Review precedes any further
 physical build or desktop release package/publication/rollout.
 
-The separate scrolling report contains a live baseline and proposed correction, not a deployed
-performance fix. Original failure and earlier review receipts remain private and distinct.
+R17 implements the scrolling correction in source, with a controlled before/after benchmark.
+The separate scrolling report preserves the live baseline; no live performance update is deployed. Original failure and earlier review receipts remain private and distinct.
 
 # R13/R14 — simulator review and desktop source changes
 

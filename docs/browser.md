@@ -1,3 +1,11 @@
+## Nov 2 scrolling performance
+
+Browser projection and profile reconciliation share a freshly loaded identity within one synchronous
+operation. No identity cache survives it. Scroll activity sends only affected timestamp rows to its
+owning windows, retaining deferred session persistence; structural changes still carry full history.
+Bounded diagnostics split projection/IPC and encrypted transport timing. See the
+[controlled before/after and remaining live acceptance](releases/2026-11-02/scroll-performance.md).
+
 ## Nov 2 address completion and site icons
 
 Browser and New tab URL fields now offer history-ranked origin ghost text. Enter opens it; Tab

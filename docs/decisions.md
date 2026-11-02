@@ -3064,3 +3064,15 @@ choice. Keep the selector without a default, retain Escape cancellation, and pre
 untouched configured-default behavior. Remove the unplaced arbitrary-window fallback. Internal
 website links continue beside their originating project and never enter this external picker.
 Source-app names/icons are optional decoration; resolving them cannot gate safe destination choice.
+
+
+## November 2 — keep repeated display work out of browser input
+
+Reuse account identity only inside a synchronous browser display/reconciliation scope, with cleanup
+on success/failure and no await. Never turn this display optimization into persistent account or
+execution-permission authorization. Reading/scrolling transfers affected timestamps to the owning
+window, not full history projections. Structural changes supersede activity. Stream-only transcript
+updates remain narrow regardless of elapsed time; real changes and push-loss fallback retain owner
+refresh. Add bounded phase timings and worker-side payload byte counts rather than serialize again
+on the input-owning thread merely to measure size. Local synthetic improvement is separate from
+live installed scrolling acceptance under the release hold.

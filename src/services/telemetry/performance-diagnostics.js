@@ -7,7 +7,7 @@ import { performance } from 'node:perf_hooks';
 export const performancePhaseNames = Object.freeze([
   'scheduler.tick', 'scheduler.permissions', 'scheduler.claim', 'scheduler.list',
   'context.get', 'run.persist', 'http.serialize', 'http.state.assemble', 'http.state.transfer', 'http.state.project', 'desktop.session.save',
-  'browser.cookies.encrypt', 'browser.profiles.reconcile', 'remote.state',
+  'browser.cookies.encrypt', 'browser.profiles.reconcile', 'browser.state.project', 'browser.state.send', 'browser.activity.send', 'remote.send.encrypt', 'remote.send.transport', 'remote.state',
   'remote.publish', 'remote.publish.serialize', 'remote.run.assemble',
   'remote.run.serialize', 'remote.sync', 'peer.heartbeat', 'peer.cache.serialize',
   'peer.cache.encrypt', 'peer.cache.disk',

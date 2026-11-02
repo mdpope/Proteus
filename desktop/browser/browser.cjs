@@ -78,8 +78,8 @@ class BrowserTabs {
     };
     const gesture=this.gestureHandler;this.gestureHandler=(event,...args)=>this.withSenderWindow(event,()=>gesture(event,...args));
     ipcMain.on('proteus:browser-gesture',this.gestureHandler);
-    this.navigationIntentHandler=event=>{const tab=[...this.tabs.values()].find(tab=>tab.view?.webContents===event.sender);if(tab&&event.senderFrame===event.sender.mainFrame){tab.navigationIntentUntil=Date.now()+1200;this.touch(tab);this.activityChanged();}};
-    this.interactionHandler=event=>{const tab=[...this.tabs.values()].find(tab=>tab.view?.webContents===event.sender);if(tab&&event.senderFrame===event.sender.mainFrame){this.touch(tab);this.activityChanged();}};ipcMain.on('proteus:browser-interaction',this.interactionHandler);ipcMain.on('proteus:navigation-intent',this.navigationIntentHandler);
+    this.navigationIntentHandler=event=>{const tab=[...this.tabs.values()].find(tab=>tab.view?.webContents===event.sender);if(tab&&event.senderFrame===event.sender.mainFrame){tab.navigationIntentUntil=Date.now()+1200;this.touch(tab);this.activityChanged(tab);}};
+    this.interactionHandler=event=>{const tab=[...this.tabs.values()].find(tab=>tab.view?.webContents===event.sender);if(tab&&event.senderFrame===event.sender.mainFrame){this.touch(tab);this.activityChanged(tab);}};ipcMain.on('proteus:browser-interaction',this.interactionHandler);ipcMain.on('proteus:navigation-intent',this.navigationIntentHandler);
     this.scrollHandler=(event,value)=>{const tab=[...this.tabs.values()].find(tab=>tab.view?.webContents===event.sender);if(!tab||event.senderFrame!==event.sender.mainFrame||JSON.stringify(value||{}).length>8192)return;const target=this.windowRegistry?.contexts.get(tab.windowId)?.window||this.window;if(!target.isDestroyed())target.webContents.send('proteus:browser-scroll',{id:tab.id,url:event.sender.getURL(),positions:value});};ipcMain.on('proteus:browser-scroll',this.scrollHandler);
     this.partition = session.fromPartition('persist:proteus-browser');
     this.actions = new BrowserActions(this);this.permissions=new BrowserPermissions(this);this.externalProtocols=new ExternalProtocols(this,{home:this.options.home});this.siteNotificationHandler=(event,value)=>this.withSenderWindow(event,()=>this.permissions.receive(event,value));ipcMain.on('proteus:site-notification',this.siteNotificationHandler);
@@ -127,7 +127,8 @@ class BrowserTabs {
     if(!this.options.errorPalette)return;const colors=errorColors(this.options.errorPalette()),signature=JSON.stringify(colors);
     for(const tab of this.tabs.values()){const wc=tab.view?.webContents,page=tab.errorPage;if(!page||!wc||wc.isDestroyed()||wc.getURL()!==page.documentURL||page.paletteSignature===signature)continue;page.paletteSignature=signature;wc.send('proteus:browser-error-colors',colors);}
   }
-  reconcileProfiles(){
+  profileDisplay(action){return this.options.profiles?.withDisplaySnapshot?this.options.profiles.withDisplaySnapshot(action):action();}
+  reconcileProfiles(){return this.profileDisplay(()=>{
     let changed=false;
     for(const tab of this.tabs.values()){
       const locked=!this.profileAvailable(tab),blocked=locked;
@@ -137,7 +138,7 @@ class BrowserTabs {
       if(locked){if(tab.view){tab.view.setVisible(false);tab.view.webContents.stop();}if(this.active===tab.id)this.active=null;}
     }
     if(changed)this.changed();
-  }
+  });}
 
   protection(tab){let origin;try{origin=new URL(tab.view?.webContents?.getURL()||tab.snapshot?.url).origin;}catch{}let settings;try{settings=this.profile(tab.profileId).settings||{};}catch{settings={blockingEnabled:false};}return {ready:!!this.blocker?.engine,enabled:settings.blockingEnabled!==false,paused:!!origin&&settings.exceptions?.includes(origin)===true,count:tab.blockedCount||0};}
   savedIcons({profileId='default',urls=[]}={}) {
@@ -162,7 +163,7 @@ class BrowserTabs {
     return {...this.previewState(tab),...audio,...this.agentStatus(tab),associationChatId:tab.associationChatId||null,developerShared:tab.developerShared===true, persist:tab.persist===true,openedAt:tab.openedAt?new Date(tab.openedAt).toISOString():null,navigationPending:tab.navigationPending===true,privateLocal,id: tab.id,destination:tab.destination,workspaceName:tab.workspaceName,siteMode:this.siteMode(tab),extensionsEnabled:this.extensions?.hasEnabled(tab.profileId)===true,protection:this.protection(tab),profileLocked:!this.profileAvailable(tab),blockedCount:tab.blockedCount||0,profileId:tab.profileId||'default',profileName:this.options.profiles?.list().items.find(p=>p.id===tab.profileId)?.name||'Default',group:tab.group||'main',parentId:tab.parentId||null,loaded:true,findRevision:tab.findRevision||0,pid:wc.getOSProcessId(),lastTouchedAt:tab.lastTouchedAt?new Date(tab.lastTouchedAt).toISOString():null, url: pendingLogical?selectedEntry.url:safeHistoryURL(wc.getURL(),this.appOrigin)?wc.getURL():(selectedEntry?.url||wc.getURL()), title: pageTitle || (liveURL ? new URL(liveURL).hostname : 'New tab'), loading: wc.isLoading()||this.reloading.has(tab.id),
       canGoBack: tab.logicalHistory?tab.logicalHistory.index>0:wc.navigationHistory.canGoBack(), canGoForward: tab.logicalHistory?tab.logicalHistory.index<tab.logicalHistory.entries.length-1:wc.navigationHistory.canGoForward(), shared: tab.shared, owner: tab.owner,resumeOwner:tab.resumeOwner||null, agentControlling:!!tab.agentActions, favicon:tab.favicon||'', error: tab.error || null, ...((includeHistory||tab.logicalHistory)?{history:tab.logicalHistory||normalizeHistory({entries:wc.navigationHistory.getAllEntries(),index:wc.navigationHistory.getActiveIndex()},this.appOrigin)}:{}) };
   }
-  list(includeHistory=false) { return [...this.tabs.values()].filter(tab=>!tab.closePromise&&!tab.pendingCreation).map(tab => this.state(tab,includeHistory)); }
+  list(includeHistory=false) { const project=()=>this.profileDisplay(()=>[...this.tabs.values()].filter(tab=>!tab.closePromise&&!tab.pendingCreation).map(tab=>this.state(tab,includeHistory)));return this.options.diagnostics?this.options.diagnostics.measureSync('browser.state.project',project):project(); }
   invalidateRendererSelection() {
     this.rendererEpoch = null; this.selectionRevision = -1; this.selectionId = null;
     this.overlays.delete('renderer-overlays');this.overviewOpen=false;
@@ -215,9 +216,12 @@ class BrowserTabs {
     }
     this.changed();
   }
-  activityChanged(){if(!this.activityTimer&&!this.shuttingDown)this.activityTimer=setTimeout(()=>{this.activityTimer=null;this.changed();},1000);}
+  // Reading/scrolling changes recency, not history, membership or authorization.
+  // Send only affected IDs to their owning windows; structural updates supersede it.
+  activityChanged(tab){if(tab)(this.activityTabs??=new Set()).add(tab.id);if(!this.activityTimer&&!this.shuttingDown)this.activityTimer=setTimeout(()=>this.flushActivity(),1000);}
+  flushActivity(){clearTimeout(this.activityTimer);this.activityTimer=null;const ids=[...(this.activityTabs||[])];this.activityTabs?.clear();if(this.shuttingDown)return;const send=()=>{const rows=ids.flatMap(id=>{const tab=this.tabs.get(id);return tab?[{id:tab.id,windowId:tab.windowId||'main',lastTouchedAt:tab.lastTouchedAt?new Date(tab.lastTouchedAt).toISOString():null,lastActivityAt:tab.lastActivityAt?new Date(tab.lastActivityAt).toISOString():null}]:[];});if(this.windowRegistry){for(const ctx of this.windowRegistry.contexts.values())if(!ctx.window.isDestroyed()){const items=rows.filter(row=>row.windowId===ctx.id);if(items.length)ctx.window.webContents.send('proteus:browser-activity',items);}}else if(rows.length&&!this.window.isDestroyed())this.window.webContents.send('proteus:browser-activity',rows);};return this.options.diagnostics?this.options.diagnostics.measureSync('browser.activity.send',send):send();}
   changed(){if(this.shuttingDown)return;this.stateBatch??=new BrowserStateBatch(()=>this.flushChanged());this.stateBatch.request();}
-  flushChanged() { clearTimeout(this.activityTimer);this.activityTimer=null;this.updateThrottling();if(this.shuttingDown)return;const list=this.list(true);if(this.windowRegistry){for(const ctx of this.windowRegistry.contexts.values())if(!ctx.window.isDestroyed())ctx.window.webContents.send('proteus:browser-state',list.filter(tab=>this.tabs.get(tab.id)?.windowId===ctx.id));}else if(!this.window.isDestroyed())this.window.webContents.send('proteus:browser-state',list); }
+  flushChanged() { clearTimeout(this.activityTimer);this.activityTimer=null;this.activityTabs?.clear();this.updateThrottling();if(this.shuttingDown)return;const list=this.list(true),send=()=>{if(this.windowRegistry){for(const ctx of this.windowRegistry.contexts.values())if(!ctx.window.isDestroyed())ctx.window.webContents.send('proteus:browser-state',list.filter(tab=>this.tabs.get(tab.id)?.windowId===ctx.id));}else if(!this.window.isDestroyed())this.window.webContents.send('proteus:browser-state',list);};return this.options.diagnostics?this.options.diagnostics.measureSync('browser.state.send',send):send(); }
   get(id) { const tab = this.tabs.get(id); if (!tab) throw new Error('Browser tab is closed or unavailable.'); return tab; }
   previewState(tab) {
     return this.options.projects ? {hidden:tab.hidden===true,destination:tab.destination,lastActivityAt:tab.lastActivityAt?new Date(tab.lastActivityAt).toISOString():null} : {};

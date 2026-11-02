@@ -1,5 +1,7 @@
 ## Nov 2 — 0.2.41 candidate
 
+- Reduce scroll-time owner work by sharing profile reads within each projection, sending only activity timestamps, and avoiding full-state reloads for streamed text; preserve account/permission freshness and push-loss fallback.
+
 - Complete address prefixes with history-ranked website origins: Enter opens, Tab accepts a trailing slash for continued paths.
 - Show saved profile-scoped site icons beside address/history rows without fetching sites.
 

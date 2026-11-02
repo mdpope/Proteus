@@ -1,3 +1,27 @@
+## R17 — reduced scrolling/state-update work
+
+Browser profile display/reconciliation reads account identity once per synchronous operation and
+releases it immediately; account changes are fresh on the next operation. Scroll recency uses
+coalesced, owning-window timestamp IPC instead of full history projection. Full structural updates
+supersede queued activity. Text-only streaming no longer falls back to repeated full owner/catalog
+refresh after three seconds; real changes and reconnect/push-loss fallback still refresh. No broader
+permission cache or timer shutdown was introduced. Added bounded phase timings and worker-side
+payload bytes to identify any remaining live stalls.
+
+Controlled actual Electron workload: 75,173 → 614 account-file loads, 59–70 → 1.3–1.9 ms per
+projection, 128 → 30 ms maximum input-dispatch gap. Separate actual Electron acceptance passes
+zero offscreen-stream full refreshes, mutation refresh and push-loss fallback. Profile revocation,
+window isolation, closed-tab handling and activity/full-state timestamp regressions pass.
+Final required validation: **1,436 tests pass, four skipped, zero failed**; static checks and web
+build pass. Actual Electron acceptance verifies activity IPC/session persistence, zero offscreen
+stream reloads, visible streaming past the old cutoff with composer/reading-position retention,
+durable-message refresh, push-loss fallback, and browser Enter/Tab/history icon behavior. The old
+rich-chat harness stops on obsolete list/lazy-activity/fixed message-count assumptions before its
+streaming section; it remains unchanged. Its failed receipts are retained, and the focused current-
+navigation streaming/scroll fixture passes without weakening those old assertions.
+See [the detailed report](scroll-performance.md). The live desktop remains 0.2.40 and release
+packaging/publication/installation remain held; synthetic measurements are not live HC acceptance.
+
 ## R15/R16 — history ghost completion and saved site icons
 
 Address fields in loaded browsers and New tab pages suggest the most frequently visited matching
@@ -27,9 +51,9 @@ New tab and address-editor Enter acceptance pass. iPhone multiline editing, tab 
 bottom-row/scroll recovery also pass. Failure receipts retain the iOS focus-loss correction and
 an obsolete test selector/height expectation rather than reclassifying them as live acceptance.
 
-R17 scrolling investigation: see [the evidence and proposed correction](scroll-performance.md).
-The live instance has recurring main-loop stalls; no exact callback or deadlock is proven and no
-live performance correction is claimed. Deployment and physical-device builds remain held for
+R17 scrolling correction: see [implementation and controlled measurements](scroll-performance.md).
+The live instance has recurring main-loop stalls and remains unchanged; post-install acceptance
+is pending and no deadlock is proven. Deployment and physical-device builds remain held for
 simulator review.
 
 ## R13/R14 final local validation

@@ -179,7 +179,7 @@ export class RemoteHost {
     if(bytes>remoteTransportLimits.packetBytes||this.socket.bufferedAmount+bytes>remoteTransportLimits.bufferedBytes){this.socket.close(1013,'Transport is busy; reconnect and refresh.');return;}
     this.socket.send(payload);
   }
-  send(peer, value) { const seq = ++peer.outgoing; this.raw(peer, { type: 'data', seq, box: seal(peer.device.key, value, `${peer.prefix}:host:${seq}`) }); }
+  send(peer, value) { const seq=++peer.outgoing,box=timedSync(this.service.performanceDiagnostics,'remote.send.encrypt',()=>seal(peer.device.key,value,`${peer.prefix}:host:${seq}`));return timedSync(this.service.performanceDiagnostics,'remote.send.transport',()=>this.raw(peer,{type:'data',seq,box})); }
   async pairing(publicURL,{management=false}={}) {
     if (this.status !== 'online') throw new Error('Enable remote access and wait for the relay to connect.');
     const relay = validateRelayURL(publicURL || (this.config.mode === 'external' ? this.config.publicURL : this.addresses()[0] || `ws://127.0.0.1:${this.config.port}`));
