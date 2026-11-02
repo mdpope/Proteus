@@ -1,3 +1,13 @@
+## Mnemosyne prototype handoff received — review pending
+
+The schedule-testing chat supplied a sample-data interactive prototype and an operations/data-
+ownership brief. Private review pointers are in the operator handoff. Product UI implementation
+still requires Operator's review; R19 schedule-owner capabilities remain in Nov 2 scope. Native health/
+execution records belong to Mnemosyne, independently of Proteus. Successful old CLI JSONL/stderr
+were deleted; receipt/state projections cannot reconstruct full historical conversations. Bounded,
+redacted native event journaling needs design and retention decisions. No deployment or hold change
+is authorized by the informational handoff.
+
 ## Nov 2 — R20 reviewed question queue controls
 
 Add owner-backed Clear from queue to local/remote/web/native question cards, immediately left of

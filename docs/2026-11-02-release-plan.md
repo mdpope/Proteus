@@ -34,8 +34,15 @@ autopilot. Verify the configured vault root during preflight instead of adopting
 
 Native semantic/ASR execution stays in independent Mnemosyne services while Proteus is closed.
 Future Transcription controls observe/control health, logs and statistics and display background
-Codex execution records; they do not absorb native scheduling. The schedule-testing chat owns its
-synthetic mockup and will supply source/validation handoff before product UI work begins. Preserve
+Codex execution records; they do not absorb native scheduling. The schedule-testing chat supplied an interactive prototype and design/ownership brief; they are
+review material, not product UI approval. Wait for operator review before implementing the redesign.
+Native execution receipts/state support activity projections, but successful historical CLI JSONL/
+stderr were deleted: complete old conversations cannot be reconstructed. Design a native-owned,
+bounded structured event journal with redaction/retention before promising chat-like history.
+Do not duplicate source transcripts into another archive. Read-only background execution records
+must not resume sessions or rerun plans; discussion starts a separate chat with selected permitted
+context. Keep model completion distinct from deterministic validation and verified effects, and
+provider-reported usage distinct from source size or verified billing cost. Preserve
 its temporary serial-test pauses until that workflow explicitly reconciles them.
 
 ## R17 — scrolling correction implemented in source
