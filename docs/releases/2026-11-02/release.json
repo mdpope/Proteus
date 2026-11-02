@@ -16,5 +16,5 @@
   "priorRequestAudit": "docs/releases/2026-11-02/prior-release-audit.md",
   "previousAcceptedSourceCommit": "4456aea8837171ba60f82775859d9ce7f4ec0810",
   "sourceCommit": null,
-  "candidateSourceStatus": "R18 overview preview refreshed; R19 owner schedule scope pending; R20 question queue review implemented and tested; rollout held"
+  "candidateSourceStatus": "R18 preview refreshed; R19 schedule tools pending; R20 queue review and R21 scoped next-turn send implemented/tested; rollout held"
 }

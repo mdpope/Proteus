@@ -205,7 +205,7 @@ test('owner inventory exceeds 1000 chats with stable, revision-bound pages',()=>
  const first=chatPage(service);rows[0].title='Renamed';assert.throws(()=>chatPage(service,{cursor:first.nextCursor}),/changed/);
 });
 
-test('tools include explicit host, durable operation identity and bounded wait schema',()=>{const [tool]=chatControlTools({handle:()=>({})},'actor');assert.equal(tool.name,'proteus_chats');assert.equal(tool.parameters.properties.targets.maxItems,8);assert.equal(tool.parameters.properties.timeoutMs.maximum,25000);});
+test('tools include explicit host, durable operation identity and bounded wait schema',()=>{const [tool]=chatControlTools({handle:()=>({})},'actor');assert.equal(tool.name,'proteus_chats');assert.deepEqual(tool.parameters.properties.modelScope.enum,['next-turn']);assert.equal(tool.parameters.properties.targets.maxItems,8);assert.equal(tool.parameters.properties.timeoutMs.maximum,25000);});
 
 test('project moves cannot widen task authority, including cached feedback and owner mutations',async t=>{
  const f=await fixture(t),{owner,control,caller,hostId,command}=f;
@@ -313,4 +313,59 @@ test('revocation during dispatch suppresses the response but preserves a known a
  control.request=async(...args)=>{const result=await original(...args);if(args[1]==='chat.start')control.revoke(grant.grant.id,control.access.revision);return result;};
  await assert.rejects(control.handle(command('create',{provider:'copilot',model:'fixture',prompt:'revoked during response'}),caller.id),/authorized/);
  assert.equal(owner.engine.listRuns().length,1);assert.equal([...control.tasks.values()][0].state,'accepted');assert.ok([...control.tasks.values()][0].chatId);assert.equal(caller.events.filter(e=>e.data?.agentFeedback).length,0);
+});
+
+
+test('paired queued send validates and preserves requested model settings without changing current or future schedule snapshots',async t=>{
+ const f=await fixture(t),{owner,control,caller,hostId,command}=f;f.grant();
+ const nextModel={id:'second',name:'Second synthetic model',controls:{reasoningEfforts:['high'],contextTiers:[{id:'default'},{id:'large'}],serviceTiers:[{id:'priority'}]}};
+ owner.engine.providers.copilot.status=async()=>({available:true,models:[model,nextModel]});
+ const schedule=await owner.buildChatSchedule({provider:'copilot',model:'fixture',reasoningEffort:'low',prompt:'hold captured model'});owner.engine.schedules.save(schedule);
+ const futureBefore=JSON.stringify(owner.engine.schedules.list()),run=owner.engine.createRun(schedule,'chat');await until(()=>run.pending);
+ const capturedBefore=JSON.stringify(run.schedule),request=command('send',{chatId:run.id,prompt:'next synthetic turn',modelScope:'next-turn',model:'second',reasoningEffort:'high',contextTier:'large',serviceTier:'priority'});
+ const task=await control.handle(request,caller.id);assert.equal(task.state,'accepted',JSON.stringify(task));
+ assert.deepEqual(task.modelSelection,{scope:'next-turn',provider:'copilot',options:{model:'second',reasoningEffort:'high',contextTier:'large',serviceTier:'priority'},state:'requested'});
+ assert.equal(JSON.stringify(run.schedule),capturedBefore);assert.equal(JSON.stringify(owner.engine.schedules.list()),futureBefore);assert.deepEqual(run.queuedMessages[0].modelOptions,task.modelSelection.options);
+ const read=await control.handle({action:'read',hostId,chatId:run.id},caller.id);assert.equal(read.modelState.captured.model,'fixture');assert.equal(read.modelState.queued[0].options.model,'second');
+ const retry=await control.handle(request,caller.id);assert.equal(retry.taskId,task.taskId);assert.equal(run.queuedMessages.length,1);
+ await assert.rejects(control.handle({...request,reasoningEffort:'low'},caller.id),/different arguments/);
+ owner.engine.reply(run.id,'Continue',run.pending.id);await until(()=>run.status==='completed');
+ assert.equal(run.schedule.model,'second');assert.equal(run.schedule.reasoningEffort,'high');assert.equal(run.initialSchedule.model,'fixture');assert.equal(run.initialSchedule.reasoningEffort,'low');assert.equal(JSON.stringify(owner.engine.schedules.list()),futureBefore);
+ const completed=await control.handle({action:'read',hostId,chatId:run.id},caller.id);assert.equal(completed.modelState.captured.model,'second');assert.equal(completed.modelState.queued.length,0);
+});
+
+test('send model options reject missing or future scope, steering, changed provider and unsupported catalog options before delivery',async t=>{
+ const f=await fixture(t),{owner,control,caller,command}=f;f.grant();const run=await f.create(owner,'hold model validation');await until(()=>run.pending);const before=run.events.length;
+ for(const extra of [{model:'fixture'},{model:'fixture',modelScope:'future-schedule'},{model:'fixture',modelScope:'next-turn',mode:'steer'},{model:'fixture',modelScope:'next-turn',provider:'claude'},{model:'fixture',modelScope:'next-turn',reasoningEffort:'invented'}])await assert.rejects(control.handle(command('send',{chatId:run.id,prompt:'must not send',...extra}),caller.id));
+ await assert.rejects(control.handle(command('reply',{chatId:run.id,requestId:run.pending.id,answer:'must not answer',model:'fixture'}),caller.id),/cannot change/);
+ assert.equal(run.events.length,before);assert.equal(run.queuedMessages?.length||0,0);assert.equal(control.tasks.size,0);
+});
+
+test('local task model selection survives restart and deduplicates retry while the destination keeps current turn settings',async t=>{
+ const f=await fixture(t),{origin,control,caller}=f,hostId=origin.remote.config.hostId;
+ const run=await f.create(origin,'hold local model');await until(()=>run.pending);control.grant(caller.id,{hostId,actions:['read','dispatch'],chatIds:[run.id]});
+ const request={action:'send',hostId,chatId:run.id,prompt:'queued local options',modelScope:'next-turn',model:'fixture',reasoningEffort:'low',operationId:randomUUID()};
+ const first=await control.handle(request,caller.id);assert.equal(first.state,'accepted',JSON.stringify(first));assert.equal(run.queuedMessages[0].modelOptions.reasoningEffort,'low');
+ const restarted=new ChatControl(origin,{pollMs:0});t.after(()=>restarted.close());const replay=await restarted.handle(request,caller.id);assert.deepEqual(replay.modelSelection,first.modelSelection);assert.equal(replay.taskId,first.taskId);assert.equal(run.queuedMessages.length,1);
+});
+
+
+test('an older destination cannot silently ignore scoped send model controls',async t=>{
+ const f=await fixture(t),{owner,control,caller,hostId,command}=f;f.grant();const run=await f.create(owner,'hold older owner');await until(()=>run.pending);
+ const connection=await control.connection(hostId);connection.capabilities=connection.capabilities.filter(cap=>cap!=='chat.send-model-options.v1');
+ await assert.rejects(control.handle(command('send',{chatId:run.id,prompt:'must not send',modelScope:'next-turn',model:'fixture',reasoningEffort:'low'}),caller.id),/needs scoped send/);
+ assert.equal(run.queuedMessages?.length||0,0);assert.equal(control.tasks.size,0);
+});
+
+test('executing owner revalidates model policy and rechecks the target project after asynchronous catalog preflight',async t=>{
+ const f=await fixture(t),{owner}=f,project=owner.workspaceProjects.read().projects[0];
+ const run=await f.create(owner,'hold owner preflight');await until(()=>run.pending);owner.workspaceProjects.associate(run,project,owner.engine);
+ const args={id:run.id,prompt:'must not send',mode:'queue',messageId:randomUUID(),agentControl:true,expectedProjectId:project.id,modelScope:'next-turn',expectedProvider:'copilot',modelOptions:{model:'fixture',reasoningEffort:'low'}};
+ const catalog=owner.catalogs.copilot,original=catalog.get.bind(catalog);
+ catalog.get=async()=>({available:true,models:[{...model,policy:{state:'disabled'}}]});await assert.rejects(owner.remote.execute({},'chat.send',args),/disabled/);assert.equal(run.queuedMessages?.length||0,0);
+ let release,entered;const gate=new Promise(resolve=>release=resolve),started=new Promise(resolve=>entered=resolve);
+ catalog.get=async()=>{entered();await gate;return original(true);};const pending=owner.remote.execute({},'chat.send',args);const rejected=assert.rejects(pending,/project changed/);await started;
+ owner.workspaceProjects.projects({action:'create',workspaceId:project.workspaceId,name:'Preflight move',expectedRevision:owner.workspaceProjects.read().revision},owner.engine);const other=owner.workspaceProjects.read().projects.find(p=>p.name==='Preflight move');
+ owner.workspaceProjects.projects({action:'move-chat',chatId:run.id,projectId:other.id,expectedRevision:owner.workspaceProjects.read().revision,expectedUpdatedAt:run.updatedAt},owner.engine);release();await rejected;assert.equal(run.queuedMessages?.length||0,0);
+ catalog.get=original;
 });

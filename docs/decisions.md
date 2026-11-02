@@ -3094,3 +3094,13 @@ or synthesize approval. Clearing is idempotent review metadata and survives rest
 The human transcript card retains its answer controls and local draft. Only pending questions can
 be newly cleared; in-flight/uncertain answer delivery retains its existing protections. Paired
 clients gate the action on the owner capability, and agent control cannot clear human questions.
+
+
+## November 2 — send model selection is scoped to a queued turn
+
+Require explicit next-turn scope for chat-control send settings. Freeze the normalized selection
+in the durable task, validate destination capability/catalog and revalidate on the executing owner.
+Recheck project, run and provider after preflight before calling the synchronous owner boundary.
+Do not switch providers, modify an active turn, edit future schedules or widen tool/source grants.
+Receipts describe requested options; scoped reads expose captured and queued settings without claiming
+provider execution or workflow completion. Never infer that older dropped options took effect.

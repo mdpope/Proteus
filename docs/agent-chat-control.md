@@ -6,6 +6,28 @@ the authenticated local endpoint is `POST /api/chat-control`. It uses existing
 Proteus peer authentication, encryption, provider adapters and command receipts.
 It does not transfer provider credentials or native sessions between computers.
 
+## R21 — scoped next-turn model settings through chat control
+
+`proteus_chats` send can explicitly select model/effort/context/service settings with
+`modelScope: "next-turn"` and queue mode. The captured provider stays fixed. The sender refreshes
+the destination catalog; the executing owner validates again and rechecks run identity, provider
+and project after asynchronous preflight. Steering, replies and cancellation cannot change model
+settings. Older destinations without the scoped-send capability are refused rather than silently
+ignoring options.
+
+The durable task freezes the requested settings and returns `modelSelection` with `state: requested`.
+This is not proof that a model executed. `read` exposes bounded `modelState` with the captured
+settings and queued selections. An active turn retains its original settings; the queued message's
+settings apply when that next turn starts. The initial captured schedule and model history remain
+available. No saved future schedule, sources, tools or permissions are edited. Future schedule
+updates and source/context refresh remain separate owner operations in R19, not part of send.
+
+Retry reuses the same operation ID and frozen selection without another message. Changed arguments
+with the same ID are rejected. Older uncertain/prepared tasks that never captured model settings
+must be inspected before submitting a new operation; the fix does not retrofit their prior sends.
+This is source-only for Nov 2. Do not claim changes through the currently installed send path took
+effect, and do not relabel prior runs with newly saved future schedule settings.
+
 ## Discovery and authorization
 
 Use `computers`, then `projects`, `models`, `list` and `read`. Select an explicit

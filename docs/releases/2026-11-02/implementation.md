@@ -1,3 +1,34 @@
+## R21 — scoped next-turn model settings through chat control
+
+`proteus_chats` send can explicitly select model/effort/context/service settings with
+`modelScope: "next-turn"` and queue mode. The captured provider stays fixed. The sender refreshes
+the destination catalog; the executing owner validates again and rechecks run identity, provider
+and project after asynchronous preflight. Steering, replies and cancellation cannot change model
+settings. Older destinations without the scoped-send capability are refused rather than silently
+ignoring options.
+
+The durable task freezes the requested settings and returns `modelSelection` with `state: requested`.
+This is not proof that a model executed. `read` exposes bounded `modelState` with the captured
+settings and queued selections. An active turn retains its original settings; the queued message's
+settings apply when that next turn starts. The initial captured schedule and model history remain
+available. No saved future schedule, sources, tools or permissions are edited. Future schedule
+updates and source/context refresh remain separate owner operations in R19, not part of send.
+
+Retry reuses the same operation ID and frozen selection without another message. Changed arguments
+with the same ID are rejected. Older uncertain/prepared tasks that never captured model settings
+must be inspected before submitting a new operation; the fix does not retrofit their prior sends.
+This is source-only for Nov 2. Do not claim changes through the currently installed send path took
+effect, and do not relabel prior runs with newly saved future schedule settings.
+
+Both dropped-option sites are corrected: the controller send payload and destination agent send.
+Focused synthetic acceptance passes 31 chat-control cases plus the actual registered stdio MCP
+catalog/tool-call test. Coverage includes paired/local dispatch, durable restart/retry, conflicting
+operation IDs, unchanged active/future schedules, later captured selection, unsupported options,
+provider/steering restrictions, older-owner refusal, policy revalidation and project movement during
+preflight. Required source suite passes **1,445 tests, four skipped, zero failed**; static checks pass.
+No UI changed, so this acceptance uses owner/protocol/execution tests rather than a UI redesign. No live intake test,
+schedule edit, deployment or UI redesign is performed by this source work.
+
 ## R20 — clear reviewed questions from the open queue
 
 Question cards add **Clear from queue** immediately left of **Send answer**. The owner persists

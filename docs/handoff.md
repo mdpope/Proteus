@@ -1,3 +1,15 @@
+## Nov 2 — R21 chat send model controls; R19 schedule tools still pending
+
+The scoped next-turn send repair now carries validated model settings through both controller task
+and executing owner, preserving current turns, future schedule definitions and source/permission
+snapshots. Receipts expose requested selection; reads expose captured/queued settings. Synthetic
+local/paired/restart/registered-stdio acceptance passes; required suite is 1,445 pass/four skip
+and static checks pass. Installed source and all rollout holds remain unchanged. The transcript testing
+workflow reports newer approved future intake settings, but its earlier captured run remains its
+original configuration. No model change on a past send is claimed. Serial triggers stay paused
+under that workflow's control; the next genuine test still needs owner start until R19 ships.
+Transcription UI still waits for mockup review.
+
 ## Mnemosyne prototype handoff received — review pending
 
 The schedule-testing chat supplied a sample-data interactive prototype and an operations/data-
