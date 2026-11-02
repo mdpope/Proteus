@@ -1,3 +1,55 @@
+## Signed native distribution and Linux installed outcome
+
+The exact accepted Mac and Linux payloads are signed with the existing trusted publisher key; independent controller verification passed. Linux is installed on linux.5ca48726d340 with accepted package hash and owner health verified, same-chat continuation and two verified recoveries. Saved configuration, encrypted peer records, histories and drafts match the verified recovery. Actual protected-storage selection, outgoing peer access and Wayland presentation retain explicit verification limits. No separate migration outcome is recorded. Mac/Linux public files are staged only; no new public activation is claimed.
+
+Windows public npm restoration and signed baseline extraction pass. A corrected human-quit repair helper is armed; it has not performed an installer repair or reopened the application. Build Mac remains prepared pending normal idle handoff.
+
+## iPad combined update verified
+
+The iPad now runs signed 0.2.39 / 2610.31.2 from the exact combined source. All 266 protected file hashes matched before first launch; four saved destinations and selection matched, and launch was verified. The earlier app-restart capture failure remains recorded. A stable cold-state reconciliation reused 156 unchanged copies in the same generation, retained changed-copy evidence, and completed the current capture without a second full backup.
+
+Exactly two verified iPad recovery generations remain. Oldest-recovery retirement removed 101,640,612 logical bytes and observed 61,169,664 additional available bytes. After verified completion, the obsolete 35-file failure subset was compacted to original manifests/receipts: 57,592,578 logical bytes removed, with 69,918,720 observed available bytes. Physical gestures, reconnect and push delivery remain unverified. The iPhone's completed update was not repeated.
+
+Build Mac remains prepared and held. Windows' ordinary-user repair helper is armed awaiting the operator's normal Quit; no installer repair or reopen is claimed yet. Linux signing and the Windows/Ian rollout remain pending. The release stays open. Earlier progress sections below are historical.
+
+## Current rollout reconciliation
+
+Work Mac and the combined website are installed and independently verified. The iPhone now runs signed 2610.31.2 from the frozen combined source: all 304 protected files matched before first launch, the four destinations and selection matched, launch passed and exactly two recovery generations remain. Physical notification delivery and gestures remain unverified.
+
+The operator resumed the iPad rollout. The same signed package passed preflight and its recovery capture is in progress; no iPad installation is claimed. Build Mac failed before replacement during recovery verification; its evidence and two verified recoveries remain. A separate normal preparation succeeded and is held before handoff during device work.
+
+The canonical Windows owner is online after profile consolidation. Its combined build was interrupted during packaging after 1,380 tests passed and six skipped; no accepted artifact exists. The stopped operation is cancelled through the owner. Reviewed repair planning covers its missing public npm files, stale native installer registration and cached owner state; no repair or replacement is yet claimed. Linux awaits designated signing and Ian awaits the same accepted Windows bytes. The release stays open; branch and PR closeout follows actual rollout.
+
+Earlier entries below are historical progress, superseded by this current reconciliation.
+
+## Build Mac handoff accepted; release remains open
+
+Build Mac has handed the exact accepted combined candidate to its supervisor. It remains on the earlier baseline until normal idle and verified replacement. Its attached unshared Default shell and another chat browser turn are protected; neither was interrupted. The command center is ending its turn so its own active run stops blocking the barrier. The task-owned sleep assertion was stopped and was not the user terminal.
+
+Work Mac and the website are verified complete. Windows remains reconnecting, Linux awaits designated signing, Ian awaits the same accepted Windows package, and the iPhone requires unlock before revalidating the retained 304-file capture and installing. iPad is deferred. Draft PR 26 contains the combined source; PR 24 and all related branch/worktree cleanup remain for verified final rollout. PR 25 documents a separate Windows profile diagnosis and needs preserving/reconciliation at closeout.
+
+## Verified Work Mac and website combined deployment
+
+Work Mac runs the exact accepted 08db build and package hash, with owner health verified and two retained recovery generations. Saved settings, provider/model selections, browser/site/notification preferences and encrypted pairing records are byte-identical to the verified pre-update recovery; all 46 drafts match. Expected project records and logical tabs remain. Legitimate scan timestamps, tab touches and completion notification turnover are classified. This establishes native-update preservation; the earlier manual baseline restart had incomplete before-inventory. The completed one-shot launchd registration is removed, with all receipts retained.
+
+Parent-authorized metadata reads confirm Codex (eight models) and Copilot (15 models) available on HC. Fusion tiers are not advertised; no real Fusion or shared remote-model turn is claimed. The source fixture results remain separate.
+
+The combined website is fully verified with final retention complete: two local recoveries/code archives, one server recovery and current/matching recovery code. The two Apache errors are expected protected-environment denials. Bounded database-journal samples before and after deployment match the documented pre-existing mysql.column_stats mismatch; no database repair was performed. Counts and recovery qualifications are in the private deployment record.
+
+Build Mac is prepared; Linux awaits designated signing; Windows remains reconnecting and Ian awaits those exact accepted bytes. The iPhone retains all 304 capture files and awaits passcode unlock before cold revalidation/install. iPad remains deferred. Old uninstalled mobile build 2610.31.1 and derived outputs were retired after verifying 2610.31.2 and preserving minimum logs; no live device or simulator data changed. The release remains open until actual rollout and final main/branch closeout.
+
+## Current combined rollout: website live, native gates pending
+
+Combined website release 20261101T010326Z is live from exact 08db248: all 9,221 deployed/local file hashes, nine HTTPS assets and fourteen endpoint checks pass. The 105 PHP tests/920 assertions pass. Ordinary restore failed and isolated captured-state verification passed, with its live comparison explicitly not performed. Two local recoveries verify; temporary server retention cleanup awaits the Mac's existing SSH key becoming available after unlock.
+
+The combined Linux package passes 1,382 native tests/four skips, package/real provider/multiwindow/PTY/restart, six-value kwallet6 continuity and isolated update/rollback/failure acceptance. Controller downloads and all 1,494 source Git blobs/436 runtime/eight input hashes match. Publisher signing and live installation remain pending. Windows' existing build is unresolved while that machine reconnects; no retry is started. Ian remains a consumer awaiting the same accepted Windows bytes.
+
+Build Mac's combined candidate is prepared without handoff. HC is armed for normal idle but an unrelated browser agent-control flag blocks replacement; neither is installed. The iPhone copied all 304 files, then safely refused final cold-state acceptance because the app relaunched; source metadata is unchanged and installation has not begun. Reuse this same capture. The Mac relocked and must be unlocked before further Apple checks or SSH signing-key access. iPad remains explicitly deferred. Release/branch closeout waits for actual rollout.
+
+## Frozen combined application source
+
+Build/deploy only `08db24856fe401db9ac39ed4283b7054568555ea`, the validated merge of the Fusion/layout branch and R15/R16. Both source commits are verified ancestors. This following documentation commit records the immutable application pin; do not build from the moving branch tip. Version remains **0.2.39**. New packages and installed/live checks remain required. iPad is deferred by the operator; iPhone and all intended desktops/web remain in scope. Final closeout must merge/push validated related work into main and retire merged clean release branches/worktrees without erasing unrelated changes.
+
 ## Combined source validation and final closeout scope
 
 All implementation from the October31 Fusion/layout branch is included with R15/R16. Combined source checks pass1,382 tests/four skips/zero failures, static checks, Fusion attribution browser UI, isolated remote composer and remote project rows. The configured llama.cpp/shared-model live UI fixtures are reserved for the designated Windows host; this Mac has no connection configuration. Their Mac test launches now use a disposable mock Keychain and portable output paths, without altering runtime behavior or assertions.
