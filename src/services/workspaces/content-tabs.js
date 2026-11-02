@@ -10,6 +10,7 @@ export const contentTabMembershipLimits=Object.freeze({scopes:128,tabs:8192});
 export function contentTab(value){
   if(!value||!ID.test(value.id||'')||!['browser','document','chat','terminal'].includes(value.type))throw new Error('Choose a bounded browser or document tab.');
   const tab={id:value.id,type:value.type,title:title(value.title)||'New tab',...contentTabMetadata(value)};if(title(value.customTitle))tab.customTitle=title(value.customTitle);
+  if(value.setup!==undefined){if(value.type!=='browser'||value.url||!['chat','internet'].includes(value.setup?.kind))throw Error('A setup placeholder must be a blank tab.');tab.setup={kind:value.setup.kind};}
   if(tab.type==='browser') { if(value.profileId&&value.profileId!=='default'){if(!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(value.profileId))throw new Error('Invalid browser profile.');tab.profileId=value.profileId;} if(tab.id.startsWith('document:'))throw new Error('Document tab IDs are reserved for host documents.');const url=value.url?safeHistoryURL(value.url):'';if(value.url&&!url)throw new Error('This private or sensitive browser URL cannot sync.');tab.url=url||'';const history=normalizeHistory(value.history);if(history&&(!history.entries.length||history.entries[history.index]?.url===tab.url))tab.history=history; }
   else if(tab.type==='chat') { if(!ID.test(value.chatId||''))throw new Error('Choose a host-owned chat.');tab.chatId=value.chatId;tab.id='chat:'+value.chatId; }
   else if(tab.type==='terminal') { if(!ID.test(value.terminalId||''))throw new Error('Choose a bounded host-owned terminal descriptor.');tab.terminalId=value.terminalId;tab.id='terminal:'+tab.terminalId; }
@@ -26,7 +27,7 @@ export function workspaceContentScopes(session){
       // Dropping the descriptor lets an authoritative partial registry close the
       // native local tab on the first synchronization.
       const url=child.privateLocal?'':safeHistoryURL(child.url)||'';
-      return contentTab({id:child.contentTabId||child.id,type:'browser',profileId:child.profileId,...common,url,history:url?child.history:undefined,...(!url?{title:child.customTitle||'New tab'}:{})});
+      return contentTab({id:child.contentTabId||child.id,type:'browser',profileId:child.profileId,...common,url,history:url?child.history:undefined,...(!url?{title:child.customTitle||'New tab'}:{}),...(!url&&child.newChatDraft?{setup:{kind:child.newChatDraft.chatType==='internet'?'internet':'chat'}}:{})});
     }
     if(child.type==='markdown'){const documentId=child.contentTabId?.startsWith('document:')?child.contentTabId.slice(9):createHash('sha256').update(owner+'\0'+(child.file||child.markdown?.file)).digest('hex');return contentTab({id:'document:'+documentId,type:'document',documentId,...(child.associationChatId?{chatId:child.associationChatId}:{}),mediaType:/\.html?$/i.test(child.file||child.markdown?.file||'')?'text/html':'text/markdown',...common});}
     if(['run','workspace-chat'].includes(child.type))return contentTab({id:child.id,type:'chat',chatId:child.runId||child.chatId||child.id,...common});

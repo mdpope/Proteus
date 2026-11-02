@@ -99,6 +99,7 @@ async function body(req, maxBytes = 2_000_000) {
 }
 
 export async function startServer({ home = defaultHome(), port = 4317, providers, browser, openExternal, timers = true, withSeed = true, background = false, lifeOptions = {}, desktopPreview = false, updateRecovery=false } = {}) {
+  async function sendHumanMessage(...args){const result=await engine.send(...args);await service.sharedDrafts?.clearSent({kind:'reply',id:args[0]},args[1]).catch(()=>{});return result;}
   const previewCodexHome = desktopPreview ? desktopPreviewCodexHome(home, desktopPreview.codexHome) : null;
   // Validate the access boundary before starting workers, providers or network owners.
   const computerAccess=new ComputerAccess(home);
@@ -619,6 +620,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         return json(200, { imported: schedules.length, enabled: false });
       }
       if(url.pathname==='/api/subagents'&&req.method==='GET'){const run=engine.getRun(url.searchParams.get('id')),agentId=url.searchParams.get('agentId'),before=url.searchParams.has('before')?Number(url.searchParams.get('before')):undefined;return json(200,run.subagents?.some(row=>row.id===agentId)?subagentPage(run,agentId,before):engine.delegation.page(run.id,agentId,before));}
+      if(url.pathname==='/api/shared-draft'&&req.method==='POST'){const value=await body(req);if(!['get','save'].includes(value.action))throw Error('Choose a draft action.');return json(200,value.action==='save'?await service.sharedDrafts.save(value):service.sharedDrafts.get(value));}
       if (url.pathname === '/api/run' && req.method === 'POST') { const { id } = await body(req); return json(200, engine.createRun(engine.schedules.get(id))); }
       if (url.pathname === '/api/chat-title' && req.method === 'POST') {
         const value = await body(req);
@@ -638,14 +640,16 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       }
       if (url.pathname === '/api/chat' && req.method === 'POST') {
         let value = await body(req);value={...value,inputOrigin:localInputOrigin(value.inputOrigin,service)};
+        const run = await service.startSharedSetup(value, async () => {
         const project=value.purpose==='update'?null:preview?.projectFor(value);if(project&&(desktopPreview||value.projectId||value.workspaceId))value={...value,workspaceId:project.workspaceId};
         const files=Array.isArray(value.attachments)?value.attachments:[],schedule=await buildChatSchedule(value,{attachmentOnly:files.length>0});
-        if(!files.length){const run=engine.createRun(schedule,'chat',null,{inputOrigin:value.inputOrigin});if(project)preview.associate(run,project,engine);return json(200,run);}
+        if(!files.length){const run=engine.createRun(schedule,'chat',null,{inputOrigin:value.inputOrigin,setupId:value.setupId});if(project)preview.associate(run,project,engine);return run;}
         if(files.length>chatAttachmentLimits.maxBatchFiles||!value.consentId||!value.draftId||!value.messageId||value.providerId!==schedule.provider)throw new Error('Review the exact files and named provider before sending.');
         await remote.attachmentConsents.verify({consentId:value.consentId,draftId:value.draftId,messageId:value.messageId,providerId:schedule.provider,deviceId:'local-desktop',attachmentIds:files});
-        const run=engine.createRun(schedule,'chat',null,{deferStart:true,attachmentOnly:!schedule.prompt.trim(),inputOrigin:value.inputOrigin});if(project)preview.associate(run,project,engine);let prepared;
-        try{prepared=await remote.attachmentConsents.prepareSend({consentId:value.consentId,draftId:value.draftId,chatId:run.id,messageId:value.messageId,providerId:schedule.provider,deviceId:'local-desktop',attachmentIds:files});engine.startDeferredRun(run.id,{proofId:prepared.proofId,attachmentIds:files,messageId:value.messageId});return json(200,run);}
+        const run=engine.createRun(schedule,'chat',null,{deferStart:true,attachmentOnly:!schedule.prompt.trim(),inputOrigin:value.inputOrigin,setupId:value.setupId});if(project)preview.associate(run,project,engine);let prepared;
+        try{prepared=await remote.attachmentConsents.prepareSend({consentId:value.consentId,draftId:value.draftId,chatId:run.id,messageId:value.messageId,providerId:schedule.provider,deviceId:'local-desktop',attachmentIds:files});engine.startDeferredRun(run.id,{proofId:prepared.proofId,attachmentIds:files,messageId:value.messageId});return run;}
         catch(error){if(prepared)await remote.attachmentConsents.releaseProof(prepared.proofId).catch(()=>{});engine.discardDeferredRun(run.id);throw error;}
+        });return json(200,run);
       }
       const match = url.pathname.match(/^\/api\/runs\/([a-f0-9-]+)\/(answer-question|reply|resume|cancel|send|edit-queued|remove-queued|steer-queued|recover)$/);
       if (match && req.method === 'POST') {
@@ -692,10 +696,10 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
           if(files.length){
             if(files.length>chatAttachmentLimits.maxBatchFiles||!value.messageId||!value.consentId||value.providerId!==run.schedule.provider)throw new Error('Review the exact files and named provider before sending.');
             const prepared=await remote.attachmentConsents.prepareSend({consentId:value.consentId,chatId:run.id,messageId:value.messageId,providerId:run.schedule.provider,deviceId:'local-desktop',attachmentIds:files});
-            try{return json(200,await engine.send(id,value.prompt,value.mode||'queue',value.messageId,value.modelOptions,{proofId:prepared.proofId,attachmentIds:files},undefined,value.inputOrigin));}
+            try{return json(200,await sendHumanMessage(id,value.prompt,value.mode||'queue',value.messageId,value.modelOptions,{proofId:prepared.proofId,attachmentIds:files},undefined,value.inputOrigin));}
             catch(error){await remote.attachmentConsents.releaseProof(prepared.proofId).catch(()=>{});throw error;}
           }
-          return json(200, await engine.send(id, value.prompt, value.mode, value.messageId, value.modelOptions,undefined,undefined,value.inputOrigin));
+          return json(200, await sendHumanMessage(id, value.prompt, value.mode, value.messageId, value.modelOptions,undefined,undefined,value.inputOrigin));
         }
         if (action === 'edit-queued') return json(200,engine.editQueued(id,value.messageId,value.prompt,value.expectedPrompt));
         if (action === 'steer-queued') return json(200,await engine.steerQueued(id,value.messageId));
@@ -708,11 +712,11 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
               if(!model)throw new Error('Selected model is unavailable. Refresh models and choose an available model.');
               validateModelOptions(options,model);
             }
-            return json(200,await engine.send(id,value.prompt,'queue',value.messageId,options,undefined,undefined,value.inputOrigin));
+            return json(200,await sendHumanMessage(id,value.prompt,'queue',value.messageId,options,undefined,undefined,value.inputOrigin));
           }
           // Modern remote clients include an idempotent delivery ID even when
           // resuming an ended turn. Preserve it and let the owner choose queue/start.
-          if(value.messageId)return json(200,await engine.send(id,value.prompt,value.mode||'queue',value.messageId,undefined,undefined,undefined,value.inputOrigin));
+          if(value.messageId)return json(200,await sendHumanMessage(id,value.prompt,value.mode||'queue',value.messageId,undefined,undefined,undefined,value.inputOrigin));
           return json(200, engine.resume(id, value.prompt,{inputOrigin:value.inputOrigin}));
         }
         engine.cancel(id); return json(200, { ok: true });
@@ -779,7 +783,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   const timer = timers ? setInterval(() => { void performanceDiagnostics.measure('scheduler.tick', () => engine.tick()).catch(error => engine.emit('scheduler-error', { error: error.message, at: new Date().toISOString() })); }, 1000) : null;
   const service = { readChatAttachment, desktopControl,workspaceProjects:preview, desktopPreview:desktopPreview?preview:null, performanceDiagnostics, notify, desktopAttention:()=>[...(service.browserAttention?.()||[]),...remote.documents.list().filter(item=>!item.approvedAt).map(item=>({id:'document:'+item.requestId,kind:'document',title:item.deviceName+' requests '+item.title,requestId:item.requestId,path:item.path,at:new Date(Date.parse(item.expiresAt)-600000).toISOString()})),...service.attention()], attention:()=>[...integrations.consumers().filter(item=>['needs-auth','failed'].includes(item.connection)).map(item=>({id:'integration:'+item.id,kind:'connection',title:(item.profile.label||item.server)+' needs attention',section:'integrations',at:item.checkedAt})),...activity.notifications().items.filter(item=>!item.readAt).map(item=>({id:'notification:'+item.id,notificationId:item.id,kind:'notification',title:item.title,body:item.body,chatId:item.chatId,silent:item.silent===true,...(item.browserIssue?{browserIssue:item.browserIssue,silent:item.silent===true}:{}),at:item.createdAt}))], browserProfiles, integrations, engine, settings, context, standup, omi, life, account, activity, workspaceFiles, attachments, buildChatSchedule, usage, catalog, catalogs, origin, token, home, url: `${origin}/?token=${token}`, async close() {
     await stateProjection.close();await service.updates?.close();await service.chatControl?.close();await desktopControl?.close();
-    activity.log('info','app.stopping','Proteus is shutting down.');clearInterval(integrationTimer);await integrations.close(); if(activityTimer)clearInterval(activityTimer); if (timer) clearInterval(timer); if (catalogTimer) clearInterval(catalogTimer); await Promise.all(Object.values(catalogs).map(c => c.pending)); await providerAuth.close(); await service.sharedInference.close(); await remote.close(); let engineCloseError; try { await engine.close(); } catch (error) { engineCloseError=error; } await attachments.close(); await copilot.close(); await codex.close(); await claude.close(); await life.close?.(); await service.browserHistory?.close(); let activityCloseError; try { await activity.close(); } catch (error) { activityCloseError=error; }
+    activity.log('info','app.stopping','Proteus is shutting down.');clearInterval(integrationTimer);await integrations.close(); if(activityTimer)clearInterval(activityTimer); if (timer) clearInterval(timer); if (catalogTimer) clearInterval(catalogTimer); await Promise.all(Object.values(catalogs).map(c => c.pending)); await providerAuth.close(); await service.sharedInference.close(); await remote.close(); let engineCloseError; try { await engine.close(); } catch (error) { engineCloseError=error; } await attachments.close(); await copilot.close(); await codex.close(); await claude.close(); await life.close?.(); await service.browserHistory?.close(); await service.sharedDrafts?.close(); let activityCloseError; try { await activity.close(); } catch (error) { activityCloseError=error; }
     for (const client of eventClients) client.end(); eventClients.clear();
     await new Promise(resolve => {
       server.close(resolve);
@@ -798,6 +802,11 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   service.computerAccess=computerAccess;computerAccess.on('change',()=>{service.notify();service.remote?.changed();});
   service.browserHistory=new BrowserHistory(home,{hostId:()=>service.remote?.info().hostId});
   service.contentTabs=new ContentTabs(home,{history:service.browserHistory,profiles:()=>browserProfiles.list().items,onChange:result=>{const metadata={scope:result.scope,id:result.id,revision:result.revision};for(const client of eventClients)client.write('event: content-tabs\ndata: '+JSON.stringify(metadata)+'\n\n');notify();remote?.broadcast('tabs',metadata,result.scope==='chat'?result.id:undefined);}});
+  service.startSharedSetup=sharedSetupStarts(service);
+  service.sharedDrafts=new SharedDrafts(home,{validate:value=>{
+    if(value.kind==='reply'){engine.getRun(value.id);return;}
+    if(!['workspace','project'].includes(value.scope)||!service.contentTabs.get(value.scope,value.scopeId).tabs.some(tab=>tab.id===value.id&&tab.setup))throw Error('This setup tab is no longer open in its project.');
+  },changed:metadata=>remote?.broadcast('draft-text',metadata)});
   service.projectFollow = new ProjectFollow({
     validationStamp: () => fileStamp([context.file,preview.file]),
     validate: value => { if(value.scope==='project')preview.projectFor({projectId:value.id},preview.snapshot());else context.scope(value.id); },
@@ -836,3 +845,5 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, async () => { await app.close(); process.exit(0); });
 }
 import {ChatPreviews} from './services/chats/chat-previews.js';
+import {SharedDrafts} from './services/chats/shared-drafts.js';
+import {sharedSetupStarts} from './services/chats/shared-setup.js';

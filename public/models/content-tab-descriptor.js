@@ -45,6 +45,7 @@ export function normalizeContentTabDescriptor(value){
   Object.assign(tab,contentTabMetadata(value));
   const customTitle=contentTabTitle(value.customTitle);if(customTitle)tab.customTitle=customTitle;
   if(tab.type==='browser'){
+    if(value.setup?.kind==='chat'||value.setup?.kind==='internet')tab.setup={kind:value.setup.kind};
     if(value.profileId&&value.profileId!=='default')tab.profileId=value.profileId;
     tab.url=value.url?(safeContentTabURL(value.url)??value.url):'';
     const history=normalizeContentTabHistory(value.history);

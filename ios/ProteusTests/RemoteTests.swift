@@ -1959,6 +1959,41 @@ final class NativeParityTests: XCTestCase {
         NativeWorkspaceNavigation.restoreOwnerChatSelection("new", descriptors: owner, navigationKey: "project-navigation:synthetic", remote: remote)
         XCTAssertEqual(remote.draft("project-navigation:synthetic")["selected"].string, "chat:new", "An existing owner tab retains its local selection")
     }
+    @MainActor func testSharedSetupAndReplyTextUseOwnerRevisionsWithoutPublishingPrivateChoices() async throws {
+        let (data, _) = try await URLSession.shared.data(from: URL(string: "\(nativeFixtureHTTPOrigin)/pair?projects=1")!)
+        let fixture = try JSONDecoder().decode(JSON.self, from: data), remote = RemoteStore()
+        remote.forget(); try remote.pair(fixture["code"].string); defer { remote.forget() }
+        for _ in 0..<200 { if remote.connected && remote.supportsProjects { break }; try await Task.sleep(for: .milliseconds(50)) }
+        XCTAssertTrue(remote.connected && remote.supportsProjects)
+        let project = fixture["projectId"].string, host = try XCTUnwrap(remote.connection?.hostId), scope = "project:" + host + ":" + project, id = UUID().uuidString
+        let current = try await remote.request("tabs.get", ["scope": .string("project"), "id": .string(project)])
+        _ = try await remote.request("tabs.mutate", ["scope": .string("project"), "id": .string(project), "expectedRevision": current["revision"], "operations": .array([.object(["action": .string("open"), "tab": .object(["id": .string(id), "type": .string("browser"), "title": .string("New chat"), "url": .string(""), "setup": .object(["kind": .string("chat")])])])])])
+        let shared = SharedAppStore(); defer { shared.unloadBrowsers() }
+        await shared.refreshContentTabs(scope: scope, remote: remote, kind: "project", id: project)
+        XCTAssertFalse(shared.tabs(in: scope).contains { ($0.contentTabId ?? $0.id) == id }, "A setup placeholder must never allocate a browser")
+        XCTAssertTrue(NativeWorkspaceNavigation.children(scope: scope, navigationKey: "project-navigation:" + project, remote: remote, shared: shared).contains { $0["id"].string == "draft:" + id && $0["type"].string == "chat-setup" })
+        let identity: [String: JSON] = ["kind": .string("setup"), "id": .string(id), "scope": .string("project"), "scopeId": .string(project)]
+        _ = try await remote.request("draft.text.save", identity.merging(["text": .string("Finish on iPhone"), "expectedRevision": .number(0), "operationId": .string(UUID().uuidString)]) { _, new in new })
+        let sync = NativeSharedDraftText(); var visible = ""
+        sync.activate(store: remote, identity: identity, text: visible) { visible = $0 }
+        for _ in 0..<100 { if visible == "Finish on iPhone" { break }; await sync.syncNow(); try await Task.sleep(for: .milliseconds(20)) }
+        XCTAssertEqual(visible, "Finish on iPhone")
+        visible = "Phone unfinished edit"; sync.changed(visible)
+        let base = try await remote.request("draft.text.get", identity)
+        _ = try await remote.request("draft.text.save", identity.merging(["text": .string("Desktop concurrent edit"), "expectedRevision": base["revision"], "operationId": .string(UUID().uuidString)]) { _, new in new })
+        try await Task.sleep(for: .milliseconds(800)); await sync.syncNow()
+        XCTAssertEqual(visible, "Phone unfinished edit"); XCTAssertEqual(sync.conflict["text"].string, "Desktop concurrent edit")
+        sync.useOther(); XCTAssertEqual(visible, "Desktop concurrent edit"); XCTAssertTrue(sync.copies.contains { $0["text"].string == "Phone unfinished edit" })
+        visible = "Resumed on phone"; sync.changed(visible); try await Task.sleep(for: .milliseconds(800)); await sync.syncNow()
+        let resumed = try await remote.request("draft.text.get", identity); XCTAssertEqual(resumed["text"].string, visible)
+        let inventory = try await remote.request("tabs.get", ["scope": .string("project"), "id": .string(project)])
+        XCTAssertFalse(String(decoding: try JSONEncoder().encode(inventory), as: UTF8.self).contains("Resumed on phone"))
+        let reply: [String: JSON] = ["kind": .string("reply"), "id": fixture["chatIds"].array[0]]
+        sync.activate(store: remote, identity: reply, text: "Unsent reply") { visible = $0 }
+        try await Task.sleep(for: .milliseconds(800)); await sync.syncNow()
+        let continued = try await remote.request("draft.text.get", reply); XCTAssertEqual(continued["text"].string, "Unsent reply")
+        sync.stop()
+    }
     @MainActor func testHistoryPagingFailureCannotBlockAuthoritativeProjectMembership() async throws {
         let (data, _) = try await URLSession.shared.data(from: URL(string: "\(nativeFixtureHTTPOrigin)/pair?projects=1")!)
         let fixture = try JSONDecoder().decode(JSON.self, from: data), remote = RemoteStore()

@@ -1,6 +1,14 @@
 import test from 'node:test';import assert from 'node:assert/strict';import http from 'node:http';
 import {bundlePreview,ChatPreviews,localPreviewURL} from '../src/services/chats/chat-previews.js';
 
+test('project browser previews use their canonical tab without reviving chat children or bypassing profile denial',()=>{
+ const source='http://127.0.0.1:5888/design/index.html',run={id:'chat',events:[{role:'assistant',text:source}]};
+ const canonical={id:'project-browser',type:'browser',url:source,associationChatId:'chat'};
+ const service={origin:'http://127.0.0.1:9999',workspaceProjects:{membership:()=>({projectId:'project'})},contentTabs:{get:scope=>({tabs:scope==='project'?[canonical,{id:'other-chat',type:'browser',url:'http://127.0.0.1:5888/other',associationChatId:'another'}]:[{id:'old-child',type:'browser',url:source}]})}};
+ const previews=new ChatPreviews(service);assert.equal(previews.sources(run).length,1);assert.equal(previews.sources(run)[0].tabId,'project-browser');
+ service.previewAllowed=tab=>tab.id!=='project-browser';assert.equal(previews.sources(run).length,0);
+});
+
 test('local preview bundles modules, CSS imports, images and fonts without forwarding arbitrary requests',async()=>{
  let color='lime',apiReads=0;
  const resources={

@@ -878,7 +878,14 @@ struct NativeShell: View {
                 }))
                 for descriptor in descriptors where !descriptor["hidden"].bool && !descriptor["navigationClosed"].bool {
                     if descriptor["type"].string == "browser", let tab = shared.tabs(in: scope).first(where: { ($0.contentTabId ?? $0.id) == descriptor["id"].string }), !tab.hidden { result.append(overviewBrowser(tab, section: caption, sectionID: scope)) }
-                    else if descriptor["type"].string == "chat" {
+                    else if descriptor["setup"] != .null {
+                        let id = descriptor["id"].string
+                        result.append(NativePhoneTab(id: "setup:" + scope + ":" + id, title: descriptor["title"].string, symbol: "bubble.left.and.bubble.right", detail: remote.displayName, section: caption, sectionID: scope, preview: nil, select: {
+                            remote.setDraft("workspace-selected-project:" + owner.workspace, .string(projectID))
+                            var navigation = remote.draft("project-navigation:" + projectID).object; navigation["selected"] = .string("draft:" + id); remote.setDraft("project-navigation:" + projectID, .object(navigation))
+                            if let profile = remote.state["context"]["workspaces"].array.first(where: { $0["id"].string == owner.workspace }) { openWorkspace(NativeWorkspaceIdentity(hostID: owner.host, hostName: remote.displayName, profile: profile)) }
+                        }))
+                    } else if descriptor["type"].string == "chat" {
                         let id = descriptor["chatId"].string, key = "chat:" + owner.host + ":" + id
                         let run = remote.chats[id] ?? remote.state["runs"].array.first { $0["id"].string == id } ?? .object(["id": .string(id), "title": descriptor["title"]])
                         let preview = phoneChrome.visited.first { $0.id == key }?.preview ?? NativeThumbnailCache.load(phoneChrome.cacheNamespace + ":" + key)

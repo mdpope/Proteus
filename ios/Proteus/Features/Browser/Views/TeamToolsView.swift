@@ -502,7 +502,7 @@ struct TeamBrowserView: View {
                 Text("New tab").font(.largeTitle.bold())
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 130))], spacing: 12) {
                     ForEach(Array(homeActions.enumerated()), id: \.offset) { _, action in
-                        Button { let old = selectedID; if action.replacesBlank, let old { shared.close(old) }; action.run() } label: { VStack(alignment: .leading, spacing: 10) { Image(systemName: action.symbol).font(.title2); Text(action.title).font(.subheadline.weight(.semibold)) }.frame(maxWidth: .infinity, minHeight: 70, alignment: .leading).padding(14).background(NativeTheme.surface, in: RoundedRectangle(cornerRadius: 12)) }.buttonStyle(.plain).disabled(!action.enabled)
+                        Button { let old = selectedID; if action.replacesBlank, let old { shared.close(old) }; action.run() } label: { VStack(alignment: .leading, spacing: 10) { Image(systemName: action.symbol).font(.title2); Text(action.title).font(.subheadline.weight(.semibold)) }.frame(maxWidth: .infinity, minHeight: 70, alignment: .leading).padding(14).background(NativeTheme.surface, in: RoundedRectangle(cornerRadius: 12)) }.buttonStyle(.plain).disabled(!action.enabled).accessibilityIdentifier("new-tab-action-" + action.title)
                     }
                 }
                 HStack {

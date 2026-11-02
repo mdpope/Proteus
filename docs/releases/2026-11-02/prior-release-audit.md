@@ -42,8 +42,9 @@ never project resource tabs. Projects have one owner-shared ordered content set,
 IDs, order, hidden state and history. Chats have no nested resource strip. Phone shows the project
 row, then Chat | Live browser with overview/actions only; the project plus creates tabs. Browser
 links, documents and previews use parent project descriptors and retain their authorization origin.
-Selection/scroll/drafts stay local. Unsent New chat setup remains private pending clarification;
-opening a setup tab never synchronizes prompt text or files.
+Selection and scroll stay local. R13 supersedes the former private-draft assumption: shared setup
+slots plus setup/reply text now synchronize through the human-only revisioned draft API. Attachments
+and execution choices stay on the sending device.
 
 Unloaded pages retain top navigation without loading to switch tabs. Browser/composer spacing uses
 the actual safe area. Native sync applies membership despite history paging failure, handles

@@ -1,4 +1,13 @@
-# R12 — current review hold
+# R13/R14 — simulator review and desktop source changes
+
+R13 adds shared setup/reply text to the clarified R12 navigation. R14 adds desktop audio controls
+and audits page notification/sound routing. Both Preview simulator identities are updated separately
+for operator review; no physical build/install or desktop package/publication/rollout is authorized
+until that review. Synthetic owner data contains a desktop-authoritative General metadata snapshot
+and a Design review setup/reply text demonstration. It does not change the live desktop owner.
+Live Slack notification/sound and service-worker ingestion remain unverified acceptance items.
+
+# R12 — retained review hold
 
 Review hold: both shared simulator Preview apps must be reviewed before any new physical-device
 build/installation, desktop release package, publication or rollout. Old accepted packages retain

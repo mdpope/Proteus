@@ -77,6 +77,7 @@ html,body{height:100%;overflow:hidden}#app{height:100dvh;min-height:0;overflow:h
 .chat-subtab-list [data-chat-subtab]>span:not(.sr-only),.team-subtab-list [data-team-tab]>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .chat-subtab-list>button.selected,.chat-subtab.selected [data-chat-subtab],.team-subtab-list>button.selected,.team-tab.selected [data-team-tab]{color:var(--ink)}
 .agent-cursor{color:var(--accent)}
+.tab-audio{display:inline-flex;align-items:center;flex:0 0 18px;color:var(--accent);margin-left:3px;pointer-events:auto}.tab-audio svg{pointer-events:none}
 .usage-sidebar .eyebrow,.usage-heading{color:var(--soft)}
 
 .device-list-heading{align-items:center;margin:24px 0 10px}.device-list-heading h2{margin:0}

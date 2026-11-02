@@ -1,3 +1,13 @@
+## Nov 2 — R13 shared drafts / R14 tab audio, simulator review hold
+
+The Nov 2 branch contains clarified mobile navigation, shared project setup/reply text with retained
+conflicts, and window-local desktop tab muting/audio indicators. Both shared simulator Preview apps
+are updated for review; physical and desktop release rollout remains held. The previous accepted
+package pin is historical. Start with the [current implementation](releases/2026-11-02/implementation.md)
+and [prior-request audit](releases/2026-11-02/prior-release-audit.md). Page notifications are verified
+synthetically; live Slack and background worker inbox delivery remain acceptance gaps. Private
+receipts carry exact simulator apps, fixture owner and hashes; do not overwrite real owner data.
+
 ## Nov 1 closed; Nov 2 handoff
 
 Nov 1 / 0.2.40 is closed by the operator with deployed outcomes and qualifications in

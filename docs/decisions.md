@@ -1,3 +1,11 @@
+## Nov 2: shared human draft text and local audio state
+
+The operator superseded private project setup drafts with shared empty slots and then explicitly
+confirmed periodic setup and reply text sync. Store text separately from inventories, preserve
+revision conflicts and retries, and consume a setup once on Send. Keep attachments and execution
+choices device-local. App navigation remains window-local. Audio mute belongs to the local page
+and saved window session, not the shared project descriptor; visual alerts survive tab muting.
+
 ## Nov 2 — window sessions and shared project content
 
 Window app tabs stay local. iPhone lists them in its sidebar with an app-tab overview;

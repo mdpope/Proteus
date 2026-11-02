@@ -16,5 +16,5 @@
   "priorRequestAudit": "docs/releases/2026-11-02/prior-release-audit.md",
   "previousAcceptedSourceCommit": "4456aea8837171ba60f82775859d9ce7f4ec0810",
   "sourceCommit": null,
-  "candidateSourceStatus": "R12 simulator review; previous accepted package superseded for future promotion"
+  "candidateSourceStatus": "R13 shared text / R14 audio source; simulator review hold; prior accepted packages historical"
 }

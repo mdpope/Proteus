@@ -1,5 +1,5 @@
 import {computerName} from '../../services/remote/computer-identity.js';
-import {mountAttachmentPicker,prepareLocalAttachments,clearAttachments} from '../chats/chat-attachments.js';
+import {mountAttachmentPicker,selectedAttachments,prepareLocalAttachments,clearAttachments} from '../chats/chat-attachments.js';
 export const providerLabel=id=>({codex:'Codex',copilot:'Copilot',claude:'Claude'}[id]||id);
 export function internetProviders(data){return Object.keys(data.providerStatuses||{}).filter(id=>id!=='rehearsal'&&id!=='local-process'&&id!=='mtplx'&&id!=='llama-cpp'&&id!=='shared-llm');}
 export function searchDefaultsFields(id,catalog,value={},escape=String){
@@ -16,14 +16,14 @@ export function mountInternetSearch(ui){
   mountAttachmentPicker({key,host:root.querySelector('[data-search-attachments]'),textarea:prompt,provider:()=> 'search',mediaTypes:{search:[...new Set(Object.values(data.attachmentMediaTypes||{}).flat())]},notify:toast});
   root.querySelectorAll('[data-search-provider]').forEach(button=>button.onclick=async()=>{
     if(busy)return;const selected=button.dataset.searchProvider;
-    if(!prompt.value.trim()){prompt.focus();return;}
+    if(!prompt.value.trim()&&!selectedAttachments(key).length){prompt.focus();return;}
     if(!data.settings.internetSearches?.[selected]?.model){root.querySelector('[data-search-status]').textContent='Choose defaults for '+providerLabel(selected)+' in Engine Room → Internet Searches first.';return;}
     busy=true;root.querySelectorAll('[data-search-provider]').forEach(b=>b.disabled=true);
     try{
-      ui.beforeStart?.();
+      await ui.beforeStart?.();
       const delivery=await prepareLocalAttachments({key,providerId:selected,destination:computerName(data.hostName)+' · Internet Search',draftId:crypto.randomUUID(),messageId:crypto.randomUUID(),mediaTypes:data.attachmentMediaTypes||{},post:api});
-      ui.beforeStart?.();
-      const run=await api('/api/chat',{chatType:'internet',provider:selected,workspaceId:workspace.value,...(ui.projectId?{projectId:ui.projectId}:{}),prompt:prompt.value,...(delivery||{})});
+      await ui.beforeStart?.();
+      const run=await api('/api/chat',{...(surface?.tab?ui.sharedSetupArgs?.(surface.tab):{}),chatType:'internet',provider:selected,workspaceId:workspace.value,...(ui.projectId?{projectId:ui.projectId}:{}),prompt:prompt.value,...(delivery||{})});
       clearAttachments(key);await ui.refresh();ui.open(run);
     }catch(error){toast(error.message);}finally{busy=false;root.querySelectorAll('[data-search-provider]').forEach(b=>b.disabled=false);}
   });if(surface.active())prompt.focus();

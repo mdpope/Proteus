@@ -204,6 +204,16 @@ let nativeFixtureRelayOrigin = ""
         if Self.isOrganizationalScope(scope) {
             workspaceContentDescriptors[scope] = Self.projectContentOperations(intents, onto: workspaceContentDescriptors[scope] ?? contentSnapshots[scope]?["tabs"].array ?? [])
         }
+        // A setup replaces the blank logical slot. Retire its local browser view
+        // without publishing Close or letting that view echo a plain blank tab
+        // over the setup marker during the next owner refresh.
+        let setups = Set(intents.filter { $0["tab"]["setup"] != .null }.map { $0["tab"]["id"].string })
+        if !setups.isEmpty {
+            let previous = applyingContent; applyingContent = true
+            for tab in tabs(in: scope) where setups.contains(tab.contentTabId ?? tab.id) { unload(tab.id, force: true) }
+            browserTabs.removeAll { $0.scope == scope && setups.contains($0.contentTabId ?? $0.id) }
+            applyingContent = previous
+        }
         saveDocumentTabs(); Task { await self.flushContentTabs(scope) }
     }
     static func projectContentOperations(_ operations: [JSON], onto tabs: [JSON]) -> [JSON] {
@@ -250,7 +260,7 @@ let nativeFixtureRelayOrigin = ""
         // Keep owner descriptors that this view cannot render. Omitting them would
         // synthesize Close operations and incomplete browser-only reorder payloads.
         let known = Self.isOrganizationalScope(scope) ? (workspaceContentDescriptors[scope] ?? []) : (contentSnapshots[scope]?["tabs"].array ?? [])
-        let retained = known.filter { !["browser", "document"].contains($0["type"].string) }
+        let retained = known.filter { $0["setup"] != .null || !["browser", "document"].contains($0["type"].string) }
         let all = browsers + docs + retained, order = chatChildOrder[scope] ?? []
         return order.compactMap { id in all.first { tab in tab["id"].string == id || tab["documentId"].string == id || tabs(in: scope).contains(where: { $0.id == id && ($0.contentTabId ?? $0.id) == tab["id"].string }) } } + all.filter { tab in !order.contains(tab["id"].string) && !order.contains(tab["documentId"].string) && !tabs(in: scope).contains(where: { browser in order.contains(browser.id) && (browser.contentTabId ?? browser.id) == tab["id"].string }) }
     }
@@ -286,16 +296,16 @@ let nativeFixtureRelayOrigin = ""
         if Self.isOrganizationalScope(scope) { workspaceContentDescriptors[scope] = response["tabs"].array }
         var seen = Set<String>()
         let incoming = response["tabs"].array.filter { !$0["id"].string.isEmpty && seen.insert($0["id"].string).inserted }
-        let ids = Set(incoming.filter { $0["type"].string == "browser" }.map { $0["id"].string })
+        let ids = Set(incoming.filter { $0["type"].string == "browser" && $0["setup"] == .null }.map { $0["id"].string })
         let existingBrowsers = tabs(in: scope)
         let privateLocal = existingBrowsers.filter { $0.url != nil && Self.safeURL($0.url ?? "") == nil }
         for old in existingBrowsers where !privateLocal.contains(old) && !ids.contains(old.contentTabId ?? old.id) { unload(old.id, force: true); unloadedBrowsers.remove(old.id) }
-        for tab in incoming where tab["type"].string == "browser" {
+        for tab in incoming where tab["type"].string == "browser" && tab["setup"] == .null {
             if let existing = existingBrowsers.first(where: { ($0.contentTabId ?? $0.id) == tab["id"].string }), !privateLocal.contains(existing), !explicitBrowserNavigations.contains(existing.id), browserViews[existing.id]?.url.map({ Self.safeURL($0.absoluteString) == nil }) != true, existing.url ?? "" != tab["url"].string, let url = Self.safeURL(tab["url"].string) { if profileAvailable(existing.profileId) && (tab["profileId"].string.isEmpty ? "default" : tab["profileId"].string) == existing.profileId, let view = browserViews[existing.id] { mirroredBrowserLoads.insert(existing.id); pendingBrowserLoads[existing.id] = url.absoluteString; view.load(URLRequest(url: url)) } }
         }
         let localIDs = Set(existingBrowsers.map(\.id))
         var nextBrowsers = browserTabs.filter { !localIDs.contains($0.id) || (privateLocal.contains($0) && !ids.contains($0.contentTabId ?? $0.id)) }
-        for tab in incoming where tab["type"].string == "browser" {
+        for tab in incoming where tab["type"].string == "browser" && tab["setup"] == .null {
             let existing = existingBrowsers.first { ($0.contentTabId ?? $0.id) == tab["id"].string }
             // Keep a live login flow local while retaining its full URLs in browsing history.
             // Retain that live view exactly once rather than appending a restored copy on refresh.
@@ -521,6 +531,19 @@ let nativeFixtureRelayOrigin = ""
             // A user edit made during the fetch wins locally and is sent with its original operation.
             if contentPending[scope] == nil { let complete = try await completeNavigationLists(response, remote: remote, kind: kind, scopeID: id); guard remote.connection?.hostId == host, remote.connected, contentHosts[scope] == host else { return }; if contentPending[scope] == nil { applyContentTabs(complete, scope: scope); contentReadAt[scope] = Date() } else { contentSnapshots[scope] = complete } }
         } catch { /* Offline clients retain bounded descriptors; reads grant no content access. */ }
+    }
+    func confirmSetupRegistration(_ tabID: String, scope: String, remote: RemoteStore, kind: String, id: String) async throws {
+        for _ in 0..<100 {
+            try Task.checkCancellation()
+            guard remote.connected else { throw RemoteError(message: "Connect this computer to register the setup. Your draft is retained.") }
+            await refreshContentTabs(scope: scope, remote: remote, kind: kind, id: id)
+            if contentPending[scope] == nil && contentRequests[scope] == nil && !contentBusy.contains(scope) {
+                guard contentSnapshots[scope]?["tabs"].array.contains(where: { $0["id"].string == tabID && $0["setup"] != .null }) == true else { throw RemoteError(message: "This setup closed on another device. Your local text is retained.") }
+                return
+            }
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        throw RemoteError(message: "Setup registration is still pending. Your draft and retry receipt are retained.")
     }
     private func completeNavigationLists(_ response: JSON, remote: RemoteStore, kind: String, scopeID: String) async throws -> JSON {
         var result = response.object, tabs = response["tabs"].array
@@ -877,7 +900,7 @@ let nativeFixtureRelayOrigin = ""
             applyingContent = false
             for preview in previews {
                 let id = preview["documentId"].string, key = scope + ":" + id
-                let revision = preview["version"].string + (preview["stale"].bool ? ":stale" : "")
+                let revision = preview["version"].string + (preview["stale"].bool ? ":stale" : "") + ":" + preview["tabId"].string
                 guard !preview["version"].string.isEmpty, previewVersions[key] != revision else { continue }
                 let value = try await remote.request("chat.previews.read", ["id": .string(chatID), "documentId": .string(id)])
                 guard value["content"].string.utf8.count <= 4 * 1024 * 1024 else { continue }

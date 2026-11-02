@@ -1,5 +1,8 @@
 ## Nov 2 — 0.2.41 candidate
 
+- Synchronize shared setup slots plus setup/reply text with revision conflict recovery; keep attachments and run choices local.
+- Add window-local tab muting and a live speaker indicator before ×; retain visual website notifications when muted.
+
 - Use one shared project tab layer, no chat-nested resource strip or sidebar resources. Keep app tabs window-local: phone sidebar/overview, tablet/desktop top strip.
 - Retain unloaded-page navigation, remove redundant bottom spacing and the extra Chat / Live browser plus.
 - Apply owner membership despite history failures; handle Close/rename pushes, overlapping reads and reconnect while preserving drafts/uncertain receipts.

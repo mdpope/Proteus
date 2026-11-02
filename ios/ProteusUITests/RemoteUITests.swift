@@ -2763,8 +2763,11 @@ final class PhoneComposerPreviewUITests: XCTestCase {
         app.buttons["composer-options"].tap()
         XCTAssertTrue(app.buttons["composer-section-Model"].waitForExistence(timeout: 5)); XCTAssertTrue(app.buttons["composer-section-Level"].exists)
         app.buttons["Done"].tap()
-        editor.tap(); editor.typeText(String(repeating: "\n", count: 45))
-        let completeDraft = draft + String(repeating: "\n", count: 45)
+        editor.tap()
+        // Send separate Return events so XCTest does not coalesce a burst while
+        // the growing editor scrolls. Twelve rows already exceed its height cap.
+        for _ in 0..<12 { editor.typeText("\n") }
+        let completeDraft = draft + String(repeating: "\n", count: 12)
         let committed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in editor.value as? String == completeDraft }, object: editor)
         XCTAssertEqual(XCTWaiter.wait(for: [committed], timeout: 3), .completed)
         XCTAssertEqual(editor.value as? String, completeDraft)
@@ -2860,6 +2863,52 @@ final class TabletComposerPreviewUITests: XCTestCase {
 }
 
 final class NativeReleaseFollowupUITests: XCTestCase {
+    override func setUpWithError() throws { continueAfterFailure = false }
+    @MainActor func testSharedProjectSetupUsesCanonicalSlotAndOwnerText() async throws {
+        func request(_ route: String, _ body: [String: Any]? = nil) async throws -> [String: Any] {
+            var request = URLRequest(url: URL(string: nativeFixtureHTTPOrigin + route)!)
+            if let body { request.httpMethod = "POST"; request.setValue("application/json", forHTTPHeaderField: "Content-Type"); request.httpBody = try JSONSerialization.data(withJSONObject: body) }
+            let (data, _) = try await URLSession.shared.data(for: request)
+            return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        }
+        let fixture = try await request("/projects-fixture"), project = try XCTUnwrap(fixture["projectId"] as? String)
+        func tabs() async throws -> [[String: Any]] { try await request("/tab-sync-fixture", ["scope": "project", "id": project, "operations": []])["tabs"] as? [[String: Any]] ?? [] }
+        let before = try await tabs(), beforeIDs = Set(before.compactMap { $0["id"] as? String })
+        let app = nativeFixtureApplication(); app.launchArguments = ["--reset-pairing", "--native-design-preview", "--phone-preview-fixture", "--synthetic-browser-workspace", "--native-app-fixture"]; app.launch()
+        if let drawer = app.buttons.matching(identifier: "phone-app-navigation").allElementsBoundByIndex.first(where: { $0.isHittable }) { drawer.tap() }
+        let projectButton = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND identifier ENDSWITH %@", "project-tree-open-", project)).firstMatch
+        if !projectButton.exists {
+            let workspace = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@", "workspace-tree-open-", "Studio")).firstMatch
+            XCTAssertTrue(workspace.waitForExistence(timeout: 15)); workspace.tap()
+            if let drawer = app.buttons.matching(identifier: "phone-app-navigation").allElementsBoundByIndex.first(where: { $0.isHittable }) { drawer.tap() }
+        }
+        XCTAssertTrue(projectButton.waitForExistence(timeout: 15)); projectButton.tap()
+        XCTAssertTrue(app.buttons["project-pinned-tab"].waitForExistence(timeout: 10)); app.buttons["New workspace tab"].tap()
+        XCTAssertTrue(app.textFields["new-tab-address"].waitForExistence(timeout: 10))
+        var blank: String?
+        for _ in 0..<100 { blank = try await tabs().compactMap { $0["id"] as? String }.first { !beforeIDs.contains($0) }; if blank != nil { break }; try await Task.sleep(for: .milliseconds(50)) }
+        let id = try XCTUnwrap(blank); app.buttons["new-tab-action-New chat"].tap()
+        let prompt = app.textFields["chat-prompt"]; XCTAssertTrue(prompt.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["new-chat-project"].label.contains("Design review"), "Workspace defaults must not replace the locked project")
+        var projected: [[String: Any]] = []
+        for _ in 0..<100 { projected = try await tabs(); if projected.contains(where: { $0["id"] as? String == id && $0["setup"] != nil }) { break }; try await Task.sleep(for: .milliseconds(50)) }
+        XCTAssertEqual(projected.count, before.count + 1); XCTAssertTrue(projected.contains { $0["id"] as? String == id && $0["setup"] != nil }, "New chat replaces the same blank owner slot: expected \(id), owner \(projected)")
+        let identity: [String: Any] = ["kind": "setup", "id": id, "scope": "project", "scopeId": project]
+        _ = try await request("/draft-text-fixture", identity.merging(["action": "save", "text": "Draft from desktop", "expectedRevision": 0, "operationId": UUID().uuidString]) { _, new in new })
+        let received = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in prompt.value as? String == "Draft from desktop" }, object: prompt)
+        XCTAssertEqual(XCTWaiter.wait(for: [received], timeout: 12), .completed)
+        prompt.tap(); prompt.typeText(" continued here")
+        let editedText = try XCTUnwrap(prompt.value as? String)
+        XCTAssertTrue(editedText.contains("Draft from desktop")); XCTAssertTrue(editedText.contains(" continued here"))
+        var ownerText = ""
+        for _ in 0..<100 { ownerText = try await request("/draft-text-fixture", identity.merging(["action": "get"]) { _, new in new })["text"] as? String ?? ""; if ownerText == editedText { break }; try await Task.sleep(for: .milliseconds(100)) }
+        XCTAssertEqual(ownerText, editedText)
+        let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Canonical shared setup and cross-device text"; shot.lifetime = .keepAlways; add(shot)
+        if app.buttons["Cancel"].exists { app.buttons["Cancel"].tap() }
+        else { let close = try XCTUnwrap(app.buttons.matching(NSPredicate(format: "label == %@", "Close New chat")).allElementsBoundByIndex.last); close.tap() }
+        for _ in 0..<100 { if !(try await tabs()).contains(where: { $0["id"] as? String == id }) { break }; try await Task.sleep(for: .milliseconds(50)) }
+        let closed = try await tabs(); XCTAssertFalse(closed.contains { $0["id"] as? String == id })
+    }
     @MainActor func testNewChatIsATabAndPreservesItsDraft() throws {
         let app = nativeFixtureApplication()
         app.launchArguments = ["--reset-pairing", "--native-design-preview", "--phone-preview-fixture", "--synthetic-browser-workspace", "--native-app-fixture"]
@@ -3016,7 +3065,6 @@ final class NativeReleaseFollowupUITests: XCTestCase {
         XCTAssertEqual(app.staticTexts["palette-save-status"].label, "Saved palette")
     }
 
-    override func setUpWithError() throws { continueAfterFailure = false }
     @MainActor func testIPadWorkspacePagesAndItemsUseOneContinuousTabStrip() throws {
         try XCTSkipIf(UIDevice.current.userInterfaceIdiom != .pad, "This fixture exercises the tablet workspace strip; phone navigation uses its drawer.")
         let app = nativeFixtureApplication()

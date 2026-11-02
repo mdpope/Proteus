@@ -1,3 +1,38 @@
+## R13 — shared setup slots and composer text
+
+The operator confirmed syncing both setup text and ordinary unsent replies. Shared project and
+workspace setup forms use one canonical blank browser descriptor with only a safe setup-kind marker.
+Converting a blank page preserves its logical ID and order; native conversion retires the old local
+browser view without publishing Close. Workspace-root setup creation resolves the default project.
+The owner consumes a setup once on explicit Send; simultaneous attempts cannot create two chats.
+
+Composer text uses a separate human-only owner API, never tab inventory or chat history projections.
+Desktop, web and native clients periodically synchronize idle text with revision checks and durable
+operation IDs. Concurrent edits require an explicit choice and keep recovery copies. Accepted replies
+clear only the exact sent text. Attachment selection, provider/model/source choices and permissions
+stay on the sending device. Window-local app setup tabs stay local. Canonical project-associated
+local previews are discoverable without recreating a chat child strip; denied profiles stay denied.
+
+Validation and review status: [Nov 2 implementation](releases/2026-11-02/implementation.md).
+
+## R14 — website notifications and tab audio
+
+Audit confirmed that permitted page `Notification` events already enter the shared Proteus
+notification history and optional system presenter, preserving site silent intent and exact click
+routing. Page audio remains ordinary Chromium audio. System sounds require system notifications to
+be enabled; operating-system sound settings still apply. This audit does not establish Slack's live
+site permission, workspace sound preference, push delivery or service-worker notification ingestion.
+The existing bridge intercepts the page constructor; background worker delivery needs separate
+acceptance and must not be advertised as verified Proteus inbox integration.
+
+Browser tab menus now offer Mute tab / Unmute tab in app, project/chat and Team Tools strips. Actual
+Chromium audibility drives a speaker immediately before the close button; muted tabs retain a muted
+indicator. Muting silences page audio and that tab's bridged notification sound while retaining visual
+history. State survives unload/reload and saved window sessions; muting an unloaded tab does not
+load it. It remains window-local and is excluded from shared project descriptors. A real Electron
+WebAudio/page-notification rehearsal verifies menu actions, indicator position, sound intent,
+unload behavior and saved state. It does not claim audible output was heard or live Slack tested.
+
 ## Nov 2 — R12 simulator review
 
 Window app tabs stay local. iPhone lists them in its sidebar with an app-tab overview;
@@ -6,8 +41,9 @@ never project resource tabs. Projects have one owner-shared ordered content set,
 IDs, order, hidden state and history. Chats have no nested resource strip. Phone shows the project
 row, then Chat | Live browser with overview/actions only; the project plus creates tabs. Browser
 links, documents and previews use parent project descriptors and retain their authorization origin.
-Selection/scroll/drafts stay local. Unsent New chat setup remains private pending clarification;
-opening a setup tab never synchronizes prompt text or files.
+Selection and scroll stay local. R13 supersedes the earlier private-draft assumption: shared-project
+New chat/Internet Search slots synchronize empty setup markers, setup text and unsent reply text.
+Attachments and provider/model/source/permission choices remain local to the sending device.
 
 Unloaded pages retain top navigation without loading to switch tabs. Browser/composer spacing uses
 the actual safe area. Native sync applies membership despite history paging failure, handles

@@ -121,6 +121,10 @@ async function seedProjectFixture() {
 // Website-service rehearsal shared by both simulator previews; never reads a live account.
 let previewTeamLists = [{id:'preview-team', revision:'1', name:'Platform Services Team', timezone:'America/Denver', instructions:'Review yesterday, today and any blockers.', members:[{id:'p1',name:'Alex',mode:'random'},{id:'p2',name:'Morgan',mode:'fixed'},{id:'p3',name:'Sam',mode:'random'}], links:[{id:'l1',title:'On Call — Operations',url:fixtureHTTPOrigin+'/browser/phone-preview?section=on-call'},{id:'l2',title:'Operational Health',url:fixtureHTTPOrigin+'/browser/one'},{id:'l3',title:'Team Queue',url:fixtureHTTPOrigin+'/browser/two'}]}, {id:'preview-review', revision:'1', name:'Design review', timezone:'UTC', instructions:'Review the current design.', members:[{id:'r1',name:'Taylor',mode:'fixed'}], links:[{id:'r-link',title:'Design notes',url:fixtureHTTPOrigin+'/browser/phone-preview?section=design-notes'}]}];
 const fixture = http.createServer(async (req, res) => {
+  if(req.url==='/draft-text-fixture'&&req.method==='POST'){
+    let raw='';for await(const chunk of req){raw+=chunk;if(raw.length>262144)throw Error('Synthetic draft is too large.');}
+    res.setHeader('Content-Type','application/json');try{const args=JSON.parse(raw);res.end(JSON.stringify(args.action==='save'?await app.sharedDrafts.save(args):app.sharedDrafts.get(args)));}catch(error){res.statusCode=400;res.end(JSON.stringify({error:error.message}));}return;
+  }
   if(req.url.startsWith('/tab-history-failure-fixture?')){
     const query=new URL(req.url,'http://fixture').searchParams,id=query.get('id');
     if(query.get('enabled')==='1')failedHistoryScopes.add(id);else failedHistoryScopes.delete(id);
