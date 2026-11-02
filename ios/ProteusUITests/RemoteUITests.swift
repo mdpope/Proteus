@@ -2803,6 +2803,15 @@ final class NativeReleaseParityUITests: XCTestCase {
             XCTAssertGreaterThanOrEqual(card.frame.minX, app.frame.minX)
             XCTAssertLessThanOrEqual(card.frame.maxX, app.frame.maxX)
         }
+        // Lazy-grid geometry must settle instead of feeding parent layout every frame.
+        let settled = cards.firstMatch.frame
+        Thread.sleep(forTimeInterval: 2)
+        XCTAssertEqual(cards.firstMatch.frame.minY, settled.minY, accuracy: 2, "An idle overview must not jump")
+        app.otherElements["phone-tab-overview"].swipeUp()
+        let scrolled = cards.firstMatch.frame
+        Thread.sleep(forTimeInterval: 2)
+        XCTAssertEqual(cards.firstMatch.frame.minY, scrolled.minY, accuracy: 2, "Overview scrolling must not recenter itself")
+        XCTAssertTrue(app.buttons["Done"].isHittable)
         XCTAssertFalse(app.keyboards.firstMatch.exists)
         let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "100 saved tabs and 30000 history entries with tall previews"; shot.lifetime = .keepAlways; add(shot)
         app.buttons["Done"].tap()

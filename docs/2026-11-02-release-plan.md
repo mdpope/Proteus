@@ -1,3 +1,33 @@
+## R19 — owner-supported schedule repair and bounded unattended execution (requested)
+
+Status: added to scope; not implemented or advertised as callable. The current registered catalog
+has no schedule tool. Existing browser/native-control refusals must not be bypassed. Keep the
+simulator review and rollout holds. A separate interactive mockup must be reviewed before any
+Transcription UI redesign is implemented.
+
+Expose discoverable schedule list/read/update/enable/disable and start-test-run operations through
+the actual registered Proteus MCP owner boundary. Updates require current revisions. Test start
+requires a stable operation ID with durable deduplication/run receipt, source/model/tool/permission
+preflight and overlap protection. Expose status, pending approvals and results, plus schedule-to-run
+linkage, retry and stop-test controls. Reconcile ambiguous starts before retry; cancellation remains
+scoped to an exact authorized run. Never approve another agent's pending tool request.
+
+Preserve captured run snapshots. Changes must explicitly distinguish future runs from applying a
+validated refresh to an existing run. Source/context and schedule-specific MCP selection/refresh
+must be owner-supported even when context selection excludes defaults; loading unrelated default
+sources is not an acceptable workaround. Never repair runs by editing their JSON directly.
+
+Unattended workflow authorization must use selected constrained tools and explicit per-tool/action
+rules, or another audited bounded mechanism. Directory access does not authorize shell execution;
+exact-command saved rules cannot be broadened into unrestricted cat/python/shell prefixes or blanket
+autopilot. Verify the configured vault root during preflight instead of adopting an app container.
+
+Native semantic/ASR execution stays in independent Mnemosyne services while Proteus is closed.
+Future Transcription controls observe/control health, logs and statistics and display background
+Codex execution records; they do not absorb native scheduling. The schedule-testing chat owns its
+synthetic mockup and will supply source/validation handoff before product UI work begins. Preserve
+its temporary serial-test pauses until that workflow explicitly reconciles them.
+
 ## R17 — scrolling correction implemented in source
 
 Reuse one freshly read account identity per synchronous browser projection; send window-scoped

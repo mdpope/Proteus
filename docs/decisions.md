@@ -3076,3 +3076,11 @@ updates remain narrow regardless of elapsed time; real changes and push-loss fal
 refresh. Add bounded phase timings and worker-side payload byte counts rather than serialize again
 on the input-owning thread merely to measure size. Local synthetic improvement is separate from
 live installed scrolling acceptance under the release hold.
+
+
+## November 2 — native overview geometry is presentation data
+
+Read tile rectangles through overlay preferences for the transition; never write per-frame lazy-grid
+geometry back into parent state. Initial centering belongs to one overview presentation and must not
+repeat when images, membership or layout update. Opening/scrolling the overview confers no browser
+load, selection or synchronization intent.

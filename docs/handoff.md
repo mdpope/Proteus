@@ -1,3 +1,12 @@
+## Nov 2 — R18 preview refreshed; R19 requested
+
+R18 removes native overview tile-geometry/state feedback and repeats of initial centering. The
+large-history phone overview stability/restore UI test and static checks pass. iPhone Preview is
+updated in place with all eight protected files and existing pairings retained; iPad remains R15.
+R19 adds requested owner schedule tools, bounded workflow permissions and explicit schedule MCP/
+context refresh semantics to the plan. They are not implemented yet. Transcription UI waits for
+the separate synthetic mockup review; Mnemosyne remains independent. Current rollout holds remain.
+
 ## Nov 2 — R17 scrolling correction validated locally
 
 Profile projection shares one current account read per synchronous operation; reading/scrolling

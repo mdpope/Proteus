@@ -1,3 +1,17 @@
+## R19 — requested schedule owner capabilities
+
+Queue revision-checked schedule management and idempotent test-run start/status/retry/stop through
+the registered MCP owner boundary, with scoped preflight, durable receipts, overlap checks and
+explicit existing-run versus future-run refresh. Repair schedule-specific MCP selection without
+loading unrelated defaults. Use bounded workflow tools/action rules, never blanket shell approvals.
+Transcription UI implementation awaits the schedule-testing chat's mockup review; independent
+Mnemosyne execution and current review/rollout holds remain. See the [release plan](2026-11-02-release-plan.md).
+
+## R18 — native overview stability
+
+Remove the live-diagnosed tile preference/layout feedback and duplicate initial centering. Preserve
+project membership, overview transitions and user scrolling. See [Nov 2 validation](releases/2026-11-02/implementation.md).
+
 ## R17 — scrolling correction implemented in source
 
 Reuse one freshly read account identity per synchronous browser projection; send window-scoped

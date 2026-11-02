@@ -1,3 +1,26 @@
+## R19 — newly requested owner schedule boundary
+
+Requested scope is recorded in the [plan](../../2026-11-02-release-plan.md). No schedule MCP tool
+or Transcription UI redesign is implemented by this checkpoint. Owner API/preflight/idempotency,
+schedule-specific MCP selection and scoped unattended action rules require their own validation.
+Existing test cancellation/temporary pause receipts remain private with the testing workflow.
+
+## R18 — iPhone overview jumps while scrolling
+
+The operator reported repeated overview jumping. The running Preview logged SwiftUI's
+`Bound preference PhoneTabRects tried to update multiple times per frame` diagnostic. Tile
+geometry was written into parent view state on every preference update, feeding layout back
+into the lazy grid. Consume that geometry directly through an overlay preference instead.
+Initial selection centering now runs once per presentation rather than twice from `onAppear`.
+The new native regression checks idle tile position and retained position after scrolling, in
+addition to existing large-history width bounds. The large-history native UI test passes (one test, zero failures), including idle and post-scroll
+stability, width bounds, Done and restore. Static checks pass. The separate iPhone Preview is
+installed/launched with its executable hash verified and all eight protected files retained before
+launch, including existing connections; pairing was not reset. The iPad Preview remains the prior
+R15 build. Physical builds and desktop rollout remain held. Native desktop screenshots were blocked
+by older unresolved control state; this diagnosis uses the actual simulator runtime diagnostic and
+separate native test acceptance, not a claimed live visual capture.
+
 ## R17 — reduced scrolling/state-update work
 
 Browser profile display/reconciliation reads account identity once per synchronous operation and
