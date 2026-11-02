@@ -15,14 +15,14 @@ export function chatQuestions(run){
   const questions=[...(run.userQuestions||[])];
   for(const [index,event] of (run.events||[]).entries()){const question=event.data?.question;if(question&&!questions.some(item=>item.id===question.id)&&run.pending?.id!==question.id)questions.push({...question,eventIndex:(run.eventStart||0)+index});}
   if(run.pending?.type==='question')questions.push({id:run.pending.id,text:run.pending.question,choices:run.pending.choices||[],options:run.pending.optionDetails||[],status:'pending',blocking:true,eventIndex:(run.eventStart||0)+run.events.findIndex(event=>event.data?.question?.id===run.pending.id)});
-  return questions;
+  return questions.map(question=>({...question,queueCleared:Object.hasOwn(run.questionQueueCleared||{},question.id)}));
 }
 export function pendingQuestionHasCard(run){
  const start=run?.eventStart||0;return run?.pending?.type==='question'&&chatQuestions(run).some(question=>question.blocking&&question.eventIndex>=start&&question.eventIndex<start+(run.events||[]).length);
 }
 const button=(label,action)=>{const node=document.createElement('button');node.type='button';node.textContent=label;node.onclick=action;return node;};
-export function mountQuestionCard(host,question,{key,answer,attachments,showHeading=true,notify=()=>{}}){
-  const signature=JSON.stringify([question,showHeading]);host.questionActions={answer,notify};
+export function mountQuestionCard(host,question,{key,answer,clear,attachments,showHeading=true,notify=()=>{}}){
+  const signature=JSON.stringify([question,showHeading]);host.questionActions={answer,clear,notify};
   if(host.questionSignature===signature)return;
   host.questionSignature=signature;host.replaceChildren();host.className='user-question-card';host.dataset.questionId=question.id;
   if(showHeading){const heading=document.createElement('h4');heading.textContent=question.text;host.append(heading);}
@@ -33,22 +33,28 @@ export function mountQuestionCard(host,question,{key,answer,attachments,showHead
   label.textContent='Your answer';input.rows=2;input.value=drafts.get(key)||'';input.setAttribute('aria-label','Your answer');label.append(input);choices.className='user-question-choices';
   const attachmentHost=document.createElement('div'),footer=document.createElement('div');footer.className='user-question-footer';
   const picker=attachments?mountQuestionAttachments({...attachments,key:'question:'+key,requestId:question.id,host:attachmentHost,textarea:input,notify}):{files:()=>[],payload:async()=>({}),clear:()=>{}};
+  const clearButton=clear&&!question.queueCleared?button('Clear from queue',async()=>{
+    if(busy||attempts.has(key))return;busy=true;submit.disabled=true;clearButton.disabled=true;
+    try{await host.questionActions.clear(question);}catch(error){host.questionActions.notify(error.message);}finally{busy=false;submit.disabled=false;clearButton.disabled=attempts.has(key);}
+  }):null;
+  if(clearButton)clearButton.disabled=attempts.has(key);
+  if(question.queueCleared){const note=document.createElement('small');note.textContent='Cleared from queue · You can still answer here.';host.append(note);}
   let messageId,submittedAnswer,busy=false;
   const send=async value=>{
-    if(busy||!value.trim()&&!picker.files().length)return;value=value.trim()?value:'Please review the attached files.';busy=true;submit.disabled=true;
+    if(busy||!value.trim()&&!picker.files().length)return;value=value.trim()?value:'Please review the attached files.';busy=true;submit.disabled=true;if(clearButton)clearButton.disabled=true;
     // Retain the operation on transport uncertainty, including a retry after a
     // render. The owner rejects changed content or a second answer claim.
     const attempt=attempts.get(key);
     const files=picker.files();
     if(attempt&&(attempt.answer!==value||attempt.files.length!==files.length||files.some((file,index)=>file!==attempt.files[index]))){host.questionActions.notify('Refresh the chat to inspect the previous answer before changing it.');busy=false;submit.disabled=false;return;}
     messageId=attempt?.messageId||crypto.randomUUID();submittedAnswer=value;
-    try{const delivery=attempt?.delivery||await picker.payload(value,messageId);attempts.set(key,{messageId,answer:submittedAnswer,files,delivery});await host.questionActions.answer(question,value,messageId,delivery);drafts.delete(key);attempts.delete(key);picker.clear();}catch(error){host.questionActions.notify(error.message);}finally{busy=false;submit.disabled=false;}
+    try{const delivery=attempt?.delivery||await picker.payload(value,messageId);attempts.set(key,{messageId,answer:submittedAnswer,files,delivery});await host.questionActions.answer(question,value,messageId,delivery);drafts.delete(key);attempts.delete(key);picker.clear();}catch(error){host.questionActions.notify(error.message);}finally{busy=false;submit.disabled=false;if(clearButton)clearButton.disabled=attempts.has(key);}
   };
   for(const choice of question.choices||[]){const node=button(choice,()=>{input.value=choice;drafts.set(key,choice);void send(choice);}),detail=(question.options||[]).find(option=>option?.label===choice)?.description;if(detail){const note=document.createElement('small');note.textContent=detail;node.append(document.createElement('br'),note);}choices.append(node);}
-  input.oninput=()=>drafts.set(key,input.value);bindQuestionReturn(input,()=>form.requestSubmit());submit.type='submit';submit.textContent='Send answer';form.onsubmit=event=>{event.preventDefault();void send(input.value);};footer.append(attachmentHost,submit);form.append(choices,label,footer);host.append(form);
+  input.oninput=()=>drafts.set(key,input.value);bindQuestionReturn(input,()=>form.requestSubmit());submit.type='submit';submit.textContent='Send answer';form.onsubmit=event=>{event.preventDefault();void send(input.value);};const actions=document.createElement('div');actions.className='user-question-actions';if(clearButton)actions.append(clearButton);actions.append(submit);footer.append(attachmentHost,actions);form.append(choices,label,footer);host.append(form);
 }
 export function mountQuestionQueue(host,run,{jump,answer,notify}){
-  const questions=chatQuestions(run).filter(question=>['pending','sending','uncertain'].includes(question.status));
+  const questions=chatQuestions(run).filter(question=>!question.queueCleared&&['pending','sending','uncertain'].includes(question.status));
   const signature=JSON.stringify(questions);host.questionActions={jump,answer,notify};
   if(host.questionSignature===signature)return;
   const open=host.querySelector('details')?.open;host.questionSignature=signature;host.replaceChildren();host.hidden=!questions.length;

@@ -27,6 +27,7 @@ struct NativeUserQuestionCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             if question.blocking && question.status == "pending" { Label("Your input is needed", systemImage: "person.crop.circle.badge.questionmark").font(.headline) }
+            if question.queueCleared && question.status == "pending" { Text("Cleared from queue · You can still answer here.").font(.caption).foregroundStyle(.secondary) }
             if showHeading { Text(question.text).font(.subheadline.weight(.semibold)) }
             if question.status == "pending" {
                 ForEach(question.choices, id: \.self) { choice in Button { send(choice) } label: { VStack(alignment: .leading, spacing: 3) { Text(choice); if let description = question.choiceDescriptions[choice] { Text(description).font(.caption).foregroundStyle(.secondary) } } }.buttonStyle(.bordered).disabled(busy) }
@@ -44,6 +45,11 @@ struct NativeUserQuestionCard: View {
                         } label: { Image(systemName: "plus").frame(width: 44, height: 44) }.accessibilityLabel("Attach files to answer").disabled(busy)
                     }
                     Spacer()
+                    if !question.queueCleared && store.state["capabilities"].array.contains(.string("chat.questions.clear.v1")) {
+                        Button("Clear from queue") {
+                            Task { busy = true; defer { busy = false }; do { _ = try await store.request("chat.clear-question", ["id": .string(chatID), "questionId": .string(question.id)]); await store.openChat(chatID) } catch { self.error = error.localizedDescription } }
+                        }.disabled(busy || store.draft(key)["attempt"] != .null).accessibilityIdentifier("question-clear-" + question.id)
+                    }
                     Button("Send answer") { send(answer) }.disabled(busy || !missingFiles.isEmpty || answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && files.isEmpty)
                 }
                 if busy { ProgressView().controlSize(.small) }
@@ -125,7 +131,7 @@ struct NativeUserQuestionQueue: View {
         get { shared.expandedQuestionQueues.contains(chatKey) }
         nonmutating set { if newValue { shared.expandedQuestionQueues.insert(chatKey) } else { shared.expandedQuestionQueues.remove(chatKey) } }
     }
-    private var waiting: [NativeUserQuestion] { questions.filter { ["pending", "sending", "uncertain"].contains($0.status) } }
+    private var waiting: [NativeUserQuestion] { questions.filter { !$0.queueCleared && ["pending", "sending", "uncertain"].contains($0.status) } }
     var body: some View {
         if !waiting.isEmpty {
             VStack(alignment: .leading, spacing: 10) {

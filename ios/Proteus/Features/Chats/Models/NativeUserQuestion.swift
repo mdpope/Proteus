@@ -8,6 +8,7 @@ struct NativeUserQuestion: Identifiable, Equatable {
     let status: String
     let eventIndex: Int
     let blocking: Bool
+    var queueCleared = false
     var answer = ""
     var deliveryState = ""
     var choiceDescriptions: [String: String] = [:]
@@ -43,6 +44,7 @@ struct NativeUserQuestion: Identifiable, Equatable {
             let index = run["events"].array.firstIndex { $0["data"]["question"]["id"] == pending["id"] }
             result.append(NativeUserQuestion(id: pending["id"].string, text: pending["question"].string, choices: pending["choices"].array.map(\.string), status: "pending", eventIndex: index.map { run["eventStart"].int + $0 } ?? -1, blocking: true, choiceDescriptions: descriptions(pending["optionDetails"])))
         }
+        for index in result.indices { result[index].queueCleared = run["questionQueueCleared"].object[result[index].id] != nil }
         return result
     }
 }

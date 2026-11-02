@@ -1,5 +1,7 @@
 ## Nov 2 — 0.2.41 candidate
 
+- Clear reviewed questions from the open queue while retaining the original card, draft and ability to answer later; synchronize review state without resolving waits or approvals.
+
 - Stop the native tab overview feeding tile geometry into parent layout; center the initial selection once so scrolling can settle.
 
 - Reduce scroll-time owner work by sharing profile reads within each projection, sending only activity timestamps, and avoiding full-state reloads for streamed text; preserve account/permission freshness and push-loss fallback.

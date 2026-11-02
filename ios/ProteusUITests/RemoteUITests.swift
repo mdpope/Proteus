@@ -2704,9 +2704,17 @@ final class PhoneSidebarPreviewUITests: XCTestCase {
     let input = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", "question-answer-")).firstMatch
     XCTAssertTrue(input.waitForExistence(timeout: 5)); input.tap(); input.typeText("Keep the same session")
     XCTAssertEqual(input.value as? String, "Keep the same session")
+    let clear = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "question-clear-")).firstMatch
+    XCTAssertTrue(clear.isHittable)
+    XCTAssertLessThanOrEqual(clear.frame.maxX, app.buttons["Send answer"].firstMatch.frame.minX + 1)
+    clear.tap()
+    let reviewed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: remaining)
+    XCTAssertEqual(XCTWaiter.wait(for: [reviewed], timeout: 15), .completed)
+    XCTAssertTrue(input.exists); XCTAssertEqual(input.value as? String, "Keep the same session", "Clearing the queue retains the answerable card and draft")
+    input.tap()
     XCTAssertTrue(app.buttons["Send answer"].firstMatch.isHittable)
     XCTAssertTrue(app.keyboards.buttons["Send"].waitForExistence(timeout: 5))
-    app.keyboards.buttons["Send"].tap()
+    app.typeText("\n") // Send Return to the focused editor without AX-scrolling an offscreen keyboard key.
     let answered = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: remaining)
     XCTAssertEqual(XCTWaiter.wait(for: [answered], timeout: 15), .completed)
     XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Keep the same session")).firstMatch.waitForExistence(timeout: 10))

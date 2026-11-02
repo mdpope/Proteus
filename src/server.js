@@ -1,3 +1,4 @@
+import {clearQuestionFromQueue} from './services/chats/user-questions.js';
 import {localInputOrigin} from './services/chats/input-origin.js';
 import {attachmentDates} from './services/chats/attachment-dates.js';
 import {attachmentPrompt} from './services/chats/attachment-prompt.js';
@@ -651,9 +652,10 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         catch(error){if(prepared)await remote.attachmentConsents.releaseProof(prepared.proofId).catch(()=>{});engine.discardDeferredRun(run.id);throw error;}
         });return json(200,run);
       }
-      const match = url.pathname.match(/^\/api\/runs\/([a-f0-9-]+)\/(answer-question|reply|resume|cancel|send|edit-queued|remove-queued|steer-queued|recover)$/);
+      const match = url.pathname.match(/^\/api\/runs\/([a-f0-9-]+)\/(clear-question|answer-question|reply|resume|cancel|send|edit-queued|remove-queued|steer-queued|recover)$/);
       if (match && req.method === 'POST') {
         let value = await body(req); const [, id, action] = match;value={...value,inputOrigin:localInputOrigin(value.inputOrigin,service)};
+        if(action==='clear-question')return json(200,clearQuestionFromQueue(engine,id,value.questionId));
         if (action === 'answer-question') return json(200,await answerQuestionWithAttachments(engine,id,value,'local-desktop'));
         if (action === 'reply') return json(200, await replyWithAttachments(engine,id,value,'local-desktop'));
         if (action === 'send' && typeof value.prompt === 'string' && /^\/mcp\s+auth(?:\s|$)/i.test(value.prompt.trim())) {

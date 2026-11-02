@@ -1,3 +1,13 @@
+## Nov 2 — R20 reviewed question queue controls
+
+Add owner-backed Clear from queue to local/remote/web/native question cards, immediately left of
+Send answer. Original events, drafts, pending waits and answer-later remain intact. The action is
+human-only, idempotent and capability gated on paired owners. Required suite passes 1,440/four skip;
+browser interaction, native model and iPhone clear-then-Return interaction checks pass. See [implementation](releases/2026-11-02/implementation.md)
+for final native acceptance. Source-only: existing desktop/website/physical apps and prior simulator
+Preview identities have not received R20. R19 owner schedule work remains requested, not implemented;
+Transcription UI awaits mockup review. All rollout/review holds remain in force.
+
 ## Nov 2 — R18 preview refreshed; R19 requested
 
 R18 removes native overview tile-geometry/state feedback and repeats of initial centering. The

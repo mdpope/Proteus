@@ -16,5 +16,5 @@
   "priorRequestAudit": "docs/releases/2026-11-02/prior-release-audit.md",
   "previousAcceptedSourceCommit": "4456aea8837171ba60f82775859d9ce7f4ec0810",
   "sourceCommit": null,
-  "candidateSourceStatus": "R15/R16 completion and icons; R17 profile/activity/stream scrolling correction measured locally; live acceptance held"
+  "candidateSourceStatus": "R18 overview preview refreshed; R19 owner schedule scope pending; R20 question queue review implemented and tested; rollout held"
 }

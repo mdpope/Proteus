@@ -1,3 +1,26 @@
+## R20 — clear reviewed questions from the open queue
+
+Question cards add **Clear from queue** immediately left of **Send answer**. The owner persists
+review metadata separately from answer status, so the question disappears from the open queue
+across clients/restart while its original transcript card and unsent answer remain. The retained
+card can still be answered later through the normal owner/provider path. Clearing sends no answer,
+resolves no provider wait, cancels no work and grants no approval. Actual waits/attention remain
+accurate; this is not the existing terminal dismissal action. Answer delivery already in progress
+cannot be hidden by the button. Old paired owners omit the action until they advertise support.
+
+Owner HTTP and encrypted human-client routes share the same queue-review service. UI changes cover
+local desktop, remote desktop/web and native cards. Pure projections retain reviewed question IDs
+and answer controls while excluding them from the queue. Required suite: 1,440 pass/four skip;
+owner tests cover restart, later answer, unchanged events, unresolved blocking waits, rejection of
+permission IDs, human-only remote access, authenticated HTTP and paged projection. Browser UI checks
+cover left-of-Send placement, disappearance, retained draft, later answer, uncertain-answer identity
+and narrow layout. Native model/compilation and static checks pass. The final iPhone interaction test passes
+clear-button placement, queue removal, draft/card retention and a later Return answer against the
+current owner. iPad uses the shared controls; its new interaction case has not run at this checkpoint.
+The first native interaction attempt passed clearing but failed on an offscreen XCTest keyboard-key
+tap; the final case sends Return to the focused editor. Initial fixture timing/projection and native
+model edit errors are retained in private failure receipts. Deployment and simulator Preview refresh remain separate under the hold.
+
 ## R19 — newly requested owner schedule boundary
 
 Requested scope is recorded in the [plan](../../2026-11-02-release-plan.md). No schedule MCP tool

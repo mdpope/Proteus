@@ -1,3 +1,13 @@
+## R20 — clear reviewed questions from the open queue
+
+Question cards add **Clear from queue** immediately left of **Send answer**. The owner persists
+review metadata separately from answer status, so the question disappears from the open queue
+across clients/restart while its original transcript card and unsent answer remain. The retained
+card can still be answered later through the normal owner/provider path. Clearing sends no answer,
+resolves no provider wait, cancels no work and grants no approval. Actual waits/attention remain
+accurate; this is not the existing terminal dismissal action. Answer delivery already in progress
+cannot be hidden by the button. Old paired owners omit the action until they advertise support.
+
 ## R19 — requested schedule owner capabilities
 
 Queue revision-checked schedule management and idempotent test-run start/status/retry/stop through

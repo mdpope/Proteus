@@ -71,3 +71,16 @@ export function askBackgroundQuestion(engine,run,request,signal,id){
     (run.userQuestions??=[]).push(question);engine.event(run,'system',request.question,{question});
   });
 }
+
+
+// Queue visibility is review metadata, never an answer, cancellation or approval.
+export function clearQuestionFromQueue(engine,id,questionId){
+ if(typeof questionId!=='string'||!questionId||questionId.length>256)throw Error('Choose a question.');
+ const run=engine.getRun(id);
+ const question=run.userQuestions?.find(q=>q.id===questionId)
+   || (run.pending?.type==='question'&&run.pending.id===questionId?{id:questionId,status:'pending'}:null)
+   || run.events.find(event=>event.data?.question?.id===questionId)?.data?.question;
+ if(!question||question.status!=='pending')throw Error('This question is no longer waiting for an answer.');
+ if(Object.hasOwn(run.questionQueueCleared||{},questionId))return run;
+ run.questionQueueCleared={...run.questionQueueCleared,[questionId]:engine.now()};engine.persist(run);return run;
+}

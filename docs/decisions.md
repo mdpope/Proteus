@@ -3084,3 +3084,13 @@ Read tile rectangles through overlay preferences for the transition; never write
 geometry back into parent state. Initial centering belongs to one overview presentation and must not
 repeat when images, membership or layout update. Opening/scrolling the overview confers no browser
 load, selection or synchronization intent.
+
+
+## November 2 — reviewing a question is separate from answering it
+
+Store queue-cleared timestamps keyed by existing structured question IDs on the owner. Do not edit
+original question events or change pending/answered status, resolve provider input, send a message,
+or synthesize approval. Clearing is idempotent review metadata and survives restart/history paging.
+The human transcript card retains its answer controls and local draft. Only pending questions can
+be newly cleared; in-flight/uncertain answer delivery retains its existing protections. Paired
+clients gate the action on the owner capability, and agent control cannot clear human questions.
