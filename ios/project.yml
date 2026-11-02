@@ -20,6 +20,8 @@ targets:
       - Proteus
       - path: ../README.md
         buildPhase: resources
+      - path: ../desktop/browser/browser-video-preload.cjs
+        buildPhase: resources
       - path: ../public/markdown
         type: folder
         buildPhase: resources

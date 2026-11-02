@@ -1,5 +1,5 @@
 import {mountSubagentViewer} from './subagent-view.js';
-import {chatQuestions,mountQuestionCard,mountQuestionQueue,questionPromptVisible} from './user-questions.js';
+import {chatQuestions,mountQuestionCard,mountQuestionQueue,questionPromptVisible,questionMessageText} from './user-questions.js';
 import {chatHistoryWindowStart,firstAssistantKeys} from './chat-history.js';
 import {mountSvgPreviews} from './svg-preview.js';
 import {bindRuntimeTimer,refreshRuntimeTimers,disposeRuntimeTimers,formatDuration,turnDuration,runtimeTotal,toolDuration,groupDuration} from './runtime.js';
@@ -11,7 +11,7 @@ import {mountChatRecovery} from './chat-recovery-controls.js';
 import { agentName, assistantName } from './agent-name.js';
 import {viewResidency} from '../../models/view-residency.js';
 import {savedConversationPosition,trackViewPosition} from '../../shared/navigation/view-position.js';
-import { sentAttachmentPreview, openSentAttachmentPreview, openStoredAttachment } from './chat-attachments.js';
+import { sentAttachmentPreview, openSentAttachmentPreview, openStoredAttachments } from './chat-attachments.js';
 import { fusionTurnFor, fusionAttributionHTML } from './copilot-fusion.js';
 const escapeHTML=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const views = new Map();
@@ -245,6 +245,7 @@ export function conversation(target, run, options) {
     }
     if (!node) { node = document.createElement('div'); node.className = 'message'; node.dataset.key = entry.key; node.innerHTML = '<div class="role"></div><div class="text"></div>'; }
     if(eventIndex(entry.key)!==null)node.dataset.eventEnd=String(eventIndex(entry.key)+1);
+    const index=eventIndex(entry.key),eventQuestions=questions.filter(question=>question.eventIndex===index);
     node.messageMarkdown=entry.text||'';
     node.className = `message ${['user', 'assistant', 'tool', 'system'].includes(entry.role) ? entry.role : 'system'}`;
     node.firstChild.textContent = `${entry.data?.delivery ? ({queued:'Queued next',steered:'Steering',sending:'Sending steering',failed:'Not delivered',removed:'Removed from queue',delivered:'Queued message delivered'}[entry.data.delivery.state] || '') + ' · ' : ''}${entry.role === 'assistant' ? assistantName(run, entry) : entry.role}${entry.streaming ? ' · streaming' : entry.at ? ' · ' + options.time(entry.at) : ''}`;
@@ -257,8 +258,7 @@ export function conversation(target, run, options) {
     }
     if(entry.data?.permission&&!entry.data.permission.automatic){let details=node.querySelector('.permission-original');if(!details){details=document.createElement('details');details.className='permission-original';node.append(details);}details.replaceChildren();const summary=document.createElement('summary');summary.textContent=entry.data.permission.intention||'Original approval request';const pre=document.createElement('pre');pre.textContent=entry.data.permission.request||'Original request was not recorded by this version.';details.append(summary,pre);}
     const body=node.querySelector('.text');
-    ProteusMarkdown.mount(body, entry.text, { ...options, resize: view.position });
-    const index=eventIndex(entry.key),eventQuestions=questions.filter(question=>question.eventIndex===index);
+    ProteusMarkdown.mount(body, questionMessageText(entry.text,eventQuestions), { ...options, resize: view.position });
     let questionCards=node.querySelector('.user-question-cards');
     if(eventQuestions.length&&options.answerQuestion){if(!questionCards){questionCards=document.createElement('div');questionCards.className='user-question-cards';node.append(questionCards);}for(const question of eventQuestions){let card=[...questionCards.children].find(card=>card.dataset.questionId===question.id);if(!card){card=document.createElement('div');questionCards.append(card);}mountQuestionCard(card,question,{...questionOptions,key:run.id+':'+question.id,showHeading:!questionPromptVisible(question,entry.text,eventQuestions.length)});}}else questionCards?.remove();
     if(run.schedule.provider==='mtplx'&&entry.role==='assistant'&&!entry.streaming)mountSvgPreviews(body,{resize:view.position});
@@ -273,7 +273,7 @@ export function conversation(target, run, options) {
         if(preview){const button=document.createElement('button');button.type='button';button.title='Preview '+attachment.name;const image=document.createElement('img');image.src=preview;image.alt='';button.append(image);button.onclick=()=>openSentAttachmentPreview(entry.data.delivery.id,attachment.name);chip.append(button);}
         const stored=typeof options.readAttachment==='function'&&/^[a-f0-9]{64}$/.test(attachment.sha256||'');
         const label=document.createElement('span');label.textContent=attachment.name;const type=document.createElement('small');type.textContent=attachment.mediaType+(preview||stored?'':' · preview available only in the sending session');label.append(type);chip.append(label);
-        if(stored){const open=document.createElement('button');open.type='button';open.className='subtle';open.textContent='Open';open.title='Open '+attachment.name;open.onclick=()=>void openStoredAttachment(attachment.name,()=>options.readAttachment(attachment.sha256));chip.append(open);}
+        if(stored){const open=document.createElement('button');open.type='button';open.className='subtle';open.textContent='Open';open.title='Open '+attachment.name;open.onclick=()=>void openStoredAttachments(entry.data.attachments,entry.data.attachments.indexOf(attachment),item=>options.readAttachment(item.sha256));chip.append(open);}
         files.append(chip);
       }
     }else files?.remove();

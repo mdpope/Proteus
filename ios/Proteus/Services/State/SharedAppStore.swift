@@ -15,6 +15,10 @@ let nativeFixtureRelayOrigin = ""
 #endif
 /// Account-scoped app data uses its own explicit OAuth consent, never a host's credentials.
 @MainActor final class SharedAppStore: ObservableObject {
+    // App-session presentation survives drawer/view recreation; never sync it to an owner.
+    @Published var sidebarWorkspaces = Set<String>()
+    @Published var sidebarOtherComputers = false
+    @Published var expandedQuestionQueues = Set<String>()
     @Published var snapshot: JSON = .null
     @Published var error: String?
     @Published var busy = false
@@ -105,9 +109,14 @@ let nativeFixtureRelayOrigin = ""
         pageScales[key] = delta == 0 ? 100 : min(500, max(25, pageScale(tab) + delta)); UserDefaults.standard.set(pageScales, forKey: "proteus.page-scales.v1")
         for row in browserTabs where row.url.flatMap(URL.init(string:)).flatMap({ pageScaleKey(row, url: $0) }) == key { if let url = row.url.flatMap(URL.init(string:)) { applyPageScale(row.id, url: url) } }
     }
-    private func videoScript() -> String { """
-        (()=>{const key=Symbol.for('proteus.video-autoplay'),enabled=\(blockVideoAutoplay ? "true" : "false");if(window[key]){window[key].enabled=enabled;return;}const policy={enabled,activated:false};Object.defineProperty(window,key,{value:policy});for(const type of ['pointerdown','touchend','keydown'])document.addEventListener(type,event=>{if(event.isTrusted)policy.activated=true;},true);const allowed=media=>!policy.enabled||media.tagName!=='VIDEO'||policy.activated||navigator.userActivation?.hasBeenActive;const original=HTMLMediaElement.prototype.play;HTMLMediaElement.prototype.play=function(...args){return allowed(this)?original.apply(this,args):Promise.reject(new DOMException('Press Play to start the video.','NotAllowedError'));};document.addEventListener('play',event=>{if(event.target instanceof HTMLMediaElement&&!allowed(event.target))event.target.pause();},true);})();
-        """ }
+    private func videoScript() -> String {
+        // Use the same player-scoped trusted-gesture policy as desktop. Only its portable
+        // function body is executed; no Electron preload or host bridge enters WebKit.
+        guard let url = Bundle.main.url(forResource: "browser-video-preload", withExtension: "cjs"),
+              let source = try? String(contentsOf: url, encoding: .utf8),
+              let start = source.range(of: "func:enabled=>{"), let end = source.range(of: "},args:[blocked]});}", range: start.upperBound..<source.endIndex) else { return "" }
+        return "((enabled)=>{" + source[start.upperBound..<end.lowerBound] + "})(" + (blockVideoAutoplay ? "true" : "false") + ");"
+    }
     private func installVideoPolicy(_ view: WKWebView) { view.configuration.userContentController.addUserScript(WKUserScript(source: videoScript(), injectionTime: .atDocumentStart, forMainFrameOnly: false)) }
     func setBlockVideoAutoplay(_ value: Bool) {
         blockVideoAutoplay = value; UserDefaults.standard.set(value, forKey: "proteus.block-video-autoplay")
@@ -128,6 +137,8 @@ let nativeFixtureRelayOrigin = ""
     }
     func receiveDownload(_ download: WKDownload) { guard downloads.count < 32 else { download.cancel(); downloadError = "Finish or cancel a download before starting more."; return }; let transfer = NativeLinkDownload(shared: self, saveAs: false); downloads[transfer.id] = transfer; transfer.attach(download) }
     private var contentSync: [String: (remote: RemoteStore, kind: String, id: String, host: String)] = [:]
+    private var contentReadAt: [String: Date] = [:]
+    private var contentReadSessions: [String: Int] = [:]
     private var contentHosts: [String: String] = [:]
     private var contentSnapshots: [String: JSON] = [:]
     private(set) var contentPending: [String: [JSON]] = [:]
@@ -209,6 +220,7 @@ let nativeFixtureRelayOrigin = ""
     }
     func hasPendingOpen(_ id: String, in scope: String) -> Bool { contentPending[scope]?.contains { ["open", "reopen"].contains($0["action"].string) && $0["explicitReopen"].bool && $0["tab"]["id"].string == id } == true }
     private func recordContentClose(_ id: String, scope: String) {
+        guard scope != "main", !scope.hasPrefix("main:") else { return }
         guard !applyingContent, !restoring else { return }
         let parts = scope.split(separator: ":", maxSplits: 2).map(String.init)
         guard parts.count >= 2, UUID(uuidString: parts[1]) != nil else { return }
@@ -234,7 +246,7 @@ let nativeFixtureRelayOrigin = ""
             if tab.hidden { value["hidden"] = .bool(true) }; if tab.persist { value["persist"] = .bool(true) }; if let date = tab.openedAt.flatMap(ProviderAllowance.date) { value["openedAt"] = .string(instant.string(from: date)) }; if let date = tab.lastTouchedAt.flatMap(ProviderAllowance.date) { value["lastTouchedAt"] = .string(instant.string(from: date)) }
             if let customTitle = tab.customTitle { value["customTitle"] = .string(customTitle) }; if value["url"]?.string.isEmpty == false, let history = Self.safeBrowserHistory(tab.history), let data = try? JSONEncoder().encode(history), let json = try? JSONDecoder().decode(JSON.self, from: data) { value["history"] = json }; return .object(value)
         }
-        let docs = documents(in: scope).filter { $0.previewSource == nil }.map { tab -> JSON in var value: [String: JSON] = ["id": .string("document:" + tab.id), "type": .string("document"), "documentId": .string(tab.id), "title": .string(tab.title), "mediaType": .string(tab.mediaType)]; if let customTitle = tab.customTitle { value["customTitle"] = .string(customTitle) }; if let prior = contentSnapshots[scope]?["tabs"].array.first(where: { $0["id"].string == "document:" + tab.id }) { for (key, field) in prior.object where value[key] == nil && key != "customTitle" { value[key] = field } }; return .object(value) }
+        let docs = documents(in: scope).filter { $0.previewSource == nil }.map { tab -> JSON in var value: [String: JSON] = ["id": .string("document:" + tab.id), "type": .string("document"), "documentId": .string(tab.id), "title": .string(tab.title), "mediaType": .string(tab.mediaType)]; if let chatID = tab.sourceChatID { value["chatId"] = .string(chatID) }; if let customTitle = tab.customTitle { value["customTitle"] = .string(customTitle) }; if let prior = contentSnapshots[scope]?["tabs"].array.first(where: { $0["id"].string == "document:" + tab.id }) { for (key, field) in prior.object where value[key] == nil && key != "customTitle" { value[key] = field } }; return .object(value) }
         // Keep owner descriptors that this view cannot render. Omitting them would
         // synthesize Close operations and incomplete browser-only reorder payloads.
         let known = Self.isOrganizationalScope(scope) ? (workspaceContentDescriptors[scope] ?? []) : (contentSnapshots[scope]?["tabs"].array ?? [])
@@ -245,7 +257,7 @@ let nativeFixtureRelayOrigin = ""
     private func contentTabsChanged() {
         guard !applyingContent, !restoring else { return }
         for (scope, snapshot) in contentSnapshots {
-            guard contentHosts[scope] != nil else { continue }
+            guard contentHosts[scope] != nil, !scope.hasPrefix("main:") else { continue }
             let prior = snapshot["tabs"].array, current = localContentTabs(scope)
             var operations: [JSON] = []
             for tab in current where !prior.contains(tab) {
@@ -324,7 +336,7 @@ let nativeFixtureRelayOrigin = ""
         let docIDs = Set(incoming.filter { $0["type"].string == "document" }.map { $0["documentId"].string })
         for old in documents(in: scope) where old.previewSource == nil && !docIDs.contains(old.id) { documentContents.removeValue(forKey: scope + ":" + old.id); documentSessions.removeValue(forKey: scope + ":" + old.id) }
         documentTabs.removeAll { $0.chatKey == scope && $0.previewSource == nil }
-        for tab in incoming where tab["type"].string == "document" { documentTabs.append(NativeDocumentDescriptor(id: tab["documentId"].string, chatKey: scope, title: tab["title"].string, mediaType: tab["mediaType"].string, customTitle: tab["customTitle"].string.isEmpty ? nil : tab["customTitle"].string)) }
+        for tab in incoming where tab["type"].string == "document" { documentTabs.append(NativeDocumentDescriptor(id: tab["documentId"].string, chatKey: scope, title: tab["title"].string, mediaType: tab["mediaType"].string, customTitle: tab["customTitle"].string.isEmpty ? nil : tab["customTitle"].string, sourceChatID: tab["chatId"].string.isEmpty ? nil : tab["chatId"].string)) }
         chatChildOrder[scope] = incoming.map { tab in tab["type"].string == "document" ? tab["documentId"].string : (tabs(in: scope).first { ($0.contentTabId ?? $0.id) == tab["id"].string }?.id ?? tab["id"].string) }
         contentSnapshots[scope] = response
         if Self.isOrganizationalScope(scope), let config = contentSync[scope] {
@@ -474,7 +486,7 @@ let nativeFixtureRelayOrigin = ""
     }
     func refreshContentTabs(scope: String, remote: RemoteStore, kind: String, id: String) async {
         if remote.status.lowercased().contains("revoked"), let host = remote.connection?.hostId { revokeContentHost(host); return }
-        guard remote.connected, remote.state["capabilities"].array.contains(.string("content-tabs.v1")), let host = remote.connection?.hostId else { return }
+        guard kind != "main", remote.connected, remote.state["capabilities"].array.contains(.string("content-tabs.v1")), let host = remote.connection?.hostId else { return }
         if kind == "project" {
             guard remote.supportsProjects, scope == "project:" + host + ":" + id,
                   remote.projectCatalog.project(id: id)?["id"].string == id else { return }
@@ -483,6 +495,19 @@ let nativeFixtureRelayOrigin = ""
         contentHosts[scope] = host
         remote.onAuthenticatedRevocation = { [weak self] in self?.revokeContentHost(host) }
         contentSync[scope] = (remote, kind, id, host)
+        remote.onContentTabsChanged = { [weak self, weak remote] notice in
+            guard let self, let remote, remote.connected, remote.connection?.hostId == host else { return }
+            let matches = self.contentSync.filter { $0.value.remote === remote && $0.value.host == host && $0.value.kind == notice["scope"].string && $0.value.id == notice["id"].string }
+            for (target, config) in matches where !target.hasPrefix("main:") && notice["revision"].int > (self.contentSnapshots[target]?["revision"].int ?? -1) {
+                Task { await self.refreshContentTabs(scope: target, remote: remote, kind: config.kind, id: config.id) }
+            }
+        }
+        // A push can overlap an earlier read. Await that read, then fetch again:
+        // returning here would discard the newer invalidation (including renames).
+        while contentBusy.contains(scope) {
+            do { try await Task.sleep(for: .milliseconds(20)) } catch { return }
+            guard remote.connected, remote.connection?.hostId == host, contentHosts[scope] == host else { return }
+        }
         if contentPending[scope]?.isEmpty == true && contentRequests[scope] == nil { contentPending[scope] = nil }
         if contentPending[scope] != nil { await flushContentTabs(scope); return }
         guard !contentBusy.contains(scope) else { return }; contentBusy.insert(scope); defer { contentBusy.remove(scope) }
@@ -494,7 +519,7 @@ let nativeFixtureRelayOrigin = ""
                 if !retained.isEmpty { response = try await remote.request("tabs.mutate", ["scope": .string(kind), "id": .string(id), "expectedRevision": .number(0), "operations": .array(retained.map { .object(["action": .string("open"), "tab": $0]) })]) }
             }
             // A user edit made during the fetch wins locally and is sent with its original operation.
-            if contentPending[scope] == nil { let complete = try await completeNavigationLists(response, remote: remote, kind: kind, scopeID: id); if contentPending[scope] == nil { applyContentTabs(complete, scope: scope) } else { contentSnapshots[scope] = complete } }
+            if contentPending[scope] == nil { let complete = try await completeNavigationLists(response, remote: remote, kind: kind, scopeID: id); guard remote.connection?.hostId == host, remote.connected, contentHosts[scope] == host else { return }; if contentPending[scope] == nil { applyContentTabs(complete, scope: scope); contentReadAt[scope] = Date() } else { contentSnapshots[scope] = complete } }
         } catch { /* Offline clients retain bounded descriptors; reads grant no content access. */ }
     }
     private func completeNavigationLists(_ response: JSON, remote: RemoteStore, kind: String, scopeID: String) async throws -> JSON {
@@ -512,6 +537,7 @@ let nativeFixtureRelayOrigin = ""
                let complete = try? JSONDecoder().decode(JSON.self, from: encoded) {
                 var value = tab.object; value["history"] = complete; tabs[index] = .object(value); continue
             }
+            do {
             var entries: [JSON] = [], cursor: String? = nil, revision: Int? = nil, selected: JSON = history["currentEntryId"]
             repeat {
                 var args: [String: JSON] = ["scope": .string(kind), "id": .string(scopeID), "tabId": tab["id"], "limit": .number(200)]
@@ -526,6 +552,11 @@ let nativeFixtureRelayOrigin = ""
             } while cursor != nil && !Task.isCancelled
             guard !Task.isCancelled, let position = entries.firstIndex(where: { $0["id"] == selected }) else { continue }
             var value = tab.object; value["history"] = .object(["entries": .array(entries), "index": .number(Double(position)), "currentEntryId": selected, "revision": .number(Double(revision ?? 0))]); tabs[index] = .object(value)
+            } catch {
+                // Keep the owner’s current history window and retry paging later. Membership
+                // is authoritative independently of a page-history transport failure.
+                if Task.isCancelled { throw CancellationError() }
+            }
         }
         result["tabs"] = .array(tabs); return .object(result)
     }
@@ -590,15 +621,22 @@ let nativeFixtureRelayOrigin = ""
     }
     func refreshKnownContentTabs(_ remote: RemoteStore) async {
         guard let host = remote.connection?.hostId else { return }
+        if contentReadSessions[host] != remote.authenticationGeneration {
+            for scope in contentHosts.keys where contentHosts[scope] == host { contentReadAt[scope] = nil }
+            contentReadSessions[host] = remote.authenticationGeneration
+        }
         for scope in contentHosts.keys.sorted() where contentHosts[scope] == host {
             let parts = scope.split(separator: ":", maxSplits: 2).map(String.init)
             let kind = parts.first ?? "", id = parts.count == 3 ? parts[2] : kind
-            guard ["main", "team", "workspace", "project", "chat"].contains(kind) else { continue }
+            guard ["team", "workspace", "project", "chat"].contains(kind) else { continue }
+            // Visible views already refresh themselves. Push handles known inactive containers;
+            // bounded fallback covers a lost notice or owner without notice support.
+            guard contentPending[scope] != nil || Date().timeIntervalSince(contentReadAt[scope] ?? .distantPast) >= 60 else { continue }
             await refreshContentTabs(scope: scope, remote: remote, kind: kind, id: id)
         }
     }
     private func flushContentTabs(_ scope: String) async {
-        guard !contentBusy.contains(scope), let config = contentSync[scope], config.remote.connected,
+        guard !scope.hasPrefix("main:"), !contentBusy.contains(scope), let config = contentSync[scope], config.remote.connected,
               let pending = contentPending[scope], !pending.isEmpty else { return }
         guard (contentBackoff[config.host]?.until ?? .distantPast) <= Date() else { return }
         let saved = contentRequests[scope]
@@ -693,6 +731,7 @@ let nativeFixtureRelayOrigin = ""
     var lists: [JSON] { snapshot["teamLists"].array }
     func reset(for identity: String) {
         guard account != identity else { return }
+        sidebarWorkspaces = []; sidebarOtherComputers = false; expandedQuestionQueues = []
         saveBrowsers()
         let cacheFailure = flushCachedState()
         mainBrowserSelectionRequest = nil
@@ -833,7 +872,7 @@ let nativeFixtureRelayOrigin = ""
             let result = try await remote.request("chat.previews.list", ["id": .string(chatID)])
             let previews = result["previews"].array, ids = Set(previews.map { $0["documentId"].string })
             applyingContent = true
-            let retained = documentTabs.filter { $0.chatKey != scope || $0.previewSource == nil || ids.contains($0.id) }
+            let retained = documentTabs.filter { $0.chatKey != scope || $0.previewSource == nil || $0.sourceChatID != chatID || ids.contains($0.id) }
             if retained != documentTabs { documentTabs = retained }
             applyingContent = false
             for preview in previews {
@@ -845,7 +884,7 @@ let nativeFixtureRelayOrigin = ""
                 let digest = SHA256.hash(data: Data(value["content"].string.utf8)).map { String(format: "%02x", $0) }.joined()
                 guard digest == value["version"].string else { continue }
                 let title = value["title"].string + (value["stale"].bool ? " · Offline snapshot" : "")
-                let descriptor = NativeDocumentDescriptor(id: id, chatKey: scope, title: title, mediaType: "text/html", previewSource: preview["source"].string, previewTabID: preview["tabId"].string.isEmpty ? nil : preview["tabId"].string, previewVersion: value["version"].string, previewLoaded: true)
+                let descriptor = NativeDocumentDescriptor(id: id, chatKey: scope, title: title, mediaType: "text/html", previewSource: preview["source"].string, previewTabID: preview["tabId"].string.isEmpty ? nil : preview["tabId"].string, previewVersion: value["version"].string, sourceChatID: chatID, previewLoaded: true)
                 applyingContent = true
                 documentContents[key] = value["content"].string
                 documentSessions[key] = NativeDocumentSession(requestID: "preview:" + id, version: value["version"].string, readAt: value["readAt"].string, assets: [], links: [], assetDataURLs: [:])
@@ -868,7 +907,7 @@ let nativeFixtureRelayOrigin = ""
     }
     func rememberDocumentSession(_ session: NativeDocumentSession, for documentID: String, in chatKey: String) { documentSessions[chatKey + ":" + documentID] = session }
     func rememberDocument(_ tab: NativeDocumentDescriptor, content: String) { if let index = documentTabs.firstIndex(where: { $0.id == tab.id && $0.chatKey == tab.chatKey }) { documentTabs[index] = tab } else { documentTabs.append(tab) }; documentContents[tab.chatKey + ":" + tab.id] = content; chatSelectedChildren[tab.chatKey] = tab.id; saveDocumentTabs(); contentTabsChanged() }
-    func renameDocument(_ id: String, title: String, in chatKey: String) { guard let index = documentTabs.firstIndex(where: { $0.id == id && $0.chatKey == chatKey }) else { return }; let tab = documentTabs[index]; documentTabs[index] = NativeDocumentDescriptor(id: tab.id, chatKey: tab.chatKey, title: String(title.prefix(200)), mediaType: tab.mediaType, parentID: tab.parentID, relativePath: tab.relativePath, customTitle: String(title.prefix(200)), previewSource: tab.previewSource, previewTabID: tab.previewTabID, previewVersion: tab.previewVersion); saveDocumentTabs(); contentTabsChanged() }
+    func renameDocument(_ id: String, title: String, in chatKey: String) { guard let index = documentTabs.firstIndex(where: { $0.id == id && $0.chatKey == chatKey }) else { return }; let tab = documentTabs[index]; documentTabs[index] = NativeDocumentDescriptor(id: tab.id, chatKey: tab.chatKey, title: String(title.prefix(200)), mediaType: tab.mediaType, parentID: tab.parentID, relativePath: tab.relativePath, customTitle: String(title.prefix(200)), previewSource: tab.previewSource, previewTabID: tab.previewTabID, previewVersion: tab.previewVersion, sourceChatID: tab.sourceChatID); saveDocumentTabs(); contentTabsChanged() }
     func closeDocument(_ id: String, in chatKey: String) { recordContentClose("document:" + id, scope: chatKey); documentTabs.removeAll { $0.id == id && $0.chatKey == chatKey }; documentContents.removeValue(forKey: chatKey + ":" + id); documentSessions.removeValue(forKey: chatKey + ":" + id); if chatSelectedChildren[chatKey] == id { chatSelectedChildren[chatKey] = "chat" }; saveDocumentTabs(); contentTabsChanged() }
     func removeChatWorkspace(hostID: String, chatID: String) {
         let key = "chat:\(hostID):\(chatID)"
@@ -945,6 +984,22 @@ let nativeFixtureRelayOrigin = ""
         let value = try JSONDecoder().decode(JSON.self, from: data)
         guard let response = response as? HTTPURLResponse, (200..<300).contains(response.statusCode) else { throw NSError(domain: "Preview service", code: 1, userInfo: [NSLocalizedDescriptionKey: value["error"].string]) }
         return value
+    }
+    /// Match the shared address classifier: a bare word searches; host punctuation navigates.
+    static func addressTarget(_ raw: String, engine: String = "Google", search: Bool = false) -> URL? {
+        let value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty, value.utf8.count <= 4096, !value.contains("\\"), !["/", ".", "~"].contains(where: value.hasPrefix) else { return nil }
+        let explicit = value.range(of: #"^https?://"#, options: [.regularExpression, .caseInsensitive]) != nil
+        let scheme = value.range(of: #"^[a-z][a-z0-9+.-]*:"#, options: [.regularExpression, .caseInsensitive]) != nil
+        if scheme && !explicit && value.range(of: #"^[^\s/?#:]+:\d+(?:[/?#]|$)"#, options: .regularExpression) == nil && !value.hasPrefix("[") { return nil }
+        let address = explicit || !value.contains(where: \.isWhitespace) && (value.contains(".") || value.contains(":") || value.contains("/") || value.contains("?") || value.contains("#") || value.lowercased() == "localhost")
+        if !search && address {
+            guard let url = URLComponents(string: explicit ? value : "https://" + value), ["http", "https"].contains(url.scheme?.lowercased() ?? ""), url.host?.isEmpty == false, url.user == nil, url.password == nil, (url.port ?? 443) <= 65535, (url.port ?? 443) >= 0 else { return nil }
+            return url.url
+        }
+        guard !scheme else { return nil }
+        var query = URLComponents(string: engine == "Bing" ? "https://www.bing.com/search" : engine == "DuckDuckGo" ? "https://duckduckgo.com/" : "https://www.google.com/search")!
+        query.queryItems = [URLQueryItem(name: "q", value: value)]; return query.url
     }
     /// Explicit bookmarks and restore descriptors must reopen the same page, including safe filters.
     static func safeURL(_ text: String) -> URL? {
@@ -1079,6 +1134,7 @@ let nativeFixtureRelayOrigin = ""
         return browserTabs.filter { $0.scope == scope }
     }
     private func recordContentOpen(_ tab: BrowserDescriptor) {
+        guard tab.scope != "main" else { return }
         let scope = syncScope(tab), parts = scope.split(separator: ":", maxSplits: 2).map(String.init)
         guard !applyingContent, !restoring, parts.count >= 2, UUID(uuidString: parts[1]) != nil else { return }
         contentHosts[scope] = parts[1]
@@ -1103,7 +1159,7 @@ let nativeFixtureRelayOrigin = ""
     func refreshMainBrowserTabs(_ remote: RemoteStore) async {
         guard let host = remote.connection?.hostId else { return }
         for tab in tabs(in: "main") where tab.ownerHostId == nil { assignBrowserOwner(tab.id, host: host) }
-        await refreshContentTabs(scope: "main:" + host, remote: remote, kind: "main", id: "main")
+        // Do not import the desktop main window into this device’s app tabs.
         await flushHistory(remote)
         await refreshHistoryCache(remote)
     }
@@ -1157,7 +1213,7 @@ let nativeFixtureRelayOrigin = ""
     }
     func selected(in scope: String) -> String? { scope == "main" ? selectedMainBrowser : scope == "team" ? selectedBrowser : scopedSelection[scope] }
     func selectChatChild(_ id: String, in scope: String) { guard scope.hasPrefix("chat:") && (id == "chat" || tabs(in: scope).contains(where: { $0.id == id })) else { return }; scopedSelection[scope] = id; saveBrowsers() }
-    func select(_ id: String, in scope: String, activateMainBrowser: Bool = true) { guard browserTabs.contains(where: { $0.id == id && $0.scope == scope }) else { return }; if scope == "main" { selectedMainBrowser = id; if activateMainBrowser { mainBrowserSelectionRequest = MainBrowserSelectionRequest(tabID: id) } } else if scope == "team" { selectedBrowser = id; if let host = currentTeamOwner { scopedSelection["team:" + host] = id } } else { scopedSelection[scope] = id }; reload(id); touch(id); saveBrowsers() }
+    func select(_ id: String, in scope: String, activateMainBrowser: Bool = true) { guard browserTabs.contains(where: { $0.id == id && $0.scope == scope }) else { return }; if scope == "main" { selectedMainBrowser = id; if activateMainBrowser { mainBrowserSelectionRequest = MainBrowserSelectionRequest(tabID: id) } } else if scope == "team" { selectedBrowser = id; if let host = currentTeamOwner { scopedSelection["team:" + host] = id } } else { scopedSelection[scope] = id }; if !unloadedBrowsers.contains(id) { touch(id) }; saveBrowsers() }
     func touch(_ id: String) { scheduleBrowserPreview(id); browserTouched[id] = Date(); if let index = browserTabs.firstIndex(where: { $0.id == id }) { browserTabs[index].lastTouchedAt = ISO8601DateFormatter().string(from: Date()) }; pruneBrowsers() }
     func persistBrowser(_ id: String, enabled: Bool) { guard let index = browserTabs.firstIndex(where: { $0.id == id }) else { return }; browserTabs[index].persist = enabled; if enabled { reload(id); _ = webView(browserTabs[index]) }; saveBrowsers() }
     func pruneBrowsers(now: Date = Date()) {
@@ -1561,7 +1617,7 @@ let nativeFixtureRelayOrigin = ""
         // autoplaying video fullscreen, so page ads took over the screen. Sound needs a
         // tap; "Block video autoplay" requires a tap for all media; windows need a tap.
         configuration.allowsInlineMediaPlayback = true
-        configuration.mediaTypesRequiringUserActionForPlayback = blockVideoAutoplay ? .all : .audio
+        configuration.mediaTypesRequiringUserActionForPlayback = .audio
         configuration.preferences.javaScriptCanOpenWindowsAutomatically = false
         let view = NativeLinkWebView(frame: .zero, configuration: configuration)
         installVideoPolicy(view)

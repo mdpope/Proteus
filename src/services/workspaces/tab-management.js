@@ -4,17 +4,19 @@ import {WorkspaceDeletion} from './workspace-deletion.js';
 export class TabManagement {
  constructor(service){this.service=service;this.tail=Promise.resolve();this.workspaceDeletion=new WorkspaceDeletion(service);}
  scope({scope,id}){if(scope==='chat')this.service.engine.getRun(id);else if(scope==='workspace')this.service.context.scope(id);else if(scope==='project')this.service.workspaceProjects.projectFor({projectId:id});this.service.contentTabs.key(scope,id);}
- handle(value={}){const task=this.tail.then(()=>this.perform(value));this.tail=task.catch(()=>{});return task;}
- async perform(value){
+ handle(value={},runId){const task=this.tail.then(()=>this.perform(value,runId));this.tail=task.catch(()=>{});return task;}
+ async perform(value,runId){
   const {contentTabs,engine,context}=this.service;
   if(value.action==='move-project'){const projects=this.service.workspaceProjects;projects.projects(value,engine);await projects.reconcileContentTabs(contentTabs,engine);await this.service.reconcileWorkspaceProjects?.();this.service.notify?.();this.service.remote?.changed();return projects.get(engine);}
   if(value.action==='delete-workspace')return this.workspaceDeletion.remove(value);
   if(value.action==='list'){
+   let origin;if(runId&&this.service.agentTabInventory)origin=this.service.agentTabInventory(runId);
+   if(runId&&!value.scope&&!value.id){const run=engine.getRun(runId),member=this.service.workspaceProjects?.membership(run),workspaceId=chatMembership(run).workspaceId;value={...value,scope:member?.projectId?'project':workspaceId?'workspace':'chat',id:member?.projectId||workspaceId||runId};}
    const persisted=contentTabs.list({...value,type:['workspace','viewer'].includes(value.type)?undefined:value.type,scope:value.scope==='shell'?undefined:value.scope});
-   const runtime=this.service.tabInventory?.()||[];
+   const runtime=origin?.tabs||this.service.tabInventory?.()||[];
    const tabs=[...persisted.map(tab=>{const views=runtime.filter(item=>(item.logicalId||item.id)===tab.id),live=views[0];return {...live,...tab,url:tab.url||live?.url||null,...(views.length?{views:views.map(({id,windowId,runtimeId})=>({id,windowId,runtimeId}))}:{})};}),...runtime.filter(tab=>value.scope==='shell'||!persisted.some(existing=>existing.id===(tab.logicalId||tab.id)))].filter(tab=>(!value.scope||tab.scope===value.scope||tab.location?.scope===value.scope)&&(!value.id||(tab.scopeId||tab.id)===value.id||tab.location?.id===value.id)&&(!value.type||tab.type===value.type));
    const offset=Math.max(0,Math.floor(Number(value.offset)||0)),limit=Math.max(1,Math.min(200,Math.floor(Number(value.limit)||100)));
-   return {tabs:tabs.slice(offset,offset+limit),total:tabs.length,offset,limit,nextOffset:offset+limit<tabs.length?offset+limit:null,workspaces:context.get().workspaces.map(({id,name})=>({id,name})),observedAt:new Date().toISOString()};
+   return {...(origin?{windowId:origin.window.id,windowNote:origin.window.note}:{}),tabs:tabs.slice(offset,offset+limit),total:tabs.length,offset,limit,nextOffset:offset+limit<tabs.length?offset+limit:null,workspaces:context.get().workspaces.map(({id,name})=>({id,name})),observedAt:new Date().toISOString()};
   }
   if(value.scope==='shell'){
    const tabs=this.service.tabInventory?.()||[],tab=tabs.find(tab=>tab.id===value.tabId);

@@ -13,12 +13,13 @@ const messages=[],errors=[];let app,page;
 try{
   app=await electron.launch({...(process.env.PROTEUS_TEST_EXECUTABLE?{executablePath:process.env.PROTEUS_TEST_EXECUTABLE}:{}),args:[...(process.env.PROTEUS_TEST_EXECUTABLE?[]:['.']),'--use-mock-keychain','--user-data-dir='+path.join(home,'electron')],env:{...process.env,PROTEUS_HOME:home,PORT:'0'},timeout:60000});
   page=await app.firstWindow();page.setDefaultTimeout(15000);page.on('pageerror',error=>errors.push(error.message));
+  await page.locator('#topbar-home').waitFor();
   await page.route('**/api/state*',async route=>{const response=await route.fetch(),data=await response.json();data.hostName='Synthetic Attachment Workstation';data.attachmentMediaTypes={...data.attachmentMediaTypes,rehearsal:['image/png'],copilot:['image/png']};data.providerSteering={...data.providerSteering,rehearsal:true};data.providerSteeringMediaTypes={...data.providerSteeringMediaTypes,rehearsal:['image/png']};await route.fulfill({json:data});});
   // Attachment UI is synthetic; do not depend on a live provider catalog.
   await page.route('**/api/provider',route=>route.fulfill({json:{provider:'copilot',available:true,models:[{id:'synthetic-attachment',name:'Synthetic attachment model',controls:{reasoningEfforts:[],contextTiers:[],serviceTiers:[]}}]}}));
   await page.route('**/api/attachments',async route=>{const value=route.request().postDataJSON();messages.push(value);const result=value.action==='begin'?{uploadId:'synthetic-upload'}:value.action==='finish'?{attachmentId:'synthetic-attachment',name:'tiny.png',mediaType:'image/png',size:image.length,sha256:'synthetic'}:value.action==='authorize'?{consentId:'synthetic-consent'}:{};await route.fulfill({json:result});});
   await page.route('**/api/chat',async route=>{const value=route.request().postDataJSON();if(value.attachments?.length){messages.push({chat:value});await route.fulfill({json:{id:'11111111-1111-4111-8111-111111111111',title:'Synthetic chat'}});}else await route.continue();});
-  await page.reload();await page.locator('#tab-add-menu summary').click();await page.locator('[data-new-tab-action]').filter({hasText:'New chat'}).click();await page.locator('[id$="-provider"]').selectOption('rehearsal');await page.locator('[data-chat-setup-prompt]').fill('A harmless rehearsal.');await page.locator('[data-chat-setup-submit]').click();await page.locator('#followup').waitFor();
+  await page.reload();await page.locator('#tab-add-menu summary').click();await page.locator('[data-new-tab-action]').filter({hasText:'New chat'}).click();await page.locator('[id$="-provider-route"]').selectOption('rehearsal');await page.locator('[data-chat-setup-prompt]').fill('A harmless rehearsal.');await page.locator('[data-chat-setup-submit]').click();await page.locator('#followup').waitFor();
   await page.locator('#followup').fill('Describe this other tiny test image.');await page.locator('#run-attachments input[type=file]').setInputFiles({name:'tiny.png',mimeType:'image/png',buffer:image});
   await page.route('**/api/runs/*/send',async route=>{messages.push({followup:route.request().postDataJSON()});await route.fulfill({json:{ok:true}});});
   await page.locator('#continue').click();await page.getByRole('button',{name:'Confirm Send'}).click();
@@ -49,7 +50,7 @@ try{
     assert.deepEqual(errors,[]);console.log('PASS packaged desktop attachment layout, preview, consent and upload with visible fixed controls at desktop/phone widths');
   }else{
   await page.reload();await page.locator('#tab-add-menu summary').click();await page.locator('[data-new-tab-action]').filter({hasText:'New chat'}).click();
-  await page.locator('[id$="-provider"]').selectOption('copilot');await page.locator('[id$="-model"]').selectOption('synthetic-attachment');await page.locator('[data-chat-setup-prompt]').fill('Describe this tiny test image.');
+  await page.locator('[id$="-provider-route"]').selectOption('copilot');await page.locator('[id$="-model"]').selectOption('synthetic-attachment');await page.locator('[data-chat-setup-prompt]').fill('Describe this tiny test image.');
   await page.locator('[id$="-attachments"] input[type=file]').setInputFiles({name:'tiny.png',mimeType:'image/png',buffer:image});
   await page.locator('[id$="-attachments"] .attachment-chip img').waitFor();
   const newChatLayout=await page.evaluate(()=>{const control=document.querySelector('[id$="-attachments"] .attachment-controls').getBoundingClientRect(),send=document.querySelector('[data-chat-setup-submit]').getBoundingClientRect();return {controlCenter:control.top+control.height/2,sendCenter:send.top+send.height/2};});

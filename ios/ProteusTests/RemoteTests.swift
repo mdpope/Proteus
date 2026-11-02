@@ -220,6 +220,8 @@ final class RemoteTests: XCTestCase {
         }
         let before = try await results()
         XCTAssertEqual(before, ["NotAllowedError", "NotAllowedError"])
+        _ = try await view.evaluateJavaScript("navigator.userActivation.hasBeenActive=true;document.querySelector(\"iframe\").contentWindow.navigator.userActivation.hasBeenActive=true")
+        let historicalGesture = try await results(); XCTAssertEqual(historicalGesture, ["NotAllowedError", "NotAllowedError"], "Page-wide historical activation must not authorize unrelated players")
         shared.setBlockVideoAutoplay(false); try await Task.sleep(for: .milliseconds(150))
         let allowed = try await results()
         XCTAssertEqual(allowed, ["played", "played"])
@@ -1882,6 +1884,32 @@ extension DestinationTests {
 }
 
 final class NativeParityTests: XCTestCase {
+    @MainActor func testAddressClassificationAndLocalMainMembership() async throws {
+        for input in ["https://consolefixture:8006/#v1:0:=qemu%2F106:4:::::8::", "consolefixture:8006", "nas/", "nas?q=1", "router#status", "[::1]:8080", "bücher.example"] {
+            let expected = input.hasPrefix("https://") ? input : "https://" + input
+            XCTAssertEqual(SharedAppStore.addressTarget(input)?.absoluteString, URL(string: expected)?.absoluteString, input)
+        }
+        XCTAssertEqual(SharedAppStore.addressTarget("nas")?.absoluteString, "https://www.google.com/search?q=nas")
+        for input in ["consolefixture:65536", "https://u:p@nas/", "file:///tmp/test", "javascript:alert(1)", "/tmp/file"] { XCTAssertNil(SharedAppStore.addressTarget(input), input) }
+        let (data, _) = try await URLSession.shared.data(from: URL(string: "\(nativeFixtureHTTPOrigin)/pair?projects=1")!)
+        let fixture = try JSONDecoder().decode(JSON.self, from: data), remote = RemoteStore()
+        remote.forget(); try remote.pair(fixture["code"].string); defer { remote.forget() }
+        let deadline = Date().addingTimeInterval(15)
+        while !remote.connected, Date() < deadline { try await Task.sleep(for: .milliseconds(50)) }
+        XCTAssertTrue(remote.connected)
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString), key = RemoteCrypto.random()
+        let shared = SharedAppStore(cacheWriter: NativeSharedCacheWriter(), cacheRoot: root, cacheKey: { key })
+        defer { try? FileManager.default.removeItem(at: root) }
+        shared.browserTabs = [BrowserDescriptor(id: "local-main", title: "Only this device", url: "https://example.test/local", scope: "main")]
+        shared.unload("local-main", force: true); shared.select("local-main", in: "main")
+        XCTAssertTrue(shared.unloadedBrowsers.contains("local-main")); XCTAssertFalse(shared.isBrowserLoaded("local-main"))
+        let before = try await remote.request("tabs.get", ["scope": .string("main"), "id": .string("main")])
+        await shared.refreshMainBrowserTabs(remote)
+        XCTAssertEqual(shared.tabs(in: "main").map(\.id), ["local-main"])
+        let after = try await remote.request("tabs.get", ["scope": .string("main"), "id": .string("main")])
+        XCTAssertEqual(after, before, "Mobile main-window navigation must not rewrite or import desktop main-window membership")
+    }
+
     func testChatSetupIdentityAndInferenceMachineChoices() throws {
         let first = NativeChatSetup(hostID: "owner", workspaceID: "workspace", projectID: "project")
         let second = NativeChatSetup(hostID: "owner", workspaceID: "workspace", projectID: "project")
@@ -1924,6 +1952,41 @@ final class NativeParityTests: XCTestCase {
         NativeWorkspaceNavigation.adoptOwnerChats([.object(["id": .string("chat:new"), "type": .string("chat"), "chatId": .string("new")])], navigationKey: "project-navigation:synthetic", remote: remote)
         XCTAssertEqual(remote.draft("project-navigation:synthetic")["chats"], .array([.string("new")]))
         XCTAssertEqual(remote.draft("project-navigation:synthetic")["selected"].string, "workspace")
+        let owner: [JSON] = [.object(["id": .string("chat:new"), "type": .string("chat"), "chatId": .string("new")])]
+        NativeWorkspaceNavigation.restoreOwnerChatSelection("old", descriptors: owner, navigationKey: "project-navigation:synthetic", remote: remote)
+        XCTAssertEqual(remote.draft("project-navigation:synthetic")["chats"], .array([.string("new")]), "Restored stale app sessions cannot inject a chat into owner membership")
+        XCTAssertEqual(remote.draft("project-navigation:synthetic")["selected"].string, "workspace")
+        NativeWorkspaceNavigation.restoreOwnerChatSelection("new", descriptors: owner, navigationKey: "project-navigation:synthetic", remote: remote)
+        XCTAssertEqual(remote.draft("project-navigation:synthetic")["selected"].string, "chat:new", "An existing owner tab retains its local selection")
+    }
+    @MainActor func testHistoryPagingFailureCannotBlockAuthoritativeProjectMembership() async throws {
+        let (data, _) = try await URLSession.shared.data(from: URL(string: "\(nativeFixtureHTTPOrigin)/pair?projects=1")!)
+        let fixture = try JSONDecoder().decode(JSON.self, from: data), remote = RemoteStore()
+        remote.forget(); try remote.pair(fixture["code"].string); defer { remote.forget() }
+        let deadline = Date().addingTimeInterval(15)
+        while !(remote.connected && remote.supportsProjects), Date() < deadline { try await Task.sleep(for: .milliseconds(50)) }
+        XCTAssertTrue(remote.connected && remote.supportsProjects)
+        let name = "Page failure " + UUID().uuidString
+        let catalog = try await remote.updateProjects(["action": .string("create"), "workspaceId": fixture["workspaceId"], "name": .string(name)])
+        let project = try XCTUnwrap(catalog["projects"].array.first { $0["name"].string == name })["id"].string
+        let host = try XCTUnwrap(remote.connection?.hostId), scope = "project:\(host):\(project)"
+        let entries: [JSON] = (0..<450).map { .object(["id": .string("entry-\($0)"), "url": .string("https://example.test/history/\($0)"), "title": .string("Entry \($0)")]) }
+        let history: JSON = .object(["entries": .array(entries), "index": .number(449), "currentEntryId": .string("entry-449"), "revision": .number(1)])
+        _ = try await remote.request("tabs.mutate", ["scope": .string("project"), "id": .string(project), "expectedRevision": .number(0), "operations": .array([.object(["action": .string("open"), "tab": .object(["id": .string("long-history"), "type": .string("browser"), "title": .string("Desktop history"), "url": entries.last!["url"], "history": history])])])])
+        _ = try await URLSession.shared.data(from: URL(string: "\(nativeFixtureHTTPOrigin)/tab-history-failure-fixture?id=\(project)&enabled=1")!)
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString), key = RemoteCrypto.random()
+        let shared = SharedAppStore(cacheWriter: NativeSharedCacheWriter(), cacheRoot: root, cacheKey: { key })
+        defer { try? FileManager.default.removeItem(at: root) }
+        shared.browserTabs = [BrowserDescriptor(id: "ghost", title: "Closed on desktop", url: "https://example.test/ghost", scope: scope, contentTabId: "ghost")]
+        remote.setDraft("reply:keep", .string("Unsent message"))
+        await shared.refreshContentTabs(scope: scope, remote: remote, kind: "project", id: project)
+        XCTAssertEqual(shared.tabs(in: scope).compactMap(\.contentTabId), ["long-history"])
+        XCTAssertEqual(shared.tabs(in: scope).first?.history?.currentEntryId, "entry-449")
+        XCTAssertEqual(remote.draft("reply:keep").string, "Unsent message")
+        XCTAssertFalse(shared.isBrowserLoaded(shared.tabs(in: scope).first!.id))
+        _ = try await URLSession.shared.data(from: URL(string: "\(nativeFixtureHTTPOrigin)/tab-history-failure-fixture?id=\(project)&enabled=0")!)
+        await shared.refreshContentTabs(scope: scope, remote: remote, kind: "project", id: project)
+        XCTAssertEqual(shared.tabs(in: scope).first?.history?.entries.count, 450, "A later owner read repairs history without resurrecting closed membership")
     }
     @MainActor func testEmptyLegacyOutboxAdoptsDesktopProjectWithoutUploadingGhosts() async throws {
         let (data, _) = try await URLSession.shared.data(from: URL(string: "\(nativeFixtureHTTPOrigin)/pair?projects=1")!)
@@ -1963,6 +2026,10 @@ final class NativeParityTests: XCTestCase {
         XCTAssertEqual(remote.draft("reply:preserved").string, "Unsent draft")
         let unchangedOwner = try await remote.request("tabs.get", args)
         XCTAssertEqual(unchangedOwner, expected)
+        _ = try await remote.request("tabs.mutate", ["scope": .string("project"), "id": .string(project), "expectedRevision": expected["revision"], "operations": .array([.object(["action": .string("close"), "id": .string("owner-0")])])])
+        let pushed = Date().addingTimeInterval(5)
+        while shared.tabs(in: scope).contains(where: { $0.contentTabId == "owner-0" }), Date() < pushed { try await Task.sleep(for: .milliseconds(50)) }
+        XCTAssertEqual(shared.tabs(in: scope).compactMap(\.contentTabId), Array(ownerTabs.dropFirst()).map { $0["id"].string }, "An authenticated owner Close notice updates the native projection without a polling call")
     }
     @MainActor func testOrphanedTabReceiptIsQuarantinedWithoutLosingItsBytes() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString), key = RemoteCrypto.random(), scope = "project:fixture:general"

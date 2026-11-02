@@ -277,8 +277,8 @@ struct TeamBrowserView: View {
                 return backPreviewKey.flatMap(NativeScreenMemory.image)
             }, forwardPreview: { selectedID.flatMap { shared.adjacentPageImage($0, back: false) } }))
         }.safeAreaInset(edge: .bottom, spacing: 0) {
-            // Sit the row partly in the home-indicator area like Safari, halving the bar height.
-            if NativePhonePreview.enabled { phoneBrowserControls.fixedSize(horizontal: false, vertical: true).padding(.bottom, -16) }
+            // The shell respects the measured safe area; controls stay above the home indicator.
+            if NativePhonePreview.enabled { phoneBrowserControls.fixedSize(horizontal: false, vertical: true) }
         }
         // iPhone controls extend into the home-indicator area; allow that overflow only.
         .scaleEffect(overview && !reduceMotion ? 0.94 : 1).opacity(overview ? 0.5 : 1).clipShape(Rectangle().inset(by: NativePhonePreview.enabled ? -24 : 0))
@@ -297,7 +297,7 @@ struct TeamBrowserView: View {
         .task(id: selectedID) {
             if let id = selectedID {
                 // Selecting an unloaded page recreates its view, as on desktop; hidden tabs stay unloaded.
-                if shared.unloadedBrowsers.contains(id), let tab = selectedTab, !tab.hidden, shared.profileAvailable(tab.profileId) { shared.reload(id); shared.touch(id) }
+                // Unloaded pages keep navigation available; Load tab is the explicit residency action.
                 if tabID != nil, shared.selected(in: scope) != id { shared.select(id, in: scope, activateMainBrowser: false) }
                 shared.assignBrowserOwner(id, host: destinations.selected?.connection?.hostId)
                 if NativeDesignPreview.enabled && phoneAreaActive { phoneChrome.currentID = "browser:" + id; phoneChrome.controlsHidden = false; phoneChrome.browserOwnsBack = navigation.canGoBack }
@@ -322,6 +322,7 @@ struct TeamBrowserView: View {
             }
         }
         .onAppear { if NativePhonePreview.enabled && phoneAreaActive { phoneChrome.browserSurfaceScope = scope }; if tabs.isEmpty && showTabs { shared.open(nil, scope: scope) }; text = selectedTab?.url ?? ""; engine = ["google": "Google", "duckduckgo": "DuckDuckGo", "bing": "Bing"][shared.snapshot["preferences"]["searchEngine"].string] ?? "Google"; if NativePhonePreview.enabled { editingAddress = false } else { addressFocused = false } }
+        .onChange(of: selectedTab.map { shared.unloadedBrowsers.contains($0.id) } ?? false) { _, unloaded in if unloaded { phoneChrome.setControlsHidden(false) } }
         .onChange(of: selectedID) { _, _ in text = selectedTab?.url ?? ""; if NativePhonePreview.enabled { editingAddress = false } else { addressFocused = false } }
         .task(id: accountRefreshIdentity) {
             guard addressFocused || selectedTab?.url == nil else { return }
@@ -523,9 +524,7 @@ struct TeamBrowserView: View {
         if NativePhonePreview.enabled { editingAddress = false }
         let input = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let selectedEngine = searchEngine ?? engine
-        var target = URL(string: input.contains("://") ? input : input.contains(".") && !input.contains(" ") ? "https://" + input : "")
-        if target?.host == nil || searchEngine != nil { var components = URLComponents(string: selectedEngine == "Bing" ? "https://www.bing.com/search" : selectedEngine == "DuckDuckGo" ? "https://duckduckgo.com/" : "https://www.google.com/search")!; components.queryItems = [URLQueryItem(name: "q", value: input)]; target = components.url }
-        guard let target, ["https", "http"].contains(target.scheme), target.user == nil, target.password == nil else { return }
+        guard let target = SharedAppStore.addressTarget(input, engine: selectedEngine, search: searchEngine != nil) else { shared.error = "Enter an HTTP or HTTPS address without credentials, or a search."; return }
         addressFocused = false; homeAddressFocused = false
         if let id = selectedID { _ = shared.navigate(target, in: id) }
         else { shared.open(target, title: target.host ?? "Browser", scope: scope) }

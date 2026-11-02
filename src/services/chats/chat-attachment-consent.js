@@ -1,3 +1,4 @@
+import {attachmentDates} from './attachment-dates.js';
 import {atomicRename} from '../../shared/atomic-rename.cjs';
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
@@ -6,7 +7,7 @@ import { chatAttachmentLimits } from './chat-attachments.js';
 
 const TTL_MS=5*60_000;
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const metadata=item=>Object.fromEntries(['attachmentId','name','mediaType','size','sha256'].map(key=>[key,item[key]]));
+const metadata=item=>({...Object.fromEntries(['attachmentId','name','mediaType','size','sha256'].map(key=>[key,item[key]])),...attachmentDates(item)});
 
 /** One explicit sender action authorizes these exact staged bytes for one provider/chat/message. */
 export class ChatAttachmentConsents {
@@ -44,7 +45,7 @@ export class ChatAttachmentConsents {
   async prepareSend({consentId,chatId,draftId,messageId,providerId,deviceId,attachmentIds}={}){
     const exact=await this.verify({consentId,chatId,draftId,messageId,providerId,deviceId,attachmentIds});
     if(draftId!==undefined&&(!chatId||typeof chatId!=='string'))throw new Error('A created chat is required for draft attachments.');
-    const bound=exact.map(item=>({attachmentId:item.attachmentId,chatId,deviceId,messageId,providerId,name:item.name,mediaType:item.mediaType,size:item.size,sha256:item.sha256}));
+    const bound=exact.map(item=>({attachmentId:item.attachmentId,chatId,deviceId,messageId,providerId,name:item.name,mediaType:item.mediaType,size:item.size,sha256:item.sha256,...attachmentDates(item)}));
     let proofId;
     try{
       if(draftId!==undefined)for(const item of exact)await this.store.claimDraft({attachmentId:item.attachmentId,draftId,chatId,deviceId,messageId,providerId});
@@ -74,7 +75,7 @@ export class ChatAttachmentConsents {
   assertPrepared({proofId,chatId,providerId,attachmentIds}={}){
     const proof=this.prepared.get(proofId);
     if(!proof||proof.used||proof.chatId!==chatId||proof.providerId!==providerId||!Array.isArray(attachmentIds)||JSON.stringify(proof.attachments.map(item=>item.attachmentId))!==JSON.stringify(attachmentIds))throw new Error('Attachment send consent is missing or changed. Review the exact files and provider again.');
-    return proof.attachments.map(item=>({name:item.name,mediaType:item.mediaType,size:item.size,...(/^[a-f0-9]{64}$/.test(item.sha256||'')?{sha256:item.sha256}:{})}));
+    return proof.attachments.map(item=>({name:item.name,mediaType:item.mediaType,size:item.size,...attachmentDates(item),...(/^[a-f0-9]{64}$/.test(item.sha256||'')?{sha256:item.sha256}:{})}));
   }
   async releaseProof(proofId){const proof=this.prepared.get(proofId);this.prepared.delete(proofId);this.persistProofs();if(!proof)return;for(const item of proof.attachments){if(proof.used)try{await this.store.preserve?.(item,proof.chatId);}catch{/* Viewing is optional; delivery already happened. */}await this.store.release(item);}}
   consume(consentId){this.grants.delete(consentId);}

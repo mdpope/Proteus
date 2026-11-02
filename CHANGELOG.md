@@ -1,7 +1,11 @@
 ## Nov 2 — 0.2.41 candidate
 
-- Restore the requested iPhone Chat / Live browser navigation row while preserving iPad placement; simulator review precedes physical rollout.
-- Reconcile desktop-owned project membership after empty legacy mobile outboxes, preserve orphaned delivery receipts for review, and prevent stale tabs bootstrapping an empty desktop project.
+- Use one shared project tab layer, no chat-nested resource strip or sidebar resources. Keep app tabs window-local: phone sidebar/overview, tablet/desktop top strip.
+- Retain unloaded-page navigation, remove redundant bottom spacing and the extra Chat / Live browser plus.
+- Apply owner membership despite history failures; handle Close/rename pushes, overlapping reads and reconnect while preserving drafts/uncertain receipts.
+- Recover intranet parsing, consented attachment-only input, concise questions/shared Enter handling, native answer attachments, ordered file viewers/dates, autoplay and continuation controls.
+- Capture authenticated submitting-window origin for agent placement without changing access; verify two actual synthetic Electron windows.
+- Hold new release packaging and physical rollout for both simulator previews.
 
 - Restore full browser layout during same-tab redraws while retaining address drafts.
 - Expose extension action-popup contexts through Chrome's runtime context API, and suppress vendor API payload logging.

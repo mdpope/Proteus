@@ -497,9 +497,14 @@ enum NativeWorkspaceNavigation {
         if value["selected"]?.string == "chat:" + id { value["selected"] = .string("workspace") }
         remote.setDraft(navigationKey, .object(value))
     }
-    /// Owner polling is authoritative for which chats are open, but a chat opened here
-    /// moments ago may not have reached the owner yet. Keep the selected chat instead
-    /// of dropping its tab until the next refresh confirms it.
+    /// A restored window selection can follow an existing owner tab, but cannot
+    /// reopen a closed tab. Only a human open action queues that shared mutation.
+    @MainActor static func restoreOwnerChatSelection(_ id: String, descriptors: [JSON], navigationKey: String, remote: RemoteStore) {
+        adoptOwnerChats(descriptors, navigationKey: navigationKey, remote: remote)
+        guard descriptors.contains(where: { $0["type"].string == "chat" && $0["chatId"].string == id && !$0["hidden"].bool }) else { return }
+        select("chat:" + id, navigationKey: navigationKey, remote: remote)
+    }
+    /// Owner membership is authoritative after pending local intent is projected.
     @MainActor static func adoptOwnerChats(_ descriptors: [JSON], navigationKey: String, remote: RemoteStore) {
         let owner = deduplicated(descriptors.filter { $0["type"].string == "chat" }.map { $0["chatId"].string })
         var value = remote.draft(navigationKey).object
@@ -511,14 +516,14 @@ enum NativeWorkspaceNavigation {
     @MainActor static func mutate(_ operations: [JSON], kind: String, id: String, scope: String, remote: RemoteStore, shared: SharedAppStore) {
         shared.queueContentOperations(operations, scope: scope, remote: remote, kind: kind, id: id)
     }
-    /// Ordered children shown in the project tab strip and sidebar: chats, browsers,
+    /// Ordered children shown in the project tab strip and overview: chats, browsers,
     /// and host-owned terminals/documents, following the owner's saved order.
     @MainActor static func children(scope: String, navigationKey: String, remote: RemoteStore, shared: SharedAppStore) -> [JSON] {
         let descriptors = shared.workspaceContentDescriptors[scope] ?? []
         let chatIDs = deduplicated(remote.draft(navigationKey)["chats"].array.map(\.string))
         let chats: [JSON] = chatIDs.map { .object(["id": .string("chat:" + $0), "sortId": .string("chat:" + $0), "type": .string("chat"), "chatId": .string($0), "title": run($0, remote: remote)["title"]]) }
         let browsers: [JSON] = shared.tabs(in: scope).map { .object(["id": .string($0.id), "sortId": .string($0.contentTabId ?? $0.id), "type": .string("browser"), "title": .string($0.title)]) }
-        let other: [JSON] = descriptors.filter { ["terminal", "document"].contains($0["type"].string) }.map { tab in var fields = tab.object; fields["sortId"] = tab["id"]; fields["id"] = .string("remote:" + tab["id"].string); return .object(fields) }
+        let other: [JSON] = descriptors.filter { ["terminal", "document"].contains($0["type"].string) }.map { tab in var fields = tab.object; fields["sortId"] = tab["id"]; fields["id"] = .string(tab["type"].string == "document" && !tab["chatId"].string.isEmpty ? tab["id"].string : "remote:" + tab["id"].string); return .object(fields) }
         let order = descriptors.map { $0["id"].string }
         let hidden = Set(descriptors.filter { $0["hidden"].bool }.map { $0["id"].string })
         let hiddenBrowsers = Set(shared.tabs(in: scope).filter(\.hidden).map(\.id))
@@ -669,11 +674,25 @@ struct NativeWorkspaceContentView: View {
             } else if let setup = setups.first(where: { "draft:" + $0.id == selected }) {
                 NewChatView(internet: setup.internet, lockedWorkspaceID: workspaceID, lockedProjectID: projectID, draftKey: setup.draftKey, onCancel: { closeSetup(setup.id) }) { id in closeSetup(setup.id); openChat(id) }.environment(store).id(setup.id)
             } else if selected.hasPrefix("chat:") { ChatView(id: String(selected.dropFirst(5)), onBack: { selected = "workspace" }, workspaceBrowserScope: scope).environment(store).id(selected) }
+            else if selected.hasPrefix("document:"), let document = shared.documents(in: scope).first(where: { "document:" + $0.id == selected }), let chatID = document.sourceChatID {
+                ChatView(id: chatID, onBack: { selected = "workspace" }, workspaceBrowserScope: scope, resourceDocumentID: document.id).environment(store).id(selected)
+            }
+            else if let browser = shared.tabs(in: scope).first(where: { $0.id == selected }), let preview = shared.documents(in: scope).first(where: { $0.previewTabID == (browser.contentTabId ?? browser.id) }), let chatID = preview.sourceChatID {
+                ChatView(id: chatID, onBack: { selected = "workspace" }, workspaceBrowserScope: scope, resourceDocumentID: preview.id).environment(store).id(selected)
+            }
             else if selected.hasPrefix("remote:") {
                 ContentUnavailableView("Available on \(store.displayName)", systemImage: "desktopcomputer", description: Text("This saved terminal or host document tab remains on \(store.displayName). Open it there to reconnect to the terminal; chat documents can be requested through their chat’s approved document controls.")).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else { TeamBrowserView(scope: scope, showTabs: false, tabID: selected, onBackToList: { selected = "workspace" }, newTabOptions: [NativeNewTabAction(title: "New chat", symbol: "bubble.left.and.bubble.right", enabled: store.connected, run: { openSetup(internet: false) }), NativeNewTabAction(title: "Internet Search", symbol: "magnifyingglass", enabled: store.connected, run: { openSetup(internet: true) })]) }
         }
         // Children swipe back to this home over its last image; the home swipes forward to the last tab.
+        .environment(\.nativeSelectResource, { id, resourceScope in
+            if resourceScope == scope {
+                if let preview = shared.documents(in: scope).first(where: { "document:" + $0.id == id && $0.previewSource != nil }) {
+                    if let browser = shared.tabs(in: scope).first(where: { ($0.contentTabId ?? $0.id) == preview.previewTabID }) { selected = browser.id }
+                    else { store.error = "This preview has no open project tab on its computer. Open it there, then refresh the project." }
+                } else { selected = id }
+            }
+        })
         .environment(\.nativeBackPreviewKey, homeImageKey)
         .modifier(NativePageSwipe(enabled: selected == "workspace" && projectID != nil, phone: true, blockBack: true, blockForward: selected != "workspace" || lastTab.isEmpty, forward: { selected = lastTab; if shared.tabs(in: scope).contains(where: { $0.id == selected }) { shared.select(selected, in: scope) } }, forwardPreview: { NativeScreenMemory.image(tabImageKey) }))
         .environment(\.nativeTabStep, { direction in

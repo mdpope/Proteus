@@ -794,13 +794,21 @@ class BrowserTabs {
     this.changed(); return this.state(tab);
   }
   agent(value,runId){
+    // Capture this invocation's turn origin before joining an asynchronous tool queue.
+    const origin=this.options.agentWindow?.(runId,value.windowId);
+    if(origin&&value.tabId){const {originTab}=require('../windows/agent-origin.cjs');value={...value,tabId:originTab(this.tabs,value.tabId,origin.id)};}
     this.agentQueues??=new Map();const key=value.tabId||'open:'+runId,previous=this.agentQueues.get(key)||Promise.resolve();
-    const task=previous.catch(()=>{}).then(()=>this.withTabWindow(this.tabs.get(value.tabId),()=>this.performAgent(value,runId)));this.agentQueues.set(key,task);
+    const perform=async()=>{
+      const result=await this.performAgent(value,runId);
+      const context=origin?{windowId:origin.id,windowNote:origin.note}:{};
+      return Array.isArray(result)?result.map(item=>({...item,...context})):result&&typeof result==='object'?{...result,...context}:result;
+    };
+    const task=previous.catch(()=>{}).then(()=>origin?this.windowRegistry.run(origin.id,perform):this.withTabWindow(this.tabs.get(value.tabId),perform));this.agentQueues.set(key,task);
     void task.finally(()=>{if(this.agentQueues.get(key)===task)this.agentQueues.delete(key);}).catch(()=>{});return task;
   }
   async performAgent(value, runId) {
     const allowed = tab => this.tabs.get(tab.id)===tab&&this.profileAvailable(tab)&&!this.agentStatus(tab).agentPaused;
-    if (value.action === 'list') return this.list().filter(info => this.profileAvailable(this.get(info.id))).map(({history,...info})=>info);
+    if (value.action === 'list') return this.list().filter(info => this.ownsWindow(this.get(info.id))&&this.profileAvailable(this.get(info.id))).map(({history,...info})=>info);
     if(value.action==='destinations')return {...(this.options.agentDestinations?.(runId)||{destinations:[{type:'chat',id:runId}]}),defaultProfileId:'default',profiles:(this.options.profiles?.list().items||[{id:'default',name:'Default'}]).map(({id,name})=>({id,name,available:this.profileAvailable({profileId:id})}))};
     if (value.action === 'open') {
       const destination=await this.options.agentDestination?.(runId,value.destination)||{parentId:runId};

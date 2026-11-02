@@ -305,6 +305,16 @@ struct ChatPermissionsView: View {
                 Text("Tool approvals").font(.headline)
                 Text("Current: \(names[context["mode"].string] ?? context["mode"].string) · \(context["source"].string == "chat" ? "this chat only" : "workspace setting")").font(.caption)
                 Text("\(run["automaticApprovals"].int) tool requests approved automatically").font(.caption).foregroundStyle(.secondary)
+                if run["chatControls"]["activeTimeContinuationProviders"].array.contains(run["schedule"]["provider"]) {
+                    Toggle("Continue automatically after the two-hour execution safeguard", isOn: Binding(get: { run["activeTimeContinuation"]["enabled"].bool }, set: { value in
+                        busy = true
+                        Task { defer { busy = false }; do {
+                            let updated = try await store.request("chat.recover", ["id": run["id"], "action": .string("active-time-auto"), "enabled": .bool(value), "expectedPreferenceVersion": run["activeTimeContinuation"]["version"] == .null ? .number(0) : run["activeTimeContinuation"]["version"]])
+                            store.mergeChat(updated); await store.refresh()
+                        } catch { store.error = error.localizedDescription } }
+                    })).disabled(busy || !store.connected).accessibilityIdentifier("active-time-auto")
+                    Text("Uses the same provider session, up to three consecutive continuations. Human waiting does not count. Stop, pending questions and other errors stop automatic continuation.").font(.caption).foregroundStyle(.secondary)
+                }
                 if run["chatControls"]["allowanceContinuation"].bool {
                     Toggle("Automatically continue when allowance resets", isOn: Binding(get: { run["allowanceContinuation"]["enabled"].bool }, set: { value in
                         busy = true

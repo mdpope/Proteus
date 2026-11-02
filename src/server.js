@@ -1,3 +1,6 @@
+import {localInputOrigin} from './services/chats/input-origin.js';
+import {attachmentDates} from './services/chats/attachment-dates.js';
+import {attachmentPrompt} from './services/chats/attachment-prompt.js';
 import {resolveScheduleContext} from './services/scheduling/schedule-context.js';
 import { StateProjectionClient } from './services/state/state-projection-client.js';
 import { StateResponseCache } from './services/state/state-response-cache.js';
@@ -211,7 +214,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   function readChatAttachment(chatId, sha256){
     const run = engine.getRun(chatId), reference = run.events.flatMap(event => event.role === 'user' ? event.data?.attachments || [] : []).find(item => item.sha256 === sha256);
     if (!reference) throw new Error('Choose an attachment from this chat.');
-    return { bytes: attachments.history(run.id, sha256), name: String(reference.name || 'attachment'), mediaType: String(reference.mediaType || 'application/octet-stream') };
+    return { bytes: attachments.history(run.id, sha256), name: String(reference.name || 'attachment'), mediaType: String(reference.mediaType || 'application/octet-stream'),...attachmentDates(reference) };
   }
   function desktopSetupPrompt(status,missing){
     return `Help me set up native desktop control for Proteus on this ${status.platform==='darwin'?'Mac':status.platform} computer.\n`+
@@ -237,7 +240,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
     engine.resume(run.id, failure.retryPrompt || 'Retry the previous request.');
     return { ok: true, runId: run.id };
   }
-  async function buildChatSchedule(value){
+  async function buildChatSchedule(value,{attachmentOnly=false}={}){
     const defaults=settings.get();
     const updateCoordinator=value.purpose==='update',buildCoordinator=value.purpose==='build';
     if(updateCoordinator&&value.chatType==='internet')throw Error('Update coordinators require an ordinary unassigned chat.');
@@ -264,7 +267,8 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
     const snapshot=context.capture({workspaceId:value.workspaceId,workspace:value.workspace||(!value.workspaceId?defaults.workspace:undefined),selectedIds:value.selectedIds,agentId:value.agentId,includeDefaults:value.includeDefaults});
     if(updateCoordinator)Object.assign(snapshot,{workspaceId:null,workspaceName:null,workspace:structuredClone(defaults.workspace),baseWorkspace:structuredClone(defaults.workspace),includeDefaults:false,selectedIds:[],agentId:null,entries:[]});
     const chatTitle=typeof value.name==='string'?value.name.trim():'';
-    return validateSchedule({schemaVersion:1,id:`chat-${Date.now()}-${randomBytes(4).toString('hex')}`,name:chatTitle||'Workspace chat',chatType:value.chatType==='internet'?'internet':'user',chatTitleManual:!!chatTitle,...(buildCoordinator?{purpose:'build'}:{}),...(updateCoordinator?{purpose:'update',updateAuthorization:{tool:'proteus_update',scopeVersion:2,hostId:remote.info().hostId,grantedAt:new Date().toISOString()}}:{}),enabled:false,cron:'0 9 * * 1-5',timezone:value.timezone||defaults.timezone,provider:value.provider||defaults.provider,model:value.model||defaults.model,reasoningMode:value.reasoningMode,reasoningEffort:value.reasoningEffort??((value.model||defaults.model)===defaults.model&&(value.provider||defaults.provider)===defaults.provider?defaults.reasoningEffort:undefined),contextTier:value.contextTier??((value.model||defaults.model)===defaults.model&&(value.provider||defaults.provider)===defaults.provider?defaults.contextTier:undefined),serviceTier:value.serviceTier??((value.model||defaults.model)===defaults.model&&(value.provider||defaults.provider)===defaults.provider?defaults.serviceTier:undefined),workspace:snapshot.workspace,context:snapshot,skillDirectories:value.skillDirectories||defaults.skillDirectories,mcpServers:value.mcpServers||defaults.mcpServers,editorContext:value.editorContext,misfire:'skip',prompt:value.prompt});
+    const schedule=validateSchedule({schemaVersion:1,id:`chat-${Date.now()}-${randomBytes(4).toString('hex')}`,name:chatTitle||'Workspace chat',chatType:value.chatType==='internet'?'internet':'user',chatTitleManual:!!chatTitle,...(buildCoordinator?{purpose:'build'}:{}),...(updateCoordinator?{purpose:'update',updateAuthorization:{tool:'proteus_update',scopeVersion:2,hostId:remote.info().hostId,grantedAt:new Date().toISOString()}}:{}),enabled:false,cron:'0 9 * * 1-5',timezone:value.timezone||defaults.timezone,provider:value.provider||defaults.provider,model:value.model||defaults.model,reasoningMode:value.reasoningMode,reasoningEffort:value.reasoningEffort??((value.model||defaults.model)===defaults.model&&(value.provider||defaults.provider)===defaults.provider?defaults.reasoningEffort:undefined),contextTier:value.contextTier??((value.model||defaults.model)===defaults.model&&(value.provider||defaults.provider)===defaults.provider?defaults.contextTier:undefined),serviceTier:value.serviceTier??((value.model||defaults.model)===defaults.model&&(value.provider||defaults.provider)===defaults.provider?defaults.serviceTier:undefined),workspace:snapshot.workspace,context:snapshot,skillDirectories:value.skillDirectories||defaults.skillDirectories,mcpServers:value.mcpServers||defaults.mcpServers,editorContext:value.editorContext,misfire:'skip',prompt:attachmentOnly&&!value.prompt?.trim()?attachmentPrompt:value.prompt});
+    if(attachmentOnly&&!value.prompt?.trim())schedule.prompt='';return schedule;
   }
   const token = randomBytes(32).toString('hex'); let origin; let remote; const schedulerErrors = []; const eventClients = new Set();
   // All windows share one assembled state per owner generation. Streaming text does
@@ -562,7 +566,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       // decides what is safe to preview.
       if (url.pathname === '/api/chat-attachment' && req.method === 'GET') {
         const file = readChatAttachment(url.searchParams.get('chatId'), url.searchParams.get('sha256'));
-        res.writeHead(200, { 'Content-Type': 'application/octet-stream', 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'private, no-store', 'Content-Disposition': 'attachment', 'X-Proteus-Media-Type': file.mediaType, 'X-Proteus-File-Name': encodeURIComponent(file.name) });
+        res.writeHead(200, { 'Content-Type': 'application/octet-stream', 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'private, no-store', 'Content-Disposition': 'attachment', 'X-Proteus-Media-Type': file.mediaType, ...(file.createdAt?{'X-Proteus-File-Created':file.createdAt}:{}),...(file.modifiedAt?{'X-Proteus-File-Modified':file.modifiedAt}:{}), 'X-Proteus-File-Name': encodeURIComponent(file.name) });
         res.end(file.bytes); return;
       }
       if (url.pathname === '/api/chat-recovery/without-agents' && req.method === 'POST') return json(200, await retryWithoutAgents(await body(req)));
@@ -625,7 +629,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         if(value.action==='begin'){
           if(value.providerId!==providerId||!adapters[providerId]?.acceptedMediaTypes)throw new Error(`${providerId} cannot receive ${value.mediaType} attachments.`);
           if(!value.id&&!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value.draftId||''))throw new Error('Choose a valid chat draft.');
-          return json(200,await attachments.begin({chatId:value.id||'draft:'+value.draftId,deviceId,messageId:value.messageId,providerId,name:value.name,mediaType:value.mediaType,size:value.size,sha256:value.sha256}));
+          return json(200,await attachments.begin({chatId:value.id||'draft:'+value.draftId,deviceId,messageId:value.messageId,providerId,name:value.name,mediaType:value.mediaType,size:value.size,sha256:value.sha256,...attachmentDates(value)}));
         }
         if(value.action==='chunk')return json(200,await attachments.chunk({uploadId:value.uploadId,deviceId,index:value.index,dataBase64:value.dataBase64}));
         if(value.action==='finish')return json(200,await attachments.finish({uploadId:value.uploadId,deviceId}));
@@ -633,19 +637,19 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         throw new Error('Unknown attachment action.');
       }
       if (url.pathname === '/api/chat' && req.method === 'POST') {
-        let value = await body(req);
+        let value = await body(req);value={...value,inputOrigin:localInputOrigin(value.inputOrigin,service)};
         const project=value.purpose==='update'?null:preview?.projectFor(value);if(project&&(desktopPreview||value.projectId||value.workspaceId))value={...value,workspaceId:project.workspaceId};
-        const schedule=await buildChatSchedule(value),files=Array.isArray(value.attachments)?value.attachments:[];
-        if(!files.length){const run=engine.createRun(schedule,'chat');if(project)preview.associate(run,project,engine);return json(200,run);}
+        const files=Array.isArray(value.attachments)?value.attachments:[],schedule=await buildChatSchedule(value,{attachmentOnly:files.length>0});
+        if(!files.length){const run=engine.createRun(schedule,'chat',null,{inputOrigin:value.inputOrigin});if(project)preview.associate(run,project,engine);return json(200,run);}
         if(files.length>chatAttachmentLimits.maxBatchFiles||!value.consentId||!value.draftId||!value.messageId||value.providerId!==schedule.provider)throw new Error('Review the exact files and named provider before sending.');
         await remote.attachmentConsents.verify({consentId:value.consentId,draftId:value.draftId,messageId:value.messageId,providerId:schedule.provider,deviceId:'local-desktop',attachmentIds:files});
-        const run=engine.createRun(schedule,'chat',null,{deferStart:true});if(project)preview.associate(run,project,engine);let prepared;
+        const run=engine.createRun(schedule,'chat',null,{deferStart:true,attachmentOnly:!schedule.prompt.trim(),inputOrigin:value.inputOrigin});if(project)preview.associate(run,project,engine);let prepared;
         try{prepared=await remote.attachmentConsents.prepareSend({consentId:value.consentId,draftId:value.draftId,chatId:run.id,messageId:value.messageId,providerId:schedule.provider,deviceId:'local-desktop',attachmentIds:files});engine.startDeferredRun(run.id,{proofId:prepared.proofId,attachmentIds:files,messageId:value.messageId});return json(200,run);}
         catch(error){if(prepared)await remote.attachmentConsents.releaseProof(prepared.proofId).catch(()=>{});engine.discardDeferredRun(run.id);throw error;}
       }
       const match = url.pathname.match(/^\/api\/runs\/([a-f0-9-]+)\/(answer-question|reply|resume|cancel|send|edit-queued|remove-queued|steer-queued|recover)$/);
       if (match && req.method === 'POST') {
-        const value = await body(req); const [, id, action] = match;
+        let value = await body(req); const [, id, action] = match;value={...value,inputOrigin:localInputOrigin(value.inputOrigin,service)};
         if (action === 'answer-question') return json(200,await answerQuestionWithAttachments(engine,id,value,'local-desktop'));
         if (action === 'reply') return json(200, await replyWithAttachments(engine,id,value,'local-desktop'));
         if (action === 'send' && typeof value.prompt === 'string' && /^\/mcp\s+auth(?:\s|$)/i.test(value.prompt.trim())) {
@@ -688,10 +692,10 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
           if(files.length){
             if(files.length>chatAttachmentLimits.maxBatchFiles||!value.messageId||!value.consentId||value.providerId!==run.schedule.provider)throw new Error('Review the exact files and named provider before sending.');
             const prepared=await remote.attachmentConsents.prepareSend({consentId:value.consentId,chatId:run.id,messageId:value.messageId,providerId:run.schedule.provider,deviceId:'local-desktop',attachmentIds:files});
-            try{return json(200,await engine.send(id,value.prompt,value.mode||'queue',value.messageId,value.modelOptions,{proofId:prepared.proofId,attachmentIds:files}));}
+            try{return json(200,await engine.send(id,value.prompt,value.mode||'queue',value.messageId,value.modelOptions,{proofId:prepared.proofId,attachmentIds:files},undefined,value.inputOrigin));}
             catch(error){await remote.attachmentConsents.releaseProof(prepared.proofId).catch(()=>{});throw error;}
           }
-          return json(200, await engine.send(id, value.prompt, value.mode, value.messageId, value.modelOptions));
+          return json(200, await engine.send(id, value.prompt, value.mode, value.messageId, value.modelOptions,undefined,undefined,value.inputOrigin));
         }
         if (action === 'edit-queued') return json(200,engine.editQueued(id,value.messageId,value.prompt,value.expectedPrompt));
         if (action === 'steer-queued') return json(200,await engine.steerQueued(id,value.messageId));
@@ -704,12 +708,12 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
               if(!model)throw new Error('Selected model is unavailable. Refresh models and choose an available model.');
               validateModelOptions(options,model);
             }
-            return json(200,await engine.send(id,value.prompt,'queue',value.messageId,options));
+            return json(200,await engine.send(id,value.prompt,'queue',value.messageId,options,undefined,undefined,value.inputOrigin));
           }
           // Modern remote clients include an idempotent delivery ID even when
           // resuming an ended turn. Preserve it and let the owner choose queue/start.
-          if(value.messageId)return json(200,await engine.send(id,value.prompt,value.mode||'queue',value.messageId));
-          return json(200, engine.resume(id, value.prompt));
+          if(value.messageId)return json(200,await engine.send(id,value.prompt,value.mode||'queue',value.messageId,undefined,undefined,undefined,value.inputOrigin));
+          return json(200, engine.resume(id, value.prompt,{inputOrigin:value.inputOrigin}));
         }
         engine.cancel(id); return json(200, { ok: true });
       }

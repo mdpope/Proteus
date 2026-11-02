@@ -1,3 +1,45 @@
+# R12 — current implementation under simulator review
+
+R12 supersedes the initial R10 preview and changes desktop/owner runtime too. The older R9
+accepted source/package below is historical, not an R12 distribution candidate.
+
+Window app tabs stay local. iPhone lists them in its sidebar with an app-tab overview;
+iPad/desktop use their top app strip and overview. Sidebar trees show workspace/project destinations,
+never project resource tabs. Projects have one owner-shared ordered content set, preserving stable
+IDs, order, hidden state and history. Chats have no nested resource strip. Phone shows the project
+row, then Chat | Live browser with overview/actions only; the project plus creates tabs. Browser
+links, documents and previews use parent project descriptors and retain their authorization origin.
+Selection/scroll/drafts stay local. Unsent New chat setup remains private pending clarification;
+opening a setup tab never synchronizes prompt text or files.
+
+Unloaded pages retain top navigation without loading to switch tabs. Browser/composer spacing uses
+the actual safe area. Native sync applies membership despite history paging failure, handles
+authenticated tab notices and reconnect, and waits for overlapping reads before fetching newer
+owner state. Empty legacy outboxes no longer suppress reads; orphan receipts and private legacy
+resources remain retained without manufacturing project membership. Unchanged offscreen scopes use
+a one-minute fallback; sidebar resource polling is removed. Broader N2 profiling remains separate.
+
+Review hold: both shared simulator Preview apps must be reviewed before any new physical-device
+build/installation, desktop release package, publication or rollout. Old accepted packages retain
+their historical identity and cannot be promoted as R12. Related superseded Windows/Linux builder
+turns are verified cancelled; queued old-source requests remain retained and require reconciliation
+before reuse. No unrelated work was cancelled.
+
+Recovered request details are in [the updated audit](prior-release-audit.md). Attachment-only input
+requires verified consented dispatch; the provider instruction never replaces exact human text.
+Question cards own answers and retain durable retries/files; general composer queues another input.
+Ordered file viewers expose optional dates with inert previews. Continuation settings use owner
+capability/version immediately above allowance. Submission origin controls placement only.
+
+Validation: actual two-window Electron origin fixture and lazy attachment gallery checks pass.
+Required final Node/static/website and phone/tablet tests are in progress; final counts follow.
+Initial fixture failures and actual focus/read-race corrections remain in private evidence.
+
+No physical/cache data edits, new release package or deployment. R9 website restore qualification
+and outstanding final asset/retention closeout remain unchanged.
+
+---
+
 # Nov 2 implementation
 
 Version: 0.2.41

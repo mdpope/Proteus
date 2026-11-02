@@ -113,27 +113,11 @@ Apply the shared desktop/web card behavior and native return-key handling. Verif
 failure and corrected keyboard/choice/draft/retry behavior, including native software-keyboard
 Send. Earlier accepted R1–R8 artifacts do not contain this addition and must not be relabelled.
 
-## R10 — recover the requested iPhone row and reconcile mobile project tabs
+## R10 — first mobile preview (navigation superseded by R12)
 
-The operator reports the installed iPhone still differs from October 31 O7: replace its chat
-child-tab row with Chat / Live browser text links plus overview, add-tab and chat actions; remove
-the duplicate composer switcher on iPhone only. Keep browser/document children reachable through
-overview/drawer and move the floating phone Agents control into the actions menu. iPad retains its
-existing rows and composer switcher.
-
-The operator also reports stale phone/tablet membership in a desktop-owned project and explicitly
-chooses the desktop as source of truth. Repair the native projection through the normal encrypted
-owner protocol, preserving IDs/order/hidden state/history, drafts and uncertain delivery evidence.
-Empty legacy outboxes must not suppress reads; an empty desktop organizational scope must not
-be populated automatically from stale local tabs. Retain orphaned request envelopes for review.
-History-page failure is a separate lead, not an established diagnosis of the physical screenshot.
-
-**Review hold:** validate and present the change in the existing shared iPhone/iPad simulators
-first. No further physical-device builds or installations until the operator reviews that preview.
-The earlier physical 2611.2.1 rollout remains installed. R9 build 2611.2.2 was prepared before this
-hold and has not been installed. Local review uses an independent preview identity and synthetic
-owner; an explicitly supplied desktop membership snapshot may be mirrored without credentials,
-real browser sessions or external page loads.
+The first preview repaired empty legacy outboxes and retained orphaned request receipts. The
+operator clarified the navigation contract after reviewing it. R12 supersedes its extra plus,
+chat children and sidebar resource placement; do not restore that initial design.
 
 ## R11 — prior request and branch audit
 
@@ -144,6 +128,37 @@ one unique browser-host resize regression was recovered and passes. No extra mer
 The earlier unimplemented/partial request register remains visible in the audit; it is not a
 claim that every collected October item was delivered. Further product changes remain tracked
 in the open Nov 2 effort.
+
+## R12 — clarified navigation and recovered requests
+
+Window app tabs stay local. iPhone lists them in its sidebar with an app-tab overview;
+iPad/desktop use their top app strip and overview. Sidebar trees show workspace/project destinations,
+never project resource tabs. Projects have one owner-shared ordered content set, preserving stable
+IDs, order, hidden state and history. Chats have no nested resource strip. Phone shows the project
+row, then Chat | Live browser with overview/actions only; the project plus creates tabs. Browser
+links, documents and previews use parent project descriptors and retain their authorization origin.
+Selection/scroll/drafts stay local. Unsent New chat setup remains private pending clarification;
+opening a setup tab never synchronizes prompt text or files.
+
+Unloaded pages retain top navigation without loading to switch tabs. Browser/composer spacing uses
+the actual safe area. Native sync applies membership despite history paging failure, handles
+authenticated tab notices and reconnect, and waits for overlapping reads before fetching newer
+owner state. Empty legacy outboxes no longer suppress reads; orphan receipts and private legacy
+resources remain retained without manufacturing project membership. Unchanged offscreen scopes use
+a one-minute fallback; sidebar resource polling is removed. Broader N2 profiling remains separate.
+
+Implement recovered October O2/O4/O6/O8/O9/O10/O12/O13 and A2/A4/A5/A6/A8: session expansion,
+intranet parsing, verified attachment-only input, concise question cards/shared Return handling,
+ordered attachment viewers/dates, submitting-window origin, continuation controls, trusted-gesture
+autoplay and native question attachments. O5 actual LAN access, A7 Linux compositor and N2 broader
+projection profiling remain live acceptance/follow-up. Preserve separate inference/Fusion/vault/
+Outlook acceptance. Test mechanisms do not establish the physical screenshot's exact cache cause.
+
+Review hold: both shared simulator Preview apps must be reviewed before any new physical-device
+build/installation, desktop release package, publication or rollout. Old accepted packages retain
+their historical identity and cannot be promoted as R12. Related superseded Windows/Linux builder
+turns are verified cancelled; queued old-source requests remain retained and require reconciliation
+before reuse. No unrelated work was cancelled.
 
 ## Handoff and acceptance
 

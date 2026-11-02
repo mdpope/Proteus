@@ -1,3 +1,4 @@
+import {browserAddress} from "../../models/browser-address.js";
 import {addTabIcons} from '../../shared/navigation/add-tab-menu.js';
 import {focusNewTabAddress} from './new-tab-input.js';
 const engines={google:'https://www.google.com/search?q=',duckduckgo:'https://duckduckgo.com/?q=',bing:'https://www.bing.com/search?q='};
@@ -5,21 +6,7 @@ export const browserSearchEngines={google:'Google',duckduckgo:'DuckDuckGo',bing:
 export function browserDefaultEngine(){try{const value=globalThis.localStorage?.getItem('proteus-browser-search-engine');return engines[value]?value:'google';}catch{return 'google';}}
 export function setBrowserDefaultEngine(value){if(!engines[value])throw new Error('Unknown search engine.');globalThis.localStorage?.setItem('proteus-browser-search-engine',value);}
 const HISTORY_PAGE_SIZE=25;
-export function browserTarget(raw,engine=browserDefaultEngine()){
-  const value=String(raw||'').trim();if(!value)throw new Error('Enter a website or search.');
-  if(/\s/.test(value)&&!value.includes('://'))return engines[engine]+encodeURIComponent(value);
-  if(/^(file|javascript|data|blob|about|chrome|devtools|proteus):/i.test(value)||/[\\]/.test(value)||value.startsWith('/')||value.startsWith('.'))throw new Error('Only HTTP and HTTPS websites can open here.');
-  const candidate=/^https?:\/\//i.test(value)?value:'https://'+value;
-  let parsed;try{parsed=new URL(candidate);}catch{if(/^[^\s./:]+$/.test(value))return engines[engine]+encodeURIComponent(value);throw new Error('Enter a valid website or search.');}
-  if(!['http:','https:'].includes(parsed.protocol)||parsed.username||parsed.password||!parsed.hostname)throw new Error('Enter an HTTP or HTTPS website without credentials.');
-  const host=parsed.hostname;
-  if(!host.includes('.')&&host!=='localhost'&&!/^\d{1,3}(?:\.\d{1,3}){3}$/.test(host)&&!host.startsWith('[')){
-    if(!/[/:?#]/.test(value))return engines[engine]+encodeURIComponent(value);
-    throw new Error('Enter a valid hostname.');
-  }
-  if(/(?:token|code|secret|key|auth|invite|pair)/i.test(parsed.searchParams.toString())&&!/^https?:\/\//i.test(value))throw new Error('Paste the full trusted website URL to open a link with credentials.');
-  return parsed.href;
-}
+export function browserTarget(raw,engine=browserDefaultEngine()){return browserAddress(raw,engines[engine]||engines.google);}
 export function searchTarget(query,engine=browserDefaultEngine()){if(!engines[engine])throw new Error('Unknown search engine.');const value=String(query||'').trim();if(!value)throw new Error('Enter a search.');return engines[engine]+encodeURIComponent(value);}
 export function historyTimestamp(value,timeZone){
   const date=new Date(value);if(!value||!Number.isFinite(date.getTime()))return 'Unknown time';

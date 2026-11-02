@@ -1,3 +1,4 @@
+import {attachmentPrompt,providerPrompt} from './services/chats/attachment-prompt.js';
 import { isActiveExecutionLimit } from './providers/execution-policy.js';
 import {taskFeedbackDelivery} from './services/chats/task-feedback-kind.js';
 import {updateCoordinatorPermission} from './services/updates/update-permissions.js';
@@ -243,8 +244,10 @@ export class Engine extends EventEmitter {
     this.runWriter.writeNow(run);this.emit('change',run);
     return {id:run.id,failureEventAt:run.failureEventAt,failureReviewedAt:run.failureReviewedAt,attentionRequired:false};
   }
-  createRun(schedule, trigger = 'manual', slot = null, {deferStart=false} = {}) {
+  createRun(schedule, trigger = 'manual', slot = null, {deferStart=false,attachmentOnly=false,inputOrigin=null} = {}) {
     if(trigger!=='scheduled')this.updateGuard?.();
+    const submittedPrompt=schedule.prompt;
+    if(attachmentOnly&&deferStart)schedule={...schedule,prompt:attachmentPrompt};
     schedule = this.prepareSchedule ? this.prepareSchedule(schedule, trigger) : schedule;
     validateSchedule(schedule);
     if (this.stopping) throw new Error('Runner is stopping.');
@@ -256,9 +259,9 @@ export class Engine extends EventEmitter {
       ...(trigger === 'chat' ? { titleKind: schedule.chatTitleManual ? 'manual' : 'generated', titleRevision: randomUUID() } : {}),
       chatType:trigger==='chat'&&schedule.chatType==='internet'?'internet':trigger==='chat'?'user':'scheduled',
       trigger, slot, status: 'queued', createdAt: this.now(), updatedAt: this.now(),
-      events: [{ role: 'user', text: schedule.prompt, at: this.now() }, ...(schedule.context?.warnings || []).map(warning => ({ role: 'system', text: warning.message, at: this.now(), data: { contextWarning: warning } }))], pending: null,
-      providerSessionId: null, usage: { inputTokens: 0, outputTokens: 0, observed: false },
-      nextPrompt: schedule.prompt,...(deferStart?{deferredStart:true}:{})
+      events: [{ role: 'user', text: attachmentOnly&&deferStart?submittedPrompt:schedule.prompt, at: this.now(),...(inputOrigin?{data:{inputOrigin}}:{}) }, ...(schedule.context?.warnings || []).map(warning => ({ role: 'system', text: warning.message, at: this.now(), data: { contextWarning: warning } }))], pending: null,
+      ...(inputOrigin?{turnOrigin:inputOrigin}:{}),providerSessionId: null, usage: { inputTokens: 0, outputTokens: 0, observed: false },
+      nextPrompt: attachmentOnly&&deferStart?submittedPrompt:schedule.prompt,...(deferStart?{deferredStart:true,...(attachmentOnly?{requiresAttachmentDispatch:true}:{})}:{})
     };
     this.runs.set(run.id, run);
     try { this.persist(run); }
@@ -271,21 +274,21 @@ export class Engine extends EventEmitter {
     if(!deferStart)queueMicrotask(() => this.drain()); return run;
   }
   verifyAttachmentDispatch(run,dispatch){if(!(this.attachmentConsents instanceof ChatAttachmentConsents)||!dispatch||typeof dispatch.proofId!=='string')throw new Error('Attachment send authorization is unavailable.');return this.attachmentConsents.assertPrepared({...dispatch,chatId:run.id,providerId:run.schedule.provider});}
-  startDeferredRun(id,dispatch){const run=this.getRun(id);if(run.trigger!=='chat'||run.status!=='queued'||run.deferredStart!==true)throw new Error('Chat draft changed.');if(dispatch){run.events[0].data={attachments:this.verifyAttachmentDispatch(run,dispatch),delivery:{id:dispatch.messageId,state:'delivered'}};run.nextAttachmentDispatch=dispatch;}delete run.deferredStart;this.persist(run);queueMicrotask(()=>this.drain());return run;}
+  startDeferredRun(id,dispatch){const run=this.getRun(id);if(run.trigger!=='chat'||run.status!=='queued'||run.deferredStart!==true)throw new Error('Chat draft changed.');if(run.requiresAttachmentDispatch&&!dispatch)throw Error('Review the exact files and provider before sending an attachment-only message.');if(dispatch){run.events[0].data={...run.events[0].data,attachments:this.verifyAttachmentDispatch(run,dispatch),delivery:{id:dispatch.messageId,state:'delivered'}};run.nextAttachmentDispatch=dispatch;}delete run.deferredStart;delete run.requiresAttachmentDispatch;this.persist(run);queueMicrotask(()=>this.drain());return run;}
   discardDeferredRun(id){const run=this.getRun(id);if(run.trigger!=='chat'||run.status!=='queued'||run.deferredStart!==true)throw new Error('Chat draft changed.');this.runs.delete(id);this.historyCache.forget(id);this.runWriter.cancel(id);fs.rmSync(path.join(this.runsDir,`${id}.json`),{force:true});this.emit('change',run);}
-  resume(id, prompt, {keepCapacityRetry=false}={}) {
+  resume(id, prompt, {keepCapacityRetry=false,inputOrigin=null}={}) {
     this.updateGuard?.();
     const run = this.getRun(id);
     if (active.has(run.status)) throw new Error('Reply to the pending question, or wait for the active turn.');
     if (typeof prompt !== 'string' || !prompt.trim()) throw new Error('A follow-up message is required.');
     if(!keepCapacityRetry)this.recovery.stop(id,false);
     const wasArchived=!!run.archivedAt;run.archivedAt=null;
-    run.status = 'queued'; run.pending = null; run.nextPrompt = prompt;
+    run.status = 'queued'; run.pending = null; run.nextPrompt = prompt;if(inputOrigin)run.turnOrigin=inputOrigin;
     this.event(run, 'user', prompt);if(wasArchived)this.emit('lifecycle',{id:run.id,archivedAt:null,archived:false,updatedAt:run.updatedAt}); queueMicrotask(() => this.drain()); return run;
   }
-  async send(id, prompt, mode = 'queue', messageId = randomUUID(), modelOptions, dispatch, source) {
+  async send(id, prompt, mode = 'queue', messageId = randomUUID(), modelOptions, dispatch, source, inputOrigin=null) {
     const run = this.getRun(id);
-    if (typeof prompt !== 'string' || !prompt.trim()) throw new Error('Write a message first.');
+    if (typeof prompt !== 'string') throw new Error('Write a message first.');
     if (!['queue','steer'].includes(mode)) throw new Error('Choose Queue next or Steer now.');
     if (typeof messageId !== 'string' || !/^[a-zA-Z0-9_-]{1,100}$/.test(messageId)) throw new Error('Invalid message identifier.');
     if (run.events.some(e => e.data?.delivery?.id === messageId)) return run;
@@ -293,6 +296,7 @@ export class Engine extends EventEmitter {
     this.updateGuard?.({runId:id,source:source===taskFeedbackDelivery?taskFeedbackDelivery:undefined});
     if (mode === 'steer' && modelOptions) throw new Error('Steering keeps the current turn’s model. Queue a message to change model settings.');
     const attached=dispatch?this.verifyAttachmentDispatch(run,dispatch):[];
+    if(!prompt.trim()&&!attached.length)throw new Error('Write a message first.');
     const provider=this.providers[run.schedule.provider];
     if(mode==='steer'){
       if(run.status!=='running'||!this.running.has(id))throw Error('Steering is available during a running turn. Queue this message, or answer the pending request first.');
@@ -305,25 +309,25 @@ export class Engine extends EventEmitter {
     if (!active.has(run.status)) {
       const wasArchived=!!run.archivedAt;run.archivedAt=null;
       if (options) this.applyModelOptions(run, options);
-      run.status = 'queued'; run.pending = null; run.nextPrompt = prompt;if(dispatch)run.nextAttachmentDispatch=dispatch;
-      this.event(run, 'user', prompt, { delivery: { id: messageId, state: 'delivered' },...(attached.length?{attachments:attached}:{}) });
+      run.status = 'queued'; run.pending = null; run.nextPrompt = prompt;if(inputOrigin)run.turnOrigin=inputOrigin;if(dispatch)run.nextAttachmentDispatch=dispatch;
+      this.event(run, 'user', prompt, { ...(inputOrigin?{inputOrigin}:{}),delivery: { id: messageId, state: 'delivered' },...(attached.length?{attachments:attached}:{}) });
       if(wasArchived)this.emit('lifecycle',{id:run.id,archivedAt:null,archived:false,updatedAt:run.updatedAt});queueMicrotask(() => this.drain()); return run;
     }
     if (mode === 'queue') {
-      run.queuedMessages ??= []; run.queuedMessages.push({ id: messageId, prompt, at: this.now(), modelOptions: options,attachmentDispatch:dispatch });
-      this.event(run, 'user', prompt, { delivery: { id: messageId, state: 'queued' },...(attached.length?{attachments:attached}:{}) });
+      run.queuedMessages ??= []; run.queuedMessages.push({ id: messageId, prompt, at: this.now(), modelOptions: options,attachmentDispatch:dispatch,inputOrigin });
+      this.event(run, 'user', prompt, { ...(inputOrigin?{inputOrigin}:{}),delivery: { id: messageId, state: 'queued' },...(attached.length?{attachments:attached}:{}) });
       return run;
     }
     if (run.status !== 'running' || !this.running.has(id)) throw new Error('Steering is available during a running turn. Queue this message, or answer the pending request first.');
     if (!provider.steer) throw new Error('This provider does not support steering. Use Queue next.');
-    const slot=this.running.get(id);
-    this.event(run, 'user', prompt, { delivery: { id: messageId, state: 'sending' },...(attached.length?{attachments:attached}:{}) });
+    const slot=this.running.get(id);if(inputOrigin)run.turnOrigin=inputOrigin;
+    this.event(run, 'user', prompt, { ...(inputOrigin?{inputOrigin}:{}),delivery: { id: messageId, state: 'sending' },...(attached.length?{attachments:attached}:{}) });
     const delivery = run.events.find(e=>e.data?.delivery?.id === messageId).data.delivery;
     try {
       const files=dispatch?await this.attachmentConsents.readForProvider({...dispatch,chatId:run.id,providerId:run.schedule.provider}):[];
       if(this.stopping||run.status!=='running'||this.running.get(id)!==slot||slot.controller.signal.aborted)throw Error('This turn ended before steering delivery. Inspect the chat before sending again.');
       const originals=this.turnAttachments.get(id),offset=originals?.length||0;if(originals)originals.push(...files);
-      await provider.steer(run,prompt,providerAttachmentInputs(files,provider.acceptedSteeringMediaTypes,offset)); delivery.state = 'steered';
+      await provider.steer(run,providerPrompt(prompt,files),providerAttachmentInputs(files,provider.acceptedSteeringMediaTypes,offset)); delivery.state = 'steered';
     }
     catch (error) { delivery.state = 'failed'; delivery.error = error.message; throw error; }
     finally { if(dispatch)await this.attachmentConsents.releaseProof(dispatch.proofId).catch(()=>{});this.persist(run); }
@@ -352,7 +356,7 @@ export class Engine extends EventEmitter {
       const files=dispatch?await this.attachmentConsents.readForProvider({...dispatch,chatId:id,providerId:run.schedule.provider}):[];
       if(this.stopping||run.status!=='running'||this.running.get(id)!==slot||slot.controller.signal.aborted)throw Error('This turn ended before steering delivery. Inspect the chat before sending again.');
       const originals=this.turnAttachments.get(id),offset=originals?.length||0;if(originals)originals.push(...files);
-      attempted=true;await provider.steer(run,message.prompt,providerAttachmentInputs(files,provider.acceptedSteeringMediaTypes,offset));run.queuedMessages=run.queuedMessages.filter(item=>item.id!==messageId);if(delivery){delivery.state='steered';delete delivery.error;}
+      attempted=true;if(message.inputOrigin)run.turnOrigin=message.inputOrigin;await provider.steer(run,providerPrompt(message.prompt,files),providerAttachmentInputs(files,provider.acceptedSteeringMediaTypes,offset));run.queuedMessages=run.queuedMessages.filter(item=>item.id!==messageId);if(delivery){delivery.state='steered';delete delivery.error;}
     }catch(error){if(delivery)delivery.error=error.message;if(dispatch){
       // A consumed proof cannot be queued or replayed after ambiguous provider
       // transport. Preserve the event/receipt, rather than silently sending twice.
@@ -365,7 +369,7 @@ export class Engine extends EventEmitter {
     const run = this.getRun(id), message = run.queuedMessages?.find(item => item.id === messageId);
     if (!message) throw new Error('This message has already been delivered or removed.');
     if (typeof expectedPrompt !== 'string' || message.prompt !== expectedPrompt) throw new Error('This queued message changed. Reopen it before editing.');
-    if (typeof prompt !== 'string' || !prompt.trim() || prompt.length > 1_000_000) throw new Error('Write a message of at most 1,000,000 characters.');
+    if (typeof prompt !== 'string' || !prompt.trim()&&!message.attachmentDispatch || prompt.length > 1_000_000) throw new Error('Write a message of at most 1,000,000 characters.');
     const event = run.events.find(item => item.data?.delivery?.id === messageId);
     if (!event || event.data.delivery.state !== 'queued') throw new Error('This message is no longer queued.');
     message.prompt = prompt; message.editedAt = this.now();
@@ -381,7 +385,7 @@ export class Engine extends EventEmitter {
     const event=run.events.find(e=>e.data?.delivery?.id===messageId);if(event)event.data.delivery.state='removed';
     this.persist(run);return run;
   }
-  reply(id, answer, requestId, attachmentDispatch=null) {
+  reply(id, answer, requestId, attachmentDispatch=null,inputOrigin=null) {
     const run = this.getRun(id); const pending = this.pending.get(id);
     if (!pending || run.pending?.id !== requestId) throw new Error('This request is no longer waiting for an answer.');
     if (typeof answer !== 'string' || !answer.trim()) throw new Error('A reply is required.');
@@ -411,14 +415,14 @@ export class Engine extends EventEmitter {
       }
       this.event(run, 'system', answer === 'deny' ? 'Permission denied.' : `Permission approved: ${answer}.`, { permission: { kind: run.pending.details?.kind, intention:displayText(run.pending.details?.intention||run.pending.question||'Tool permission',240), request:displayText(run.pending.details||{},12000), decision: answer, automatic: false, ...(typeof run.pending.details?.toolCallId === 'string' ? { toolCallId: run.pending.details.toolCallId.slice(0,128) } : {}) } });
     }
-    this.pending.delete(id); run.pending = null; run.status = 'running';resumeTurn(run,this.now());providerProgress(run,this.now(),{observable:true});
+    if(inputOrigin)run.turnOrigin=inputOrigin;this.pending.delete(id); run.pending = null; run.status = 'running';resumeTurn(run,this.now());providerProgress(run,this.now(),{observable:true});
     if (!isPermission) this.event(run, 'user', answer, {questionReply:{requestId},...(attachmentDispatch?{attachments:questionFiles,delivery:{id:attachmentDispatch.messageId,questionReplyDigest:attachmentDispatch.signature}}:{})}); else this.persist(run);
     const providerAnswer=attachmentDispatch?answer+`\nThe user attached ${questionFiles.length} file(s). Call proteus_question_attachments with requestId ${requestId} to view the images/text before continuing.`:answer;
     pending.resolve(isPermission && !['approve','deny'].includes(answer) ? 'approve' : providerAnswer);
     if (isPermission) this.recheckPermissions();
     return run;
   }
-  answerQuestion(id,questionId,answer,messageId,action,dispatch){return answerUserQuestion(this,id,questionId,answer,messageId,action,dispatch);}
+  answerQuestion(id,questionId,answer,messageId,action,dispatch,inputOrigin){return answerUserQuestion(this,id,questionId,answer,messageId,action,dispatch,inputOrigin);}
   async readQuestionAttachments(id,requestId){
     const run=this.getRun(id),slot=this.running.get(id),dispatch=run.questionAttachmentReplies?.[requestId];
     if(!slot||slot.controller.signal.aborted||!dispatch||dispatch.providerId!==run.schedule.provider)throw Error('These question attachments are not available to this active chat/provider.');
@@ -517,7 +521,7 @@ export class Engine extends EventEmitter {
       const attachments=dispatch?await this.attachmentConsents.readForProvider({...dispatch,chatId:run.id,providerId:run.schedule.provider}):[];
       this.turnAttachments.set(run.id,attachments);
       await provider.run({
-        run, prompt, attachments:providerAttachmentInputs(attachments,provider.acceptedMediaTypes), signal: controller.signal,
+        run, prompt:providerPrompt(prompt,attachments), attachments:providerAttachmentInputs(attachments,provider.acceptedMediaTypes), signal: controller.signal,
         permissionProfile: () => this.describePermissions(run),
         emit: (role, text, data) => this.event(run, role, text, data),
         stream: (id, text) => this.stream(run, id, text),
@@ -551,7 +555,7 @@ export class Engine extends EventEmitter {
       delete run.questionAttachmentReplies;
       await this.queuedSteers.get(run.id)?.catch(()=>{});
       if (run.status === 'completed' && run.queuedMessages?.length && !this.stopping) {
-        const next = run.queuedMessages.shift(); if (next.modelOptions) this.applyModelOptions(run, next.modelOptions); run.nextPrompt = next.prompt;run.nextAttachmentDispatch=next.attachmentDispatch; run.status = 'queued';
+        const next = run.queuedMessages.shift(); if (next.modelOptions) this.applyModelOptions(run, next.modelOptions); run.nextPrompt = next.prompt;run.nextAttachmentDispatch=next.attachmentDispatch;if(next.inputOrigin)run.turnOrigin=next.inputOrigin; run.status = 'queued';
         const event=run.events.find(e=>e.data?.delivery?.id===next.id);if(event)event.data.delivery.state='delivered';
       }
       this.persist(run); if (lane) this.backgroundRuns.delete(lane); else this.running.delete(run.id);this.historyCache.trim();

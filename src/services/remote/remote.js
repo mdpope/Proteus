@@ -1,3 +1,5 @@
+import {inputOrigin} from '../chats/input-origin.js';
+import {attachmentDates} from '../chats/attachment-dates.js';
 import {portableWebsiteNotification} from '../telemetry/website-notification.js';
 import {activeTimeProviders} from '../../../public/features/chats/chat-recovery-state.js';
 import {subagentSummaries,subagentPage} from '../chats/subagents.js';
@@ -322,6 +324,7 @@ export class RemoteHost {
     const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Host request failed.'); return data;
   }
   async execute(peer, method, args) {
+    if(!args.agentControl&&['chat.start','chat.send','chat.reply','chat.answer-question','chat.resume'].includes(method))args={...args,inputOrigin:inputOrigin(args.inputOrigin,{hostId:this.config.hostId,deviceId:peer.device.id,client:args.inputOrigin?.client==='mobile'?'mobile':args.inputOrigin?.client==='website'?'website':'remote-desktop'})};
     if(method.startsWith('inference.')){if(!this.service.sharedInference)throw Error('Shared inference is unavailable.');return this.service.sharedInference.handle(peer,method,args);}
     const engine = this.service.engine;
     if(method==='computer.access.get')return this.service.computerAccess.get();
@@ -444,7 +447,7 @@ export class RemoteHost {
       if(!engine.providers[providerId]?.acceptedMediaTypes)throw new Error(`${providerId} cannot receive ${args.mediaType} attachments. Choose a supported file type or provider.`);
       if(args.providerId!==undefined&&args.providerId!==providerId)throw new Error('The chat provider changed. Choose the attachment again.');
       if(!run&&!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(args.draftId||''))throw new Error('Choose a chat or a valid first-message draft.');
-      return this.service.attachments.begin({chatId:run?.id||'draft:'+args.draftId,deviceId:peer.device.id,messageId:args.messageId,providerId,name:args.name,mediaType:args.mediaType,size:args.size,sha256:args.sha256});
+      return this.service.attachments.begin({chatId:run?.id||'draft:'+args.draftId,deviceId:peer.device.id,messageId:args.messageId,providerId,name:args.name,mediaType:args.mediaType,size:args.size,sha256:args.sha256,...attachmentDates(args)});
     }
     if (method === 'chat.attachments.chunk') return this.service.attachments.chunk({uploadId:args.uploadId,deviceId:peer.device.id,index:args.index,dataBase64:args.dataBase64});
     if (method === 'chat.attachments.finish') return this.service.attachments.finish({uploadId:args.uploadId,deviceId:peer.device.id});
@@ -481,7 +484,7 @@ export class RemoteHost {
         if(!selection||typeof selection!=='object'||Array.isArray(selection)||Object.keys(selection).some(key=>!['releaseId','manifestDigest','channel'].includes(key))||typeof selection.releaseId!=='string'||!selection.releaseId||!/^[a-f0-9]{64}$/.test(selection.manifestDigest||'')||selection.channel!==undefined&&!['stable','preview'].includes(selection.channel))throw Error('Choose an exact published release and manifest digest.');
         const run=await startUpdateSession(this.service,{...selection,operationId:args.operationId,instructions:args.prompt});peer.runId=run.id;return {runId:run.id};
       }
-      const startArgs=pick(args,['purpose','chatType','name','prompt','provider','model','reasoningEffort','contextTier','serviceTier','workspaceId','projectId','selectedIds','agentId','includeDefaults']);
+      const startArgs=pick(args,['purpose','chatType','name','prompt','inputOrigin','provider','model','reasoningEffort','contextTier','serviceTier','workspaceId','projectId','selectedIds','agentId','includeDefaults']);
       const project=startArgs.purpose==='update'?null:this.service.workspaceProjects?.projectFor(startArgs);if(project&&(args.projectId||args.workspaceId))startArgs.workspaceId=project.workspaceId;
       if(args.commandFolder){
         const catalog=this.service.context.get(),profile=catalog.workspaces.find(w=>w.id===(startArgs.workspaceId||catalog.defaultWorkspaceId));
@@ -497,9 +500,9 @@ export class RemoteHost {
       const files=Array.isArray(args.attachments)?args.attachments:[];
       if(!files.length){const run=await this.api('/api/chat',startArgs);peer.runId=run.id;return {runId:run.id};}
       if(!args.consentId||!args.draftId||!args.messageId||files.length>chatAttachmentLimits.maxBatchFiles||args.providerId!==args.provider)throw new Error('Review the exact first-message files and named provider before sending.');
-      const schedule=await this.service.buildChatSchedule(startArgs);
+      const schedule=await this.service.buildChatSchedule(startArgs,{attachmentOnly:files.length>0});
       await this.attachmentConsents.verify({consentId:args.consentId,draftId:args.draftId,messageId:args.messageId,providerId:schedule.provider,deviceId:peer.device.id,attachmentIds:files});
-      const run=engine.createRun(schedule,'chat',null,{deferStart:true});if(project)this.service.workspaceProjects.associate(run,project,engine);let prepared;
+      const run=engine.createRun(schedule,'chat',null,{deferStart:true,attachmentOnly:!schedule.prompt.trim(),inputOrigin:args.inputOrigin});if(project)this.service.workspaceProjects.associate(run,project,engine);let prepared;
       try{prepared=await this.attachmentConsents.prepareSend({consentId:args.consentId,draftId:args.draftId,chatId:run.id,messageId:args.messageId,providerId:schedule.provider,deviceId:peer.device.id,attachmentIds:files});engine.startDeferredRun(run.id,{proofId:prepared.proofId,attachmentIds:files,messageId:args.messageId});peer.runId=run.id;return {runId:run.id};}
       catch(error){if(prepared)await this.attachmentConsents.releaseProof(prepared.proofId).catch(()=>{});engine.discardDeferredRun(run.id);throw error;}
     }
@@ -509,7 +512,7 @@ export class RemoteHost {
       if(args.messageId&&run.events.some(event=>event.data?.delivery?.id===args.messageId))return {runId:run.id};
       if(files.length>chatAttachmentLimits.maxBatchFiles||args.providerId!==run.schedule.provider||!args.consentId||!args.messageId)throw new Error('Review the exact files and named provider before sending.');
       const prepared=await this.attachmentConsents.prepareSend({consentId:args.consentId,chatId:run.id,messageId:args.messageId,providerId:run.schedule.provider,deviceId:peer.device.id,attachmentIds:files});
-      try{await engine.send(run.id,args.prompt,args.mode||'queue',args.messageId,args.modelOptions,{proofId:prepared.proofId,attachmentIds:files});peer.runId=run.id;return {runId:run.id};}
+      try{await engine.send(run.id,args.prompt,args.mode||'queue',args.messageId,args.modelOptions,{proofId:prepared.proofId,attachmentIds:files},undefined,args.inputOrigin);peer.runId=run.id;return {runId:run.id};}
       catch(error){await this.attachmentConsents.releaseProof(prepared.proofId).catch(()=>{});throw error;}
     }
     if(method==='chat.answer-question'){if(args.agentControl)throw Error('Interactive question answers require the human chat interface.');await answerQuestionWithAttachments(engine,args.id,args,peer.device.id);return {runId:args.id};}
@@ -526,7 +529,7 @@ export class RemoteHost {
         return {runId:args.id};
       }
       engine.getRun(args.id); const action = method.split('.')[1];
-      await this.api(`/api/runs/${args.id}/${action}`, pick(args, ['answer', 'requestId', 'prompt', 'mode', 'messageId', 'modelOptions', 'expectedPrompt','action','enabled','expectedPreferenceVersion','expectedUpdatedAt','expectedFailureEventAt'])); return { runId: args.id };
+      await this.api(`/api/runs/${args.id}/${action}`, pick(args, ['answer', 'requestId', 'prompt', 'mode', 'messageId', 'modelOptions', 'expectedPrompt','action','enabled','expectedPreferenceVersion','expectedUpdatedAt','expectedFailureEventAt','inputOrigin'])); return { runId: args.id };
     }
     if (method === 'chat.permissions') {
       await this.api('/api/permissions', { action: ['grant-chat-folder','revoke-chat-folder','revoke-chat-rule','set-chat-read-only'].includes(args.action) ? args.action : args.scope === 'chat' ? 'set-chat-mode' : 'set-mode', runId: args.id, ...pick(args, ['mode','folder','access','ruleId','enabled', 'expectedContextId', 'expectedRevision', 'expectedChatRevision', 'expectedRequestId']) });
@@ -535,7 +538,7 @@ export class RemoteHost {
     // Read-only, bounded chunks of a file a message in this chat references.
     if (method === 'chat.attachments.get') {
       const file = this.service.readChatAttachment(args.id, args.sha256), offset = Math.max(0, Math.min(file.bytes.length, Number.isSafeInteger(args.offset) ? args.offset : 0)), end = Math.min(file.bytes.length, offset + 384 * 1024);
-      return { name: file.name, mediaType: file.mediaType, size: file.bytes.length, offset, dataBase64: file.bytes.subarray(offset, end).toString('base64'), done: end >= file.bytes.length };
+      return { name: file.name, mediaType: file.mediaType, size: file.bytes.length, ...attachmentDates(file), offset, dataBase64: file.bytes.subarray(offset, end).toString('base64'), done: end >= file.bytes.length };
     }
     if (method === 'chat.retry-without-agents') { await this.api('/api/chat-recovery/without-agents', { runId: args.id, expectedFailureEventAt: args.expectedFailureEventAt }); return { runId: args.id }; }
     if (method === 'chat.context') { await this.api('/api/run-context', { runId: args.id, ...pick(args, ['selectedIds', 'agentId', 'includeDefaults']) }); return { runId: args.id }; }

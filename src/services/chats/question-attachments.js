@@ -5,26 +5,26 @@ export const questionAttachmentMediaTypes=Object.freeze(['image/png','image/jpeg
 const digest=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 export async function answerQuestionWithAttachments(engine,id,args,deviceId){
  const run=engine.getRun(id),ids=args.attachments;
- if(!Array.isArray(ids)||!ids.length)return engine.answerQuestion(id,args.questionId,args.answer,args.messageId,args.action);
+ if(!Array.isArray(ids)||!ids.length)return engine.answerQuestion(id,args.questionId,args.answer,args.messageId,args.action,null,args.inputOrigin);
  const signature=digest([args.questionId,args.answer||'',ids,args.providerId,deviceId]);
  const question=run.userQuestions?.find(item=>item.id===args.questionId);
  if(!question||args.action&&args.action!=='answer')throw Error('Only an ordinary unanswered question accepts attachments.');
  if(question.messageId){
   if(question.messageId!==args.messageId||question.attachmentSignature!==signature)throw Error('This question submission ID was already used with different content.');
-  return engine.answerQuestion(id,args.questionId,args.answer||'Please review the attached files.',args.messageId,args.action,{signature});
+  return engine.answerQuestion(id,args.questionId,args.answer||'Please review the attached files.',args.messageId,args.action,{signature},args.inputOrigin);
  }
  if(question.status!=='pending')throw Error('This question is no longer waiting for an answer.');
  if(ids.length>4||args.providerId!==run.schedule.provider||!args.consentId||!args.messageId)throw Error('Review up to four question attachments and their exact provider before sending.');
  const files=await engine.attachmentConsents.verify({consentId:args.consentId,chatId:id,messageId:args.messageId,providerId:run.schedule.provider,deviceId,attachmentIds:ids});
  if(files.some(file=>!questionAttachmentMediaTypes.includes(file.mediaType)))throw Error('Question replies support PNG, JPEG, WebP images and plain text.');
  const prepared=await engine.attachmentConsents.prepareSend({consentId:args.consentId,chatId:id,messageId:args.messageId,providerId:run.schedule.provider,deviceId,attachmentIds:ids});
- try{return await engine.answerQuestion(id,args.questionId,args.answer||'Please review the attached files.',args.messageId,args.action,{proofId:prepared.proofId,attachmentIds:ids,messageId:args.messageId,signature});}
+ try{return await engine.answerQuestion(id,args.questionId,args.answer||'Please review the attached files.',args.messageId,args.action,{proofId:prepared.proofId,attachmentIds:ids,messageId:args.messageId,signature},args.inputOrigin);}
  catch(error){if(!question.messageId)await engine.attachmentConsents.releaseProof(prepared.proofId).catch(()=>{});throw error;}
 }
 /** Use the existing exact-file/provider consent boundary, bound to one question. */
 export async function replyWithAttachments(engine,id,args,deviceId){
  const run=engine.getRun(id),ids=args.attachments;
- if(!Array.isArray(ids)||!ids.length)return engine.reply(id,args.answer,args.requestId);
+ if(!Array.isArray(ids)||!ids.length)return engine.reply(id,args.answer,args.requestId,null,args.inputOrigin);
  const signature=digest([args.requestId,args.answer||'',ids,args.providerId,deviceId]);
  const prior=run.events.find(event=>event.data?.questionReply?.requestId===args.requestId&&event.data?.delivery?.id===args.messageId);
  if(prior){if(prior.data.delivery.questionReplyDigest!==signature)throw Error('This question submission ID was already used with different content.');return run;}
@@ -33,7 +33,7 @@ export async function replyWithAttachments(engine,id,args,deviceId){
  const files=await engine.attachmentConsents.verify({consentId:args.consentId,chatId:id,messageId:args.messageId,providerId:run.schedule.provider,deviceId,attachmentIds:ids});
  if(files.some(file=>!questionAttachmentMediaTypes.includes(file.mediaType)))throw Error('Question replies support PNG, JPEG, WebP images and plain text.');
  const prepared=await engine.attachmentConsents.prepareSend({consentId:args.consentId,chatId:id,messageId:args.messageId,providerId:run.schedule.provider,deviceId,attachmentIds:ids});
- try{return engine.reply(id,args.answer||'Please review the attached files.',args.requestId,{proofId:prepared.proofId,attachmentIds:ids,messageId:args.messageId,signature});}
+ try{return engine.reply(id,args.answer||'Please review the attached files.',args.requestId,{proofId:prepared.proofId,attachmentIds:ids,messageId:args.messageId,signature},args.inputOrigin);}
  catch(error){await engine.attachmentConsents.releaseProof(prepared.proofId).catch(()=>{});throw error;}
 }
 export function questionAttachmentTools(adapter,runId){

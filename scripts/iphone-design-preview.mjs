@@ -18,12 +18,17 @@ const device=requested?devices.find(d=>d.udid===requested):devices.find(d=>d.sta
 if(!device)throw new Error('Choose an available '+(ipad?'iPad':'iPhone')+' simulator. Physical devices are outside this preview.');
 const previewBundle=ipad?'org.proteusapp.review.proteus.ipad-preview':'org.proteusapp.review.proteus.iphone-preview';
 const output=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-phone-preview-'));
+const derivedData=process.env.PROTEUS_PREVIEW_DERIVED_DATA||path.join(output,'DerivedData');
 const info=path.join(output,'Info.plist');fs.copyFileSync(path.join(root,'ios/Proteus/Info.plist'),info);
 run('/usr/libexec/PlistBuddy',['-c','Add :CFBundleDisplayName string Proteus Preview',info]);
 const log=path.join(output,'build.log');const fd=fs.openSync(log,'w');
 console.log(`Building Proteus Preview for ${device.name}. Logs: ${output}`);
-try{run('xcodebuild',['-project','ios/Proteus.xcodeproj','-scheme','Proteus','-configuration','Debug','-destination',`platform=iOS Simulator,id=${device.udid}`,'-derivedDataPath',path.join(output,'DerivedData'),'-parallel-testing-enabled','NO','ONLY_ACTIVE_ARCH=YES',`PRODUCT_BUNDLE_IDENTIFIER=${previewBundle}`,`INFOPLIST_FILE=${info}`,'CODE_SIGNING_ALLOWED=YES','CODE_SIGN_IDENTITY=-','build'],{stdio:['ignore',fd,fd]});}catch(error){throw new Error(`Preview build failed; inspect ${log}`,{cause:error});}finally{fs.closeSync(fd);}
-const app=path.join(output,'DerivedData/Build/Products/Debug-iphonesimulator/Proteus.app');
+try{run('xcodebuild',['-project','ios/Proteus.xcodeproj','-scheme','Proteus','-configuration','Debug','-destination',`platform=iOS Simulator,id=${device.udid}`,'-derivedDataPath',derivedData,'-parallel-testing-enabled','NO','ONLY_ACTIVE_ARCH=YES',`PRODUCT_BUNDLE_IDENTIFIER=${previewBundle}`,`INFOPLIST_FILE=${info}`,'CODE_SIGNING_ALLOWED=YES','CODE_SIGN_IDENTITY=-','build'],{stdio:['ignore',fd,fd]});}catch(error){throw new Error(`Preview build failed; inspect ${log}`,{cause:error});}finally{fs.closeSync(fd);}
+const compiledApp=path.join(derivedData,'Build/Products/Debug-iphonesimulator/Proteus.app');
+// A reusable compiler cache is mutable. Keep each review receipt's app independent
+// before another device changes PRODUCT_BUNDLE_IDENTIFIER in that cache.
+const app=process.env.PROTEUS_PREVIEW_DERIVED_DATA?path.join(output,'Proteus.app'):compiledApp;
+if(app!==compiledApp)fs.cpSync(compiledApp,app,{recursive:true});
 const bundle=run('/usr/libexec/PlistBuddy',['-c','Print :CFBundleIdentifier',path.join(app,'Info.plist')]).trim();
 if(bundle!==previewBundle)throw new Error('Refusing to install an app with the production identity.');
 fs.writeFileSync(path.join(output,'receipt.json'),JSON.stringify({kind:'synthetic-native-design-preview',bundle,device:device.udid,app,buildOnly},null,2)+'\n');

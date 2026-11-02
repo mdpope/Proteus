@@ -9,7 +9,7 @@ import UIKit
 
 // A separate UIKit picker has an explicit cancel callback and can be reopened reliably
 // after an iPad attachment menu. Selecting a photo still only stages an attachment.
-private struct NativePhotoSelection: UIViewControllerRepresentable {
+struct NativePhotoSelection: UIViewControllerRepresentable {
     var limit: Int
     var finished: ([PHPickerResult]) -> Void
     func makeCoordinator() -> Coordinator { Coordinator(finished: finished) }
@@ -257,12 +257,12 @@ enum NativeAttachmentBudget {
     let available = Set(items.map(\.id))
     return attachmentRecords(store: store, draftKey: draftKey).filter { !available.contains($0["id"].string) }
 }
-@MainActor private func appendAttachmentRecord(store: RemoteStore, draftKey: String, item: NativeDraftAttachment) {
+@MainActor func appendAttachmentRecord(store: RemoteStore, draftKey: String, item: NativeDraftAttachment) {
     var records = attachmentRecords(store: store, draftKey: draftKey)
     records.append(.object(["id": .string(item.id), "name": .string(item.name), "mediaType": .string(item.mediaType)]))
     store.setDraft(draftKey, .array(records))
 }
-@MainActor private func removeAttachmentRecord(store: RemoteStore, draftKey: String, id: String) {
+@MainActor func removeAttachmentRecord(store: RemoteStore, draftKey: String, id: String) {
     let records = attachmentRecords(store: store, draftKey: draftKey).filter { $0["id"].string != id }
     store.setDraft(draftKey, records.isEmpty ? .null : .array(records))
 }
@@ -341,7 +341,7 @@ struct NewChatView: View {
     }) }
     private var providerName: String { nativeProviderName(provider) }
     private func submitPrompt() {
-        guard !sending, !loading, !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        guard !sending, !loading, (!prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attachments.isEmpty) else { return }
         if attachments.isEmpty { start() } else { confirmAttachmentStart = true }
     }
     private var promptField: some View {
@@ -390,15 +390,15 @@ struct NewChatView: View {
                     }
                 }
                 if !internet && lockedWorkspaceID == nil { ContextSelection(selected: $selected, agent: $agent, includeDefaults: $includeDefaults, workspaceID: workspace) }
-                if internet { Section { HStack { Spacer(); ForEach(store.state["providerStatuses"].object.keys.sorted().filter { !["local-process", "rehearsal"].contains($0) }, id: \.self) { id in Button("Search with " + id.capitalized) { provider = id; if store.state["defaults"]["internetSearches"][id]["model"].string.isEmpty { store.error = "Configure Internet Search defaults in Engine Room on \(store.displayName) first." } else if attachments.isEmpty { start() } else { confirmAttachmentStart = true } }.disabled(prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || sending || !store.connected) } } } }
+                if internet { Section { HStack { Spacer(); ForEach(store.state["providerStatuses"].object.keys.sorted().filter { !["local-process", "rehearsal"].contains($0) }, id: \.self) { id in Button("Search with " + id.capitalized) { provider = id; if store.state["defaults"]["internetSearches"][id]["model"].string.isEmpty { store.error = "Configure Internet Search defaults in Engine Room on \(store.displayName) first." } else if attachments.isEmpty { start() } else { confirmAttachmentStart = true } }.disabled((prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && attachments.isEmpty) || sending || !store.connected) } } } }
                 if startIntent != .null { Section { Text("Start awaiting confirmation. Retry uses the same request and saved choices.").font(.caption) } }; if let error = store.error { Section { Text(error).foregroundStyle(.orange) } }
             }.scrollDismissesKeyboard(.interactively).disabled(loading || sending || startIntent != .null).accessibilityIdentifier("new-chat-form").navigationTitle(internet ? "Internet Search" : "New chat").toolbar {
                 ToolbarItem(placement: .cancellationAction) { HStack { if NativePhonePreview.enabled && onCancel != nil && lockedWorkspaceID == nil { NativeSidebarButton() }; Button("Cancel") { if let onCancel { onCancel() } else { dismiss() } } } }
-                ToolbarItem(placement: .confirmationAction) { if !internet || startIntent != .null { Button { if startIntent != .null || attachments.isEmpty { start() } else { confirmAttachmentStart = true } } label: { if sending { ProgressView() } else { Image(systemName: "arrow.up").font(.system(size: 19, weight: .semibold)).frame(width: 36, height: 36).background(NativeTheme.accent).foregroundStyle(NativeTheme.background).clipShape(Circle()) } }.disabled(loading || sending || !store.connected || (startIntent == .null && (prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || workspace.isEmpty || (provider != "rehearsal" && model.isEmpty) || providerChoice?.available == false || !missingAttachments.isEmpty || (!attachments.isEmpty && (!attachmentsEnabled || hasUnsupportedAttachment))))).accessibilityLabel("Start chat").accessibilityIdentifier("start-chat") } }
+                ToolbarItem(placement: .confirmationAction) { if !internet || startIntent != .null { Button { if startIntent != .null || attachments.isEmpty { start() } else { confirmAttachmentStart = true } } label: { if sending { ProgressView() } else { Image(systemName: "arrow.up").font(.system(size: 19, weight: .semibold)).frame(width: 36, height: 36).background(NativeTheme.accent).foregroundStyle(NativeTheme.background).clipShape(Circle()) } }.disabled(loading || sending || !store.connected || (startIntent == .null && ((prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && attachments.isEmpty) || workspace.isEmpty || (provider != "rehearsal" && model.isEmpty) || providerChoice?.available == false || !missingAttachments.isEmpty || (!attachments.isEmpty && (!attachmentsEnabled || hasUnsupportedAttachment))))).accessibilityLabel("Start chat").accessibilityIdentifier("start-chat") } }
             }.onChange(of: workspace) { _, _ in if !loading { applyWorkspaceDefaults(); project = store.projectCatalog.defaultProject(in: workspace)?["id"].string ?? "" } }.onChange(of: draftValue) { _, value in if !loading { store.setDraft(draftKey, value) } }.onChange(of: prompt) { _, value in if !loading && !sending && nativeTextAttachmentRequired(value) { if addAttachment(Data(value.utf8), name: "Pasted text.txt", mediaType: "text/plain") { prompt = "[Attached: Pasted text.txt]" } } } .onChange(of: provider) { old, value in if !loading && old != value { model = ""; effort = ""; contextTier = "default"; serviceTier = "" }; if value != "rehearsal" { Task { await store.loadModels(provider: value) } } }.task { await store.refresh(); guard !Task.isCancelled else { return }; workspace = store.state["context"]["defaultWorkspaceId"].string; provider = store.state["defaults"]["provider"].string; model = store.state["defaults"]["model"].string; effort = store.state["defaults"]["reasoningEffort"].string; serviceTier = store.state["defaults"]["serviceTier"].string; contextTier = store.state["defaults"]["contextTier"].string.isEmpty ? "default" : store.state["defaults"]["contextTier"].string; applyWorkspaceDefaults(); if let saved = store.drafts[draftKey] { restore(saved) }; if let lockedWorkspaceID { workspace = lockedWorkspaceID; selected = []; agent = ""; includeDefaults = true }; project = lockedProjectID ?? (project.isEmpty ? store.projectCatalog.defaultProject(in: workspace)?["id"].string ?? "" : project); if provider != "rehearsal" { await store.loadModels(provider: provider) }; guard !Task.isCancelled else { return }; loading = false }
             .sheet(isPresented: $photoPicker) { NativePhotoSelection(limit: NativeAttachmentBudget.maxFiles - attachments.count) { results in photoPicker = false; if !results.isEmpty { Task { await importPhotos(results) } } } }
             .fileImporter(isPresented: $filePicker, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in if case .success(let urls) = result { for url in urls { if !importFile(url) { break } } } else if case .failure(let error) = result { store.error = error.localizedDescription } }
-            .sheet(item: $previewAttachment) { item in AttachmentPreview(attachment: item) { previewAttachment = nil } }
+            .sheet(item: $previewAttachment) { item in AttachmentPreview(attachment: item, siblings: attachments) { previewAttachment = nil } }
             .sheet(isPresented: $confirmAttachmentStart) { AttachmentSendReview(attachments: attachments, providerName: providerName, hostName: store.displayName) { confirmAttachmentStart = false; start() } }
         }
     }
@@ -443,7 +443,7 @@ struct NewChatView: View {
         var ids: [JSON] = [], claims: [JSON] = []
         for item in attachments {
             let digest = SHA256.hash(data: item.bytes).map { String(format: "%02x", $0) }.joined()
-            let begun = try await store.request("chat.attachments.begin", ["draftId": .string(attachmentDraftID), "providerId": .string(provider), "messageId": .string(attachmentMessageID), "name": .string(item.name), "mediaType": .string(item.mediaType), "size": .number(Double(item.bytes.count)), "sha256": .string(digest)])
+            let begun = try await store.request("chat.attachments.begin", ["draftId": .string(attachmentDraftID), "providerId": .string(provider), "messageId": .string(attachmentMessageID), "name": .string(item.name), "mediaType": .string(item.mediaType), "size": .number(Double(item.bytes.count)), "sha256": .string(digest)].merging(item.fileDates) { current, _ in current })
             let uploadID = begun["uploadId"].string
             guard !uploadID.isEmpty else { throw RemoteError(message: "\(store.displayName) did not create an attachment upload.") }
             let chunkSize = max(1, min(begun["chunkSize"].int, 256 * 1024))
@@ -454,17 +454,17 @@ struct NewChatView: View {
             let finished = try await store.request("chat.attachments.finish", ["uploadId": .string(uploadID)])
             guard !finished["attachmentId"].string.isEmpty else { throw RemoteError(message: "\(store.displayName) did not confirm the attachment.") }
             ids.append(finished["attachmentId"])
-            claims.append(.object(["attachmentId": finished["attachmentId"], "name": .string(item.name), "mediaType": .string(item.mediaType), "size": .number(Double(item.bytes.count)), "sha256": .string(digest)]))
+            claims.append(.object(["attachmentId": finished["attachmentId"], "name": .string(item.name), "mediaType": .string(item.mediaType), "size": .number(Double(item.bytes.count)), "sha256": .string(digest)].merging(item.fileDates) { current, _ in current }))
         }
         let consent = try await store.request("chat.attachments.authorize", ["draftId": .string(attachmentDraftID), "providerId": .string(provider), "messageId": .string(attachmentMessageID), "attachments": .array(claims)])
         guard !consent["consentId"].string.isEmpty, consent["providerId"].string == provider else { throw RemoteError(message: "\(store.displayName) did not confirm the exact attachment destination.") }
         return (ids, consent["consentId"].string)
     }
-    @discardableResult private func addAttachment(_ data: Data, name: String, mediaType: String) -> Bool {
+    @discardableResult private func addAttachment(_ data: Data, name: String, mediaType: String, createdAt: String? = nil, modifiedAt: String? = nil) -> Bool {
         guard !sending else { return false }
         guard !supportedAttachmentTypes.isEmpty else { store.error = "\(providerName) does not accept attachments through Proteus."; return false }
         if let reason = NativeAttachmentBudget.rejection(existingCount: attachments.count, existingBytes: attachments.reduce(0) { $0 + $1.bytes.count }, incomingBytes: data.count) { store.error = reason; return false }
-        let item = NativeDraftAttachment(id: UUID().uuidString, name: String(name.prefix(120)), mediaType: mediaType, bytes: data)
+        let item = NativeDraftAttachment(id: UUID().uuidString, name: String(name.prefix(120)), mediaType: mediaType, bytes: data, createdAt: createdAt, modifiedAt: modifiedAt)
         shared.draftAttachments[attachmentScope, default: []].append(item)
         appendAttachmentRecord(store: store, draftKey: draftKey + "-attachments", item: item)
         return true
@@ -493,7 +493,7 @@ struct NewChatView: View {
         let access = url.startAccessingSecurityScopedResource(); defer { if access { url.stopAccessingSecurityScopedResource() } }
         let types = ["png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "gif": "image/gif", "webp": "image/webp", "pdf": "application/pdf", "txt": "text/plain"]
         let mediaType = types[url.pathExtension.lowercased()] ?? "application/octet-stream"
-        do { let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0; guard size > 0, size <= NativeAttachmentBudget.maxFileBytes else { throw RemoteError(message: "Choose a file between 1 byte and 8 MB.") }; return addAttachment(try Data(contentsOf: url), name: url.lastPathComponent, mediaType: mediaType) }
+        do { let values = try url.resourceValues(forKeys: [.fileSizeKey, .creationDateKey, .contentModificationDateKey]); let size = values.fileSize ?? 0; guard size > 0, size <= NativeAttachmentBudget.maxFileBytes else { throw RemoteError(message: "Choose a file between 1 byte and 8 MB.") }; return addAttachment(try Data(contentsOf: url), name: url.lastPathComponent, mediaType: mediaType, createdAt: values.creationDate.map { ISO8601DateFormatter().string(from: $0) }, modifiedAt: values.contentModificationDate.map { ISO8601DateFormatter().string(from: $0) }) }
         catch { store.error = error.localizedDescription; return false }
     }
     private func pasteAttachment() {
@@ -675,6 +675,8 @@ struct ChatView: View {
     let id: String
     var onBack: (() -> Void)? = nil
     var workspaceBrowserScope: String? = nil
+    var resourceDocumentID: String? = nil
+    @Environment(\.nativeSelectResource) private var selectResource
     /// A project/workspace tab owns the surrounding navigation bar and tab strip.
     private var embedded: Bool { workspaceBrowserScope != nil }
     @State private var selectedAgent: String?
@@ -806,7 +808,7 @@ struct ChatView: View {
         NativeActivity.group(events: run["events"].array, startingAt: index, provider: run["schedule"]["provider"].string)
     }
     private var pending: JSON { run["pending"] }
-    private var desiredDraftKey: String { pending["type"].string == "question" ? "answer:" + id + ":" + pending["id"].string : "reply:" + id }
+    private var desiredDraftKey: String { pending["type"].string == "question" && !inlinePendingQuestion ? "answer:" + id + ":" + pending["id"].string : "reply:" + id }
     private func stallMessage(now: Date) -> String {
         let progress = run["progress"]
         let last = ProviderAllowance.date(progress["lastProgressAt"].string) ?? now
@@ -815,13 +817,17 @@ struct ChatView: View {
         let stage = tools.isEmpty ? "the provider" : tools
         return "No observable progress for \(seconds / 60)m \(seconds % 60)s. Waiting for " + stage + ". Stop this turn to interrupt it, then inspect unfinished work before continuing. Queued messages are preserved."
     }
+    private var inlinePendingQuestion: Bool {
+        pending["type"].string == "question" && NativeUserQuestion.read(run).contains { $0.blocking && $0.id == pending["id"].string && $0.eventIndex >= run["eventStart"].int }
+    }
     private var nativeRun: Bool { run["schedule"]["provider"].string == "local-process" }
     private var active: Bool { ["running", "queued", "awaiting_input"].contains(run["status"].string) }
     private var contentRefreshIdentity: String { chatBrowserScope + ":" + String(phoneAreaActive) + ":" + String(describing: scenePhase) }
     private var chatBrowserScope: String { "chat:\(store.connection?.hostId ?? "local"):\(id)" }
-    private var attachmentDraftKey: String { pending["type"].string == "question" ? "question-attachments:" + id + ":" + pending["id"].string : "reply-attachments:" + id }
-    private var attachmentScope: String { pending["type"].string == "question" ? chatBrowserScope + ":" + pending["id"].string : chatBrowserScope }
-    private var supportedAttachmentTypes: [String] { store.state[pending["type"].string == "question" ? "questionAttachmentMediaTypes" : "attachmentMediaTypes"][run["schedule"]["provider"].string].array.map(\.string) }
+    private var resourceScope: String { workspaceBrowserScope ?? chatBrowserScope }
+    private var attachmentDraftKey: String { pending["type"].string == "question" && !inlinePendingQuestion ? "question-attachments:" + id + ":" + pending["id"].string : "reply-attachments:" + id }
+    private var attachmentScope: String { pending["type"].string == "question" && !inlinePendingQuestion ? chatBrowserScope + ":" + pending["id"].string : chatBrowserScope }
+    private var supportedAttachmentTypes: [String] { store.state[pending["type"].string == "question" && !inlinePendingQuestion ? "questionAttachmentMediaTypes" : "attachmentMediaTypes"][run["schedule"]["provider"].string].array.map(\.string) }
     private var attachmentsEnabled: Bool { store.state["capabilities"].array.contains(.string("chat.attachments.v1")) && !supportedAttachmentTypes.isEmpty }
     private var attachments: [NativeDraftAttachment] { shared.draftAttachments[attachmentScope] ?? [] }
     private var canSteerAttachments: Bool { let types = run["chatControls"]["steeringMediaTypes"].array.map(\.string); return attachments.allSatisfy { types.contains($0.mediaType) } }
@@ -831,9 +837,7 @@ struct ChatView: View {
             // No chat header: its actions are on the chat tab (press and hold), and the
             // project/tab bars own navigation. Only compact iPad split views keep Back.
             if sizeClass != .regular && !NativePhonePreview.enabled && !embedded { compactHeader }
-            if NativePhonePreview.enabled {
-                if !phoneChrome.controlsHidden { phoneChatNavigation }
-            } else if !embedded { childTabs }
+            if NativePhonePreview.enabled && resourceDocumentID == nil { phoneChatNavigation }
             if selectedChild == "chat" && pageSearch.visible { HStack { Spacer(minLength: 0); NativePageFindBar(search: pageSearch, loadedOnly: true) }.padding(8) }
             #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("--history-diagnostics") {
@@ -861,16 +865,10 @@ struct ChatView: View {
             }
             else if selectedChild == "chat" { conversation }
             else if selectedChild == "live" { LiveBrowserView(chatID: id, modeStatus: NativePhonePreview.enabled ? nil : AnyView(composerStatus)).environment(store) }
-            else if let tab = shared.browserTabs.first(where: { $0.id == selectedChild && $0.scope == chatBrowserScope }) {
-                TeamBrowserView(scope: chatBrowserScope, showTabs: false, tabID: tab.id, onBackToList: returnToChats).environment(\.nativeTabStep, { direction in
-                    let ids = ["chat"] + shared.orderedChatChildren(in: chatBrowserScope, documentIDs: documents.map(\.id))
-                    guard let index = ids.firstIndex(of: selectedChild), ids.indices.contains(index + direction) else { return }
-                    selectedChild = ids[index + direction]; shared.selectChatChild(selectedChild, for: chatBrowserScope)
-                }).onAppear { shared.select(tab.id, in: chatBrowserScope) }
-            } else if let document = documents.first(where: { $0.id == selectedChild }) {
+            else if resourceDocumentID != nil, let document = documents.first(where: { $0.id == selectedChild }) {
                 ChatDocumentReader(document: document, store: store, runID: id, requestLatest: {
                     if document.requestID.hasPrefix("preview:") {
-                        Task { await shared.reloadPreview(document.id, scope: chatBrowserScope, remote: store, chatID: id) }
+                        Task { await shared.reloadPreview(document.id, scope: resourceScope, remote: store, chatID: id) }
                     } else if let parentID = document.parentID, let relativePath = document.relativePath {
                         if let parent = documents.first(where: { $0.id == parentID }), !parent.requestID.isEmpty { requestDocument(fromRequestID: parent.requestID, relativePath: relativePath, parentID: parentID) }
                         else { store.error = "Open and approve the parent document first, then request this linked document again." }
@@ -883,7 +881,7 @@ struct ChatView: View {
         }
     }
     var body: some View {
-        AnyView(chatLayout).environment(\.nativeBrowserContainer, workspaceBrowserScope ?? chatBrowserScope).onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in let available = max(160, height - 88); if abs(composerAvailableHeight - available) > 1 { composerAvailableHeight = available } }.background(NativeTheme.background).navigationBarBackButtonHidden(true).toolbar(.hidden, for: .navigationBar)
+        AnyView(chatLayout).environment(\.nativeBrowserContainer, workspaceBrowserScope ?? "main").onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in let available = max(160, height - 88); if abs(composerAvailableHeight - available) > 1 { composerAvailableHeight = available } }.background(NativeTheme.background).navigationBarBackButtonHidden(true).toolbar(.hidden, for: .navigationBar)
         .modifier(NativePhoneBackNavigation())
         .simultaneousGesture(TapGesture(count: 2).onEnded { if NativePhonePreview.enabled && !composerHasFocus && !shared.tabs(in: chatBrowserScope).contains(where: { $0.id == selectedChild }) { phoneChrome.toggleControls() } })
         .background { if NativeDesignPreview.enabled && phoneAreaActive { NativePhoneSurface(chrome: phoneChrome, overviewEnabled: !shared.tabs(in: chatBrowserScope).contains(where: { $0.id == selectedChild })) } }
@@ -897,9 +895,9 @@ struct ChatView: View {
             if ProcessInfo.processInfo.arguments.contains("--synthetic-desktop-browser-tabs") { shared.replayDesktopBrowserFixture(scope: chatBrowserScope) }
             #endif
             while !Task.isCancelled {
-                await shared.refreshContentTabs(scope: chatBrowserScope, remote: store, kind: "chat", id: id)
+                if !embedded { await shared.refreshContentTabs(scope: chatBrowserScope, remote: store, kind: "chat", id: id) }
                 guard !Task.isCancelled else { return }
-                await shared.refreshPreviews(scope: chatBrowserScope, remote: store, chatID: id)
+                await shared.refreshPreviews(scope: resourceScope, remote: store, chatID: id)
                 try? await Task.sleep(for: .seconds(2))
             }
         }
@@ -907,12 +905,13 @@ struct ChatView: View {
             if NativeDesignPreview.enabled { registerPhoneTab() }
             documents = restoredDocumentTabs()
             let saved = shared.chatSelectedChildren[chatBrowserScope] ?? shared.selected(in: chatBrowserScope) ?? "chat"
-            selectedChild = saved == "chat" || saved == "live" || shared.tabs(in: chatBrowserScope).contains(where: { $0.id == saved }) || documents.contains(where: { $0.id == saved }) ? saved : "chat"
+            selectedChild = resourceDocumentID ?? (["chat", "live"].contains(saved) ? saved : "chat")
+            if resourceDocumentID == nil { shared.selectChatChild(selectedChild, for: chatBrowserScope) }
         }
             .onDisappear { documentTask?.cancel(); questionRevealTask?.cancel(); documents = [] }
             .onChange(of: pageSearch.query) { _, query in if !query.isEmpty { followLatest = false; restoringConversation = false; pendingAnchorRestore = nil; pendingInitialRestore = nil } }
             .onChange(of: shared.chatSelectedChildren[chatBrowserScope]) { _, value in
-                if let value, value == "chat" || value == "live" || shared.tabs(in: chatBrowserScope).contains(where: { $0.id == value }) || documents.contains(where: { $0.id == value }) { selectedChild = value }
+                if resourceDocumentID == nil, let value, ["chat", "live"].contains(value) { selectedChild = value }
             }
             .onChange(of: shared.documentTabs) { _, _ in
                 documents = restoredDocumentTabs()
@@ -920,7 +919,7 @@ struct ChatView: View {
             }
             .sheet(isPresented: $photoPicker) { NativePhotoSelection(limit: NativeAttachmentBudget.maxFiles - attachments.count) { results in photoPicker = false; if !results.isEmpty { Task { await importPhotos(results) } } } }
             .fileImporter(isPresented: $filePicker, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in if case .success(let urls) = result { for url in urls { if !importFile(url) { break } } } else if case .failure(let error) = result { store.error = error.localizedDescription } }
-            .sheet(item: $previewAttachment) { attachment in AttachmentPreview(attachment: attachment) { previewAttachment = nil } }
+            .sheet(item: $previewAttachment) { attachment in AttachmentPreview(attachment: attachment, siblings: attachments) { previewAttachment = nil } }
             .sheet(isPresented: $confirmAttachmentSend) { AttachmentSendReview(attachments: attachments, providerName: providerName, hostName: store.displayName) { confirmAttachmentSend = false; Task { await sendAttachments() } } }
             .alert("Rename tab", isPresented: Binding(get: { renameChildID != nil }, set: { if !$0 { renameChildID = nil } })) {
                 TextField("Tab name", text: $renameChildTitle)
@@ -955,10 +954,10 @@ struct ChatView: View {
 
     }
     private func restoredDocumentTabs() -> [ChatDocumentTab] {
-        shared.documents(in: chatBrowserScope).map { descriptor in
+        shared.documents(in: resourceScope).map { descriptor in
             let existing = documents.first { $0.id == descriptor.id }
-            let session = shared.documentSession(for: descriptor.id, in: chatBrowserScope)
-            return ChatDocumentTab(id: descriptor.id, title: descriptor.title, version: session?.version ?? existing?.version ?? "", content: shared.content(for: descriptor.id, in: chatBrowserScope) ?? existing?.content, mediaType: descriptor.mediaType, readAt: session?.readAt ?? existing?.readAt ?? "", requestID: session?.requestID ?? existing?.requestID ?? (descriptor.previewSource == nil ? "" : "preview:" + descriptor.id), assets: session?.assets ?? existing?.assets ?? [], links: session?.links ?? existing?.links ?? [], assetDataURLs: session?.assetDataURLs ?? existing?.assetDataURLs ?? [:], parentID: descriptor.parentID, relativePath: descriptor.relativePath, fileCreatedAt: session?.fileCreatedAt ?? existing?.fileCreatedAt ?? "", fileModifiedAt: session?.fileModifiedAt ?? existing?.fileModifiedAt ?? "")
+            let session = shared.documentSession(for: descriptor.id, in: resourceScope)
+            return ChatDocumentTab(id: descriptor.id, title: descriptor.title, version: session?.version ?? existing?.version ?? "", content: shared.content(for: descriptor.id, in: resourceScope) ?? existing?.content, mediaType: descriptor.mediaType, readAt: session?.readAt ?? existing?.readAt ?? "", requestID: session?.requestID ?? existing?.requestID ?? (descriptor.previewSource == nil ? "" : "preview:" + descriptor.id), assets: session?.assets ?? existing?.assets ?? [], links: session?.links ?? existing?.links ?? [], assetDataURLs: session?.assetDataURLs ?? existing?.assetDataURLs ?? [:], parentID: descriptor.parentID, relativePath: descriptor.relativePath, fileCreatedAt: session?.fileCreatedAt ?? existing?.fileCreatedAt ?? "", fileModifiedAt: session?.fileModifiedAt ?? existing?.fileModifiedAt ?? "")
         }
     }
     private func registerPhoneTab() {
@@ -977,7 +976,6 @@ struct ChatView: View {
     private func returnToChats() { if let onBack { onBack() } else { dismiss() } }
     private var phoneChatNavigation: some View {
         HStack(spacing: 0) {
-            if !embedded { NativeSidebarButton() }
             HStack(spacing: 8) {
                 modeLink("Chat", mode: "chat", identifier: "chat-mode-conversation")
                 if store.state["capabilities"].array.contains(.string("browser.live.v1")) {
@@ -987,7 +985,6 @@ struct ChatView: View {
             }.font(.caption).padding(.horizontal, 8)
             Spacer(minLength: 0)
             Button { phoneChrome.showTabs?() } label: { NativeTabOverviewIcon().frame(width: 44, height: 44) }.accessibilityLabel("Tab overview").accessibilityIdentifier("chat-tab-overview")
-            Button { shared.open(nil, scope: chatBrowserScope); selectedChild = shared.selected(in: chatBrowserScope) ?? "chat"; shared.selectChatChild(selectedChild, for: chatBrowserScope) } label: { Image(systemName: "plus").frame(width: 44, height: 44) }.accessibilityLabel("Add chat tab")
             chatActions
         }.buttonStyle(.plain).nativeTabBar().accessibilityElement(children: .contain).accessibilityIdentifier("phone-chat-navigation")
     }
@@ -1005,7 +1002,6 @@ struct ChatView: View {
                 if NativePhonePreview.enabled && !run["subagents"].array.isEmpty {
                     Button(selectedAgent == nil ? "Agents (\(run["subagents"].array.count))" : "Parent conversation", systemImage: "person.2") { selectedAgent = selectedAgent == nil ? run["subagents"].array.first?["id"].string : nil }.accessibilityIdentifier("chat-agents")
                 }
-                ForEach(documents) { document in Button(document.title, systemImage: "doc") { selectedChild = document.id; shared.selectChatChild(document.id, for: chatBrowserScope) } }
                 Button("Copy chat link", systemImage: "link") { UIPasteboard.general.url = NativeChatLink.url(host: store.connection?.hostId ?? "", id: id) }
                 if store.state["capabilities"].array.contains(.string("chat.rename.v1")) { Button("Rename", systemImage: "pencil") { showRename = true } }
                 if lifecycleEnabled {
@@ -1013,66 +1009,6 @@ struct ChatView: View {
                     Button("Delete chat", systemImage: "trash", role: .destructive) { confirmDelete = true }.disabled(chatHasPendingWork(run))
                 }
             } label: { Image(systemName: "ellipsis.circle").font(.system(size: 22)).frame(width: 44, height: 44).contentShape(Rectangle()) }.frame(width: 44, height: 44).contentShape(Rectangle()).accessibilityLabel("Chat actions").accessibilityIdentifier("chat-actions")
-    }
-    private var childTabs: some View {
-        HStack(spacing: 0) {
-            // An unassigned iPhone chat has no project bar above it, so this row holds the drawer.
-            if NativePhonePreview.enabled && !embedded { NativeSidebarButton(); Divider().frame(height: 24) }
-            Button { if NativePhonePreview.enabled { phoneChrome.captureCurrent() }; selectedChild = "chat"; shared.selectChatChild("chat", for: chatBrowserScope) } label: { Label("Chat", systemImage: "bubble.left.and.bubble.right") }.accessibilityIdentifier("chat-conversation-tab")
-                .lineLimit(1).padding(.horizontal, 12).frame(minHeight: 44)
-                .overlay(alignment: .bottom) { Rectangle().fill(selectedChild == "chat" ? NativeTheme.accent : .clear).frame(height: 2) }
-                .nativeChatTabActions(id)
-            Divider().frame(height: 24)
-NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs: documents.map(\.id)), selection: selectedChild) { HStack(spacing: 0) {
-            ForEach(shared.orderedChatChildren(in: chatBrowserScope, documentIDs: documents.map(\.id)), id: \.self) { childID in
-                HStack {
-                    if let tab = shared.tabs(in: chatBrowserScope).first(where: { $0.id == childID }) {
-                        Button { if NativePhonePreview.enabled { phoneChrome.captureCurrent() }; shared.select(tab.id, in: chatBrowserScope); selectedChild = tab.id; shared.selectChatChild(tab.id, for: chatBrowserScope) } label: { NativeContentTabLabel(title: shared.browserLabel(tab), symbol: NativeTabSymbol.name(kind: "browser")) }.lineLimit(1).accessibilityLabel(tab.title)
-                            .accessibilityIdentifier("chat-browser-tab-" + (tab.contentTabId ?? tab.id))
-                            .accessibilityValue(selectedChild == tab.id ? "Active" : "Inactive")
-                        Button { closeChild(tab.id) } label: { Image(systemName: "xmark").font(.caption2) }.accessibilityLabel("Close " + tab.title)
-                    } else if let document = documents.first(where: { $0.id == childID }) {
-                        Button { if NativePhonePreview.enabled { phoneChrome.captureCurrent() }; selectedChild = document.id; shared.selectChatChild(document.id, for: chatBrowserScope) } label: { NativeContentTabLabel(title: document.title, symbol: NativeTabSymbol.name(kind: "document", mediaType: document.mediaType)) }.lineLimit(1).accessibilityLabel(document.title)
-                        Button { closeChild(document.id) } label: { Image(systemName: "xmark").font(.caption2) }.accessibilityLabel("Close " + document.title)
-                    }
-                }.padding(12).overlay(alignment: .bottom) { Rectangle().fill(selectedChild == childID ? NativeTheme.accent : .clear).frame(height: 2) }
-                    .draggable(childID).dropDestination(for: String.self) { ids, _ in guard let source = ids.first else { return false }; shared.moveChatChild(source, before: childID, in: chatBrowserScope, documentIDs: documents.map(\.id)); return true }
-                    .contextMenu {
-                        Button("Rename tab", systemImage: "pencil") { renameChildID = childID; renameChildTitle = shared.tabs(in: chatBrowserScope).first(where: { $0.id == childID })?.title ?? documents.first(where: { $0.id == childID })?.title ?? "" }
-                        Button("Move left", systemImage: "arrow.left") { shared.shiftChatChild(childID, by: -1, in: chatBrowserScope, documentIDs: documents.map(\.id)) }.disabled(shared.orderedChatChildren(in: chatBrowserScope, documentIDs: documents.map(\.id)).first == childID)
-                        Button("Move right", systemImage: "arrow.right") { shared.shiftChatChild(childID, by: 1, in: chatBrowserScope, documentIDs: documents.map(\.id)) }.disabled(shared.orderedChatChildren(in: chatBrowserScope, documentIDs: documents.map(\.id)).last == childID)
-                        Button("Close tab", systemImage: "xmark") { closeChild(childID) }
-                        Button("Close other tabs") { for other in shared.orderedChatChildren(in: chatBrowserScope, documentIDs: documents.map(\.id)) where other != childID { closeChild(other) } }.disabled(shared.orderedChatChildren(in: chatBrowserScope, documentIDs: documents.map(\.id)).count < 2)
-                        Button("Close tabs to the right") { let children = shared.orderedChatChildren(in: chatBrowserScope, documentIDs: documents.map(\.id)); if let index = children.firstIndex(of: childID) { for other in children.dropFirst(index + 1) { closeChild(other) } } }.disabled(shared.orderedChatChildren(in: chatBrowserScope, documentIDs: documents.map(\.id)).last == childID)
-                    }
-                .id(childID)
-                Divider().frame(height: 24)
-            }
-        }.buttonStyle(.plain) }.scrollIndicators(.hidden).accessibilityIdentifier("chat-child-tab-strip")
-            if selectedChild == "chat" { Button { pageSearch.visible.toggle() } label: { Image(systemName: "magnifyingglass") }.padding(12).accessibilityLabel("Find in chat").keyboardShortcut("f", modifiers: .command) }
-            if NativePhonePreview.enabled && !shared.tabs(in: chatBrowserScope).contains(where: { $0.id == selectedChild }) {
-                Button { phoneChrome.showTabs?() } label: { NativeTabOverviewIcon().frame(width: 44, height: 44) }.accessibilityLabel("Tab overview").accessibilityIdentifier("chat-tab-overview")
-            }
-            Button { shared.open(nil, scope: chatBrowserScope); selectedChild = shared.selected(in: chatBrowserScope) ?? "chat"; shared.selectChatChild(selectedChild, for: chatBrowserScope) } label: { Image(systemName: "plus") }.padding(12).accessibilityLabel("Add chat tab")
-            #if DEBUG
-            if ProcessInfo.processInfo.arguments.contains("--show-scroll-fixture-controls") {
-                TimelineView(.periodic(from: .now, by: 0.2)) { _ in Text(String(Int(conversationOffset))).font(.caption2.monospacedDigit()).frame(width: 54).accessibilityIdentifier("chat-scroll-offset") }
-                Text(String(visibleAnchor?.anchor ?? -1) + ":" + String(Int(visibleAnchor?.inset ?? 0)))
-                    .font(.caption2.monospacedDigit()).frame(width: 72).accessibilityIdentifier("chat-scroll-anchor")
-                Button("Read long message") {
-                    followLatest = false
-                    composerHasFocus = false; composerExpanded = false
-                    userReadingGesture = true
-                    let commandID = UUID()
-                    fixtureScrollStep = 0
-                    fixtureScrollID = commandID
-                    scrollCommand = NativeScrollCommand(id: commandID, y: 4800, minimumContentHeight: 9500)
-                }.font(.caption2).accessibilityIdentifier("read-long-message-fixture")
-                Button("Prepend fixture") { prependFixtureHistory() }.font(.caption2).accessibilityIdentifier("prepend-chat-fixture")
-                Text(scrollTrace.joined(separator: " | ")).font(.caption2).lineLimit(1).frame(width: 100).accessibilityIdentifier("chat-scroll-trace")
-            }
-            #endif
-        }.nativeTabBar()
     }
     private func closeChild(_ id: String) {
         if NativePhonePreview.enabled { phoneChrome.visited.removeAll { $0.id == "document:" + (store.connection?.hostId ?? "") + ":" + id } }
@@ -1103,19 +1039,20 @@ NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs
                 ForEach(visibleEventIndices, id: \.self) { absoluteIndex in
                     let index = absoluteIndex - run["eventStart"].int
                     let event = run["events"].array[index]
+                    let eventQuestions = NativeUserQuestion.read(run).filter { $0.eventIndex == absoluteIndex }
                     VStack(alignment: .leading, spacing: 0) {
                         if routineActivity(event) {
                             ChatActivityGroupView(events: activityGroup(startingAt: index), hostName: store.state["hostName"].string, runID: id, runStatus: run["status"].string, search: pageSearch, eventStart: absoluteIndex)
                         } else if event["role"].string != "assistant" || !event["text"].string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                             if !event["data"]["delivery"]["state"].string.isEmpty { Text(event["data"]["delivery"]["state"].string.capitalized).font(.caption2).foregroundStyle(.teal) }
-                            MessageView(role: event["role"].string == "assistant" ? assistantName(event) : event["role"].string, text: event["text"].string, runID: id, timestamp: event["timestamp"].string.isEmpty ? event["at"].string : event["timestamp"].string, turn: event["role"].string == "assistant" ? messageTurn(at: index) : .null, actionID: MessageActions.eligible(event) ? "\(store.connection?.hostId ?? "local"):\(id):\(absoluteIndex):\(event["at"].string)" : nil, sentAttachments: event["data"]["attachments"].array, onDocumentLink: event["role"].string == "assistant" ? { source in openDocument(source) } : nil, onResize: { Task { @MainActor in await Task.yield(); if followLatest && !userReadingGesture && !restoringConversation && pageSearch.query.isEmpty { proxy.scrollTo("chat-end", anchor: .bottom) } } }, search: pageSearch, searchKey: absoluteIndex, viewport: CGRect(x: 0, y: conversationViewportTop, width: conversationViewportWidth, height: max(1, composerAvailableHeight)))
+                            MessageView(role: event["role"].string == "assistant" ? assistantName(event) : event["role"].string, text: NativeUserQuestion.presentationText(event["text"].string, questions: eventQuestions), runID: id, timestamp: event["timestamp"].string.isEmpty ? event["at"].string : event["timestamp"].string, turn: event["role"].string == "assistant" ? messageTurn(at: index) : .null, actionID: MessageActions.eligible(event) ? "\(store.connection?.hostId ?? "local"):\(id):\(absoluteIndex):\(event["at"].string)" : nil, sentAttachments: event["data"]["attachments"].array, onDocumentLink: event["role"].string == "assistant" ? { source in openDocument(source) } : nil, onResize: { Task { @MainActor in await Task.yield(); if followLatest && !userReadingGesture && !restoringConversation && pageSearch.query.isEmpty { proxy.scrollTo("chat-end", anchor: .bottom) } } }, search: pageSearch, searchKey: absoluteIndex, viewport: CGRect(x: 0, y: conversationViewportTop, width: conversationViewportWidth, height: max(1, composerAvailableHeight)))
                             if event["role"].string == "assistant", let turn = NativeFusion.turn(run, id: event["data"]["fusion"]["fusionId"].string) {
                                 NativeFusionAttribution(run: run, turn: turn).padding(.horizontal, 4).padding(.bottom, 6)
                             }
-                            let eventQuestions = NativeUserQuestion.read(run).filter { $0.eventIndex == absoluteIndex }
                             ForEach(eventQuestions) { question in
-                                NativeUserQuestionCard(question: question, showHeading: !question.promptVisible(in: event["text"].string, among: eventQuestions.count)) { value, messageID in
-                                    _ = try await store.request(question.blocking ? "chat.reply" : "chat.answer-question", ["id": .string(id), "answer": .string(value), "messageId": .string(messageID), question.blocking ? "requestId" : "questionId": .string(question.id)])
+                                NativeUserQuestionCard(question: question, showHeading: !question.promptVisible(in: event["text"].string, among: eventQuestions.count), chatID: id) { value, messageID, delivery in
+                                    var args = delivery; args["id"] = .string(id); args["answer"] = .string(value); args["messageId"] = .string(messageID); args[question.blocking ? "requestId" : "questionId"] = .string(question.id)
+                                    _ = try await store.request(question.blocking ? "chat.reply" : "chat.answer-question", args)
                                     await store.openChat(id)
                                 }
                                 .id("user-question-" + question.id)
@@ -1165,7 +1102,7 @@ NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs
                         }
                 }
                 ForEach(run["liveMessages"].object.keys.sorted(), id: \.self) { key in MessageView(role: "\(assistantName(.null)) · streaming", text: run["liveMessages"][key].string, runID: id, turn: streamingTurn(for: key), onResize: { Task { @MainActor in await Task.yield(); if followLatest && !userReadingGesture && !restoringConversation { proxy.scrollTo("chat-end", anchor: .bottom) } } }) }
-                if pending != .null {
+                if pending != .null && !inlinePendingQuestion {
                     VStack(alignment: .leading, spacing: 12) {
                         Label("Your input is needed", systemImage: "person.crop.circle.badge.questionmark").font(.headline)
                         Text(pending["question"].string)
@@ -1328,12 +1265,12 @@ NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs
             }
             .onChange(of: run["liveMessages"]) { _, _ in if followLatest { proxy.scrollTo("chat-end", anchor: .bottom) } }
             .safeAreaInset(edge: .top) {
-                NativeUserQuestionQueue(questions: NativeUserQuestion.read(run)) { question in
+                NativeUserQuestionQueue(questions: NativeUserQuestion.read(run), chatKey: chatBrowserScope) { question in
                     questionRevealTask?.cancel(); questionRevealTask = Task { await revealQuestion(question, with: proxy) }
                 }
             }
         }
-            .safeAreaInset(edge: .bottom) { if nativeRun { VStack { Text("Native Omi processing · outcomes are recorded by the worker.").font(.caption); if active { Button("Stop process", role: .destructive) { act("chat.cancel", [:]) } } }.padding().background(NativeTheme.surface) } else { composer } }
+            .safeAreaInset(edge: .bottom, spacing: 0) { if nativeRun { VStack { Text("Native Omi processing · outcomes are recorded by the worker.").font(.caption); if active { Button("Stop process", role: .destructive) { act("chat.cancel", [:]) } } }.padding().background(NativeTheme.surface) } else { composer } }
     }
     private func restoreConversation(_ location: NativeChatScrollLocation, with proxy: ScrollViewProxy) {
         let transaction = UUID()
@@ -1393,10 +1330,10 @@ NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs
     }
     private func submitReply() {
         guard !cannotSend else { return }
-        if pending["type"].string == "question" { if attachments.isEmpty { answer(text) } else { attachmentSendMode = "answer"; confirmAttachmentSend = true } } else { send("queue") }
+        if pending["type"].string == "question" && !inlinePendingQuestion { if attachments.isEmpty { answer(text) } else { attachmentSendMode = "answer"; confirmAttachmentSend = true } } else { send("queue") }
     }
     private var replyPlaceholder: String {
-        pending["type"].string == "question" ? "Add your feedback…" : active ? "Add an update while this runs…" : "Continue this conversation…"
+        pending["type"].string == "question" && !inlinePendingQuestion ? "Add your feedback…" : active ? "Add an update while this runs…" : "Continue this conversation…"
     }
     private var replyField: some View {
         Group {
@@ -1455,9 +1392,6 @@ NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs
     private var composerStatus: some View {
             HStack(spacing: 8) {
                 ConnectionStatus().accessibilityIdentifier("chat-composer-connection-status")
-                if !documents.isEmpty {
-                    Menu { ForEach(documents) { document in Button(document.title) { selectedChild = document.id; shared.selectChatChild(document.id, for: chatBrowserScope) } } } label: { Image(systemName: "doc") }.accessibilityLabel("Chat documents")
-                }
                 if !NativePhonePreview.enabled && store.state["capabilities"].array.contains(.string("browser.live.v1")) {
                     modeLink("Chat", mode: "chat", identifier: "chat-mode-conversation")
                     Text("|").foregroundStyle(.secondary)
@@ -1505,7 +1439,7 @@ NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs
                             .background(cannotSend ? Color(white: 0.25) : NativeTheme.accent, in: Circle())
                             .overlay(alignment: .bottomTrailing) { if active && pending["type"].string != "question" { Image(systemName: "clock").font(.system(size: 12)).background(NativeTheme.accent, in: Circle()) } }
                     }.buttonStyle(.plain).foregroundStyle(cannotSend ? Color(white: 0.82) : Color(red: 0.08, green: 0.16, blue: 0.07))
-                        .disabled(cannotSend || (!attachments.isEmpty && !attachmentsEnabled)).accessibilityLabel(pending["type"].string == "question" ? "Send feedback" : active ? "Queue message" : "Send message").accessibilityIdentifier("send-message")
+                        .disabled(cannotSend || (!attachments.isEmpty && !attachmentsEnabled)).accessibilityLabel(pending["type"].string == "question" && !inlinePendingQuestion ? "Send feedback" : active ? "Queue message" : "Send message").accessibilityIdentifier("send-message")
                     if ["running", "awaiting_input"].contains(run["status"].string) {
                         stopButton
                     }
@@ -1576,7 +1510,7 @@ NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs
             var attachmentClaims: [JSON] = []
             for item in selectedFiles {
                 let digest = SHA256.hash(data: item.bytes).map { String(format: "%02x", $0) }.joined()
-                let started = try await store.request("chat.attachments.begin", ["id": .string(id), "messageId": .string(messageID), "providerId": .string(providerID), "name": .string(item.name), "mediaType": .string(item.mediaType), "size": .number(Double(item.bytes.count)), "sha256": .string(digest)])
+                let started = try await store.request("chat.attachments.begin", ["id": .string(id), "messageId": .string(messageID), "providerId": .string(providerID), "name": .string(item.name), "mediaType": .string(item.mediaType), "size": .number(Double(item.bytes.count)), "sha256": .string(digest)].merging(item.fileDates) { current, _ in current })
                 let uploadID = started["uploadId"].string
                 let chunkSize = max(1, min(started["chunkSize"].int, 256 * 1024))
                 guard !uploadID.isEmpty else { throw RemoteError(message: "\(store.displayName) did not create an attachment upload.") }
@@ -1588,7 +1522,7 @@ NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs
                 let finished = try await store.request("chat.attachments.finish", ["uploadId": .string(uploadID)])
                 guard !finished["attachmentId"].string.isEmpty else { throw RemoteError(message: "\(store.displayName) did not confirm the attachment.") }
                 attachmentIDs.append(finished["attachmentId"])
-                attachmentClaims.append(.object(["attachmentId": finished["attachmentId"], "name": .string(item.name), "mediaType": .string(item.mediaType), "size": .number(Double(item.bytes.count)), "sha256": .string(digest)]))
+                attachmentClaims.append(.object(["attachmentId": finished["attachmentId"], "name": .string(item.name), "mediaType": .string(item.mediaType), "size": .number(Double(item.bytes.count)), "sha256": .string(digest)].merging(item.fileDates) { current, _ in current }))
             }
             let consent = try await store.request("chat.attachments.authorize", ["id": .string(id), "providerId": .string(providerID), "messageId": .string(messageID), "attachments": .array(attachmentClaims)])
             guard !consent["consentId"].string.isEmpty, consent["providerId"].string == providerID else { throw RemoteError(message: "\(store.displayName) did not confirm the exact attachment destination.") }
@@ -1611,13 +1545,13 @@ NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs
             await store.openChat(id)
         } catch { store.error = "Attachment was not sent: " + error.localizedDescription }
     }
-    @discardableResult private func addAttachment(_ data: Data, name: String, mediaType: String) -> Bool {
+    @discardableResult private func addAttachment(_ data: Data, name: String, mediaType: String, createdAt: String? = nil, modifiedAt: String? = nil) -> Bool {
         guard !busy else { return false }
         guard attachmentsEnabled else { store.error = "\(store.displayName) has not enabled approved attachments for this provider yet."; return false }
-        guard pending["type"].string != "question" || supportedAttachmentTypes.contains(mediaType) else { store.error = "This question accepts images or plain text."; return false }
-        if pending["type"].string == "question", attachments.count >= 4 { store.error = "Question replies accept up to four files."; return false }
+        guard pending["type"].string != "question" || inlinePendingQuestion || supportedAttachmentTypes.contains(mediaType) else { store.error = "This question accepts images or plain text."; return false }
+        if pending["type"].string == "question", !inlinePendingQuestion, attachments.count >= 4 { store.error = "Question replies accept up to four files."; return false }
         if let reason = NativeAttachmentBudget.rejection(existingCount: attachments.count, existingBytes: attachments.reduce(0) { $0 + $1.bytes.count }, incomingBytes: data.count) { store.error = reason; return false }
-        let item = NativeDraftAttachment(id: UUID().uuidString, name: String(name.prefix(120)), mediaType: mediaType, bytes: data)
+        let item = NativeDraftAttachment(id: UUID().uuidString, name: String(name.prefix(120)), mediaType: mediaType, bytes: data, createdAt: createdAt, modifiedAt: modifiedAt)
         shared.draftAttachments[attachmentScope, default: []].append(item)
         appendAttachmentRecord(store: store, draftKey: attachmentDraftKey, item: item)
         return true
@@ -1649,10 +1583,10 @@ NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs
         let types = ["png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "gif": "image/gif", "webp": "image/webp", "pdf": "application/pdf", "txt": "text/plain"]
         let mediaType = types[suffix] ?? "application/octet-stream"
         do {
-            let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+            let values = try url.resourceValues(forKeys: [.fileSizeKey, .creationDateKey, .contentModificationDateKey]); let size = values.fileSize ?? 0
             guard size > 0, size <= NativeAttachmentBudget.maxFileBytes else { throw RemoteError(message: "Choose a file between 1 byte and 8 MB.") }
             let data = try Data(contentsOf: url)
-            return addAttachment(data, name: url.lastPathComponent, mediaType: mediaType)
+            return addAttachment(data, name: url.lastPathComponent, mediaType: mediaType, createdAt: values.creationDate.map { ISO8601DateFormatter().string(from: $0) }, modifiedAt: values.contentModificationDate.map { ISO8601DateFormatter().string(from: $0) })
         } catch { store.error = error.localizedDescription; return false }
     }
     private func pasteAttachment() {
@@ -1735,8 +1669,8 @@ NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs
         if let url = URL(string: source), ["http", "https"].contains(url.scheme ?? ""), ["localhost", "127.0.0.1", "::1"].contains(url.host ?? "") {
             Task {
                 guard !Task.isCancelled else { return }
-                await shared.refreshPreviews(scope: chatBrowserScope, remote: store, chatID: id)
-                if let preview = shared.documents(in: chatBrowserScope).first(where: { $0.previewSource == source }) { selectedChild = preview.id; shared.selectChatChild(preview.id, for: chatBrowserScope) }
+                await shared.refreshPreviews(scope: resourceScope, remote: store, chatID: id)
+                if let preview = shared.documents(in: resourceScope).first(where: { $0.previewSource == source }), let selectResource { selectResource("document:" + preview.id, resourceScope) }
                 else { store.error = "Enable View chat documents on \(store.displayName) and keep the design server running to open this preview." }
             }
             return
@@ -1792,9 +1726,10 @@ NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs
                 let title = result["title"].string.isEmpty ? "Document" : result["title"].string
                 let tab = ChatDocumentTab(id: stableID, title: title, version: result["version"].string, content: result["content"].string, mediaType: mediaType, readAt: result["readAt"].string, requestID: requestID, assets: assets, links: result["links"].array, assetDataURLs: assetURLs, parentID: parentID, relativePath: relativePath, fileCreatedAt: result["fileCreatedAt"].string, fileModifiedAt: result["fileModifiedAt"].string)
                 if let index = documents.firstIndex(where: { $0.id == stableID }) { documents[index] = tab } else { documents.append(tab) }
-                shared.rememberDocument(NativeDocumentDescriptor(id: tab.id, chatKey: chatBrowserScope, title: tab.title, mediaType: tab.mediaType, parentID: parentID, relativePath: relativePath), content: result["content"].string)
-                shared.rememberDocumentSession(NativeDocumentSession(requestID: requestID, version: tab.version, readAt: tab.readAt, assets: assets, links: tab.links, assetDataURLs: assetURLs, fileCreatedAt: tab.fileCreatedAt, fileModifiedAt: tab.fileModifiedAt), for: stableID, in: chatBrowserScope)
-                selectedChild = tab.id
+                shared.rememberDocument(NativeDocumentDescriptor(id: tab.id, chatKey: resourceScope, title: tab.title, mediaType: tab.mediaType, parentID: parentID, relativePath: relativePath, sourceChatID: id), content: result["content"].string)
+                shared.rememberDocumentSession(NativeDocumentSession(requestID: requestID, version: tab.version, readAt: tab.readAt, assets: assets, links: tab.links, assetDataURLs: assetURLs, fileCreatedAt: tab.fileCreatedAt, fileModifiedAt: tab.fileModifiedAt), for: stableID, in: resourceScope)
+                if let selectResource { selectResource("document:" + tab.id, resourceScope) }
+                else { store.error = "Document approved. Open it from the parent tab list." }
             } catch is CancellationError { }
             catch { store.error = error.localizedDescription }
             documentNotice = nil; documentTask = nil
@@ -2065,7 +2000,7 @@ struct MessageView: View {
     var turn: JSON = .null
     var actionID: String? = nil
     var sentAttachments: [JSON] = []
-    @State private var attachmentPreview: URL?
+    @State private var attachmentPreviewIndex: Int?
     @State private var loadingAttachment: String?
     var onDocumentLink: ((String) -> Void)? = nil
     var onResize: () -> Void = {}
@@ -2094,7 +2029,7 @@ struct MessageView: View {
         }.onGeometryChange(for: Bool.self) { geometry in
             guard let viewport, viewport.width > 0 else { return true }
             return geometry.frame(in: .global).intersects(viewport.insetBy(dx: 0, dy: -max(600, viewport.height * 1.5)))
-        } action: { visible in richVisible = visible }.quickLookPreview($attachmentPreview)
+        } action: { visible in richVisible = visible }.sheet(isPresented: Binding(get: { attachmentPreviewIndex != nil }, set: { if !$0 { attachmentPreviewIndex = nil } })) { if let index = attachmentPreviewIndex { NativeStoredAttachmentViewer(chatID: runID, items: sentAttachments, index: index).environment(store) } }
         .padding().background(role == "user" ? NativePalette.shared.color("user") : role == "system" ? NativeTheme.background : NativePalette.shared.color("assistant"), in: RoundedRectangle(cornerRadius: 16)).overlay(alignment: .leading) { Rectangle().fill(NativePalette.shared.color(role == "user" ? "userEdge" : "assistantEdge")).frame(width: 3) }.clipShape(RoundedRectangle(cornerRadius: 16)).padding(.leading, role == "user" ? 20 : 0).padding(.trailing, actionID != nil || role.contains("streaming") ? 20 : 0)
     }
 }
@@ -2148,19 +2083,32 @@ struct BackdropImagePreview: View {
 struct AttachmentPreview: View {
     @Environment(\.dismiss) private var dismiss
     let attachment: NativeDraftAttachment
+    var siblings: [NativeDraftAttachment] = []
     let close: () -> Void
+    @State private var selectedID: String?
+    private var items: [NativeDraftAttachment] { siblings.isEmpty ? [attachment] : siblings }
+    private var index: Int { items.firstIndex { $0.id == (selectedID ?? attachment.id) } ?? 0 }
+    private var current: NativeDraftAttachment { items[index] }
+    private func step(_ amount: Int) { let target = index + amount; if items.indices.contains(target) { selectedID = items[target].id } }
     var body: some View {
         NavigationStack {
             Group {
-                if let image = attachment.image {
+                if let image = current.image {
                     BackdropImagePreview(image: image, imageLabel: "Attachment image preview") { close(); dismiss() }
-                } else if attachment.mediaType == "text/plain", let text = String(data: attachment.bytes, encoding: .utf8) {
+                } else if current.mediaType == "text/plain", let text = String(data: current.bytes, encoding: .utf8) {
                     ScrollView { Text(text).font(.body.monospaced()).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading).padding() }
                 } else {
-                    ContentUnavailableView(attachment.name, systemImage: attachment.mediaType == "application/pdf" ? "doc.richtext" : "doc", description: Text("\(ByteCountFormatter.string(fromByteCount: Int64(attachment.bytes.count), countStyle: .file)) · Preview not available here"))
+                    ContentUnavailableView(current.name, systemImage: current.mediaType == "application/pdf" ? "doc.richtext" : "doc", description: Text("\(ByteCountFormatter.string(fromByteCount: Int64(current.bytes.count), countStyle: .file)) · Preview not available here"))
                 }
-            }.background(NativeTheme.background).navigationTitle(attachment.name).navigationBarTitleDisplayMode(.inline)
-                .toolbar { ToolbarItem(placement: .confirmationAction) { Button { close(); dismiss() } label: { Image(systemName: "xmark") }.accessibilityLabel("Close preview").keyboardShortcut(.cancelAction) } }
+            }.background(NativeTheme.background).navigationTitle(current.name).navigationBarTitleDisplayMode(.inline)
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    HStack { Text(current.name).lineLimit(1); Spacer(); Text([current.createdAt.map { "Created " + $0 }, current.modifiedAt.map { "Modified " + $0 }, ByteCountFormatter.string(fromByteCount: Int64(current.bytes.count), countStyle: .file)].compactMap { $0 }.joined(separator: " · ")).font(.caption).foregroundStyle(.secondary) }.padding(12)
+                }
+                .simultaneousGesture(DragGesture(minimumDistance: 80).onEnded { value in if abs(value.translation.width) > abs(value.translation.height) * 2 { step(value.translation.width < 0 ? 1 : -1) } })
+                .toolbar { ToolbarItemGroup(placement: .topBarLeading) {
+                    Button { step(-1) } label: { Image(systemName: "chevron.left") }.disabled(index == 0).accessibilityLabel("Previous attachment").keyboardShortcut(.leftArrow, modifiers: [])
+                    Button { step(1) } label: { Image(systemName: "chevron.right") }.disabled(index + 1 == items.count).accessibilityLabel("Next attachment").keyboardShortcut(.rightArrow, modifiers: [])
+                }; ToolbarItem(placement: .confirmationAction) { Button { close(); dismiss() } label: { Image(systemName: "xmark") }.accessibilityLabel("Close preview").keyboardShortcut(.cancelAction) } }
         }
     }
 }
@@ -2675,14 +2623,8 @@ private struct NativeSubagentConversation: View {
 }
 
 extension MessageView {
-    /// Opens a file kept with the chat in Quick Look, the system's sandboxed viewer.
     fileprivate func openAttachment(_ item: JSON) {
-        let sha = item["sha256"].string
-        guard loadingAttachment == nil, !sha.isEmpty else { return }
-        loadingAttachment = sha
-        Task { defer { loadingAttachment = nil }
-            do { attachmentPreview = try await store.attachmentFile(chatID: runID, sha256: sha, name: item["name"].string) }
-            catch { store.error = error.localizedDescription }
-        }
+        guard let index = sentAttachments.firstIndex(of: item) else { return }
+        attachmentPreviewIndex = index
     }
 }

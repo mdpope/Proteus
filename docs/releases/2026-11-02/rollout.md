@@ -1,3 +1,19 @@
+# R12 — current review hold
+
+Review hold: both shared simulator Preview apps must be reviewed before any new physical-device
+build/installation, desktop release package, publication or rollout. Old accepted packages retain
+their historical identity and cannot be promoted as R12. Related superseded Windows/Linux builder
+turns are verified cancelled; queued old-source requests remain retained and require reconciliation
+before reuse. No unrelated work was cancelled.
+
+Physical apps remain R1–R8 / 2611.2.1. Signed R9 / 2611.2.2 was built before the hold and is not
+installed. Normal simulator apps/data remain separate from the Preview identities. The historical
+ledger below does not describe R12 distribution. Latest deployed website is R9: activation/file/
+endpoint audit passed; ordinary restore failed; captured-state verification passed with live-state
+comparison not performed. Final served-asset/retention closeout remains open.
+
+---
+
 # Nov 2 rollout
 
 Version: 0.2.41

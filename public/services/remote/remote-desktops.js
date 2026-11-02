@@ -2,7 +2,7 @@ import {inferenceProviderChoices,modelsForInferenceChoice} from '../../features/
 import {viewResidency} from '../../models/view-residency.js';
 import {rememberArtifactPosition,savedArtifactPosition,restoreDocumentView} from '../../shared/navigation/view-position.js';
 import {previewEnabled} from '../../shared/navigation/desktop-preview.js';
-import {bindAllowancePreference} from '../../features/chats/allowance-controls.js';
+import {bindActiveTimePreference,bindAllowancePreference} from '../../features/chats/allowance-controls.js';
 import {modelPicker,modelControls,modelSelection,applyOwnerModelCatalog} from '../../shared/ui/features.js';
 import {bindPermissionSidebar} from '../../shared/navigation/permission-sidebar.js';
 import {previewApprovalChoices} from '../../shared/navigation/preview-permissions.js';
@@ -24,9 +24,9 @@ const drafts=new Map(), histories=new Map(), cursors=new Map(), operations=new M
 const $=selector=>document.querySelector(selector);
 const esc=value=>ui.escape(value);
 const call=value=>{if(!window.desktop?.peers)return Promise.reject(new Error('Open Proteus desktop to pair another computer.'));return window.desktop.peers(value);};
-const request=(hostId,method,args={},options)=>call({action:'request',hostId,method,args,options});
+const request=(hostId,method,args={},options)=>call({action:'request',hostId,method,args:['chat.start','chat.send','chat.reply','chat.answer-question','chat.resume'].includes(method)?{...args,inputOrigin:args.inputOrigin||{client:'remote-desktop',windowId:window.desktop?.windowId||'main'}}:args,options});
 // Reuse the same protocol request ID after an ambiguous timeout; do not duplicate a turn.
-async function mutate(hostId,method,args){const key=hostId+':'+method+':'+(args.id||'new'),signature=JSON.stringify(args);let op=operations.get(key);if(!op||op.signature!==signature){op={signature,id:crypto.randomUUID(),issuedAt:new Date().toISOString()};operations.set(key,op);}const result=await request(hostId,method,args,{id:op.id,issuedAt:op.issuedAt});if(operations.get(key)===op)operations.delete(key);return result;}
+async function mutate(hostId,method,args){if(['chat.start','chat.send','chat.reply','chat.answer-question','chat.resume'].includes(method))args={...args,inputOrigin:args.inputOrigin||{client:'remote-desktop',windowId:window.desktop?.windowId||'main'}};const key=hostId+':'+method+':'+(args.id||'new'),signature=JSON.stringify(args);let op=operations.get(key);if(!op||op.signature!==signature){op={signature,id:crypto.randomUUID(),issuedAt:new Date().toISOString()};operations.set(key,op);}const result=await request(hostId,method,args,{id:op.id,issuedAt:op.issuedAt});if(operations.get(key)===op)operations.delete(key);return result;}
 const providerLabel=id=>({copilot:'Copilot',codex:'Codex',claude:'Claude',rehearsal:'Local rehearsal'}[id]||id);
 const hostLabel=id=>peers.find(peer=>peer.hostId===id)?.label||'Paired computer';
 const documentViews=new Map(), dismissedPreviews=new Set();
@@ -263,6 +263,7 @@ export async function renderRemoteRun(tab){if(ui.state.tab!==tab.id)return;const
         if(!hostCapabilities.get(tab.hostId)?.includes('chat.permissions.folders.v1'))panel.querySelector('[data-preview-add-folder]').disabled=true;
       }
     }
+    bindActiveTimePreference(main,{run,command:payload=>mutate(tab.hostId,'chat.recover',{id:run.id,...payload}),reload:()=>renderRemoteRun(tab),notify:ui.toast});
     bindAllowancePreference(main,{run,command:payload=>mutate(tab.hostId,'chat.recover',{id:run.id,...payload}),reload:()=>renderRemoteRun(tab),notify:ui.toast});
     bindChatFolderTrust(main,{run,request:payload=>mutate(tab.hostId,'chat.permissions',{...payload,id:run.id,scope:'chat'}),refresh:()=>renderRemoteRun(tab),notify:ui.toast});
     const mount=mountConversation;mount();

@@ -5,48 +5,57 @@ implementation/closeout and current source at `4456aea`. This distinguishes miss
 from unavailable provider features and acceptance that has not happened. Simulator review is
 required before further physical iPhone/iPad builds or installations.
 
-## Main findings
+## R12 implementation update (supersedes the original missing list)
 
-The October 31 document explicitly implemented O14–O17 and left O1–O13 as research. November 1
-delivered its named scope and transferred five live defects; it did not implement the whole
-October 31 register. Those earlier requests need an explicit place in the open Nov 2 backlog.
+The original audit found omitted October work rather than missing committed branches. The operator
+authorized recovery and clarified navigation. Source implementation is separate from live acceptance.
 
-| Earlier request | Current finding |
+| Earlier request | Implemented result / remaining acceptance |
 | --- | --- |
-| O1: Enter sends question answers | Previously absent from inline cards. R9 now implements and tests Enter/Send, alternate newlines, empty/composition/repeat guards and retry identity. Existing physical build 2611.2.1 does not contain it. |
-| O2: retain sidebar expansion | Still view-local `@State` in `NativeWorkspaceTree`, including workspace/project expansion and paging. Not implemented as the requested shared app-session state. |
-| O4: valid intranet addresses | Reproduced in current renderer: explicit single-label HTTPS, hostname:port and the documented long-fragment example all throw “Enter a valid hostname.” Main-process acceptance does not repair the earlier renderer rejection. |
-| O5: LAN console reachability | Still requires actual app-specific network/privacy acceptance. It is separate from O4; a parser fix is not proof of LAN connectivity. |
-| O6: attachment-only messages | Still rejected by ordinary owner `engine.send` and website composer text guards. Existing question-card attachment-only support does not implement ordinary chat/new-chat support. |
-| O7: iPhone Chat / Live browser row | Missing. Current source still renders child tabs and puts the switcher in `composerStatus`. The requested iPhone-only replacement row and removal from the composer were not delivered. iPad was explicitly to remain unchanged. Now assigned to simulator review first. |
-| O8: one question/options/answer presentation | R9 fixes the repeated single-question heading. The wider original request remains partial: generated prose may still repeat choice lists, and an answered card still shows status rather than “Answered: …”. Multiple-question labels are retained deliberately so fields remain identifiable. |
-| O9: physical iPhone browser bar clipping | The fixed negative bottom padding remains in source. The original physical failure has not received the requested matching-device acceptance; simulator success alone does not settle it. |
-| O10: attachment viewer arrows and dates | Still a single-file viewer without ordered previous/next navigation or created/modified metadata. |
-| O11: closed tabs reappear | Owner tombstones, explicit reopen and membership fixes are present from Nov 1. Current phone/desktop project-list mismatch is a live mobile-projection defect, not proof that the owner Close mechanism is absent. |
-| O12: originating window/device for agent tabs | Needs a focused submission-origin audit. Existing project ownership and multiwindow membership do not by themselves establish this requested turn-origin behavior. Do not mark it complete from those changes. |
-| O13: continuation setting placement/parity | Shared Run details still place the active-time setting before runtime/usage and the allowance setting later. No matching native control or website binding was found in this audit. The requested arrangement/parity is not complete. |
-| O14: Copilot Fusion | Implementation is present. Current runtime advertises Auto without Fusion tiers; actual provider availability/execution remains unverified. |
-| O15–O17: remote layout/context parity | Committed implementation is in main. These are not missing branch changes. |
+| O1 / A8 Return | Shared desktop/web Enter helper and native Send/Return; alternate newlines, IME/repeats, empty/busy guards and retry identity preserved. |
+| O2 / A5 expansion | Workspace/question expansion retained for the app session, reset on identity changes; resource expanders removed. |
+| O4 addresses | Renderer/desktop shared parser and native parity for intranet, ports, IPv6, IDN/fragments; invalid schemes/credentials/ports rejected. |
+| O5 LAN | Actual network/privacy acceptance remains open. Parsing does not prove reachability. |
+| O6 attachment-only | Verified new chat/send/queue/edit/steer with blank text. Provider review instruction is separate from exact stored human text; consent/proof/retry required. |
+| O7 navigation | Superseded by clarified R12 contract below. |
+| O8 questions | Exact repeated choice lines/headings removed only from display, descriptions/distinct labels retained; answered/queued state shown. Inline card owns the answer, general composer queues another message. |
+| O9 clipping | Fixed negative padding removed, actual safe area used; simulator navigation/spacing checks do not replace physical acceptance. |
+| O10 viewer | Ordered lazy previous/next, keys/swipe, name/details and optional dates in shared/native viewers. HTML stays inert text. |
+| O11 Close/sync | Existing tombstones plus empty-outbox repair, history isolation, authenticated pushes/reconnect and overlapping-read handling. Physical cache cause unproven. |
+| O12 origin | Authenticated device/window/view retained per human input and queued message. Two actual Electron windows verify renderer origin, focus-independent opens, lazy mirrors, override and closed-origin fallback. |
+| O13 continuation | Control immediately precedes allowance across clients, using owner capability/version, pending disable and error rollback. |
+| O14 Fusion | Actual runtime still advertises Auto without Fusion tiers; distinct availability explained. No real Fusion execution claimed. |
+| O15–O17 | Earlier committed layout/context implementation already in main. |
+| A2 autoplay | Native portable desktop gesture policy applies in existing main/subframes; old activation cannot permanently bypass it. |
+| A4 answer files | Native choose files/photos/paste, explicit provider/file review, bounded media and durable retry metadata. Missing bytes require reattachment. |
+| A6 polling | Sidebar resource polling removed; affected authenticated notices, reconnect reset and one-minute unchanged-offscreen fallback. N2 broader projection profiling remains separate. |
+| A7 Linux | Designated live compositor acceptance remains held with new packaging. |
 
-Additional October 31 audit items still visible: native autoplay retains the sticky activation
-rule (A2); native inline question cards still lack attachment controls (A4); question-queue
-expansion remains view-local (A5); broad project polling remains (A6); Enter rules are not yet
-consolidated into the proposed single shared UI helper (A8). Native notification coalescing and
-persistent notice deduplication (A3) were implemented in Nov 1. N2 routine state-projection work
-was explicitly deferred, separate from N1's delivered integration-health correction.
+A3 notification deduplication was already delivered in Nov 1. Real inference, vault authentication,
+affected-HC geometry, Fusion availability and Outlook acceptance retain their existing qualifications.
 
-## Personal / General synchronization
+## Clarified navigation / Personal General sync
 
-Fresh desktop inventory agrees with the desktop screenshot: nine visible browser tabs, three
-hidden browser tabs and no open chat descriptor. The phone screenshot includes an obsolete news
-tab and a chat descriptor, while missing five visible desktop entries. Preserve the desktop's
-stable identities, order, hidden state and histories. Repair the mobile projection; do not change
-desktop membership to match the stale phone cache.
+Window app tabs stay local. iPhone lists them in its sidebar with an app-tab overview;
+iPad/desktop use their top app strip and overview. Sidebar trees show workspace/project destinations,
+never project resource tabs. Projects have one owner-shared ordered content set, preserving stable
+IDs, order, hidden state and history. Chats have no nested resource strip. Phone shows the project
+row, then Chat | Live browser with overview/actions only; the project plus creates tabs. Browser
+links, documents and previews use parent project descriptors and retain their authorization origin.
+Selection/scroll/drafts stay local. Unsent New chat setup remains private pending clarification;
+opening a setup tab never synchronizes prompt text or files.
 
-Two source mechanisms require reproduction: an empty restored pending-operation array can block
-refresh without dispatching anything; a history-page error can prevent an otherwise fresh
-membership list from being applied. Neither is yet established as the physical device's actual
-cause. Preserve unknown delivery receipts and unsent drafts during any repair.
+Unloaded pages retain top navigation without loading to switch tabs. Browser/composer spacing uses
+the actual safe area. Native sync applies membership despite history paging failure, handles
+authenticated tab notices and reconnect, and waits for overlapping reads before fetching newer
+owner state. Empty legacy outboxes no longer suppress reads; orphan receipts and private legacy
+resources remain retained without manufacturing project membership. Unchanged offscreen scopes use
+a one-minute fallback; sidebar resource polling is removed. Broader N2 profiling remains separate.
+
+Fresh read-only desktop inventory still shows twelve browsers: nine visible, three hidden, no open
+chat. Review copies only IDs/order/titles/hidden metadata into a synthetic owner with local URLs.
+Desktop membership is untouched. Encrypted-owner regressions establish empty-outbox/history fixes
+and push Close/rename handling, not the exact physical-cache diagnosis.
 
 ## Branch integration
 
@@ -66,7 +75,8 @@ preserve already-integrated commit ancestry.
 
 ## Review order
 
-First implement/review the requested iPhone navigation and mobile membership repair in the
-existing shared phone/tablet simulators. Keep physical builds/installations held until that
-review. Keep the remaining recovered requests visible as pending work; this audit does not claim
-they are implemented or authorize replacing old accepted artifact identities.
+Review hold: both shared simulator Preview apps must be reviewed before any new physical-device
+build/installation, desktop release package, publication or rollout. Old accepted packages retain
+their historical identity and cannot be promoted as R12. Related superseded Windows/Linux builder
+turns are verified cancelled; queued old-source requests remain retained and require reconciliation
+before reuse. No unrelated work was cancelled.

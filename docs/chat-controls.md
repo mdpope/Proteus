@@ -1,3 +1,10 @@
+## Nov 2 — continuation controls
+
+The provider-supported active-time safeguard sits immediately above allowance continuation in
+shared Run details and native chat controls. Desktop, remote desktop and website bind the same
+versioned owner preference; native uses the advertised capability. Controls disable while a save
+is pending and restore the previous value on error. Existing real-chat preferences are unchanged.
+
 ## October 25 — Combined preview recovery and remote parity
 
 The combined review candidate shares local/remote permission controls and model/effort/context/

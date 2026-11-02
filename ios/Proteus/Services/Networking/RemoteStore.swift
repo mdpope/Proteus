@@ -1,3 +1,4 @@
+import CryptoKit
 import Observation
 import Foundation
 import Combine
@@ -79,6 +80,8 @@ struct RemoteHostInfo: Equatable {
     private var waiting: [String: CheckedContinuation<JSON, Error>] = [:]
     private var timeouts: [String: Task<Void, Never>] = [:]
     private var pendingCommands: [String: JSON] = [:]
+    var onContentTabsChanged: ((JSON) -> Void)?
+    private(set) var authenticationGeneration = 0
     var pendingCommandCount: Int { pendingCommands.count }
     private var cacheTimer: Task<Void, Never>?
     private let cacheWriter = DispatchQueue(label: "com.proteus.remote-cache", qos: .utility)
@@ -134,12 +137,14 @@ struct RemoteHostInfo: Equatable {
     /// Downloads a file kept with a chat on its owner into a private temporary copy.
     func attachmentFile(chatID: String, sha256: String, name: String) async throws -> URL {
         var data = Data(), offset = 0
+        let host = connection?.hostId
         for _ in 0..<400 {
             let page = try await request("chat.attachments.get", ["id": .string(chatID), "sha256": .string(sha256), "offset": .number(Double(offset))])
             guard let chunk = Data(base64Encoded: page["dataBase64"].string) else { throw RemoteError(message: "The attachment could not be read.") }
-            data.append(chunk); offset += chunk.count
+            guard connection?.hostId == host, data.count + chunk.count <= NativeAttachmentBudget.maxFileBytes else { throw RemoteError(message: "The attachment destination changed or the file exceeds 8 MB.") }; data.append(chunk); offset += chunk.count
             if page["done"].bool || chunk.isEmpty { break }
         }
+        guard SHA256.hash(data: data).map({ String(format: "%02x", $0) }).joined() == sha256 else { throw RemoteError(message: "The saved attachment bytes changed.") }
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("chat-attachments/" + sha256, isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let safe = name.replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: ":", with: "_").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -262,6 +267,7 @@ struct RemoteHostInfo: Equatable {
             guard let connection else { return }
             let ready = try RemoteCrypto.open(packet["box"].string, key: connection.key, aad: "\(prefix):ready")
             guard ready["protocol"].int == 1 else { throw RemoteError(message: "Unsupported remote protocol.") }
+            authenticationGeneration += 1
             connected = true; status = "Connected"; error = nil
             onConnected?()
             // Separate task: the receive loop must remain free to deliver these responses.
@@ -286,6 +292,7 @@ struct RemoteHostInfo: Equatable {
             } else if value["type"].string == "event" {
                 cursor = value["cursor"].string
                 if value["event"].string == "state" { updateState(value["data"]) }
+                if value["event"].string == "tabs" { onContentTabsChanged?(value["data"]) }
                 if value["event"].string == "run" { mergeChat(value["data"]) }
                 if value["event"].string == "chat.lifecycle" { applyLifecycle(value["data"]); Task { await refresh() } }
                 saveCache()
@@ -313,6 +320,13 @@ struct RemoteHostInfo: Equatable {
         let id = requestID ?? UUID().uuidString.lowercased()
         guard UUID(uuidString: id) != nil, waiting[id] == nil else { throw RemoteError(message: "This action is already awaiting confirmation.") }
         let formatter = ISO8601DateFormatter(); formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        var args = args
+        if ["chat.start", "chat.send", "chat.reply", "chat.answer-question", "chat.resume"].contains(method) && args["inputOrigin"] == nil {
+            let key = "proteus.mobile.window-id"
+            let windowID = UserDefaults.standard.string(forKey: key) ?? UUID().uuidString
+            UserDefaults.standard.set(windowID, forKey: key)
+            args["inputOrigin"] = .object(["client": .string("mobile"), "windowId": .string(windowID)])
+        }
         let command: JSON = .object(["id": .string(id), "method": .string(method), "args": .object(args), "issuedAt": .string(issuedAt ?? formatter.string(from: Date()))])
         return try await withCheckedThrowingContinuation { continuation in
             waiting[id] = continuation; pendingCommands[id] = command

@@ -1,3 +1,13 @@
+## Nov 2 — simulator review before rollout
+
+Use the existing shared phone/tablet with separate Proteus Preview identities and an isolated
+synthetic owner. Build-only previews cannot select physical devices or the production bundle.
+`PROTEUS_PREVIEW_DERIVED_DATA` reuses a caller-owned compiler cache; each resulting review app is
+copied outside that mutable cache before its receipt is written. `PROTEUS_IOS_DERIVED_DATA` reuses
+the test compiler cache while each invocation retains independent results and fixture receipts.
+Normal installed applications, real destinations and physical data are untouched by these checks.
+The operator holds new physical builds/installations and desktop release promotion for review.
+
 ## October 30 — isolated native tests and normal-app repair
 
 `apple-build.mjs test` builds `org.proteusapp.proteus.mobile-tests` and verifies that identity before

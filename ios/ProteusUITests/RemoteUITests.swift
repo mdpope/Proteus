@@ -1848,7 +1848,7 @@ final class RemoteUITests: XCTestCase {
         _ = try await URLSession.shared.data(from: URL(string: "\(nativeFixtureHTTPOrigin)/live-grant")!)
         let newChat = app.buttons["new-chat"]; XCTAssertTrue(newChat.waitForExistence(timeout: 25)); newChat.tap()
         let prompt = app.textFields["chat-prompt"]; XCTAssertTrue(prompt.waitForExistence(timeout: 10)); prompt.tap(); prompt.typeText("Live browser rehearsal")
-        app.buttons["start-chat"].tap(); XCTAssertTrue(app.staticTexts["Your input is needed"].waitForExistence(timeout: 20))
+        app.buttons["start-chat"].tap(); XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", "question-answer-")).firstMatch.waitForExistence(timeout: 20))
         if app.buttons["composer-preview"].exists { app.buttons["composer-preview"].tap() }
         let reply = app.descendants(matching: .any).matching(identifier: "reply-text").firstMatch; XCTAssertTrue(reply.waitForExistence(timeout: 10)); reply.tap(); reply.typeText("Unsent pending answer")
         XCTAssertFalse(app.buttons["Chat tools"].exists)
@@ -2723,7 +2723,7 @@ final class PhoneComposerPreviewUITests: XCTestCase {
         XCTAssertEqual(app.buttons.matching(identifier: "chat-live-browser").count, 1)
         XCTAssertFalse(app.scrollViews["chat-child-tab-strip"].exists)
         for id in ["chat-tab-overview", "chat-actions"] { XCTAssertEqual(app.buttons[id].frame.midY, chat.frame.midY, accuracy: 3) }
-        XCTAssertEqual(app.buttons["Add chat tab"].frame.midY, chat.frame.midY, accuracy: 3)
+        XCTAssertFalse(app.buttons["Add chat tab"].exists)
         XCTAssertLessThan(chat.frame.midY, app.scrollViews["chat-conversation-scroll"].frame.minY)
         live.tap(); XCTAssertTrue(chat.isHittable); chat.tap()
         XCTAssertTrue(app.scrollViews["chat-conversation-scroll"].waitForExistence(timeout: 10))
@@ -2735,6 +2735,10 @@ final class PhoneComposerPreviewUITests: XCTestCase {
         let compact = app.buttons["composer-preview"]
         XCTAssertTrue(compact.waitForExistence(timeout: 10)); XCTAssertLessThanOrEqual(compact.frame.height, 44)
         XCTAssertFalse(app.buttons["send-message"].exists); XCTAssertFalse(app.buttons["composer-options"].exists); XCTAssertFalse(app.buttons["chat-attach"].exists)
+        // This rehearsal creates a blocking question and its real in-app notice.
+        // Dismiss that independent overlay before measuring/tapping card padding.
+        let notice = app.buttons["Dismiss notification"]
+        if notice.exists { notice.tap() }
         let compactShot = XCTAttachment(screenshot: app.screenshot()); compactShot.name = "Final iPhone one-line composer"; compactShot.lifetime = .keepAlways; add(compactShot)
         let collapsedCard = app.descendants(matching: .any).matching(identifier: "reply-composer-card").firstMatch
         collapsedCard.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0)).withOffset(CGVector(dx: 0, dy: 2)).tap()
@@ -2768,8 +2772,7 @@ final class PhoneComposerPreviewUITests: XCTestCase {
         XCTAssertLessThanOrEqual(card.frame.height, app.frame.height * 0.5 + 1)
         let cappedShot = XCTAttachment(screenshot: app.screenshot()); cappedShot.name = "iPhone composer capped at half-screen with scrolling text"; cappedShot.lifetime = .keepAlways; add(cappedShot)
         app.buttons["send-message"].tap()
-        let saved = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Checkpoint saved:")).firstMatch
-        XCTAssertTrue(saved.waitForExistence(timeout: 15), "Only the Send button submits the iPhone draft to the synthetic provider")
+        verifyComposerQueuedAndInlineAnswer(app, editor: editor)
     }
 }
 
@@ -2808,6 +2811,26 @@ final class NativeReleaseParityUITests: XCTestCase {
     }
 }
 
+@MainActor private func verifyComposerQueuedAndInlineAnswer(_ app: XCUIApplication, editor: XCUIElement) {
+    // The general composer queues a separate message while an inline question
+    // owns its answer. Sending here must not accidentally answer that question.
+    let cleared = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+        !editor.exists || (editor.value as? String ?? "").isEmpty
+    }, object: editor)
+    XCTAssertEqual(XCTWaiter.wait(for: [cleared], timeout: 15), .completed)
+    app.scrollViews["chat-conversation-scroll"].coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.25)).tap()
+    let notice = app.buttons["Dismiss notification"]; if notice.exists { notice.tap() }
+    let queue = app.buttons["chat-question-queue-toggle"]
+    XCTAssertTrue(queue.waitForExistence(timeout: 10)); if queue.value as? String != "Expanded" { queue.tap() }
+    let question = app.buttons["This sample run needs feedback. What should the next checkpoint focus on?"]
+    XCTAssertTrue(question.waitForExistence(timeout: 5)); question.tap()
+    let answer = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", "question-answer-")).firstMatch
+    XCTAssertTrue(answer.waitForExistence(timeout: 10)); answer.tap(); answer.typeText("Reviewed inline")
+    XCTAssertTrue(app.keyboards.buttons["Send"].waitForExistence(timeout: 5)); app.keyboards.buttons["Send"].tap()
+    let saved = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Checkpoint saved: Reviewed inline")).firstMatch
+    XCTAssertTrue(saved.waitForExistence(timeout: 15), "The inline answer submits to the same synthetic owner session")
+}
+
 final class TabletComposerPreviewUITests: XCTestCase {
     override func setUpWithError() throws { continueAfterFailure = false }
     @MainActor func testTabletQuestionQueueChoicesAndCustomAnswerUseOwnerSession() { verifyQuestionQueueAnswers(phone: false) }
@@ -2832,8 +2855,7 @@ final class TabletComposerPreviewUITests: XCTestCase {
         // XCTest on this runtime drops hardware Return events; Shift+Return is covered by
         // NativeReplyTextView command tests and a captured-keyboard native GUI rehearsal.
         editor.tap(); editor.typeText("\n")
-        let saved = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Checkpoint saved:")).firstMatch
-        XCTAssertTrue(saved.waitForExistence(timeout: 15), "Unmodified Return still submits on iPad")
+        verifyComposerQueuedAndInlineAnswer(app, editor: editor)
     }
 }
 
@@ -2925,12 +2947,11 @@ final class NativeReleaseFollowupUITests: XCTestCase {
         XCTAssertEqual(workspaceToggle.value as? String, "Expanded")
         let project = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "project-tree-open-")).firstMatch
         XCTAssertTrue(project.waitForExistence(timeout: 10))
-        let projectID = String(project.identifier.dropFirst("project-tree-open-".count))
-        let projectToggle = app.buttons["project-tree-toggle-" + projectID]
         project.tap(); revealNavigation()
-        XCTAssertEqual(projectToggle.value as? String, "Expanded")
-        projectToggle.tap(); XCTAssertEqual(projectToggle.value as? String, "Collapsed")
-        project.tap(); revealNavigation(); XCTAssertEqual(projectToggle.value as? String, "Expanded")
+        XCTAssertFalse(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "project-tree-toggle-")).firstMatch.exists)
+        XCTAssertFalse(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "project-recent-")).firstMatch.exists)
+        XCTAssertFalse(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "scope-tab-")).firstMatch.exists)
+        XCTAssertEqual(workspaceToggle.value as? String, "Expanded", "Opening a project and recreating navigation preserves workspace expansion")
         let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Workspace and project name auto expansion"; shot.lifetime = .keepAlways; add(shot)
     }
     @MainActor func testRestoredWorkspaceBrowserSelectionAndSwitching() throws {
@@ -3052,5 +3073,43 @@ final class NativeReleaseFollowupUITests: XCTestCase {
         let proof = XCTAttachment(screenshot: app.screenshot()); proof.name = "Phone separate label, compact footer and ordered address swipe"; proof.lifetime = .keepAlways; add(proof)
         let options = XCTMeasureOptions(); options.iterationCount = 3
         measure(metrics: [XCTOSSignpostMetric.scrollingAndDecelerationMetric, XCTCPUMetric(application: app), XCTMemoryMetric(application: app)], options: options) { page.swipeUp(); page.swipeDown() }
+    }
+}
+
+final class Nov2MobileNavigationUITests: XCTestCase {
+    override func setUpWithError() throws { continueAfterFailure = false }
+    @MainActor func testUnloadedPhonePageKeepsNavigationAndWindowTabs() {
+        let app = nativeFixtureApplication()
+        app.launchArguments = ["--reset-pairing", "--native-design-preview", "--phone-preview-fixture", "--synthetic-browser-workspace", "--native-app-fixture"]
+        app.launch()
+        XCTAssertTrue(app.buttons["phone-new-tab"].waitForExistence(timeout: 20)); app.buttons["phone-new-tab"].tap()
+        let address = app.textFields["new-tab-address"]
+        XCTAssertTrue(address.waitForExistence(timeout: 10)); address.tap(); address.typeText("\(nativeFixtureHTTPOrigin)/browser/phone-preview?tab=unload-review"); app.buttons["Open address"].tap()
+        XCTAssertTrue(app.webViews.firstMatch.staticTexts["Proteus browser rehearsal"].waitForExistence(timeout: 20))
+        app.webViews.firstMatch.swipeUp()
+        app.buttons["phone-browser-more"].tap(); app.buttons["Unload page"].tap()
+        XCTAssertTrue(app.staticTexts["Page unloaded"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["phone-app-navigation"].isHittable); XCTAssertTrue(app.buttons["browser-address"].isHittable)
+        XCTAssertEqual(app.webViews.count, 0, "Recovering navigation must not load the page")
+        app.buttons["phone-app-navigation"].tap()
+        let overview = app.buttons["phone-main-tab-overview"]
+        if !overview.isHittable { app.scrollViews["phone-navigation-drawer"].swipeUp() }
+        XCTAssertTrue(overview.waitForExistence(timeout: 5)); overview.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["main-tab-overview"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.webViews.count, 0)
+        let proof = XCTAttachment(screenshot: app.screenshot()); proof.name = "Window-local app tab overview without loading a page"; proof.lifetime = .keepAlways; add(proof)
+    }
+    @MainActor func testPhoneChatHasOnlyProjectRowAndModeLinksAndUsesBottomSafeArea() {
+        let app = openComposerDesignPreview(phone: true)
+        XCTAssertTrue(app.buttons["chat-live-browser"].waitForExistence(timeout: 15))
+        XCTAssertEqual(app.buttons.matching(identifier: "chat-live-browser").count, 1)
+        XCTAssertFalse(app.buttons["Add chat tab"].exists); XCTAssertFalse(app.scrollViews["chat-child-tab-strip"].exists)
+        let card = app.descendants(matching: .any).matching(identifier: "reply-composer-card").firstMatch
+        XCTAssertTrue(card.waitForExistence(timeout: 10))
+        XCTAssertLessThanOrEqual(app.frame.maxY - card.frame.maxY, 50, "Only card padding and the home-indicator safe area remain below the composer")
+        app.buttons["chat-live-browser"].tap(); XCTAssertTrue(app.buttons["chat-mode-conversation"].isHittable)
+        XCTAssertTrue(app.buttons["chat-tab-overview"].isHittable); XCTAssertTrue(app.buttons["chat-actions"].isHittable)
+        app.buttons["chat-mode-conversation"].tap()
+        let proof = XCTAttachment(screenshot: app.screenshot()); proof.name = "Chat mode links, no nested tabs, measured composer safe area"; proof.lifetime = .keepAlways; add(proof)
     }
 }
