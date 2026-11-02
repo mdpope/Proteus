@@ -1,3 +1,5 @@
+> Closed by operator: deployed 0.2.40 with qualified acceptance. Follow-up defects moved to [Nov 2](2026-11-02-release-plan.md). See [final closeout](releases/2026-11-01/closeout.md). Earlier entries are historical.
+
 # Nov 1 release plan — navigation, responsiveness and distribution
 
 **Stage: 0.2.40 reserved; all-platform build and rollout authorized.** The operator lifted the

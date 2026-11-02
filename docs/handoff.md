@@ -1,3 +1,13 @@
+## Nov 1 closed; Nov 2 handoff
+
+Nov 1 / 0.2.40 is closed by the operator with deployed outcomes and qualifications in
+[the closeout](releases/2026-11-01/closeout.md). All five desktops, the website and both physical
+mobile apps received the release. Secondary-Mac maintenance completed with two verified recoveries.
+Browser sizing, real vault lifecycle, closed-popup control, machine-specific model choices and
+mobile in-tab New chat move to [Nov 2](2026-11-02-release-plan.md), in a new chat.
+Do not reopen Nov 1 or relabel installed packages. Further local deletion is held for the
+operator's requested full-path disk review. Earlier entries below are historical checkpoints.
+
 ## November 1 — 0.2.40 rollout authorized, expanded corrections under test
 
 The operator lifted the local hold and requested all-platform rollout plus Work Mac verification.

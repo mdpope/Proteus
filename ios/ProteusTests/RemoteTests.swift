@@ -1951,12 +1951,18 @@ final class NativeParityTests: XCTestCase {
         notices.observe([], hostID: host, now: now)
         notices.observe([item(now.addingTimeInterval(-3600))], hostID: host, now: now)
         XCTAssertNil(notices.banner)
+        XCTAssertEqual(defaults.dictionary(forKey: "proteus.notification-receipts.v2")?.count ?? 0, 0)
         let fresh = item(now); notices.observe([fresh], hostID: host, now: now)
-        XCTAssertNotNil(notices.banner); notices.dismissBanner()
+        // XCTest can run while UIApplication is inactive. Delivery is still claimed once;
+        // foreground banner timing has its own lifecycle-independent timer regression.
+        XCTAssertEqual(defaults.dictionary(forKey: "proteus.notification-receipts.v2")?.count, 1)
+        if UIApplication.shared.applicationState == .active { XCTAssertNotNil(notices.banner) }
+        notices.dismissBanner()
         let restored = NativeNotifications(defaults: defaults)
         defer { restored.dismissBanner() }
         restored.observe([], hostID: host, now: now); restored.observe([fresh], hostID: host, now: now)
         XCTAssertNil(restored.banner, "A previously delivered event remains deduplicated across process lifetime")
+        XCTAssertEqual(defaults.dictionary(forKey: "proteus.notification-receipts.v2")?.count, 1)
     }
     func testOwnerAdvertisedLocalProvidersAndSavedUnavailableSelection() {
         let statuses: [String: JSON] = ["codex": .object([:]), "shared-llm": .object([:]), "llama-cpp": .object([:]), "mtplx": .object([:]), "local-process": .object([:])]

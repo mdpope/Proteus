@@ -1,4 +1,8 @@
-## Nov 1 — 0.2.40 (in progress)
+## Nov 2 — collected for a new chat
+
+Browser sizing, vault lifecycle, closed-popup control, machine-specific local models and in-tab mobile New chat are recorded in [the Nov 2 plan](docs/2026-11-02-release-plan.md). No new implementation or version reservation is claimed.
+
+## Nov 1 — 0.2.40 (closed)
 
 - Reconcile a reviewed post-install recovery-checksum failure through the owner maintenance
   boundary, preserving its original journal and failure evidence before eligible cleanup.
