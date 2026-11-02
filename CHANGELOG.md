@@ -1,6 +1,14 @@
-## Nov 2 — collected for a new chat
+## Nov 2 — 0.2.41 candidate
 
-Browser sizing, vault lifecycle, closed-popup control, machine-specific local models and in-tab mobile New chat are recorded in [the Nov 2 plan](docs/2026-11-02-release-plan.md). No new implementation or version reservation is claimed.
+- Restore full browser layout during same-tab redraws while retaining address drafts.
+- Expose extension action-popup contexts through Chrome's runtime context API, and suppress vendor API payload logging.
+- Settle uncertain desktop input only after the exact missing window is corroborated by a fresh complete process inventory; new input still needs a new observation.
+- Identify local inference choices by machine and adapter, preserving source IDs and offline saved choices.
+- Open mobile New chat in an independent tab with retained draft, attachment scope and retry identity.
+- Hydrate mounted model pickers from refreshed owner catalogs, and distinguish Copilot Auto from unadvertised Fusion.
+- Keep external-link destination selection through focus changes and avoid a native source-icon lookup crash. Internal links retain their originating project.
+
+Implementation and validation are tracked in [the release record](docs/releases/2026-11-02/implementation.md); no installation is claimed by these source changes.
 
 ## Nov 1 — 0.2.40 (closed)
 
