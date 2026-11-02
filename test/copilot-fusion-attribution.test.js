@@ -31,7 +31,10 @@ test('Fusion choices come only from advertised Fusion routing tiers, with labels
   assert.equal(fusionModel({ tiers: [auto.tiers[0]] }), null, 'no Fusion tier means no catalog entry');
   assert.equal(fusionModel({ tiers: [auto.tiers[3]] }), null, 'only disabled tiers means no selectable entry');
   assert.match(fusionAvailability([], { tiers: [auto.tiers[3]] }).note, /Requires Copilot Pro\+/);
-  assert.match(fusionAvailability([], undefined).note, /has not offered Copilot Fusion/);
+  assert.match(fusionAvailability([], undefined).note, /has not advertised Copilot Fusion routing/);
+  const autoOnly=fusionAvailability([{id:'auto',name:'Auto'}]);
+  assert.equal(autoOnly.available,false);assert.equal(autoOnly.autoAvailable,true);
+  assert.match(autoOnly.note,/Auto is a separate choice/);
   // Effort IDs pass the shared option validator; unknown tiers are rejected like any effort.
   validateModelOptions({ reasoningEffort: 'fusion-high' }, model);
   assert.throws(() => validateModelOptions({ reasoningEffort: 'fusion-max' }, model), /unavailable/);

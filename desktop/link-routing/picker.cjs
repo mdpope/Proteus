@@ -19,7 +19,11 @@ class LinkPicker{
       if(safariSelector&&value?.external==='safariselector'){finish({external:'safariselector'});return;}
       const target=targets.find(target=>target.key===value?.key);if(target)finish({target,newWindow:value.newWindow===true,automatic:value.automatic===true&&target.key===defaultKey});
     };
-    let touched=false;ipcMain.on('proteus:link-picker-choice',listener);panel.on('closed',()=>finish(null));panel.on('blur',()=>finish({dismissed:true,touched}));
+    let touched=false;ipcMain.on('proteus:link-picker-choice',listener);panel.on('closed',()=>finish(null));
+    // OS activation, another app or another Proteus window can take focus before
+    // a choice. Keep the selector until the human chooses/cancels. Only an
+    // untouched, explicitly configured default may accept blur automatically.
+    panel.on('blur',()=>{if(defaultKey&&!touched)finish({dismissed:true,touched});});
     try{await panel.loadFile(path.join(__dirname,'picker.html'));if(this.pending){panel.webContents.send('proteus:link-picker',{url,targets,warning,colors,safariSelector,source,defaultKey,autoSelectSeconds});panel.show();panel.focus();}}catch(error){finish(null);throw error;}
     return result;
   }

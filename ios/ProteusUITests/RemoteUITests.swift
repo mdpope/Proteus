@@ -2822,6 +2822,31 @@ final class TabletComposerPreviewUITests: XCTestCase {
 }
 
 final class NativeReleaseFollowupUITests: XCTestCase {
+    @MainActor func testNewChatIsATabAndPreservesItsDraft() throws {
+        let app = nativeFixtureApplication()
+        app.launchArguments = ["--reset-pairing", "--native-design-preview", "--phone-preview-fixture", "--synthetic-browser-workspace", "--native-app-fixture"]
+        app.launch()
+        if let navigation = app.buttons.matching(identifier: "phone-app-navigation").allElementsBoundByIndex.first(where: { $0.isHittable }) {
+            navigation.tap(); app.buttons["phone-nav-Chats"].tap()
+        } else { XCTAssertTrue(app.buttons["sidebar-Chats"].waitForExistence(timeout: 20)); app.buttons["sidebar-Chats"].tap() }
+        let create = app.buttons["new-chat"]
+        XCTAssertTrue(create.waitForExistence(timeout: 15))
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: create)], timeout: 20), .completed)
+        create.tap()
+        let prompt = app.textFields["chat-prompt"]
+        XCTAssertTrue(prompt.waitForExistence(timeout: 12)); XCTAssertEqual(app.sheets.count, 0)
+        prompt.tap(); prompt.typeText("Unsent independent setup tab")
+        if app.buttons["Hide keyboard"].exists { app.buttons["Hide keyboard"].tap() }
+        openNotificationFixtureHome(app)
+        let draft = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label == %@", "shell-tab-draft:", "New chat")).firstMatch
+        if !draft.isHittable, let navigation = app.buttons.matching(identifier: "phone-app-navigation").allElementsBoundByIndex.first(where: { $0.isHittable }) { navigation.tap() }
+        XCTAssertTrue(draft.waitForExistence(timeout: 10)); draft.tap()
+        XCTAssertTrue(prompt.waitForExistence(timeout: 10)); XCTAssertEqual(prompt.value as? String, "Unsent independent setup tab")
+        XCTAssertEqual(app.sheets.count, 0)
+        let proof = XCTAttachment(screenshot: app.screenshot()); proof.name = "New chat in a tab with retained draft"; proof.lifetime = .keepAlways; add(proof)
+        app.buttons["Cancel"].tap()
+        XCTAssertFalse(prompt.exists)
+    }
     @MainActor func testComputerActionsFitPhoneAndExplainSelection() {
         let app = nativeFixtureApplication(); app.launchArguments = ["--reset-pairing", "--synthetic-destinations", "--synthetic-linux-host"]; app.launch()
         let navigation = app.buttons["phone-app-navigation"]; XCTAssertTrue(navigation.waitForExistence(timeout: 15)); navigation.tap()

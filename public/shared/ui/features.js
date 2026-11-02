@@ -1,6 +1,7 @@
 import {sourceKindIcon} from './source-icons.js';
 import {workspaceCatalog} from '../../features/workspaces/workspace-ui.js';
 import { uniqueModels, modelControlVisible, optionsForModelChange } from '../../features/chats/model-choices.js';
+import {modelsForInferenceChoice} from '../../features/chats/provider-choices.js';
 import { contextPlan } from '../../features/workspaces/context-plan.js';
 import { browserSurfaceIdentity } from '../../features/browser/browser-toolbar.js';
 let u;
@@ -161,6 +162,7 @@ function updateModelControls(id, providerId, ownerCatalog) {
     !select.value ? 'Choose a model.' : !model ? 'Selected model is unavailable or the catalog has not loaded.' : model.fusion ? 'Copilot Fusion routes each prompt across models; the effort sets how deeply. Billed per model used.'+(controls?.unavailableReasoningEfforts?.length?' Unavailable: '+controls.unavailableReasoningEfforts.map(item=>item.label+' — '+item.message).join('; '):'') : !efforts.length ? (controls?.reasoningSupported === false ? 'This model does not support thinking effort.' : 'Thinking effort choices are not reported.') : '',
     controls?.maxOutputTokens ? 'Maximum output: ' + tokenSize(controls.maxOutputTokens) + ' tokens. Context size is the prompt budget; output is separate.' : 'Context capacity is not advertised by this catalog; actual usage appears during a run.',
     provider === 'codex' ? 'Uses the executing computer’s Codex sign-in. Selected instructions and skills are supplied; editor-specific agent tool filters are not supported. MCP servers require a grant for all their selected tools.' : '',
+    provider === 'copilot' ? data?.fusion?.note || '' : '',
     data?.checkedAt ? 'Catalog checked ' + new Date(data.checkedAt).toLocaleTimeString() + '. Refreshes every five minutes.' : 'Catalog has not been checked.',
     data?.stale ? 'Using last known choices. Refresh failed: ' + data.error : ''
   ].filter(Boolean).join(' ');
@@ -196,6 +198,10 @@ export async function refreshModels(id, providerId, force = false) {
     }
     updateModelControls(id, providerId);
   };
+  // State sync can refresh the host catalog while a focused form stays mounted.
+  // A fresh cache must still hydrate its DOM; TTL only suppresses network reads.
+  const current=select.value||select.dataset.selected||'';
+  select.innerHTML=modelOptions(modelsForInferenceChoice(catalogFor(provider)?.models||[],select.dataset),current);select.value=current;
   updateModelControls(id, providerId); if (['rehearsal','local-process'].includes(provider)) return;
   const requestGeneration=select.dataset.catalogGeneration=String(Number(select.dataset.catalogGeneration||0)+1);
   const old = catalogFor(provider), checked = old?.attemptedAt || old?.checkedAt;
@@ -208,7 +214,7 @@ export async function refreshModels(id, providerId, force = false) {
     if (provider === 'copilot') u.state.data.providerStatus = data;
     document.querySelectorAll('[data-model-picker]').forEach(root => {
       const input = $('#' + root.dataset.modelPicker); if (input.dataset.modelOwner==='remote'||input.dataset.provider !== provider) return;
-      const current = input.value || input.dataset.selected || ''; input.innerHTML = modelOptions(data.models || [], current); input.value = current;
+      const current = input.value || input.dataset.selected || ''; input.innerHTML = modelOptions(modelsForInferenceChoice(data.models || [],input.dataset), current); input.value = current;
       updateModelControls(input.id, input.dataset.providerId);
     });
   } catch (error) { u.toast(error.message); }

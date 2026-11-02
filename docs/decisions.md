@@ -2999,3 +2999,28 @@ Extension state captures concrete windows because a presentation proxy changes i
 changes. Current sender and last-focused window are separate concepts; active tabs are per window.
 Updater permission is a persisted, versioned owner grant for update and narrow preflight actions,
 not a cross-machine permission-answering capability or arbitrary shell grant.
+## November 2 — mobile chat setup tabs and inference location
+
+New chat setup is a device-local tab, created before any conversation starts. Main navigation
+owns main drafts; a workspace/project owns its child drafts. Each draft has an independent ID,
+form state, attachment scope and request identity. Switching tabs restores that draft; closing
+it changes only local navigation. A submitted request retains its exact ID and arguments until
+the owner confirms it, including after reconnect. The existing owner continues to authorize
+execution and attachments. No browser, chat or inference route is invented to represent a draft.
+
+Local inference choices identify the inference machine and adapter. Shared routes are grouped
+by their existing source host/provider identity; equal model names from different machines remain
+distinct. A route already exposed locally is not presented again as a second independent model.
+Offline/empty sources stay visible with their actual availability, while saved route/model IDs
+are preserved for review. The execution owner remains separate from the computer doing inference.
+Catalog capabilities remain provider supplied; no model-name effort or context table is added.
+Desktop/web share catalog presentation, and native clients consume the same source identities.
+
+## November 2 — external-link focus cannot choose a destination
+
+External Outlook/Mail links require project selection unless a configured rule/default supplies
+one. Losing picker focus can occur during OS activation and does not establish a project/window
+choice. Keep the selector without a default, retain Escape cancellation, and preserve the existing
+untouched configured-default behavior. Remove the unplaced arbitrary-window fallback. Internal
+website links continue beside their originating project and never enter this external picker.
+Source-app names/icons are optional decoration; resolving them cannot gate safe destination choice.

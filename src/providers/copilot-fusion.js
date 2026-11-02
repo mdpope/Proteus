@@ -59,8 +59,8 @@ export function fusionAvailability(models, auto) {
   const note = model ? 'Choose Copilot Fusion in the model picker, then a Fusion effort.'
     : legacy.length ? 'Select an advertised Fusion model.'
     : unavailable.length ? 'Copilot Fusion is advertised but unavailable: ' + unavailable.map(tier => `${tier.label} — ${tier.message || tier.reason || 'unavailable'}`).join('; ')
-    : 'Copilot has not offered Copilot Fusion to this account/runtime. Refresh models to check again.';
-  return { available: !!model || legacy.length > 0, modelIds: model ? [FUSION_MODEL_ID] : legacy.map(item => item.id), tiers, note };
+    : 'This Copilot runtime has not advertised Copilot Fusion routing. Auto is a separate choice; it does not establish Fusion availability. Refresh models to check again.';
+  return { available: !!model || legacy.length > 0, autoAvailable:models.some(item=>item.id==='auto'), modelIds: model ? [FUSION_MODEL_ID] : legacy.map(item => item.id), tiers, note };
 }
 
 /** Session configuration for the selected catalog entry. */

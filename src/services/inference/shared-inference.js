@@ -69,13 +69,14 @@ export class SharedInference {
   for(let at=0;at<peers.length;at+=4)await Promise.all(peers.slice(at,at+4).map(async peer=>{if(peer.paused)return;try{const value=await this.request(peer.hostId,'inference.catalog',{}, {timeoutMs:20000});for(const provider of value.providers||[])if(localModelProviders.includes(provider.providerId))result.push({hostId:peer.hostId,hostLabel:peer.label,...provider});}catch{result.push({hostId:peer.hostId,hostLabel:peer.label,available:false,error:'Offline, sharing unavailable, or provider sharing is not supported by this version.'});}}));return result;
  }
  async models(){
-  this.service.computerAccess?.assertOutgoing();const rows=this.value.imports.filter(row=>row.enabled),result=[],routes=new Map();
+  this.service.computerAccess?.assertOutgoing();const rows=this.value.imports.filter(row=>row.enabled),result=[],routes=new Map(),sources=[];
   const catalogs=new Map();for(const row of rows){let value=catalogs.get(row.hostId);if(!value){try{value=await this.request(row.hostId,'inference.catalog',{}, {timeoutMs:20000});}catch{value={providers:[]};}catalogs.set(row.hostId,value);}
    const provider=value.providers?.find(p=>p.providerId===row.providerId&&p.available);const hostLabel=this.service.peers?.list().find(p=>p.hostId===row.hostId)?.label||'Paired computer';
+   sources.push({hostId:row.hostId,providerId:row.providerId,hostLabel,available:!!provider,error:provider?null:'This inference source is offline or is not currently sharing models.'});
    for(const model of provider?.models||[]){if(typeof model.id!=='string'||!model.id||model.id.length>200||!Number.isSafeInteger(model.controls?.contextTiers?.[0]?.totalTokens))continue;
     const id=modelId(row.hostId,row.providerId,model.id),sharedSource={hostId:row.hostId,providerId:row.providerId,modelId:model.id,hostLabel};routes.set(id,sharedSource);result.push({id,name:(model.name||model.id)+' / '+hostLabel,description:'Shared '+row.providerId+' model on '+hostLabel,supportsVision:false,sharedSource,controls:{...structuredClone(model.controls),maxOutputTokens:Math.min(16384,model.controls.maxOutputTokens||16384)}});
    }
-  }this.routes=routes;return result;
+  }this.routes=routes;this.catalogSources=sources;return result;
  }
  route(id){const route=this.routes.get(id);if(!route||!this.value.imports.some(row=>row.enabled&&row.hostId===route.hostId&&row.providerId===route.providerId))throw Error('The selected shared model is unavailable. Refresh models; no fallback was selected.');this.service.computerAccess?.assertOutgoing();return route;}
  watch(route,controller){const key=sourceKey(route.hostId,route.providerId);let set=this.consumers.get(key);if(!set)this.consumers.set(key,set=new Set());set.add(controller);return ()=>{set.delete(controller);if(!set.size)this.consumers.delete(key);};}

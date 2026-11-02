@@ -32,6 +32,7 @@ class BrowserExtensions {
    removeWindow:window=>{if(!window.isDestroyed())window.close();},
    requestPermissions:async(extension,permissions)=>(await dialog.showMessageBox(this.browser.window,{type:'question',title:extension.name,message:'Allow additional extension permissions?',detail:[...(permissions.permissions||[]),...(permissions.origins||[])].join('\n'),buttons:['Deny','Allow'],defaultId:0,cancelId:0})).response===1
   });
+  require('./extension-contexts.cjs').installExtensionContexts(host,()=>this.windows);
   require('./extension-window-context.cjs').installExtensionWindowContext(host,{
    windowForSender:wc=>BrowserWindow.fromWebContents(wc),
    ownerForPopup:wc=>[...this.windows].find(window=>!window.isDestroyed()&&window.webContents===wc&&window.extensionActionPopup)?.getParentWindow(),

@@ -10,6 +10,16 @@ import {normalizeContentTabDescriptor,normalizeContentTabHistory,sameContentTab,
 import {createTabSynchronizer,rebaseTabChanges,tabChanges,syncableTabURL,shouldRemoveCapturedTab} from '../public/models/content-tab-sync.js';
 const pendingCount=values=>[...values.keys()].filter(key=>key.startsWith('proteus.navigation.pending:')).length;
 const tab=id=>({id,type:'browser',title:id,url:'https://example.test/'+id});
+test('explicit draft replacement retains its position after owner chat creation',async t=>{
+ const host=hostStore(t),scope={scope:'project',id:'draft-replacement'},before=tab('before'),draft=tab('draft'),after=tab('after');
+ host.mutate({...scope,expectedRevision:0,operations:[before,draft,after].map(tab=>({action:'open',tab}))});
+ let local=[before,draft,after];const values=new Map(),errors=[];
+ const sync=createTabSynchronizer({explicitCloseOnly:true,scopes:()=>[scope],pendingStorage:{getItem:key=>values.get(key),setItem:(key,value)=>values.set(key,value),removeItem:key=>values.delete(key)},readLocal:async()=>structuredClone(local),request:async(_scope,action,args)=>action==='get'?host.get(scope.scope,scope.id):host.mutate({...scope,...args}),apply:async(_scope,tabs)=>{local=structuredClone(tabs);},onError:error=>errors.push(error)});
+ await sync.all();const chat={id:'chat:replacement',type:'chat',title:'Replacement',chatId:'replacement'};
+ host.mutate({...scope,expectedRevision:host.get(scope.scope,scope.id).revision,operations:[{action:'open',tab:chat}]});
+ local=[before,{...chat,navigationPending:true},after];sync.close(scope,draft.id);await sync.all();
+ assert.deepEqual(host.get(scope.scope,scope.id).tabs.map(tab=>tab.id),['before','chat:replacement','after']);assert.deepEqual(local.map(tab=>tab.id),['before','chat:replacement','after']);assert.deepEqual(errors,[]);
+});
 test('owner-committed native placement adopts its history and order instead of publishing another navigation seed',async()=>{
  const scope={scope:'workspace',id:'destination'},known=tab('known'),entries=['back','selected','forward'].map(id=>({id,url:'https://example.test/'+id,title:id}));
  const moved={...tab('moved'),url:entries[1].url,history:{entries,index:1,currentEntryId:'selected',revision:8}};

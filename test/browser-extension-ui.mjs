@@ -14,6 +14,9 @@ let app;try{
  const popup=await app.waitForEvent('window',{predicate:page=>page.url().startsWith('chrome-extension:'),timeout:15000}).catch(()=>app.windows().find(page=>page.url().startsWith('chrome-extension:')));assert.ok(popup);
  await popup.locator('body').waitFor();await popup.waitForFunction(()=>document.body.innerText.trim().length>40,{},{timeout:20000});
  if(!process.env.PROTEUS_TEST_EXTENSION){
+  const contexts=await popup.evaluate(async()=>({supported:typeof chrome.runtime.getContexts==='function',contexts:typeof chrome.runtime.getContexts==='function'?(await chrome.runtime.getContexts({})).map(context=>({type:context.contextType,frameId:context.frameId,documentId:context.documentId})):[]}));
+  console.log(JSON.stringify({syntheticExtensionContexts:contexts}));
+  assert.ok(contexts.contexts.some(context=>context.type==='POPUP'),'an action popup is discoverable through the MV3 runtime context API');
   const shell=await app.firstWindow(),selection=()=>shell.locator('#tabs .tabitem.selected').getAttribute('data-tab-container');
   const choices=await app.evaluate(async({app})=>{const browser=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser(),result=[];for(let i=0;i<2;i++){const info=await browser.command({action:'create'});result.push({id:info.id,nativeId:browser.get(info.id).view.webContents.id});}return result;});
   for(const choice of choices){await popup.evaluate(id=>new Promise(resolve=>chrome.tabs.update(id,{active:true},resolve)),choice.nativeId);await shell.locator('[data-tab-container="'+choice.id+'"].selected').waitFor();}

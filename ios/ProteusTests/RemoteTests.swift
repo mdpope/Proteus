@@ -1879,6 +1879,23 @@ extension DestinationTests {
 }
 
 final class NativeParityTests: XCTestCase {
+    func testChatSetupIdentityAndInferenceMachineChoices() throws {
+        let first = NativeChatSetup(hostID: "owner", workspaceID: "workspace", projectID: "project")
+        let second = NativeChatSetup(hostID: "owner", workspaceID: "workspace", projectID: "project")
+        XCTAssertNotEqual(first.draftKey, second.draftKey)
+        XCTAssertEqual(NativeChatSetup.decode(first.json), first)
+        let source: JSON = .object(["hostId": .string("model-host"), "hostLabel": .string("Model machine"), "providerId": .string("mtplx"), "available": .bool(false)])
+        let model: JSON = .object(["id": .string("preserved-route"), "name": .string("Same model name"), "sharedSource": source])
+        let statuses: [String: JSON] = ["mtplx": .object(["available": .bool(true)]), "shared-llm": .object(["sources": .array([source]), "models": .array([model])])]
+        let choices = nativeInferenceProviderChoices(statuses, ownerName: "Executing machine")
+        XCTAssertEqual(choices.first { $0.provider == "mtplx" }?.label, "MTPLX · Executing machine")
+        let remote = try XCTUnwrap(choices.first { $0.sourceHost == "model-host" })
+        XCTAssertEqual(remote.label, "MTPLX · Model machine"); XCTAssertFalse(remote.available)
+        XCTAssertEqual(remote.catalog(statuses["shared-llm"]!)["models"].array.first?["id"].string, "preserved-route")
+        let removed = nativeInferenceProviderChoices([:], ownerName: "Owner", selected: "shared-llm", savedRoute: remote.id)
+        XCTAssertFalse(try XCTUnwrap(removed.first { $0.id == remote.id }).available)
+        XCTAssertFalse(nativeInferenceProviderChoices(["shared-llm": .object([:])], ownerName: "Owner").contains { $0.provider == "shared-llm" })
+    }
     @MainActor func testLegacyInferredDeletionRetainsOriginalReceiptWithoutReplaying() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString), key = RemoteCrypto.random()
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)

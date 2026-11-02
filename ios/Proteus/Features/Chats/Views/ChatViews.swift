@@ -268,6 +268,7 @@ enum NativeAttachmentBudget {
 }
 
 struct ChatsView: View {
+    @Environment(\.nativeOpenChatSetup) private var openSetup
     @Environment(RemoteStore.self) var store
     @State private var path: [String] = []
     @State private var newChat = false
@@ -283,7 +284,7 @@ struct ChatsView: View {
             }.background(NativeTheme.background).navigationTitle("Chats").searchable(text: $query)
                 .safeAreaInset(edge: .bottom) { ConnectionStatus().accessibilityIdentifier("chat-composer-connection-status").padding().background(NativeTheme.surface) }
                 .refreshable { await store.refresh() }
-                .toolbar { Button("New chat", systemImage: "square.and.pencil") { newChat = true }.disabled(!store.connected).accessibilityIdentifier("new-chat") }
+                .toolbar { Button("New chat", systemImage: "square.and.pencil") { if let openSetup { openSetup(NativeChatSetup(hostID: store.connection?.hostId ?? "")) } else { newChat = true } }.disabled(!store.connected).accessibilityIdentifier("new-chat") }
                 .navigationDestination(for: String.self) { ChatView(id: $0) }
                 .sheet(isPresented: $newChat) { NewChatView { id in newChat = false; path.append(id) } }
         }
@@ -296,9 +297,13 @@ struct NewChatView: View {
     var internet = false
     var lockedWorkspaceID: String? = nil
     var lockedProjectID: String? = nil
+    var draftKey = "new-chat"
+    var onCancel: (() -> Void)? = nil
     var onStarted: (String) -> Void
+    @State private var startIntent: JSON = .null
     @State private var name = ""
     @State private var prompt = ""
+    @State private var providerRoute = ""
     @State private var provider = "copilot"
     @State private var model = ""
     @State private var effort = ""
@@ -315,14 +320,25 @@ struct NewChatView: View {
     @State private var filePicker = false
     @State private var previewAttachment: NativeDraftAttachment?
     @State private var confirmAttachmentStart = false
-    private var attachmentScope: String { "new-chat:\(store.connection?.hostId ?? "local")" }
+    private var attachmentScope: String { "\(draftKey):\(store.connection?.hostId ?? "local")" }
     private var attachments: [NativeDraftAttachment] { shared.draftAttachments[attachmentScope] ?? [] }
-    private var missingAttachments: [JSON] { missingAttachmentRecords(store: store, draftKey: "new-chat-attachments", items: attachments) }
+    private var missingAttachments: [JSON] { missingAttachmentRecords(store: store, draftKey: draftKey + "-attachments", items: attachments) }
     private var attachmentMessageID: String { shared.draftMessageIDs[attachmentScope] ?? "" }
     private var attachmentDraftID: String { shared.draftSessionIDs[attachmentScope] ?? "" }
     private var supportedAttachmentTypes: [String] { internet ? Array(Set(store.state["attachmentMediaTypes"].object.values.flatMap { $0.array.map(\.string) })) : store.state["attachmentMediaTypes"][provider].array.map(\.string) }
     private var attachmentsEnabled: Bool { store.state["capabilities"].array.contains(.string("chat.attachments.v1")) && !supportedAttachmentTypes.isEmpty }
     private var hasUnsupportedAttachment: Bool { !attachments.isEmpty && supportedAttachmentTypes.isEmpty }
+    private var providerChoices: [NativeInferenceProviderChoice] { nativeInferenceProviderChoices(store.providerStatuses, ownerName: store.displayName, ownerID: store.connection?.hostId ?? "", selected: provider, savedRoute: providerRoute) }
+    private var providerChoice: NativeInferenceProviderChoice? {
+        if let choice = providerChoices.first(where: { $0.id == providerRoute && $0.provider == provider }) { return choice }
+        if provider == "shared-llm", let source = store.providerStatuses[provider]?["models"].array.first(where: { $0["id"].string == model })?["sharedSource"], let choice = providerChoices.first(where: { $0.sourceHost == source["hostId"].string && $0.sourceProvider == source["providerId"].string }) { return choice }
+        return providerChoices.first { $0.provider == provider }
+    }
+    private var providerRouteBinding: Binding<String> { Binding(get: { providerChoice?.id ?? provider }, set: { value in
+        guard let choice = providerChoices.first(where: { $0.id == value }) else { return }
+        providerRoute = value; provider = choice.provider; model = ""; effort = ""; contextTier = "default"; serviceTier = ""
+        if provider != "rehearsal" { Task { await store.loadModels(force: true, provider: provider) } }
+    }) }
     private var providerName: String { nativeProviderName(provider) }
     private func submitPrompt() {
         guard !sending, !loading, !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
@@ -345,9 +361,9 @@ struct NewChatView: View {
                     if store.supportsProjects {
                         Picker("Project", selection: $project) { ForEach(store.projectCatalog.projects(in: workspace), id: \.self) { Text($0["name"].string).tag($0["id"].string) } }.disabled(lockedProjectID != nil).accessibilityIdentifier("new-chat-project")
                     }
-                    if !internet { Picker("Provider", selection: $provider) { ForEach(nativeProviderIDs(store.providerStatuses, selected: provider), id: \.self) { id in Text(nativeProviderName(id)).tag(id) } }.accessibilityIdentifier("chat-provider")
+                    if !internet { Picker("Provider", selection: providerRouteBinding) { ForEach(providerChoices) { choice in Text(choice.label + (choice.available ? "" : " · unavailable")).tag(choice.id) } }.accessibilityIdentifier("chat-provider")
                     if provider != "rehearsal" {
-                        ProviderModelPicker(model: $model, effort: $effort, contextTier: $contextTier, serviceTier: $serviceTier, provider: provider)
+                        ProviderModelPicker(model: $model, effort: $effort, contextTier: $contextTier, serviceTier: $serviceTier, provider: provider, catalogOverride: providerChoice?.catalog(store.providerStatuses[provider] ?? .null))
                     }
                 }
                 }
@@ -375,11 +391,11 @@ struct NewChatView: View {
                 }
                 if !internet && lockedWorkspaceID == nil { ContextSelection(selected: $selected, agent: $agent, includeDefaults: $includeDefaults, workspaceID: workspace) }
                 if internet { Section { HStack { Spacer(); ForEach(store.state["providerStatuses"].object.keys.sorted().filter { !["local-process", "rehearsal"].contains($0) }, id: \.self) { id in Button("Search with " + id.capitalized) { provider = id; if store.state["defaults"]["internetSearches"][id]["model"].string.isEmpty { store.error = "Configure Internet Search defaults in Engine Room on \(store.displayName) first." } else if attachments.isEmpty { start() } else { confirmAttachmentStart = true } }.disabled(prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || sending || !store.connected) } } } }
-                if let error = store.error { Section { Text(error).foregroundStyle(.orange) } }
-            }.scrollDismissesKeyboard(.interactively).disabled(loading || sending).accessibilityIdentifier("new-chat-form").navigationTitle(internet ? "Internet Search" : "New chat").toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) { if !internet { Button { if attachments.isEmpty { start() } else { confirmAttachmentStart = true } } label: { if sending { ProgressView() } else { Image(systemName: "arrow.up").font(.system(size: 19, weight: .semibold)).frame(width: 36, height: 36).background(NativeTheme.accent).foregroundStyle(NativeTheme.background).clipShape(Circle()) } }.disabled(loading || sending || !store.connected || prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || workspace.isEmpty || (provider != "rehearsal" && model.isEmpty) || !missingAttachments.isEmpty || (!attachments.isEmpty && (!attachmentsEnabled || hasUnsupportedAttachment))).accessibilityLabel("Start chat").accessibilityIdentifier("start-chat") } }
-            }.onChange(of: workspace) { _, _ in if !loading { applyWorkspaceDefaults(); project = store.projectCatalog.defaultProject(in: workspace)?["id"].string ?? "" } }.onChange(of: draftValue) { _, value in if !loading { store.setDraft("new-chat", value) } }.onChange(of: prompt) { _, value in if !loading && !sending && nativeTextAttachmentRequired(value) { if addAttachment(Data(value.utf8), name: "Pasted text.txt", mediaType: "text/plain") { prompt = "[Attached: Pasted text.txt]" } } } .onChange(of: provider) { old, value in if !loading && old != value { model = ""; effort = ""; contextTier = "default"; serviceTier = "" }; if value != "rehearsal" { Task { await store.loadModels(provider: value) } } }.task { await store.refresh(); workspace = store.state["context"]["defaultWorkspaceId"].string; provider = store.state["defaults"]["provider"].string; model = store.state["defaults"]["model"].string; effort = store.state["defaults"]["reasoningEffort"].string; serviceTier = store.state["defaults"]["serviceTier"].string; contextTier = store.state["defaults"]["contextTier"].string.isEmpty ? "default" : store.state["defaults"]["contextTier"].string; applyWorkspaceDefaults(); if let saved = store.drafts["new-chat"] { restore(saved) }; if let lockedWorkspaceID { workspace = lockedWorkspaceID; selected = []; agent = ""; includeDefaults = true }; project = lockedProjectID ?? store.projectCatalog.defaultProject(in: workspace)?["id"].string ?? ""; if provider != "rehearsal" { await store.loadModels(provider: provider) }; loading = false }
+                if startIntent != .null { Section { Text("Start awaiting confirmation. Retry uses the same request and saved choices.").font(.caption) } }; if let error = store.error { Section { Text(error).foregroundStyle(.orange) } }
+            }.scrollDismissesKeyboard(.interactively).disabled(loading || sending || startIntent != .null).accessibilityIdentifier("new-chat-form").navigationTitle(internet ? "Internet Search" : "New chat").toolbar {
+                ToolbarItem(placement: .cancellationAction) { HStack { if NativePhonePreview.enabled && onCancel != nil && lockedWorkspaceID == nil { NativeSidebarButton() }; Button("Cancel") { if let onCancel { onCancel() } else { dismiss() } } } }
+                ToolbarItem(placement: .confirmationAction) { if !internet || startIntent != .null { Button { if startIntent != .null || attachments.isEmpty { start() } else { confirmAttachmentStart = true } } label: { if sending { ProgressView() } else { Image(systemName: "arrow.up").font(.system(size: 19, weight: .semibold)).frame(width: 36, height: 36).background(NativeTheme.accent).foregroundStyle(NativeTheme.background).clipShape(Circle()) } }.disabled(loading || sending || !store.connected || (startIntent == .null && (prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || workspace.isEmpty || (provider != "rehearsal" && model.isEmpty) || providerChoice?.available == false || !missingAttachments.isEmpty || (!attachments.isEmpty && (!attachmentsEnabled || hasUnsupportedAttachment))))).accessibilityLabel("Start chat").accessibilityIdentifier("start-chat") } }
+            }.onChange(of: workspace) { _, _ in if !loading { applyWorkspaceDefaults(); project = store.projectCatalog.defaultProject(in: workspace)?["id"].string ?? "" } }.onChange(of: draftValue) { _, value in if !loading { store.setDraft(draftKey, value) } }.onChange(of: prompt) { _, value in if !loading && !sending && nativeTextAttachmentRequired(value) { if addAttachment(Data(value.utf8), name: "Pasted text.txt", mediaType: "text/plain") { prompt = "[Attached: Pasted text.txt]" } } } .onChange(of: provider) { old, value in if !loading && old != value { model = ""; effort = ""; contextTier = "default"; serviceTier = "" }; if value != "rehearsal" { Task { await store.loadModels(provider: value) } } }.task { await store.refresh(); guard !Task.isCancelled else { return }; workspace = store.state["context"]["defaultWorkspaceId"].string; provider = store.state["defaults"]["provider"].string; model = store.state["defaults"]["model"].string; effort = store.state["defaults"]["reasoningEffort"].string; serviceTier = store.state["defaults"]["serviceTier"].string; contextTier = store.state["defaults"]["contextTier"].string.isEmpty ? "default" : store.state["defaults"]["contextTier"].string; applyWorkspaceDefaults(); if let saved = store.drafts[draftKey] { restore(saved) }; if let lockedWorkspaceID { workspace = lockedWorkspaceID; selected = []; agent = ""; includeDefaults = true }; project = lockedProjectID ?? (project.isEmpty ? store.projectCatalog.defaultProject(in: workspace)?["id"].string ?? "" : project); if provider != "rehearsal" { await store.loadModels(provider: provider) }; guard !Task.isCancelled else { return }; loading = false }
             .sheet(isPresented: $photoPicker) { NativePhotoSelection(limit: NativeAttachmentBudget.maxFiles - attachments.count) { results in photoPicker = false; if !results.isEmpty { Task { await importPhotos(results) } } } }
             .fileImporter(isPresented: $filePicker, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in if case .success(let urls) = result { for url in urls { if !importFile(url) { break } } } else if case .failure(let error) = result { store.error = error.localizedDescription } }
             .sheet(item: $previewAttachment) { item in AttachmentPreview(attachment: item) { previewAttachment = nil } }
@@ -390,11 +406,11 @@ struct NewChatView: View {
         let defaults = store.state["context"]["workspaces"].array.first { $0["id"].string == workspace }?["defaults"] ?? .null
         selected = Set(defaults["selectedIds"].array.map(\.string)); agent = defaults["agentId"].string; includeDefaults = defaults["includeDefaults"] != .bool(false)
     }
-    private var draftValue: JSON { .object(["name": .string(name), "prompt": .string(prompt), "provider": .string(provider), "model": .string(model), "effort": .string(effort), "contextTier": .string(contextTier), "serviceTier": .string(serviceTier), "workspace": .string(workspace), "selected": .array(selected.sorted().map(JSON.string)), "agent": .string(agent), "includeDefaults": .bool(includeDefaults)]) }
-    private func restore(_ value: JSON) { name = value["name"].string; prompt = value["prompt"].string; provider = value["provider"].string; model = value["model"].string; effort = value["effort"].string; contextTier = value["contextTier"].string; serviceTier = value["serviceTier"].string; workspace = value["workspace"].string; selected = Set(value["selected"].array.map(\.string)); agent = value["agent"].string; includeDefaults = value["includeDefaults"] != .bool(false) }
+    private var draftValue: JSON { .object(["startIntent": startIntent, "project": .string(project), "name": .string(name), "prompt": .string(prompt), "providerRoute": .string(providerRoute), "provider": .string(provider), "model": .string(model), "effort": .string(effort), "contextTier": .string(contextTier), "serviceTier": .string(serviceTier), "workspace": .string(workspace), "selected": .array(selected.sorted().map(JSON.string)), "agent": .string(agent), "includeDefaults": .bool(includeDefaults)]) }
+    private func restore(_ value: JSON) { providerRoute = value["providerRoute"].string; startIntent = value["startIntent"]; project = value["project"].string; name = value["name"].string; prompt = value["prompt"].string; provider = value["provider"].string; model = value["model"].string; effort = value["effort"].string; contextTier = value["contextTier"].string; serviceTier = value["serviceTier"].string; workspace = value["workspace"].string; selected = Set(value["selected"].array.map(\.string)); agent = value["agent"].string; includeDefaults = value["includeDefaults"] != .bool(false) }
     private func start() {
-        if internet && store.state["defaults"]["internetSearches"][provider]["model"].string.isEmpty { store.error = "Configure Internet Search defaults for " + provider + " first."; return }
-        guard missingAttachments.isEmpty else { store.error = "Remove or reattach the missing files before starting this chat."; return }
+        if startIntent == .null && internet && store.state["defaults"]["internetSearches"][provider]["model"].string.isEmpty { store.error = "Configure Internet Search defaults for " + provider + " first."; return }
+        guard startIntent != .null || missingAttachments.isEmpty else { store.error = "Remove or reattach the missing files before starting this chat."; return }
         sending = true
         Task { defer { sending = false }
             do {
@@ -403,7 +419,7 @@ struct NewChatView: View {
                 if internet { values = ["chatType": .string("internet"), "provider": .string(provider), "workspaceId": .string(workspace), "prompt": .string(prompt)] }
                 if lockedWorkspaceID != nil { values.removeValue(forKey: "selectedIds"); values.removeValue(forKey: "agentId"); values.removeValue(forKey: "includeDefaults") }
                 if store.supportsProjects && !project.isEmpty { values["projectId"] = .string(project) }
-                if !attachments.isEmpty {
+                if startIntent == .null && !attachments.isEmpty {
                     guard attachmentsEnabled else { throw RemoteError(message: "\(store.displayName) has not enabled approved attachments.") }
                     shared.draftMessageIDs[attachmentScope] = attachmentMessageID.isEmpty ? UUID().uuidString : attachmentMessageID
                     shared.draftSessionIDs[attachmentScope] = attachmentDraftID.isEmpty ? UUID().uuidString : attachmentDraftID
@@ -411,8 +427,13 @@ struct NewChatView: View {
                     values["draftId"] = .string(attachmentDraftID); values["messageId"] = .string(attachmentMessageID)
                     values["attachments"] = .array(prepared.ids); values["consentId"] = .string(prepared.consentID); values["providerId"] = .string(provider)
                 }
-                let result = try await store.request("chat.start", values)
-                store.setDraft("new-chat", .null); store.setDraft("new-chat-attachments", .null)
+                if startIntent == .null {
+                    let formatter = ISO8601DateFormatter(); formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                    startIntent = .object(["id": .string(UUID().uuidString.lowercased()), "issuedAt": .string(formatter.string(from: Date())), "args": .object(values)])
+                    store.setDraft(draftKey, draftValue)
+                }
+                let result = try await store.request("chat.start", startIntent["args"].object, requestID: startIntent["id"].string, issuedAt: startIntent["issuedAt"].string)
+                store.setDraft(draftKey, .null); store.setDraft(draftKey + "-attachments", .null)
                 shared.draftAttachments[attachmentScope] = []; shared.draftMessageIDs[attachmentScope] = nil; shared.draftSessionIDs[attachmentScope] = nil
                 await store.refresh(); onStarted(result["runId"].string)
             } catch { store.error = error.localizedDescription }
@@ -445,19 +466,19 @@ struct NewChatView: View {
         if let reason = NativeAttachmentBudget.rejection(existingCount: attachments.count, existingBytes: attachments.reduce(0) { $0 + $1.bytes.count }, incomingBytes: data.count) { store.error = reason; return false }
         let item = NativeDraftAttachment(id: UUID().uuidString, name: String(name.prefix(120)), mediaType: mediaType, bytes: data)
         shared.draftAttachments[attachmentScope, default: []].append(item)
-        appendAttachmentRecord(store: store, draftKey: "new-chat-attachments", item: item)
+        appendAttachmentRecord(store: store, draftKey: draftKey + "-attachments", item: item)
         return true
     }
     private func removeAttachment(_ id: String) {
         guard !sending else { return }
         shared.draftAttachments[attachmentScope]?.removeAll { $0.id == id }
-        removeAttachmentRecord(store: store, draftKey: "new-chat-attachments", id: id)
+        removeAttachmentRecord(store: store, draftKey: draftKey + "-attachments", id: id)
     }
     private func removeMissingAttachments() {
         guard !sending else { return }
         let kept = Set(attachments.map(\.id))
-        let records = attachmentRecords(store: store, draftKey: "new-chat-attachments").filter { kept.contains($0["id"].string) }
-        store.setDraft("new-chat-attachments", records.isEmpty ? .null : .array(records))
+        let records = attachmentRecords(store: store, draftKey: draftKey + "-attachments").filter { kept.contains($0["id"].string) }
+        store.setDraft(draftKey + "-attachments", records.isEmpty ? .null : .array(records))
     }
     private func importPhotos(_ items: [PHPickerResult]) async {
         for item in items {

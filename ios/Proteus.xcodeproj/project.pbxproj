@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		B2F241001122334455660001 /* ChatSetup.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2F241001122334455660002 /* ChatSetup.swift */; };
 		0251FE479F24F5A96EA70F96 /* RemoteStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9023FEA1077763EA7555C94D /* RemoteStore.swift */; };
 		1162CF50A47019EEE0F0B91C /* ScheduleViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99814D317E2043305330CB8E /* ScheduleViews.swift */; };
 		2DA06CE96BFC9F1B53D5955C /* MarkdownView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8599964FC6EFDA8704A9F1CF /* MarkdownView.swift */; };
@@ -68,6 +69,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		B2F241001122334455660002 /* ChatSetup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatSetup.swift; sourceTree = "<group>"; };
 		0E775F33FC902E4E594401A1 /* UsageViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageViews.swift; sourceTree = "<group>"; };
 		2627C7D5A4DE8F9F996B47F8 /* NativeShell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeShell.swift; sourceTree = "<group>"; };
 		284BE80DCDBBFD7A264CF03C /* EngineRoomView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineRoomView.swift; sourceTree = "<group>"; };
@@ -307,6 +309,7 @@
 				E97DA91FEBC6D447B7D9A9BE /* BrowserModels.swift */,
 				AEBA300AF9361FCB954195A9 /* ChatScrollModels.swift */,
 				A0F1D23E45678901ABCD0002 /* ProviderChoices.swift */,
+				B2F241001122334455660002 /* ChatSetup.swift */,
 				8EE5D84DB0FFFCF87E643DDA /* JSON.swift */,
 				85CC555919516B6821F4F60E /* NativeProjects.swift */,
 			);
@@ -569,6 +572,7 @@
 				7D2D46EE0FD987BA432874CD /* BrowserModels.swift in Sources */,
 				5EF60626047C8C2416E2255F /* ChatScrollModels.swift in Sources */,
 				A0F1D23E45678901ABCD0001 /* ProviderChoices.swift in Sources */,
+				B2F241001122334455660001 /* ChatSetup.swift in Sources */,
 				E430010E9EE52E44B1F9CA66 /* BrowserCacheKeychain.swift in Sources */,
 				35F51F9D47A18DF741E5E436 /* NativeDescriptorCache.swift in Sources */,
 				D0A6A874D71541FD86BC5E31 /* NativeSharedCache.swift in Sources */,
@@ -661,7 +665,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 2611.1.1;
+				CURRENT_PROJECT_VERSION = 2611.2.1;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -680,8 +684,8 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 0.2.40;
-				PROTEUS_RELEASE_DATE = "2026-11-01";
+				MARKETING_VERSION = 0.2.41;
+				PROTEUS_RELEASE_DATE = "2026-11-02";
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -767,7 +771,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 2611.1.1;
+				CURRENT_PROJECT_VERSION = 2611.2.1;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -780,8 +784,8 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 0.2.40;
-				PROTEUS_RELEASE_DATE = "2026-11-01";
+				MARKETING_VERSION = 0.2.41;
+				PROTEUS_RELEASE_DATE = "2026-11-02";
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";

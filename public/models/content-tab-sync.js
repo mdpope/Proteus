@@ -94,7 +94,8 @@ function changesAfterOwnerUpdates(baseline,local,remote,navigation){
   const operations=tabChanges([...baseline,...arrivals.values()],observed,{navigation});
   const previousOrder=baseline.filter(tab=>!arrivals.has(tab.id)).map(tab=>tab.id);
   const localOrder=local.filter(tab=>!arrivals.has(tab.id)).map(tab=>tab.id);
-  return previousOrder.join('\0')===localOrder.join('\0')?operations.filter(op=>op.action!=='reorder'):operations;
+  const explicitChatOpen=local.some(tab=>arrivals.has(tab.id)&&tab.type==='chat'&&tab.navigationPending);
+  return !explicitChatOpen&&previousOrder.join('\0')===localOrder.join('\0')?operations.filter(op=>op.action!=='reorder'):operations;
 }
 export function createTabSynchronizer({scopes,readLocal,apply,acknowledge=async()=>{},request,onError=()=>{},navigation=false,explicitCloseOnly=false,pendingStorage,now=Date.now,preserveUntracked=()=>false}){
   const records=new Map(),navigationCache=new Map(),backoff=new Map();
@@ -192,6 +193,9 @@ export function createTabSynchronizer({scopes,readLocal,apply,acknowledge=async(
         if(remaining.length){pendingStorage?.setItem(closeKey,JSON.stringify(remaining));record.again=true;}else pendingStorage?.removeItem(closeKey);
         pendingStorage?.removeItem(closeRequestKey);
         local=local.filter(tab=>!closes.includes(tab.id));
+        // Confirmed explicit closes may accompany a replacement in the same
+        // position. They must not make that complete local order look partial.
+        if(record.baseline)record.baseline=record.baseline.filter(tab=>!closes.includes(tab.id));
       }
       if(records.get(id)!==record)return;
       if(raw.revision<record.revision)throw Error('The owner returned an older tab revision. Retry synchronization.');

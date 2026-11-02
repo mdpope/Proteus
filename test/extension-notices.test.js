@@ -17,6 +17,7 @@ function launch(home){
   if(name==='electron-chrome-extensions')return {ElectronChromeExtensions:class{}};
   if(name==='electron-chrome-web-store')return {};
   if(name==='./extension-window-context.cjs')return {installExtensionWindowContext(){}};
+  if(name==='./extension-contexts.cjs')return {installExtensionContexts(){}};
   if(name==='./extension-permissions.cjs')return {installExtensionPermissions(host,_save,notify){callbacks.set(host.profileId,notify);}};
   if(name.startsWith('.'))return desktopRequire(name);
   return require(name);

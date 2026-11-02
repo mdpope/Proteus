@@ -1,3 +1,20 @@
+## Nov 2 — redraw geometry, extension contexts and incoming links
+
+Browser redraws restore the browser layout class independently of toolbar reuse. Native bounds
+therefore use the full content surface while address edits, history and reading position survive.
+
+Chrome runtime context discovery includes host-created extension action popups and extension
+windows, scoped to the requesting extension and browser session. Context identity rotates on
+document navigation; native document IDs are never fabricated. Vendor API argument/result
+logging is disabled. Synthetic authentication-to-ready/autofill verifies this path, while real
+Bitwarden unlock remains a separate live acceptance gate.
+
+Incoming external links keep their project selector when focus changes unless an untouched,
+configured default explicitly supplies the destination. Focus loss without a default cannot
+open an unplaced tab in an arbitrary window. Source-app icons use declared bundle resources,
+avoiding the native file-icon worker crash observed in the disposable Mac test. Internal links
+retain their originating project. Source tests do not establish workstation.example.test installation.
+
 ## Nov 1 — extension window and authentication lifecycle
 
 Extension adapter records hold concrete native windows, never the window-selection proxy. Action

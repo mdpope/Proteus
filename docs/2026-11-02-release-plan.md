@@ -1,8 +1,8 @@
 # Nov 2 release plan
 
-Status: request collection and handoff to a new chat. The operator moved the five live defects
-below out of Nov 1 on November 1. Do not reopen Nov 1 or relabel its accepted packages. Reserve
-the next application version through the normal release workflow when Nov 2 implementation starts.
+Status: implementation started in the Nov 2 chat; **0.2.41** reserved through the release workflow.
+The five live defects below carry forward from closed Nov 1. New requests remain part of this
+open release. Do not reopen Nov 1 or relabel its accepted packages.
 
 ## R1 — embedded browser sometimes uses only part of its available surface
 
@@ -71,6 +71,34 @@ workspace/project placement and execution-owner controls. Preserve unsent prompt
 provider/model choices and retry identity when switching tabs. Cancel/close must not start a
 conversation or cancel unrelated work. Verify iPad and iPhone layouts as well as desktop/web
 consistency; do not infer the physical layout fixed from a simulator screenshot alone.
+
+## R6 — current GPT and Claude catalogs, including missing GPT-6.1 Terra
+
+The operator requests current GPT-6 Astra/GPT-6.1 Terra choices and a Claude catalog review.
+Use refreshed executing-owner metadata for model IDs, efforts, context and speed. Check all
+model pickers, preserving saved selections and defaults. Diagnose missing choices across runtime,
+host cache, remote projection and mounted controls; do not replace metadata with a name table.
+Official OpenAI model documentation confirms Astra and Terra, but account/client availability
+requires a runtime observation. Keep account identities and raw catalogs in private evidence.
+
+## R7 — Copilot Fusion versus Auto
+
+The operator sees only Auto and expects the already-requested Fusion option, with a different
+presentation in VS Code. Trace actual runtime/version/account metadata and supported session
+configuration before deciding these are equivalent or that the account lacks entitlement. Keep
+Auto and Fusion distinct. Show Fusion availability/reason in the picker and provider screen;
+verify advertised tiers, execution configuration and provider attribution. Synthetic routing
+tests alone do not establish real Fusion availability or successful execution.
+
+## R8 — restore the SafariSelector-style incoming-link destination selector
+
+The operator reports that the project/window selector no longer appears and tabs open in
+unexpected windows. Trace OS link delivery, picker focus, rules/defaults and destination-window
+selection. Preserve configured routing and existing window/project/tab identities. Verify warm
+and cold links, multiple windows, focus changes, cancellation and explicit destination selection
+in an isolated fixture, followed by exact-package and live acceptance.
+Confirmed scope: workstation.example.test links opened from Outlook. Internal website links retain their originating
+project and do not invoke the external destination selector.
 
 ## Handoff and acceptance
 

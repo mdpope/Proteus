@@ -1,3 +1,19 @@
+## Nov 2 — owner catalogs and inference location
+
+Mounted model pickers hydrate from current owner state even when the network cache is fresh.
+Saved model IDs and supported effort/context/speed choices survive catalog updates. New IDs
+come from executing-owner metadata. Refreshed Codex/Copilot catalogs advertise GPT-6 Astra and
+GPT-6.1 Terra; refreshed authenticated Claude metadata supplies its current models.
+
+Copilot Auto and Fusion remain distinct. The current runtime can advertise Auto without Fusion
+tiers; the picker and Providers screen explain that observation. No Fusion tier or entitlement
+is inferred from Auto. Advertised-tier configuration and attribution tests remain in place.
+
+Local inference choices show adapter and inference computer. Shared sources carry stable host/
+provider IDs plus availability even when discovery fails; stale models cannot imply availability.
+Empty generic shared buckets are omitted, and saved unavailable sources remain reviewable.
+The chat execution owner still controls tools and permissions independently of inference location.
+
 ## Shared local inference
 
 llama.cpp and MTPLX may be shared with explicitly selected paired devices. SharedLlmProvider keeps the local agent/tool loop and delegates inference over encrypted peer RPC. See [shared models](shared-models.md) for setup, ownership, queueing, cancellation and recovery.

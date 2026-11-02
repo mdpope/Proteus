@@ -1,11 +1,5 @@
 {
   "schemaVersion": 1,
-  "id": "2026-11-01",
-  "version": "0.2.40",
-  "status": "closed",
-  "closedOn": "2026-11-01",
-  "sourceCommit": "11ca09b84408bab3a630daeea8fa12c8e373e5fc",
-  "review": "https://github.com/mdpope/Proteus/pull/27",
-  "followUpPlan": "docs/2026-11-02-release-plan.md",
-  "cleanupStatus": "Operator-approved A/B/C completed: 15 paths retired, minimal evidence preserved, dependencies relocated without copying; protected/unreviewed paths remain held."
+  "id": "2026-11-02",
+  "version": "0.2.41"
 }

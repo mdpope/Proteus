@@ -1,3 +1,11 @@
+## Nov 2 — 0.2.41 candidate underway
+
+[The Nov 2 plan](2026-11-02-release-plan.md) now includes current GPT/Claude catalogs, distinct
+Copilot Fusion availability and the external Outlook-link selector regression. Source corrections
+cover R1–R8. Local and synthetic acceptance, exact packages, installation and live workflows are
+recorded separately in [implementation](releases/2026-11-02/implementation.md) and
+[rollout](releases/2026-11-02/rollout.md). Nov 1 remains closed.
+
 ## Nov 1 closed; Nov 2 handoff
 
 Nov 1 / 0.2.40 is closed by the operator with deployed outcomes and qualifications in
