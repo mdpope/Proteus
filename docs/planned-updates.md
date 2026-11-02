@@ -1,3 +1,13 @@
+## R22 — shared Mnemosyne operations design and staged product boundary
+
+Record one desktop/web design with existing web schedule authority preserved. Mnemosyne core and
+iOS library remain independent; Omi is one source, with Stardate and other audio/text adapters
+proposed. Extract optional independent filing adapters in stages, preserving today's native owners
+and disabled Proteus replacements. Source-map lineage joins event IDs to claims/contributions;
+applied/not-applicable/delegated outcomes stay distinct. Fresh unattended checklist acceptance,
+source/watcher migration and production UI implementation remain pending. See the
+[release plan](2026-11-02-release-plan.md); no review or deployment hold is lifted.
+
 ## R21 — scoped next-turn model settings through chat control
 
 `proteus_chats` send can explicitly select model/effort/context/service settings with

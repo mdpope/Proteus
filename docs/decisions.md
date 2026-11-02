@@ -3104,3 +3104,15 @@ Recheck project, run and provider after preflight before calling the synchronous
 Do not switch providers, modify an active turn, edit future schedules or widen tool/source grants.
 Receipts describe requested options; scoped reads expose captured and queued settings without claiming
 provider execution or workflow completion. Never infer that older dropped options took effect.
+
+
+## November 2 — Mnemosyne operations design constraints; implementation pending
+
+Use one desktop/web visual and interaction design with platform wiring only where real constraints
+require it; operational visibility does not widen current web schedule-control authority. Mnemosyne
+is the independent core/service/iOS library and Omi is a source. Proposed additional sources and
+optional independent filing adapters require staged contracts, extraction and acceptance. Preserve
+native owners and prepared-disabled alternatives rather than reassign lifecycle for a UI. Event
+identity, execution claim and contribution lineage are distinct and join through source maps;
+applied, not-applicable and delegated outcomes must not collapse into a generic completion state.
+This design direction grants no production UI build, watcher/owner migration or rollout authority.

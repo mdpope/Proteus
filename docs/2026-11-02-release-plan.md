@@ -1,3 +1,42 @@
+## R22 — Mnemosyne product and operations constraints (implementation pending)
+
+Desktop and web share one visual/interaction design: styling, layouts, content and button semantics.
+Only genuine Electron/browser constraints justify different wiring. Preserve the current web
+schedule-control authority while showing the same operational information; visibility does not
+expand permissions. Do not build a separate web design or implement the production redesign
+before operator review.
+
+Mnemosyne is the product, iOS app and independent Mac service; Omi is one source. The generic core
+must ingest/transcribe/assemble and retain a neutral review/library without Proteus, Obsidian,
+operator workflows or organization workflows. Optional independent filing adapters own configured destination policy and may
+later run natively without Proteus. Current semantic publication still depends on operator workflows: stage a
+neutral contract and guarded adapter extraction, preserving revisions, hashes, human edits and
+receipts. This direction does not authorize bulk renames, identifier/cloud-identity changes, or
+immediate owner/watcher replacement.
+
+Proposed source adapters include Stardate through its own iCloud delivery and other MacWhisper/
+audio/text exports, converging into the Mnemosyne iOS library with source/revision provenance.
+Already-transcribed text requires no second ASR. Do not merge unrelated recordings by text or
+file similarity, or activate two producers on the same folder. Validate each new source and its
+watcher handoff separately before widening library publication.
+
+The three disabled Proteus local-process entries are prepared replacements for native jobs,
+reported loaded at 60-second intervals. Represent the actual owners as service observations and
+authorized controls, not as scheduling responsibility transferred to Proteus. Preserve the native
+takeover gate and existing locks, claims, audio, device/cloud identity, answers and retry receipts.
+
+Stable event IDs differ from execution claim IDs. Join source-map publication/contribution outputs
+to actual claims instead of assuming event-named work directories. Keep applied, not-applicable
+and delegated outcomes distinct. Retained state/receipts cannot reconstruct deleted CLI transcripts;
+bounded native journaling still needs design.
+
+The handoff reports eight audit targets mapped with current destination and ASR/job hashes verified.
+Both general schedules used scoped rules without human prompts, but early completion required
+continuations. Updated completion checklists have not passed a fresh unattended start. Recurring
+triggers stay paused under the testing workflow. These findings do not constitute new source-ingest,
+closed-Proteus health, native migration, production UI or deployment acceptance. R19 owner schedule
+capabilities remain in scope and all review/rollout holds remain unchanged.
+
 ## R21 — scoped next-turn model settings through chat control
 
 `proteus_chats` send can explicitly select model/effort/context/service settings with

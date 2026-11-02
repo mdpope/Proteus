@@ -1,3 +1,15 @@
+## Mnemosyne boundary clarification received — no implementation authorization
+
+Read the updated product-boundary proposal and UI concept. Desktop/web share one visual and action
+design, preserving current web schedule-control scope. Generic Mnemosyne/iOS library must work
+without Proteus or vault systems; optional independent filing adapters and additional sources need
+staged extraction/acceptance. Preserve actual native job owners and disabled prepared replacements.
+Join event IDs to execution claims through source maps, retaining applied/not-applicable/delegated
+outcomes. The handoff reports eight mapped/hash-verified audit targets and scoped schedule runs
+that still needed continuations; fresh unattended checklist acceptance remains pending and recurring
+triggers remain paused. R19 tools remain in scope. Product UI, owner/watcher migration and rollout
+holds remain unchanged. Exact private review pointers and reported evidence are in the operator handoff.
+
 ## Nov 2 — R21 chat send model controls; R19 schedule tools still pending
 
 The scoped next-turn send repair now carries validated model settings through both controller task
