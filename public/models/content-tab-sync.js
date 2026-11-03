@@ -4,9 +4,12 @@ import {applyNavigationDelta} from '../shared/navigation/navigation-history.js';
 export function syncableTabURL(value){return value?safeContentTabURL(value):'';}
 // A membership-only pass may remove only identities confirmed absent by the owner.
 // Newly captured local opens must survive until the subsequent mutation pass.
-export function shouldRemoveCapturedTab(id,ownerIds,capturedIds,{membershipOnly=false,removedIds=[],preservedIds=[]}={}){
+export function shouldRemoveCapturedTab(id,ownerIds,capturedIds,{membershipOnly=false,removedIds=[],preservedIds=[],pendingOpen=false}={}){
   if(!id||ownerIds.has(id)||!capturedIds.has(id))return false;
   if(membershipOnly&&!removedIds.includes(id))return false;
+  // A creation event can arrive after the read snapshot. Preserve that explicit
+  // local intent until the next mutation, while confirmed owner closes still win.
+  if(pendingOpen&&!removedIds.includes(id))return false;
   return !preservedIds.includes(id)||removedIds.includes(id);
 }
 export function tabChanges(before,after,{navigation=false,seed=false}={}){
@@ -324,7 +327,7 @@ export function createTabSynchronizer({scopes,readLocal,apply,acknowledge=async(
       // apply receives the captured snapshot, so it preserves additions made during I/O.
       if(records.get(id)!==record)return;
       rememberOwner(); // Mutation acknowledgements also prove owner participation.
-      await apply(scope,remote.tabs,captured,{preservedIds:[...(record.localAliases||[])]});record.pendingSnapshot=null;
+      await apply(scope,remote.tabs,captured,{preservedIds:[...(record.localAliases||[])],removedIds:[...new Set([...removedIds,...captured.filter(tab=>Object.hasOwn(remote.closed||{},tab.id)).map(tab=>tab.id)])]});record.pendingSnapshot=null;
       record.baseline=structuredClone(remote.tabs);record.revision=remote.revision;record.retry=null;if(wrote)backoff.delete(hostKey(scope));
     };
     record.busy=work().catch(error=>{

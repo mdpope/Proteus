@@ -24,7 +24,7 @@ class BrowserExtensions {
   host.adapter=new ElectronChromeExtensions({license:'GPL-3.0',session,
    createTab:async details=>{
     const context=[...(this.browser.windowRegistry?.contexts.values()||[])].find(ctx=>ctx.window.id===details.windowId);
-    const create=async()=>{if(String(details.url||'').startsWith('chrome-extension:')){const popup=this.openPage(host,details.url,{options:true,toggle:false});return [popup.webContents,popup];}const info=await this.browser.create(details.url||'',null,null,{profileId});const tab=this.browser.get(info.id);if(details.active!==false)this.browser.actions.send({type:'select-tab',info});return [tab.view.webContents,this.ownerWindow()];};
+    const create=()=>this.createExtensionTab(host,details);
     return context?this.browser.windowRegistry.run(context.id,create):create();
    },
    selectTab:wc=>{if(host.reflectingSelection)return;const tab=[...this.browser.tabs.values()].find(tab=>tab.view?.webContents===wc);if(tab){const select=()=>this.browser.actions.send({type:'select-tab',info:this.browser.state(tab)});if(tab.windowId&&this.browser.windowRegistry)this.browser.windowRegistry.run(tab.windowId,select);else select();}},
@@ -44,6 +44,32 @@ class BrowserExtensions {
    this.browser.actions.send({type:'notice',message:extension.name+' could not connect to its desktop app. Open and unlock that app, check browser integration, then retry in this profile.'});
   });
   host.ready=(async()=>{for(const row of rows)if(row.enabled){try{await session.extensions.loadExtension(path.join(folder,row.directory),{allowFileAccess:false});}catch(error){row.error=error.message;}}})();return host.ready;
+ }
+ // Creation conveys intent once; later selection and restoration do not.
+ async createExtensionTab(host,details){
+  if(String(details.url||'').startsWith('chrome-extension:')){const popup=this.openPage(host,details.url,{options:true,toggle:false});return [popup.webContents,popup];}
+  const {profileId}=host,inactive=details.active===false,selectionRevision=this.browser.selectionRevision;
+  const previous=inactive?host.adapter.ctx?.store?.getActiveTabFromWindow(this.ownerWindow()):null;
+  const info=await this.browser.create(details.url||'',null,null,{profileId,...(inactive?{background:true}:{})});
+  const tab=this.browser.get(info.id);
+  if(inactive){
+   // The adapter activates newly observed WebContents. Reflect the current
+   // native selection, or the unchanged blank-page selection hidden by HTML.
+   const selected=this.browser.tabs.get(this.browser.active);
+   const contents=selected?.profileId===profileId?selected.view?.webContents:this.browser.selectionRevision===selectionRevision?previous:null;
+   if(contents&&!contents.isDestroyed())this.selectTab(profileId,contents);
+   else{
+    // With Overview selected there is no prior browser view. Undo only the
+    // adapter's automatic activation of this new background WebContents.
+    const store=host.adapter.ctx?.store,window=this.ownerWindow();
+    if(store?.getActiveTabFromWindow(window)===tab.view.webContents){
+     store.windowToActiveTab.delete(window);
+     const cached=store.tabDetailsCache.get(tab.view.webContents.id);if(cached)cached.active=false;
+    }
+   }
+  }
+  this.browser.actions.send({type:inactive?'background-tab':'select-tab',info,created:true});
+  return [tab.view.webContents,this.ownerWindow()];
  }
  save(host){fs.mkdirSync(host.folder,{recursive:true});const tmp=host.file+'.tmp';fs.writeFileSync(tmp,JSON.stringify(host.rows),{mode:0o600});atomicRename(tmp,host.file);host.listCache=null;const notice={type:'extensions-changed',profileId:host.profileId};if(this.browser.windowRegistry){for(const {window} of this.browser.windowRegistry.contexts.values())if(!window.isDestroyed())window.webContents.send('proteus:browser-action',notice);}else this.browser.actions.send(notice);}
  host(id){const host=this.profiles.get(id);if(!host)throw new Error('Open a tab in this browser profile first.');if(this.browser.sessionFor(id)!==host.session)throw new Error('The profile account changed.');return host;}

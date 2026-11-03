@@ -16,7 +16,7 @@
   "priorRequestAudit": "docs/releases/2026-11-02/prior-release-audit.md",
   "previousAcceptedSourceCommit": "4456aea8837171ba60f82775859d9ce7f4ec0810",
   "sourceCommit": "474b219948a25ef36ff9a37ae171adef105ffb27",
-  "candidateSourceStatus": "R35 Mac installed and independently verified at 2a5525e8; Linux/Windows frozen a1cf6d4c native qualification pending with later test-only harness corrections; native build2611.2.10 retained; publication and live connection acceptance remain open",
+  "candidateSourceStatus": "R36 extension creation correction in source/native UI validation; not yet frozen or built. Installed Mac remains R35 2a5525e8; native build2611.2.10 retained. R35 Linux/Windows candidates do not contain R36 and are not final rollout artifacts.",
   "widerDistributionHold": {
     "active": false,
     "reason": "Operator explicitly authorizes all configured devices, web and release closeout after connection fixes."

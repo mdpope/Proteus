@@ -1,3 +1,7 @@
+## Nov 2 extension tab creation
+
+Extension-created active and background browser tabs carry explicit creation intent into their shared owner registry. The marker survives an older in-flight read and settles after owner acceptance. Existing-tab selection/restoration does not acquire that intent, and confirmed owner closes or moves still remove stale views. Inactive extension creation uses the background focus guard and retains the selected tab. Its adapter reflects the current native selection, or an unchanged blank-page selection; a newer renderer selection prevents restoring an older one. Replacement native package acceptance remains separate from the source correction.
+
 ## Nov 2 scrolling performance
 
 Browser projection and profile reconciliation share a freshly loaded identity within one synchronous

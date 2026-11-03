@@ -356,3 +356,27 @@ test('membership-only owner removal preserves a newly opened local terminal unti
  assert.ok(local.some(x=>x.id===terminal.id));assert.equal(selected,terminal.id);
  assert.ok(host.get(scope.scope,scope.id).tabs.some(x=>x.id===terminal.id),'new terminal reaches owner');assert.deepEqual(errors,[]);
 });
+
+test('new creation arriving during the first authoritative read survives until its owner acknowledgement',async t=>{
+ const host=hostStore(t),scope={scope:'main',id:'main'},kept=tab('kept'),fresh={id:'new-blank',type:'browser',title:'New tab',url:''};
+ host.mutate({...scope,expectedRevision:0,operations:[{action:'open',tab:kept}]});
+ let local=[kept,{...fresh}],release,entered;const readStarted=new Promise(resolve=>entered=resolve),gate=new Promise(resolve=>release=resolve),errors=[];let first=true;
+ const sync=createTabSynchronizer({navigation:true,explicitCloseOnly:true,scopes:()=>[scope],readLocal:async()=>local.map(({pendingOpen,...item})=>({...item,navigationPending:pendingOpen===true})),request:async(_scope,action,args)=>{if(action!=='get')return host.mutate({...scope,...args});const current=host.get(scope.scope,scope.id);if(first){first=false;entered();await gate;}return current;},apply:async(_scope,owner,captured,options={})=>{
+  const ids=new Set(owner.map(item=>item.id)),capturedIds=new Set(captured.map(item=>item.id));
+  local=local.filter(item=>!shouldRemoveCapturedTab(item.id,ids,capturedIds,{...options,pendingOpen:item.pendingOpen===true}));
+  if(!options.membershipOnly)for(const item of owner){let current=local.find(value=>value.id===item.id);if(!current)local.push({...item});else{Object.assign(current,item);delete current.pendingOpen;}}
+ },onError:error=>errors.push(error)});
+ const reading=sync.all();await readStarted;local.find(item=>item.id===fresh.id).pendingOpen=true;release();await reading;
+ assert.ok(local.some(item=>item.id===fresh.id&&item.pendingOpen),'late explicit creation must survive the older snapshot');
+ await sync.all();assert.ok(host.get(scope.scope,scope.id).tabs.some(item=>item.id===fresh.id));assert.equal(local.find(item=>item.id===fresh.id).pendingOpen,undefined,'owner acknowledgement settles creation intent');assert.deepEqual(errors,[]);
+});
+
+test('confirmed owner closes override late creation intent and delayed selection cannot reopen them',async t=>{
+ const host=hostStore(t),scope={scope:'main',id:'main'},fresh={id:'closed-blank',type:'browser',title:'New tab',url:''};
+ host.mutate({...scope,expectedRevision:0,operations:[{action:'open',tab:fresh}]});host.mutate({...scope,expectedRevision:1,operations:[{action:'close',id:fresh.id}]});
+ for(const pendingOpen of [true,false]){
+  let local=[{...fresh,pendingOpen}];const errors=[];
+  const sync=createTabSynchronizer({navigation:true,explicitCloseOnly:true,scopes:()=>[scope],readLocal:async()=>local.map(item=>({...item,navigationPending:item.pendingOpen===true})),request:async(_scope,action,args)=>action==='get'?host.get(scope.scope,scope.id):host.mutate({...scope,...args}),apply:async(_scope,owner,captured,options={})=>{const ids=new Set(owner.map(item=>item.id)),capturedIds=new Set(captured.map(item=>item.id));local=local.filter(item=>!shouldRemoveCapturedTab(item.id,ids,capturedIds,{...options,pendingOpen:item.pendingOpen===true}));},onError:error=>errors.push(error)});
+  await sync.all();assert.equal(local.length,0);assert.equal(host.get(scope.scope,scope.id).tabs.length,0);assert.ok(host.get(scope.scope,scope.id).closed[fresh.id]);assert.deepEqual(errors,[]);
+ }
+});

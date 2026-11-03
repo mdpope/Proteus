@@ -1,4 +1,10 @@
-# Current: R35 local Mac installed; native qualification and distribution open
+# Current: R36 creation-intent correction in validation
+
+Linux qualification proved that a supported extension-created blank tab can be removed by the first authoritative main-scope read before its creation intent is published. R36 carries intent from actual creation through active/background registration and preserves it across an older snapshot while retaining owner close/move authority. Source validation passes 1,486 tests with four skipped and static checks; the focused regressions and the source extension, authentication and two-window sidebar UI fixtures pass. The controlled native regression now passes both read orderings, inactive selection and owner close/move authority. Replacement-package acceptance remains pending. R35 packages do not contain R36. No replacement build, publication or repeat physical-device install is claimed.
+
+The local Mac remains on independently verified R35; both physical mobile clients retain build2611.2.10. Final consumer rollout, sustained native/web transport and message acknowledgements, R25 after full local acceptance, recovery reconciliation, retention and main closeout remain open. Broader Mnemosyne implementation remains deferred.
+
+# R35 local Mac acceptance checkpoint
 
 The local Mac runs `2a5525e8d539+src.5970f442e5bb`. Its owner completed installation, health and navigation preservation with the durable continuation delivered. Independent installed-filesystem hashing and strict deep Apple signature verification match the accepted artifact and original identity. Two current registered recoveries verify. Independent comparison retains all prior history and navigation receipt identities; permissions, shared text drafts, pairings, profile configuration, source selections and saved window layouts match byte for byte. Current reading state reflects ordinary use and the existing 200-view limit: four new views displaced only the four oldest views. Live reading restoration and sustained authenticated transport/message acceptance remain separate checks.
 

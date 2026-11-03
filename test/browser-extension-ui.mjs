@@ -19,7 +19,8 @@ let app;try{
   console.log(JSON.stringify({syntheticExtensionContexts:contexts}));
   assert.ok(contexts.contexts.some(context=>context.type==='POPUP'),'an action popup is discoverable through the MV3 runtime context API');
   const shell=await app.firstWindow(),selection=()=>shell.locator('#tabs .tabitem.selected').getAttribute('data-tab-container');
-  const choices=await app.evaluate(async({app})=>{const browser=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser(),result=[];for(let i=0;i<2;i++){const info=await browser.command({action:'create'});result.push({id:info.id,nativeId:browser.get(info.id).view.webContents.id});}return result;});
+  const nativeIds=await popup.evaluate(async()=>{const result=[];for(let i=0;i<2;i++){const tab=await chrome.tabs.create({active:false});if(tab.active)throw Error('Inactive synthetic creation must not claim selection');result.push(tab.id);}return result;});
+  const choices=await app.evaluate(({app},ids)=>{const browser=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser();return ids.map(nativeId=>{const tab=[...browser.tabs.values()].find(tab=>tab.view?.webContents.id===nativeId);if(!tab)throw Error('Synthetic extension-created tab missing');return {id:tab.id,nativeId};});},nativeIds);
   for(const choice of choices){await popup.evaluate(id=>new Promise(resolve=>chrome.tabs.update(id,{active:true},resolve)),choice.nativeId);await shell.locator('[data-tab-container="'+choice.id+'"].selected').waitFor();}
   for(let i=0;i<8;i++){const choice=choices[i%2];await shell.locator('[data-tab="'+choice.id+'"]').click();await shell.waitForTimeout(35);assert.equal(await selection(),choice.id);}
   await shell.waitForTimeout(250);assert.equal(await selection(),choices[1].id,'Host reflection must not replay an older selection');

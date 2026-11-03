@@ -1,3 +1,7 @@
+## Nov 2 R36 — creation intent originates at creation
+
+Only an actual new extension browser-tab callback may declare creation intent; observing a locally missing ID, selecting a tab or restoring a saved view cannot declare a reopen. Carry the intent into active or background renderer registration and retain it until owner acknowledgement, including when it arrives after a synchronization snapshot. Confirmed owner close/move tombstones override it. Background extension creation uses the existing focus guard and registers without changing selection. Keep authoritative first-read behavior for ordinary stale mirrors.
+
 ## Nov 2 R35 — native qualification preserves platform privacy and source identity
 
 Windows fixtures must exercise private ACLs through the existing helpers instead of assuming POSIX mode bits. Never weaken application-home validation for a test. Linux packages must record the actual full source commit, short revision and dirty state in provenance, independently of historical transfer metadata. Keep strict release-source input verification. Qualification-only changes do not relabel or rebuild an already accepted Mac package whose runtime/build inputs remain identical; retain each artifact's original source pin and companion archive.

@@ -114,3 +114,8 @@ test('pending navigation requires a real stable logical stack and oversized pend
  const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-pending-budget-'));
  try{const store=new WorkspaceSession(home,{projects:true});store.save({tabs:[{id:'browser',type:'browser',history,navigationPending:true}]});const before=fs.readFileSync(store.file);const entries=Array.from({length:3000},(_,index)=>({id:'entry-'+index,url:'https://example.test/'+index+'?data='+'x'.repeat(3000)}));assert.throws(()=>store.save({tabs:[{id:'browser',type:'browser',navigationPending:true,history:{entries,index:2999,currentEntryId:'entry-2999',revision:1}}]}),/Pending browser history.*original record was preserved/);assert.deepEqual(fs.readFileSync(store.file),before);}finally{fs.rmSync(home,{recursive:true,force:true});}
 });
+
+test('Team browser creation intent survives normalization and reopen without promoting ordinary saved selection',()=>{
+ const saved=normalizeSession({team:{active:'pending',tabs:[{id:'pending',type:'browser',browserId:'native-pending',url:'',pendingOpen:true},{id:'existing',type:'browser',browserId:'native-existing',url:'',pendingOpen:'true'}]}});
+ const reopened=normalizeSession(saved);assert.equal(reopened.team.tabs.find(tab=>tab.id==='pending').pendingOpen,true);assert.equal(reopened.team.tabs.find(tab=>tab.id==='existing').pendingOpen,undefined);assert.equal(reopened.team.active,'pending');
+});

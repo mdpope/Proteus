@@ -1,3 +1,7 @@
+## Nov 2 R36 — retain extension-created tabs during first sync
+
+- Carry explicit creation intent for active and background extension tabs through owner synchronization, including a creation event arriving during a pending read. Background creation retains the selected tab. Existing selection and restoration cannot reopen owner-closed or moved identities.
+
 ## Nov 2 R35 — stop sidebar catalog refetch loops
 
 - Desktop sidebars consume compact workspace metadata already received by their authenticated owner connection. Peer changes no longer trigger full context and sync network requests from every renderer window. Keep live rename/project updates, offline/paused/revoked boundaries and explicit configuration reads.
