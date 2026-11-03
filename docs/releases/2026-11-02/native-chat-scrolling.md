@@ -38,14 +38,29 @@ phone tests that silently skipped when their legacy tab bar was absent. The iPad
 varied-rich-content scrolling workload passes with two active renderers; recorded simulator app CPU
 time averages 1.048 seconds over 2.481 seconds of scrolling/deceleration, physical memory about
 68.4 MB and peak 81.3 MB. These are diagnostic measurements without a prior-build baseline.
-The final phone and tablet reruns remain in progress; title collisions between phone navigation
-and the chat list are resolved by stable row accessibility identities. Debug diagnostic labels update natively without publishing every frame through SwiftUI.
+Final phone and tablet gesture/prepend/reopen/cold-launch cases pass, as do question-card
+containment, choices, Clear, retained draft and Return submission. Title collisions between phone
+navigation and the chat list are resolved by stable row accessibility identities. Debug diagnostic labels update natively without publishing every frame through SwiftUI.
 
 The required Node suite passes (1,454 pass, four skip); static validation passes. Simulator metrics
 will not establish a physical iPad frame rate. Physical review and authenticated remote connection
-stability are separate acceptance requirements. The independently signed first question-card build
-is installed and running on iPad: all 195 protected files hash-match before first launch, four
-saved destinations/selection are preserved, and two verified recovery generations remain.
-The operator additionally authorizes the iPhone; the combined correction will update both devices
-after final native acceptance. The accepted Mac, updater usability hold, broader distribution hold
-and Mnemosyne redesign hold remain unchanged.
+stability remain separate acceptance requirements.
+
+## Installed review build
+
+Both physical devices run **0.2.41 / 2611.2.5**, built once from `dd4b7db` with the established
+paid identity/profile and unchanged entitlements. The accepted artifact hash is
+`739b3fdbf07ceefe186ce34133d6d3575338e200fec832ee8a8b3b1471138272`.
+The iPhone's 302 protected files match before first launch. The iPad launched independently during
+verification; a subsequent full cold readback matches all 199 protected files, so its receipt explicitly
+records verification after that observed launch. Both running processes, four saved destinations
+and selection verify; exactly two verified recoveries remain per device. Physical scrolling and
+reconnect/push are for live review and are not inferred from installation.
+
+Both shared simulators now contain one **Proteus Preview**, build **2611.2.5**. Older app identities
+and completed test runners are removed. In-place refresh compares 3,119 phone and 2,656 tablet
+files before launch: only OS launch snapshots change, all protected data and both saved destinations
+per simulator remain intact. The simulator-assigned container paths may change.
+
+The accepted Mac build is unchanged. Updater usability, broader distribution and Mnemosyne redesign
+holds remain. The separate iOS/web connection instability remains open.

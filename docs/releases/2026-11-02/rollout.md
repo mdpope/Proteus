@@ -1,3 +1,32 @@
+# R26 — native correction installed locally
+
+Both physical devices and both shared Preview simulators run **0.2.41 / 2611.2.5** from frozen
+native source `dd4b7db`. The paid artifact is
+`739b3fdbf07ceefe186ce34133d6d3575338e200fec832ee8a8b3b1471138272`.
+Phone/tablet simulator gesture, history prepend, reopen, cold-launch and question-card interaction
+acceptance pass; all 174 native unit tests, the required Node suite (1,454 pass/four skip) and static
+checks pass. See [native chat scrolling](native-chat-scrolling.md) for causes, measurements and limits.
+
+The phone's 302 protected files match before first launch. The tablet's 199 match a full cold
+readback after an independently observed launch during verification; that qualified timing remains
+explicit in its receipt. Saved destinations/selection and running builds verify; exactly two recovery
+generations remain per device. Retention removes 154,025,735/123,515,080 logical bytes for phone/tablet;
+observed free-space changes are +33,198,080/+122,748,928 bytes amid concurrent work. No keychain
+material was exported, pairing reset, certificate changed or app uninstalled on a physical device.
+
+Older simulator app identities and completed test runners are removed. Each simulator contains
+one current Proteus Preview. The existing Preview identities and protected data are preserved;
+launch snapshots and simulator container-path changes are recorded separately.
+
+The local Mac's R23 owner update has completed with verified runtime health and the accepted package.
+Independent preservation comparisons cover navigation/history, permissions, selected sources and
+drafts; live visible restoration and authenticated iOS/web stability remain separate, incomplete
+acceptance. Repeated relay disconnects have been observed after restart. Keep updater usability held;
+do not promote installation or a later quiet interval as proof of stable remote connectivity.
+Wider distribution and the broad Mnemosyne implementation remain held.
+
+Earlier entries below are historical checkpoints.
+
 # R23 — physical devices verified; local desktop waiting for idle
 
 Both physical clients now run **0.2.41 / 2611.2.3**, using the accepted artifact below. The iPhone's 300 protected files and iPad's 198 protected files all match recovery hashes before first launch. Running processes and each device's four saved connections/selection verify afterward. Established bundle, signing/profile and keychain entitlements remain unchanged. Exactly two verified recovery generations remain per device. Retention removes 150,625,440 logical bytes for phone and 109,338,600 for tablet; observed free-space changes are +14,671,872 and -23,019,520 bytes respectively while concurrent work continues, not an isolated allocation measurement.

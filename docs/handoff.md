@@ -1,3 +1,18 @@
+## R26 — native review build installed; connection acceptance open
+
+Both physical clients and the single remaining Preview app on each shared simulator run
+0.2.41/2611.2.5, frozen source `dd4b7db`. Native question cards stay inside their message surface;
+scrolling has one native owner, stable content anchors, momentum guards and durable bookmarks.
+Phone/tablet interaction and cold-launch tests, the large-history workload, 174 native unit tests,
+the required Node suite and static checks pass. See [native scrolling acceptance](releases/2026-11-02/native-chat-scrolling.md)
+and [rollout](releases/2026-11-02/rollout.md). Physical data preservation is verified, with the tablet's
+post-independent-launch readback qualification retained. Physical gesture review remains separate.
+
+The local Mac R23 update is installed and healthy; repeated relay disconnects still prevent full
+connection acceptance. R24 remains open and updater usability stays held. Broader distribution and
+Mnemosyne redesign remain held. Exact device routing, artifact/update/recovery receipts, source
+freezes and continuation details remain in the private operator record. Earlier sections are history.
+
 ## R23 physical rollout complete; R24 connection stability remains open
 
 Physical iPhone/iPad run 0.2.41/2611.2.3 with all 300/198 protected files hash-matched before launch, four saved destinations/selection each retained and two verified recoveries each. Physical gesture, push and authenticated reconnect are not established. Same local desktop owner job is handed off/waiting for idle; parent must yield for restart. Installed Mac is still 0.2.40 until independent verification. The operator reports repeated reconnecting/offline on both iOS and web against this Mac; do not mistake saved metadata for connection acceptance. Complete desktop preservation/health and trace owner/relay/client connection behavior before claiming resolution. Private recovery/update receipts and continuation routing are in the operator record. Wider distribution/Mnemosyne holds remain.

@@ -1,3 +1,17 @@
+## Nov 2: native conversation reading has one scroll owner
+
+Use the UIKit conversation probe as the sole owner of automatic bottom following and bookmark
+offsets. A genuine pan suspends following through deceleration; layout and keyboard movement do
+not enable it. Prefetch may fill cache headroom during motion, while visible prepends and native
+offset commands wait for rest. Explicit question navigation cancels competing restoration.
+
+Keep high-frequency measurements in reference state and use stable content coordinates for event
+anchors. Absolute offsets require the same loaded/rendered boundaries, revision and width; otherwise
+restore the event and inset. Persist only bounded local account/device reading metadata on completed
+gestures, acknowledged restoration and lifecycle transitions. Shared drafts and remote execution
+ownership retain their existing independent boundaries. Question forms and their controls belong
+inside the associated message surface, with responsive footer layout.
+
 ## Nov 2: origin completion uses retained visits and the owner cache
 
 Rank website origins by retained visit count within a profile, then recency and a stable URL tie.
