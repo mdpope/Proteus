@@ -1,3 +1,7 @@
+## Nov 2 R33 — update preservation correction
+
+- Finish renderer checkpoints before capturing update preservation, and retain document chat associations in saved window/Team tabs. Keep all identity, data and idle guards; report a bounded recovery-check reason on timeout.
+
 ## Nov 2 — 0.2.41 candidate
 
 - Preserve the idle message anchor when preceding content finishes sizing after a history prepend; retain native gesture ownership and reading state across reopen.

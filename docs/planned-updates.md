@@ -1,3 +1,7 @@
+## Nov 2 R33 — recovery investigation and iPad follow-through
+
+The last Mac candidate and rollback both timed out during recovery verification; the previous owner is running, without a completed recovery-health receipt. A read-only comparison found two document descriptors lost their chat association between the pre-Quit inventory and the cold snapshot. Source now preserves that metadata and checkpoints before the preservation snapshot. Recovery diagnostics retain only fixed check reasons. Existing recovery guards and historical evidence remain; deployment and sustained connection acceptance are still open. The operator has now authorized the physical iPad follow-up using the existing signed build10. R25 usability and the wider Mnemosyne redesign remain held/deferred.
+
 ## Nov 2 R32 — validated source, live traffic acceptance pending
 
 The iPhone build9 live General read now matches the desktop's 12 ordered tab IDs and revision.

@@ -1,3 +1,9 @@
+# R33 current installation status
+
+The physical iPad follow-up is now authorized and complete on **0.2.41 / 2611.2.10**, reusing the accepted native artifact. All **199 protected files** matched before first launch; four saved destinations, selection and original signing/keychain groups remain. Two verified recoveries are retained. Oldest accepted recovery retirement removed 138,825,276 logical bytes, with observed free space +139,239,424 bytes. The incomplete earlier build8 copy was retired separately after proving it had no completed capture or install intent; failure receipts remain.
+
+The iPhone and both Preview simulators already run build10; no repeat installation occurred. The latest Mac candidate and rollback both failed live recovery verification. The previous Mac runtime responds, but full rollback health/acceptance remains incomplete. R33 addresses the final-checkpoint/association discrepancy and adds bounded timeout reasons. Replacement acceptance, sustained authenticated mobile/web connectivity, other desktop updates and release closeout remain open. Wider Mnemosyne remains deferred and R25 usability remains held until full local acceptance.
+
 # R32 local device completion / Mac idle handoff
 
 The physical iPhone is now **0.2.41 / 2611.2.10**, installed and launched in place. All **320

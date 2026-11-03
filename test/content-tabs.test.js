@@ -120,3 +120,16 @@ test('concurrent unchanged scope reads share history work but revisions and retu
  const values=await Promise.all(pending),latest=await current;assert.equal(latest.tabs.length,2);assert.equal(values[0].tabs.length,1);values[0].tabs[0].title='changed by caller';assert.equal(values[1].tabs[0].title,browser.title);assert.equal(tabs.readFlights.size,0);
  await tabs.getAsync('project','synthetic',{historyLimit:32});assert.equal(seeds,5,'A later read must refresh rather than reuse a completed cache');
 });
+
+
+test('document checkpoints retain original chat binding through project and Team restores',async t=>{
+ const {documentSessionMetadata}=await import('../public/models/content-tab-descriptor.js');
+ const {normalizeSession}=await import('../desktop/windows/workspace-session.cjs');
+ const original={id:'notes',type:'markdown',parentId:'project-a',contentTabId:'document:'+('a'.repeat(64)),associationChatId:'chat-origin',markdown:{file:'/tmp/synthetic-notes.md'}};
+ const saved={tabs:[{id:'project-a',type:'workspace',workspaceId:'work',projectId:'project-a'}, {...original,...documentSessionMetadata(original)}],team:{tabs:[{...original,...documentSessionMetadata(original)}]}};
+ const restored=normalizeSession(JSON.parse(JSON.stringify(saved)),{projects:true,sharedTeam:true});
+ const scopes=workspaceContentScopes(restored);
+ assert.equal(scopes.find(row=>row.scope==='project').tabs[0].chatId,'chat-origin');
+ assert.equal(scopes.find(row=>row.scope==='team').tabs[0].chatId,'chat-origin');
+ assert.equal(documentSessionMetadata(restored.tabs.find(tab=>tab.id==='notes')).file,'/tmp/synthetic-notes.md');
+});

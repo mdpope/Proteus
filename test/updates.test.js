@@ -126,6 +126,29 @@ test('new input before handoff cancels the checkpoint; durable recovery input st
  const job=f.controller.status().job;await handoff(f,job);await f.controller.advance();writeJob(f.controller.file,{phase:'verifying'});
  await f.engine.send(f.run.id,'User message arriving during verified restart','queue','synthetic-user');assert.equal(f.run.status,'queued');assert.equal(f.engine.running.size,0);assert.equal(f.run.events.at(-1).text,'User message arriving during verified restart');
 });
+test('preservation records the completed renderer checkpoint before helper handoff',async t=>{
+ const f=fixture(t);let descriptor={id:'document:'+('d'.repeat(64)),type:'document',documentId:'d'.repeat(64),chatId:'chat-a'};
+ f.service.context={config:()=>({workspaces:[]})};f.service.workspaceProjects={read:()=>({projects:[]})};
+ f.service.contentTabs={read:()=>({scopes:{'chat:chat-a':{tabs:[descriptor]}}})};
+ let checkpointed=false;
+ f.service.prepareUpdateCheckpoint=async()=>{await Promise.resolve();descriptor={...descriptor,hidden:true};checkpointed=true;};
+ const launch=f.controller.launchHelper;f.controller.launchHelper=job=>{assert.equal(checkpointed,true);return launch(job);};
+ await handoff(f,await prepare(f));await f.controller.advance();
+ assert.equal(readJob(f.controller.file).phase,'stopping');
+ assert.equal(f.controller.verifyPreservation(readJob(f.controller.file)).navigation.tabs,1);
+ descriptor={...descriptor,chatId:'other-chat'};
+ assert.throws(()=>f.controller.verifyPreservation(readJob(f.controller.file)),/Saved tab membership/,'a real association change must still fail preservation');
+});
+test('a failed final renderer checkpoint leaves the app open and releases the barrier',async t=>{
+ const f=fixture(t);f.service.prepareUpdateCheckpoint=async()=>{throw Error('Synthetic renderer did not save');};
+ await handoff(f,await prepare(f));await assert.rejects(f.controller.advance(),/Synthetic renderer/);
+ assert.equal(f.controller.status().job.phase,'prepared');assert.equal(f.engine.updateBarrier,false);assert.deepEqual(f.calls,[]);
+});
+test('new input during the renderer checkpoint prevents helper launch and Quit',async t=>{
+ const f=fixture(t);f.service.prepareUpdateCheckpoint=async()=>{f.controller.newInput();};
+ await handoff(f,await prepare(f));await f.controller.advance();
+ assert.equal(f.controller.status().job.phase,'prepared');assert.equal(f.engine.updateBarrier,false);assert.deepEqual(f.calls,[]);
+});
 test('task feedback in another chat preserves handoff but its queued work still blocks restart',async t=>{
  const f=fixture(t);f.engine.drain=async()=>{};
  const parent=f.engine.createRun({...f.run.schedule,id:'feedback-parent'},'chat',null,{deferStart:true});parent.status='completed';delete parent.deferredStart;f.engine.persist(parent);

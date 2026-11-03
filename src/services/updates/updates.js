@@ -222,6 +222,11 @@ export class Updates {
   try{
    await this.service.engine.schedulerTick;
    if(this.job().phase!=='waiting-for-idle'||this.waiting(job).length){this.service.engine.updateBarrier=false;return;}
+   // A renderer checkpoint can commit final tab descriptors and drafts. Finish
+   // it before hashing preservation, then repeat the idle/revision checks. Quit
+   // must never compare a pre-checkpoint inventory with post-checkpoint data.
+   await this.service.prepareUpdateCheckpoint?.();
+   if(this.job().phase!=='waiting-for-idle'||this.waiting(job).length){this.service.engine.updateBarrier=false;return;}
    // No await between the final idle check, durable handoff and graceful Quit.
    await this.spawnHelper(this.job(),true);
    if(this.job().phase!=='waiting-for-idle'||this.waiting(job).length){this.service.engine.updateBarrier=false;return;}

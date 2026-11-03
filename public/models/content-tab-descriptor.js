@@ -2,6 +2,11 @@
 // Several window-local view IDs can represent one owner descriptor. Count that
 // identity once when comparing order with a deduplicated synchronization snapshot.
 export const contentTabOrder=ids=>[...new Set(ids.filter(Boolean))];
+// Saved renderer checkpoints must retain the document's original chat binding,
+// including after its presentation moves into a project or Team surface.
+export function documentSessionMetadata(tab){
+ return {file:tab.markdown?.file||tab.file,...(tab.associationChatId?{associationChatId:tab.associationChatId}:{})};
+}
 export function windowContentTabId(tab){
  if(['run','remote-run'].includes(tab.type))return 'chat:'+(tab.runId||tab.chatId||(tab.contentTabId?.startsWith('chat:')?tab.contentTabId.slice(5):tab.id.replace(/^chat:/,'')));
  if(tab.type==='terminal')return 'terminal:'+tab.terminal?.id;

@@ -1,3 +1,7 @@
+## Nov 2 R33 — preservation describes the final checkpoint
+
+A final renderer checkpoint can update canonical descriptors and drafts. Complete it before recording preservation, then recheck idleness and the handoff phase before starting the helper. A failed checkpoint leaves the application open. Save document chat associations on every surface, independently of their current project placement. Keep strict preservation/identity/barrier verification and classify timeout failures using fixed reasons without logging private owner responses.
+
 ## Nov 2 R32 — presentation subscriptions belong to each transport and visible view
 
 A legacy full-page watcher must not promote summary subscribers of the same chat. Send each peer

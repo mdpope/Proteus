@@ -1,3 +1,7 @@
+# R33 recovery correction in validation
+
+The preceding Mac update returned to the previous runtime after candidate and rollback verification timeouts. The cold snapshot differs from the pre-Quit navigation receipt only in two document chat associations; adding their original binding reproduces the saved hashes. Source now saves those associations and completes renderer checkpoints before the preservation inventory. Timeout diagnostics retain fixed check reasons. No failure journal is rewritten and no validation predicate is relaxed. Focused updater and recovery tests pass. Full Node validation passes 1,472 tests with four skipped; static checks pass. Replacement package acceptance follows. Existing native build10 is reused without relabeling its frozen source.
+
 # R32 final candidate acceptance
 
 The corrected owner stream retains the last durable replay cursor for replaceable incremental

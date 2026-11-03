@@ -141,6 +141,7 @@ else {
     const windowPositions=id=>{const prefix='window:'+id+':';return viewPositions.get().flatMap(([key,position])=>key.startsWith(prefix)?[[key.slice(prefix.length),position]]:id==='main'&&!key.startsWith('window:')?[[key,position]]:[]);};
     const captureWindow=(ctx,kind,name,expectedRevision)=>windowLayouts.capture({windowId:ctx.id,session:ctx.session.get(),positions:windowPositions(ctx.id),bounds:ctx.window.getNormalBounds(),maximized:ctx.window.isMaximized(),kind,name},expectedRevision);
     if(windowLayouts)windows.checkpointForQuit=async()=>{for(const ctx of windows.contexts.values()){ctx.checkpointing=true;try{await checkpointWindow(ctx);captureWindow(ctx,'previous');}finally{ctx.checkpointing=false;}}};
+    service.prepareUpdateCheckpoint=()=>windows.checkpointForQuit?.();
     windows.handle('proteus:window-layouts',async(event,value)=>{
       trusted(event);if(!windowLayouts)throw Error('Window sessions are available in the design preview.');
       if(value?.action==='audit-content')return windowContentRecovery.audit();
