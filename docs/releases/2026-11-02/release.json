@@ -15,8 +15,8 @@
   },
   "priorRequestAudit": "docs/releases/2026-11-02/prior-release-audit.md",
   "previousAcceptedSourceCommit": "4456aea8837171ba60f82775859d9ce7f4ec0810",
-  "sourceCommit": "9faf4e1947e07ff47f5bfb80f38850bcb0637e81",
-  "candidateSourceStatus": "R36 9faf4e19 installed locally and owner healthy. Independent full installed hash and strict signature match. Nine signed-package UI tests pass; Linux/Windows four source-mode UI qualifiers pass, final packages pending. Native 2611.2.10 retained. Live connection and wider rollout acceptance remain open.",
+  "sourceCommit": "4bbec8cadc9c24916cc7514ead9b1b53f5a6051d",
+  "candidateSourceStatus": "Final R37 frozen 4bbec8c: Mac, Linux and Windows packages qualified with exact-package UI, source companions and original publisher signatures verified. Final web and Mac/Linux download publication are verified; native consumer installation and Windows transfer/publication remain open. Native 2611.2.10 is retained; iOS performance, composer growth and residual disconnect follow-ups are deferred to Nov 3.",
   "widerDistributionHold": {
     "active": false,
     "reason": "Operator explicitly authorizes all configured devices, web and release closeout after connection fixes."
@@ -26,12 +26,10 @@
     "reason": "Operator moved broader Mnemosyne redesign and staged product-boundary work to Nov 3; preserved in docs/2026-11-03-mnemosyne-handoff.md."
   },
   "acceptedSourcePins": {
-    "darwin-arm64": "9faf4e1947e07ff47f5bfb80f38850bcb0637e81",
-    "ios": "8d2e0df2807934ef72cc0bd1427b187ab61b5ed2"
+    "darwin-arm64": "4bbec8cadc9c24916cc7514ead9b1b53f5a6051d",
+    "ios": "8d2e0df2807934ef72cc0bd1427b187ab61b5ed2",
+    "linux-x64": "4bbec8cadc9c24916cc7514ead9b1b53f5a6051d",
+    "win32-x64": "4bbec8cadc9c24916cc7514ead9b1b53f5a6051d"
   },
-  "qualifyingSourcePins": {
-    "linux-x64": "a1cf6d4c985d2730b2de031c0c473cd9afea375d",
-    "win32-x64": "a1cf6d4c985d2730b2de031c0c473cd9afea375d"
-  },
-  "replacementSourceCommit": "9faf4e1947e07ff47f5bfb80f38850bcb0637e81"
+  "replacementSourceCommit": "4bbec8cadc9c24916cc7514ead9b1b53f5a6051d"
 }

@@ -1,3 +1,22 @@
+# R37 — final qualification and deployment in progress
+
+Application source is frozen at `4bbec8cadc9c24916cc7514ead9b1b53f5a6051d`.
+Mac, Linux and Windows packages passed their platform qualification, source integrity and original publisher-signature checks. Windows transition checks use simulated installer calls and retain the prior qualification of the unchanged installer recipe; its installer is Authenticode unsigned.
+
+Build Mac currently runs accepted R36; the final R37 update is prepared and awaits its destination-owned approval. The secondary Mac update is waiting for unrelated active work. Final Mac/Linux downloads are published and independently verified over HTTPS. Their unassigned destination coordinators are processing the final Linux and secondary Mac updates. Windows artifact transfer awaits restoration of its existing GitHub login. Dispatch and package staging do not establish completed consumer installations.
+
+The final web build is unchanged after qualification. Its first capture stopped at the server recovery-retention guard before activation. Verified superseded payloads have now been retired while retaining the current site, shared data, the verified server recovery and the local recovery pair. A separate retry namespace preserves the failed attempt and runs the normal deployment guards. The final web build activated and all fourteen endpoint checks plus six served-asset hashes passed. Ordinary isolated restore failed; the existing fixed captured-state verification passed before activation. The authenticated session displayed the existing test reply without resending, then another disconnect occurred. That limited result does not establish sustained stability; the residual connection issue remains a Nov 3 follow-up.
+
+Both physical iOS devices and shared Preview simulators retain build `2611.2.10`; they have not been reinstalled. General membership matched the owner in the completed comparison. The actual iPhone test message arrived, but the operator reports poor performance, missing composer growth and one residual disconnect. Those issues and the Mnemosyne redesign are explicitly deferred to Nov 3; see the linked issue and design handoff records. No sustained-stability claim is made.
+
+The historical sections below retain earlier evidence; they do not supersede this final status. Nov 2 remains open until rollout and closeout verify.
+
+## R37 final packages qualifying
+
+Final source `4bbec8c` passes 1,489 source tests (four skipped), static checks, 34 focused updater regressions and disposable Electron interaction checks. Its signed Mac candidate passes all ten exact-package UI checks, official extraction and corresponding-source verification. Windows and Linux builders are qualifying the same immutable source. These are package acceptance results, not installed outcomes. Native 2611.2.10 remains installed on both physical devices.
+
+The R36 Mac package is published with verified immutable and mutable HTTPS hashes. Work Mac has handed it off but waits for an older pending approval and browser operation; nothing was cancelled to force restart. Ian's computer reports Windows and awaits the final Windows package. The web received one acceptance request and the owner produced its exact acknowledgement, but the old web client disconnected before showing the reply. Preserve that failed return path for comparison after the final web deployment. The operator's new iOS performance, composer and residual disconnect observations are explicitly in the Nov 3 queue.
+
 ## R36 installed and independently verified; compatible-consumer rollout
 
 The Mac R36 runtime and exact installed tree match the accepted signed package; strict Apple signing verification passes. The owner completed the update and resumed its coordinator. The pre-resume receipt verifies 112 runs, 130,109 events, eight workspaces, 18 projects, 55 scopes, 239 tabs and three windows. Independent cold-to-current comparison retains all prior 494 navigation tabs, 2,518 history entries and 6,524 navigation receipts. Permissions, pairings, source selection and saved layouts are unchanged. All prior shared drafts remain; new reading positions evict only the five oldest entries under the established 200-view limit. Post-restart usage changes are distinguished from migration loss.
