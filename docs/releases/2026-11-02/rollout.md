@@ -1,3 +1,11 @@
+# Operator deferral — physical iPad follow-up
+
+The operator explicitly deferred the physical iPad build8 update until later because it cannot
+be closed now. Leave it on the accepted **0.2.41 / 2611.2.7** installation. The changed-data
+capture stopped before installation; build8 is not installed or accepted on that device.
+Both verified existing recovery generations remain intact. Record this device as deferred at
+release closeout; do not block otherwise completed target deployment solely on this deferral.
+
 # R29 rollout checkpoint — November 3
 
 The operator authorized all configured devices and web deployment after the connection fixes.
