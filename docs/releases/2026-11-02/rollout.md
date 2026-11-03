@@ -3,15 +3,15 @@
 The physical iPhone is now **0.2.41 / 2611.2.10**, installed and launched in place. All **320
 current protected files** match before first launch; four saved destinations, selection and
 original signing/keychain access groups are preserved. Two verified recoveries remain. Retention
-removed167,365,050logical bytes; observed free-space change was +167,284,736bytes.
+removed 167,365,050 logical bytes; observed free-space change was +167,284,736 bytes.
 
 A fresh build10 authenticated General read matches the desktop's **12 ordered IDs and revision
 3562**, including the three hidden entries. That scope reports received, zero pending edits and
 no active retry envelope. Stable chat sending and sustained connection traffic remain separate
 post-Mac-update acceptance work.
 
-Both shared simulators retain exactly one current Preview/build10, with saved data/destinations
-verified and completed test apps removed. The physical iPad remains explicitly deferred on build7.
+Both shared simulators retain exactly one current Preview / build 10, with saved data/destinations
+verified and completed test apps removed. The physical iPad remains explicitly deferred on build 7.
 The corrected signed Mac candidate is accepted and handed off, waiting only for this release turn
 to finish. Its prior completed-update coordinator was cancelled only to release an obsolete
 read-permission probe; no pending approval was granted and no unrelated work or update job was
@@ -19,7 +19,7 @@ cancelled. The current Mac is still R29 until the owner reports the new installa
 
 The never-accepted first Mac staging bundle was removed only after exact hash/no-running-process
 checks and verified corrected-candidate acceptance. Its failure/build receipts remain. Removal
-covered650,194,569logical bytes; observed free-space change was +683,806,720bytes. No recovery,
+covered 650,194,569 logical bytes; observed free-space change was +683,806,720 bytes. No recovery,
 installed app, phone/iPad data or corrected candidate was removed.
 
 Release closeout and wider target deployment remain unfinished. Updater usability stays held
@@ -67,7 +67,7 @@ reliability. It does not independently prove the earlier mismatch's precise caus
 The local Mac's R29 owner update completed with verified runtime health; R30 draft-header and R32
 traffic source changes have not yet been packaged/installed there. Web and relay R29 deployments
 completed; production authenticated web stability and final retention remain open. Preview apps
-remain build7 pending final refresh. The physical iPad remains explicitly deferred on build7;
+remain build7 pending final refresh. The physical iPad remains explicitly deferred on build 7;
 do not operate it for this follow-up. Other desktop deployment and final release closeout remain.
 
 R32 source isolates client watch modes, stops hidden native chat watches and sends negotiated
