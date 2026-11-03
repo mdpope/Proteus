@@ -27,6 +27,10 @@ try{
  assert.equal(contexts.current.id,a.windowId);assert.deepEqual(contexts.tabs.map(tab=>tab.id),[a.nativeId]);assert.deepEqual(contexts.all.map(tab=>tab.id).sort(),[a.nativeId,b.nativeId].sort());assert.deepEqual(contexts.last.map(tab=>tab.id),contexts.all.filter(tab=>tab.windowId===contexts.lastWindow.id).map(tab=>tab.id));
  const authenticationEvent=extensionWindow(app,installed[0].id,'/auth.html');await popup.locator('#unlock').click();const authentication=await authenticationEvent;await authentication.locator('#complete').waitFor();const closed=authentication.waitForEvent('close');await authentication.locator('#complete').click();await closed;
  await popup.getByText('Synthetic vault unlocked',{exact:true}).waitFor();assert.equal(popup.isClosed(),false);
+ // The popup fills lastFocusedWindow. Restore the asserted destination after
+ // exercising the second-window query above, then verify the same API sees it.
+ await native((main,id)=>{const ctx=[...main.getWindows().contexts.values()].find(ctx=>ctx.window.id===id);process.mainModule.require('electron').app.focus({steal:true});ctx.window.show();ctx.window.focus();},a.windowId);
+ await popup.waitForFunction(async id=>(await chrome.tabs.query({active:true,lastFocusedWindow:true})).some(tab=>tab.id===id),a.nativeId);
  await popup.locator('#fill').click();await popup.getByText('Synthetic form filled',{exact:true}).waitFor();
  const form=await native(async(main,id)=>main.getBrowser().get(id).view.webContents.executeJavaScript('({user:document.querySelector("#username").value,password:document.querySelector("#password").value,inputs:window.inputs})'),a.id);
  assert.deepEqual(form,{user:'synthetic-user',password:'SYNTHETIC-ONLY-PASSWORD',inputs:2});

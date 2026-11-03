@@ -1,5 +1,7 @@
 # R35 platform qualification follow-up
 
+Linux diagnosis isolated two additional fixture assumptions: a screenshot used a macOS-only path, and synthetic autofill queried the last-focused window after selecting B while asserting A. Screenshots now use the disposable fixture directory; autofill explicitly restores A and waits for the same extension query before retaining both the A-value and B-untouched assertions. The link fixture separately asserts the supported non-macOS direct fallback, including loaded/default-profile/unowned/unshared/agent-paused placement. It retains every macOS picker assertion. These are qualification-only changes; accepted package bytes and original source companions retain their pins. Native checks must establish the new assertions before promotion. Original failure evidence is preserved.
+
 Windows qualification stopped on two test-only portability errors: a POSIX mode assertion and an API fixture created without private Windows ACLs. Use the existing ACL-aware assertion and private-directory helper; product privacy checks remain strict. Linux qualification found that its packager omitted the current Git pin. New Linux provenance now records the full commit, short revision and dirty state and passes the ordinary release-source verifier without relaxing it. Accepted Mac inputs and bytes are unchanged; its original package/source pin is retained. Replacement native qualification and the remaining Linux geometry/UI/rollback checks must pass before publication.
 
 # R35 sidebar feedback correction in validation

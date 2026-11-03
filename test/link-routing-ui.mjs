@@ -10,7 +10,19 @@ try{
  const inventory=()=>app.evaluate(({app})=>process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser().list(true));
  const open=url=>app.evaluate(({app},url)=>app.emit('open-url',{preventDefault(){}},url),url);
  const popup=()=>wait(()=>app.windows().find(page=>page.url().endsWith('/link-routing/picker.html')));
- const url=fixture.origin+'/link-picker';await open(url);const picker=await popup();await picker.getByRole('searchbox').waitFor();
+ const url=fixture.origin+'/link-picker';await open(url);
+ if(process.platform!=='darwin'){
+  // Only macOS instantiates the project picker. Other platforms use the direct
+  // external-link path, which must retain ordinary unshared browser access.
+  const tab=await wait(async()=>(await inventory()).find(tab=>tab.url===url&&tab.loaded));
+  assert.equal(tab.url,url);assert.equal(tab.loaded,true);assert.equal(tab.owner,null);
+  assert.equal(tab.agentPaused,true);assert.equal(tab.shared,false);
+  assert.equal(tab.profileId,'default');assert.equal(tab.parentId,null);
+  assert.equal(app.windows().some(page=>page.url().endsWith('/link-routing/picker.html')),false);
+  assert.deepEqual(errors,[]);
+  console.log(JSON.stringify({passed:true,synthetic:true,directExternalLinkFallback:true,loaded:true,unowned:true,unshared:true,agentPaused:true,picker:'not applicable on this platform'}));
+ }else{
+ const picker=await popup();await picker.getByRole('searchbox').waitFor();
  // OS activation and unrelated windows can steal focus before a human chooses.
  await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().find(window=>window.webContents.getURL().endsWith('/link-routing/picker.html')).emit('blur'));
  await new Promise(resolve=>setTimeout(resolve,150));assert.equal(picker.isClosed(),false,'focus loss must not pick an arbitrary destination');assert.equal((await inventory()).some(tab=>tab.url===url),false);
@@ -25,4 +37,5 @@ try{
  await assert.rejects(shell.evaluate(id=>window.desktop.browser({action:'unload',id}),tab.id),/Persisted/);
  await shell.screenshot({path:process.cwd()+'/.runtime-tests/link-routing-ui.png'});assert.deepEqual(errors,[]);
  console.log(JSON.stringify({passed:true,synthetic:true,pickerFilterKeyboard:true,projectPlacement:true,automaticRule:true,escapeCancel:true,persistedHiddenResident:true,previewCannotRegister:true}));
+ }
 }catch(error){console.error('Synthetic picker state',app?.windows().map(page=>page.url()),await app?.windows().find(page=>page.url().startsWith('http:'))?.locator('body').innerText().catch(()=>''));throw error;}finally{await app?.close();await fixture.cleanup();}
