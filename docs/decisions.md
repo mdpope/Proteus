@@ -3169,3 +3169,8 @@ Current sync state supersedes obsolete replayed state snapshots; lifecycle and m
 retain their existing meanings. Measure wire bytes, queue pressure and numeric close codes without
 persisting payloads or credentials. Resume an explicitly visible project's owner independently of
 the default selected computer, preserving suspended-command and immutable-owner boundaries.
+
+
+## Nov 2 follow-up: membership is independent of history hydration
+
+Publish a valid owner membership response immediately. Optional complete Back/Forward paging must not keep obsolete tabs on screen. Retain matching complete local histories, and apply later hydration only while its owner scope/revision and absence of local pending intent still match. Draft synchronization status belongs in the desktop chat heading, keeping conflict recovery available outside message entry.

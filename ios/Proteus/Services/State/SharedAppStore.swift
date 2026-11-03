@@ -181,7 +181,7 @@ let nativeFixtureRelayOrigin = ""
         let previous = contentReadEvidence[scope], now = Date().timeIntervalSince1970
         if previous?["revision"] == snapshot["revision"], previous?["tabIds"] == .array(ids), now - Double(previous?["at"].int ?? 0) < 30 { return }
         contentReadEvidence[scope] = .object(["revision": snapshot["revision"], "tabIds": .array(ids), "at": .number(now)])
-        let keep = contentReadEvidence.sorted { $0.value["at"].int > $1.value["at"].int }.prefix(16)
+        let keep = contentReadEvidence.sorted { $0.value["at"].int > $1.value["at"].int }.prefix(64)
         contentReadEvidence = Dictionary(uniqueKeysWithValues: keep.map { ($0.key, $0.value) })
         let value = JSON.object(["schemaVersion": .number(1), "scopes": .object(contentReadEvidence)])
         guard let data = try? JSONEncoder().encode(value), data.count <= 1_000_000 else { return }
@@ -384,7 +384,15 @@ let nativeFixtureRelayOrigin = ""
             }
             let customTitle = tab["customTitle"].string
             let title = !customTitle.isEmpty ? customTitle : pageTitle ?? (preservesLocalNavigation ? existing?.title ?? tab["title"].string : tab["title"].string)
-            let history = preservesLocalNavigation ? existing?.history : Self.decodeBrowserHistory(tab["history"]) ?? existing?.history
+            let ownerHistory = tab["history"]
+            let retainedHistory = existing?.history
+            let history: BrowserTabHistory?
+            if preservesLocalNavigation { history = retainedHistory }
+            else if let retainedHistory, retainedHistory.revision == ownerHistory["revision"].int,
+                    retainedHistory.entries.count == ownerHistory["total"].int,
+                    let selected = retainedHistory.entries.firstIndex(where: { $0.id == ownerHistory["currentEntryId"].string }) {
+                history = BrowserTabHistory(entries: retainedHistory.entries, index: selected, currentEntryId: retainedHistory.entries[selected].id, revision: retainedHistory.revision)
+            } else { history = Self.decodeBrowserHistory(ownerHistory) ?? retainedHistory }
             var descriptor = BrowserDescriptor(id: localID, title: title, url: address, scope: scope.hasPrefix("main:") ? "main" : scope.hasPrefix("team:") ? "team" : scope, customTitle: customTitle.isEmpty ? nil : customTitle, contentTabId: tab["id"].string, history: history, profileId: profile)
             descriptor.hidden = tab["hidden"].bool; descriptor.persist = tab["persist"].bool; descriptor.openedAt = existing?.openedAt ?? (tab["openedAt"].string.isEmpty ? nil : tab["openedAt"].string)
             descriptor.lastActivityAt = tab["lastActivityAt"].string.isEmpty ? existing?.lastActivityAt : tab["lastActivityAt"].string
@@ -588,7 +596,17 @@ let nativeFixtureRelayOrigin = ""
                 throw RemoteError(message: "The host did not return a valid tab snapshot. Cached tabs are retained.")
             }
             // A user edit made during the fetch wins locally and is sent with its original operation.
-            if contentPending[scope] == nil { let complete = try await completeNavigationLists(response, remote: remote, kind: kind, scopeID: id); guard remote.connection?.hostId == host, remote.connected, contentHosts[scope] == host else { return }; if contentPending[scope] == nil { applyContentTabs(complete, scope: scope, afterReadingRevision: readRevision); contentReadAt[scope] = Date(); if contentSnapshots[scope]?["revision"] == complete["revision"] { recordContentRead(complete, scope: scope) } } else { contentSnapshots[scope] = complete } }
+            if contentPending[scope] == nil {
+                // Membership is already authoritative. Do not leave obsolete tabs on
+                // screen while optional Back/Forward history pages wait or disconnect.
+                applyContentTabs(response, scope: scope, afterReadingRevision: readRevision)
+                guard contentSnapshots[scope]?["revision"] == response["revision"] else { return }
+                contentReadAt[scope] = Date(); recordContentRead(response, scope: scope)
+                let complete = try await completeNavigationLists(response, remote: remote, kind: kind, scopeID: id)
+                guard remote.connection?.hostId == host, remote.connected, contentHosts[scope] == host,
+                      contentPending[scope] == nil, contentSnapshots[scope]?["revision"] == response["revision"] else { return }
+                applyContentTabs(complete, scope: scope)
+            }
         } catch { /* Offline clients retain bounded descriptors; reads grant no content access. */ }
     }
     func confirmSetupRegistration(_ tabID: String, scope: String, remote: RemoteStore, kind: String, id: String) async throws {

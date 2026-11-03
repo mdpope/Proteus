@@ -59,10 +59,15 @@ const app = await startServer({ home, port: 0, timers: false, providers: { copil
     return rehearsal.run(args);
   }
 }, codex:{status:async()=>({available:false,models:[]}),quota:syntheticQuota(41)},claude:{status:async()=>({available:false,models:[]}),quota:syntheticQuota(88)} } });
-const failedHistoryScopes=new Set(),executeForHistoryFixture=app.remote.execute.bind(app.remote);
-app.remote.execute=(peer,method,args)=>{
+const delayedHistoryScopes=new Set(),failedHistoryScopes=new Set(),executeForHistoryFixture=app.remote.execute.bind(app.remote);
+app.remote.execute=async(peer,method,args)=>{
+ if(delayedHistoryScopes.has(args.id)&&method==='tabs.history'){await new Promise(resolve=>setTimeout(resolve,30000));throw Error('Synthetic delayed history unavailable');}
  if(failedHistoryScopes.has(args.id)&&method==='tabs.history')throw Error('Synthetic page-history transport failure');
- return executeForHistoryFixture(peer,method,failedHistoryScopes.has(args.id)&&method==='tabs.get'?{...args,historyLimit:16}:args);
+ const result=await executeForHistoryFixture(peer,method,failedHistoryScopes.has(args.id)&&method==='tabs.get'?{...args,historyLimit:16}:args);
+ if(delayedHistoryScopes.has(args.id)&&method==='tabs.get'){
+  const browser=result.tabs?.find(tab=>tab.type==='browser');if(browser?.history)browser.history={...browser.history,total:browser.history.entries.length+1};
+ }
+ return result;
 };
 app.liveBrowser=new LiveBrowser({list:()=>[{id:'fixture-live-tab',title:'Synthetic desktop browser',agentControlling:true}],current:()=>true,capture:async()=>({revision:1,width:800,height:600,image:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII='})});
 const schedule = app.engine.schedules.list()[0]; app.engine.schedules.save({ ...app.engine.schedules.get(schedule.id), workspace: { cwd: workspace, additionalDirectories: [] } }, schedule.revision);
@@ -143,7 +148,7 @@ const fixture = http.createServer(async (req, res) => {
   if(req.url==='/transport-evidence'){res.setHeader('Content-Type','application/json');res.end(JSON.stringify({host:app.remote.status,wire:app.performanceDiagnostics?.snapshot().remoteTransport,relay:relay.diagnostics?.()}));return;}
   if(req.url==='/tab-reconnect-fixture'&&req.method==='POST'){
     let raw='';for await(const chunk of req){raw+=chunk;if(raw.length>1024)throw Error('Synthetic request too large');}
-    const value=JSON.parse(raw);if(value.action==='disconnect')await app.remote.stop();else if(value.action==='connect')await app.remote.start();else throw Error('Unknown synthetic connection action');
+    const value=JSON.parse(raw);if(value.action==='disconnect')await app.remote.stop();else if(value.action==='connect')await app.remote.start();else if(value.action==='delay-history'&&typeof value.id==='string')delayedHistoryScopes.add(value.id);else throw Error('Unknown synthetic connection action');
     res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify({synthetic:true}));return;
   }
   if(req.url==='/tab-sync-fixture'&&req.method==='POST'){

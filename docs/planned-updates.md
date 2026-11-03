@@ -1,3 +1,11 @@
+## Nov 2 follow-up in validation
+
+Immediate mobile tab membership ahead of optional browser-history paging and desktop draft-status
+header placement are implemented. Physical General comparison, sustained authenticated iPhone/iPad
+and web connectivity, Mac installation, other desktop rollout, updater usability after local
+acceptance, and release closeout remain open. The wider distribution hold is lifted; broader
+Mnemosyne implementation remains deferred.
+
 ## R29 — transport stability and visible project owners
 
 The operator reports continued iPad disconnects and an obsolete iPhone General tab cache. A physical

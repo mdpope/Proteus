@@ -18,12 +18,14 @@ try{
  await choose(first,id);await choose(second,id);
  const input=page=>page.locator('#main .new-chat-tab-panel textarea[id$="-prompt"]');await input(first).waitFor();await input(second).waitFor();
  await input(first).fill('Draft started on the phone, finished on desktop.');await until(async()=>(await input(second).inputValue())==='Draft started on the phone, finished on desktop.','setup text crosses windows');
+ for(const page of [first,second]){assert.equal(await page.locator('.new-chat-tab-panel > .shared-draft-status').count(),1);assert.equal(await page.locator('.new-chat-composer .shared-draft-status').count(),0);}
  const inventory=await native((main,id)=>main.getService().contentTabs.get('project',id),fixture.project.id);assert.doesNotMatch(JSON.stringify(inventory),/Draft started on the phone/);
  await input(first).fill('First concurrent edit');await input(second).fill('Second concurrent edit');
  const conflictPage=await until(async()=>{for(const page of [first,second])if(await page.getByRole('button',{name:'Use other draft',exact:true}).count())return page;},'conflicting edit is retained');
  const retained=await input(conflictPage).inputValue();await conflictPage.getByRole('button',{name:'Use other draft',exact:true}).click();await until(async()=>(await input(first).inputValue())===(await input(second).inputValue()),'explicit conflict choice converges');assert.ok(await conflictPage.locator('.shared-draft-status').textContent().then(text=>text.includes(retained)));
  for(const page of [first,second])await choose(page,fixture.user[0].id);
  await first.locator('#followup').fill('Unsent reply continued on another device');await until(async()=>(await second.locator('#followup').inputValue())==='Unsent reply continued on another device','existing chat reply crosses windows');
+ for(const page of [first,second]){assert.equal(await page.locator('#main > .heading .shared-draft-status').count(),1);assert.equal(await page.locator('.composer .shared-draft-status').count(),0);}
  assert.deepEqual(errors,[]);console.log(JSON.stringify({passed:true,actualWindows:2,emptySetupMembership:true,setupText:true,replyText:true,conflictsRetained:true,draftTextAbsentFromInventory:true,noProviderExecution:true}));
 }catch(error){console.error(JSON.stringify({errors}));throw error;}
 finally{await app?.close().catch(()=>{});await fixture.cleanup();}

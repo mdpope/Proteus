@@ -241,8 +241,9 @@ final class RemoteUITests: XCTestCase {
         try await post("/tab-reconnect-fixture", ["action": "disconnect"])
         XCTAssertTrue(app.staticTexts["Offline · cached tabs"].waitForExistence(timeout: 15))
         try await post("/tab-sync-fixture", ["scope": "project", "id": project, "operations": [["action": "close", "id": "native-project-browser"], ["action": "open", "tab": ["id": "native-reconnected-browser", "type": "browser", "title": "Owner after reconnect", "url": nativeFixtureHTTPOrigin + "/browser/one"]]]])
+        try await post("/tab-reconnect-fixture", ["action": "delay-history", "id": project])
         try await post("/tab-reconnect-fixture", ["action": "connect"])
-        XCTAssertTrue(app.buttons["workspace-managed-title-native-reconnected-browser"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.buttons["workspace-managed-title-native-reconnected-browser"].waitForExistence(timeout: 10), "Membership must refresh before the optional 30-second history page returns")
         XCTAssertFalse(old.exists, "An online owner refresh must remove the old cached tab without leaving this page")
     }
     @MainActor func testNativeProjectsOwnerLifecycleAndScopedTabs() async throws {

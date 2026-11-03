@@ -2,7 +2,13 @@
 // marker; attachment bytes, provider/source choices and approvals never enter it.
 export function bindSharedDraftText({input,identity,request,storage=localStorage,changed=()=>{},notify=()=>{}}){
  if(!input)return {stop(){},sync:async()=>{}};
- const key='shared-text:'+JSON.stringify(identity),status=document.createElement('div');status.className='note shared-draft-status';status.setAttribute('role','status');input.after(status);
+ const key='shared-text:'+JSON.stringify(identity),status=document.createElement('div');status.className='note shared-draft-status';status.setAttribute('role','status');
+ // Draft state belongs with the chat heading; the composer is for message entry.
+ const setupHeading=input.closest('.new-chat-tab-panel')?.querySelector(':scope > h2');
+ const chatHeading=input.closest('#main')?.querySelector(':scope > .heading > div');
+ if(setupHeading)setupHeading.after(status);
+ else if(chatHeading){chatHeading.querySelectorAll('.shared-draft-status').forEach(node=>node.remove());chatHeading.append(status);}
+ else input.after(status);
  let state;try{state=JSON.parse(storage.getItem(key)||'null');}catch{}state??={base:null,copies:[]};
  let busy=false,closed=false,lastInput=0,timer;
  const save=()=>storage.setItem(key,JSON.stringify(state));

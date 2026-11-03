@@ -1,3 +1,27 @@
+# R30 follow-up — membership before history
+
+The operator still observes mismatched iPhone General tabs and disconnects while sending after
+mobile build 2611.2.7. The Mac component remains prepared behind a human-only coordinator approval,
+so the combined transport correction is not yet installed or accepted end to end.
+
+A further client delay is corrected: a fresh tab snapshot previously waited for optional complete
+browser-history paging before it replaced obsolete membership. The app now applies the owner list
+first, then hydrates Back/Forward history. A matching complete local history is retained, and a
+concurrent owner update or local intent prevents a stale history completion from overwriting it.
+The open-tab list repaints this authoritative membership even while history hydration is loading.
+The private, content-free membership evidence retains at most 64 recent scopes under its existing
+one-megabyte bound so background reads do not immediately evict the project being investigated.
+
+The synthetic iPhone reconnect test passes with a deliberately unavailable 30-second history
+request: the replacement tab appears within ten seconds, before history finishes, and obsolete
+membership disappears. The complete-history preservation test and native networking tests pass.
+Full iPad/native acceptance is in progress. This reproduction does not establish that delayed
+history explains every live General mismatch or disconnect; physical and Mac verification remain.
+
+The desktop draft sync/status and conflict details are moved beside the chat heading and new-chat
+heading. Two actual Electron windows verify setup/reply synchronization and conflict recovery, with
+no status inside the composer. These source changes are not in frozen R29 installed packages.
+
 ## R29 — transport stability and visible project owners
 
 The operator reports continued iPad disconnects and an obsolete iPhone General tab cache. A physical

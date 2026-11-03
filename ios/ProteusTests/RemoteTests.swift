@@ -347,6 +347,16 @@ final class RemoteTests: XCTestCase {
         XCTAssertEqual(Set(row.object.keys), ["at", "tabIds", "revision"])
         XCTAssertLessThanOrEqual(evidence["scopes"].object.count, 16)
     }
+    @MainActor func testMembershipWindowKeepsCompleteMatchingBrowserHistory() {
+        let shared = SharedAppStore(cacheRoot: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString), cacheKey: { nil })
+        let scope = "project:synthetic:canonical"
+        let entries: [JSON] = (0..<40).map { .object(["id": .string("entry-\($0)"), "url": .string("https://example.test/\($0)"), "title": .string("Page \($0)")]) }
+        func snapshot(_ history: JSON) -> JSON { .object(["revision": .number(3), "tabs": .array([.object(["id": .string("kept"), "type": .string("browser"), "title": .string("Kept"), "url": .string("https://example.test/20"), "history": history])])]) }
+        shared.applyContentTabs(snapshot(.object(["entries": .array(entries), "index": .number(20), "currentEntryId": .string("entry-20"), "revision": .number(7)])), scope: scope)
+        shared.applyContentTabs(snapshot(.object(["entries": .array(Array(entries[18...22])), "index": .number(2), "offset": .number(18), "total": .number(40), "currentEntryId": .string("entry-20"), "revision": .number(7)])), scope: scope)
+        XCTAssertEqual(shared.tabs(in: scope).first?.history?.entries.count, 40)
+        XCTAssertEqual(shared.tabs(in: scope).first?.history?.currentEntryId, "entry-20")
+    }
     @MainActor func testFreshOwnerReadReplacesOldCacheIncarnationWithoutOverwritingConcurrentState() {
         let shared = SharedAppStore(cacheRoot: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString), cacheKey: { nil })
         let scope = "project:synthetic:canonical"

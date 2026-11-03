@@ -115,7 +115,7 @@ struct NativeWorkspaceTabsView: View {
         }.disabled(busy).refreshable { await load() }.task(id: scope + ":" + store.connected.description + ":" + store.projectCatalog.revision.string) { await load() }
         // Tab actions report owner refusals here instead of silently doing nothing.
         .alert("Tab action", isPresented: Binding(get: { store.error != nil && !moving }, set: { if !$0 { store.error = nil } })) { Button("OK") { store.error = nil } } message: { Text(store.error ?? "") }
-        .onChange(of: shared.workspaceContentDescriptors) { _, _ in if !loading { loadCachedTabs() } }
+        .onChange(of: shared.workspaceContentDescriptors) { _, _ in loadCachedTabs() }
         .sheet(isPresented: $moving) {
             NavigationStack { Form {
                 NativeMoveDestinationPicker(groups: NativeMoveLocations.groups(context: catalog, projects: store.projectCatalog.raw, chats: store.state["runs"].array, containersOnly: moveTab["type"].string == "chat"), selection: $destination)
