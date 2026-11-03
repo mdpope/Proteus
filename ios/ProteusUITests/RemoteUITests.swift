@@ -1143,83 +1143,62 @@ final class RemoteUITests: XCTestCase {
         section.tap(); XCTAssertEqual(section.value as? String, "Collapsed")
         let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Single green expander"; shot.lifetime = .keepAlways; add(shot)
     }
-    @MainActor func testLongMessageKeepsIntraMessagePositionWhenReopenedOnPhone() throws {
+    @MainActor func testChatReadingPositionSurvivesMomentumPrependAndReopen() throws {
         let app = nativeFixtureApplication()
-        app.launchArguments = ["--reset-pairing", "--synthetic-destinations", "--synthetic-long-chat", "--show-scroll-fixture-controls"]
-        app.launch()
-        guard app.tabBars.firstMatch.exists else { throw XCTSkip("Phone navigation regression") }
-        app.tabBars.buttons["Chats"].tap()
-        let row = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Long fixture")).firstMatch
+        app.launchArguments = ["--reset-pairing", "--synthetic-clean-navigation", "--synthetic-destinations", "--synthetic-long-chat", "--show-scroll-fixture-controls"]
+        app.launch(); showChats(app)
+        let row = app.buttons["chat-row-10000000-0000-4000-8000-000000000001:long-chat"]
         XCTAssertTrue(row.waitForExistence(timeout: 10)); row.tap()
-        let composerShot = XCTAttachment(screenshot: app.screenshot()); composerShot.name = "Native chat composer"; composerShot.lifetime = .keepAlways; add(composerShot)
         let scroll = app.scrollViews["chat-conversation-scroll"]
         XCTAssertTrue(scroll.waitForExistence(timeout: 10))
-        app.buttons["read-long-message-fixture"].tap()
-        let readingAnchor = app.staticTexts["chat-scroll-anchor"]
-        XCTAssertTrue(readingAnchor.waitForExistence(timeout: 5))
-        let offset = app.staticTexts["chat-scroll-offset"]
-        XCTAssertTrue(offset.waitForExistence(timeout: 5))
-        for _ in 0..<30 {
-            if (Int(readingAnchor.label.split(separator: ":").last ?? "") ?? 0) > 200 { break }
-            Thread.sleep(forTimeInterval: 0.2)
-        }
-        let positioned = Int(offset.label) ?? 0
-        scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.45))
-            .press(forDuration: 0.2, thenDragTo: scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.65)))
-        for _ in 0..<20 {
-            if abs((Int(offset.label) ?? 0) - positioned) > 30 { break }
-            Thread.sleep(forTimeInterval: 0.2)
-        }
-        XCTAssertGreaterThan(abs((Int(offset.label) ?? 0) - positioned), 30, "A real finger drag must change the native reading offset")
-        let before = Int(offset.label) ?? 0
-        let beforeAnchor = readingAnchor.label
-        XCTAssertGreaterThan(before, 200, "The fixture must be scrolled well inside its one long message")
-        XCTAssertTrue(readingAnchor.label.hasPrefix("0:"), "The reader must be anchored inside the long message, not following the bottom; offset \(before), trace \(app.staticTexts["chat-scroll-trace"].label)")
-        XCTAssertGreaterThan(Int(beforeAnchor.replacingOccurrences(of: ",", with: "").split(separator: ":").last ?? "") ?? 0, 200, "The saved anchor must be deep inside the long message; offset \(before), anchor \(beforeAnchor), trace \(app.staticTexts["chat-scroll-trace"].label)")
-        if app.buttons["chat-back"].exists { app.buttons["chat-back"].tap() } else { app.buttons["sidebar-Chats"].tap() }
-        XCTAssertTrue(row.waitForExistence(timeout: 8)); row.tap()
-        XCTAssertTrue(offset.waitForExistence(timeout: 8))
-        let restoredExpectation = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", String(before)), object: offset)
-        _ = XCTWaiter.wait(for: [restoredExpectation], timeout: 10)
-        let restored = Int(offset.label) ?? 0
-        XCTAssertLessThanOrEqual(abs(restored - before), 35, "Reopening should keep the reading point within the long message; before \(before), before anchor \(beforeAnchor), after \(restored), anchor \(app.staticTexts["chat-scroll-anchor"].label), trace \(app.staticTexts["chat-scroll-trace"].label)")
-    }
-    @MainActor func testPrependingHistoryKeepsVisibleLongMessageAndInsetOnPhone() throws {
-        let app = nativeFixtureApplication()
-        app.launchArguments = ["--reset-pairing", "--synthetic-destinations", "--synthetic-long-chat", "--show-scroll-fixture-controls"]
-        app.launch()
-        guard app.tabBars.firstMatch.exists else { throw XCTSkip("Phone reading-position regression") }
-        app.tabBars.buttons["Chats"].tap()
-        let row = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Long fixture")).firstMatch
-        XCTAssertTrue(row.waitForExistence(timeout: 8)); row.tap()
-        let conversation = app.buttons["chat-conversation-tab"]
-        XCTAssertTrue(conversation.waitForExistence(timeout: 8)); conversation.tap()
-        let scroll = app.scrollViews["chat-conversation-scroll"]
-        XCTAssertTrue(scroll.waitForExistence(timeout: 8))
-        app.buttons["read-long-message-fixture"].tap()
-        let anchor = app.staticTexts["chat-scroll-anchor"]
-        XCTAssertTrue(anchor.waitForExistence(timeout: 5))
-        for _ in 0..<30 {
-            if (Int(anchor.label.split(separator: ":").last ?? "") ?? 0) > 200 { break }
-            Thread.sleep(forTimeInterval: 0.2)
-        }
-        let nativeOffset = app.staticTexts["chat-scroll-offset"]
-        let positioned = Int(nativeOffset.label) ?? 0
-        scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.45))
-            .press(forDuration: 0.2, thenDragTo: scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.65)))
-        for _ in 0..<20 {
-            if abs((Int(nativeOffset.label) ?? 0) - positioned) > 30 { break }
-            Thread.sleep(forTimeInterval: 0.2)
-        }
-        XCTAssertGreaterThan(abs((Int(nativeOffset.label) ?? 0) - positioned), 30, "A real finger drag must change the native reading offset")
-        let before = anchor.label.replacingOccurrences(of: ",", with: "").split(separator: ":").compactMap { Int($0) }
-        XCTAssertEqual(before.count, 2, "Visible anchor label: \(anchor.label)")
-        XCTAssertEqual(before.first, 0, "trace \(app.staticTexts["chat-scroll-trace"].label)")
-        XCTAssertGreaterThan(before[1], 200)
+        let position = app.staticTexts["chat-scroll-offset"], anchor = app.staticTexts["chat-scroll-anchor"]
+        let read = app.buttons["read-long-message-fixture"]
+        XCTAssertTrue(read.waitForExistence(timeout: 10)); read.tap()
+        let positioned = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "1500"), object: position)
+        XCTAssertEqual(XCTWaiter.wait(for: [positioned], timeout: 10), .completed)
+        scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.4)).press(forDuration: 0.1,
+            thenDragTo: scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.7)))
+        Thread.sleep(forTimeInterval: 2)
+        let before = try XCTUnwrap(Int(position.label))
+        XCTAssertGreaterThan(before, 200); XCTAssertNotEqual(before, 1500, "A real gesture must move the native viewport")
+        Thread.sleep(forTimeInterval: 1)
+        XCTAssertLessThanOrEqual(abs((Int(position.label) ?? -10000) - before), 2, "Settled reading must not jump after layout callbacks")
+        let inset = try XCTUnwrap(Int(anchor.label.split(separator: ":").last ?? ""))
         app.buttons["prepend-chat-fixture"].tap()
-        let after = anchor.label.replacingOccurrences(of: ",", with: "").split(separator: ":").compactMap { Int($0) }
-        XCTAssertEqual(after.first, 0, "The same absolute message must stay visible after prepending history")
-        XCTAssertLessThanOrEqual(abs(after[1] - before[1]), 35, "The relative reading point within that message must remain stable")
+        Thread.sleep(forTimeInterval: 2)
+        XCTAssertTrue(anchor.label.hasPrefix("0:"), "Anchor \(anchor.label); trace \(app.staticTexts["chat-scroll-trace"].label)")
+        XCTAssertLessThanOrEqual(abs((Int(anchor.label.split(separator: ":").last ?? "") ?? -10000) - inset), 35, "Prepending must preserve the point within the same message")
+        let saved = try XCTUnwrap(Int(position.label))
+        showChats(app); XCTAssertTrue(row.waitForExistence(timeout: 8)); row.tap()
+        XCTAssertTrue(position.waitForExistence(timeout: 8)); Thread.sleep(forTimeInterval: 2)
+        XCTAssertLessThanOrEqual(abs((Int(position.label) ?? -10000) - saved), 35, "Reopening must retain the reading position")
+        let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Restored native chat reading position"; shot.lifetime = .keepAlways; add(shot)
+        let savedInset = try XCTUnwrap(Int(anchor.label.split(separator: ":").last ?? ""))
+        app.terminate(); app.launchArguments.removeAll { $0 == "--reset-pairing" || $0 == "--synthetic-clean-navigation" }; app.launch()
+        showChats(app); XCTAssertTrue(row.waitForExistence(timeout: 10)); row.tap()
+        XCTAssertTrue(anchor.waitForExistence(timeout: 10)); Thread.sleep(forTimeInterval: 2)
+        XCTAssertTrue(anchor.label.hasPrefix("0:"), "Cold anchor \(anchor.label), native offset \(position.label); trace \(app.staticTexts["chat-scroll-trace"].label)")
+        XCTAssertLessThanOrEqual(abs((Int(anchor.label.split(separator: ":").last ?? "") ?? -10000) - savedInset), 35, "Cold launch must retain the point within the message even if the cached presentation window differs")
+    }
+    @MainActor func testHeavyChatScrollingKeepsRendererWorkBounded() throws {
+        let app = nativeFixtureApplication()
+        app.launchArguments = ["--reset-pairing", "--synthetic-clean-navigation", "--synthetic-destinations", "--synthetic-heavy-chat", "--synthetic-varied-chat", "--history-diagnostics"]
+        app.launch(); showChats(app)
+        let row = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Heavy fixture")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 12)); row.tap()
+        let scroll = app.scrollViews["chat-conversation-scroll"]
+        XCTAssertTrue(scroll.waitForExistence(timeout: 12))
+        Thread.sleep(forTimeInterval: 2)
+        let options = XCTMeasureOptions(); options.iterationCount = 2
+        measure(metrics: [XCTOSSignpostMetric.scrollingAndDecelerationMetric, XCTCPUMetric(application: app), XCTMemoryMetric(application: app)], options: options) {
+            scroll.swipeDown(); scroll.swipeUp()
+        }
+        let renderers = app.buttons["history-renderers"]
+        renderers.tap()
+        let count = try XCTUnwrap(Int(renderers.value as? String ?? ""))
+        XCTAssertLessThanOrEqual(count, 16, "A thousand-event history must keep native rich renderers bounded")
+        let report = XCTAttachment(string: "1,000 synthetic events with varied rich content; active Markdown renderers after gestures: \(count). XCTest scrolling/CPU/memory metrics retained; simulator metrics do not establish physical-device frame rate.")
+        report.name = "Native chat scrolling workload"; report.lifetime = .keepAlways; add(report)
     }
     @MainActor func testActualSimulatorLocalNotificationTapRoutesThroughSpringBoard() {
         let app = nativeFixtureApplication()
@@ -2718,7 +2697,9 @@ final class PhoneSidebarPreviewUITests: XCTestCase {
         }
         let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Question, answer field and actions share one message card"; shot.lifetime = .keepAlways; XCTContext.runActivity(named: "Question card bounds") { $0.add(shot) }
     }
-    XCTAssertLessThanOrEqual(clear.frame.maxX, app.buttons["Send answer"].firstMatch.frame.minX + 1)
+    let send = app.buttons["Send answer"].firstMatch
+    XCTAssertTrue(clear.frame.maxX <= send.frame.minX + 1 || clear.frame.maxY <= send.frame.minY + 1,
+        "Clear precedes Send in the same associated card, with vertical fallback for larger text")
     clear.tap()
     let reviewed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: remaining)
     XCTAssertEqual(XCTWaiter.wait(for: [reviewed], timeout: 15), .completed)

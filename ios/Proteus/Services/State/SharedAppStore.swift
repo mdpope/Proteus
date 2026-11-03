@@ -44,6 +44,35 @@ let nativeFixtureRelayOrigin = ""
     @Published private(set) var chatChildOrder: [String: [String]] = [:]
     @Published var draftAttachments: [String: [NativeDraftAttachment]] = [:]
     var chatScrollLocations: [String: NativeChatScrollLocation] = [:]
+    // Reading metadata stays local to this account/device. Persist on a completed
+    // gesture or lifecycle transition, never on each scroll-frame callback.
+    private var chatPositionNamespace = ""
+    private var chatPositionKey: String { "proteus.chat-positions." + SHA256.hash(data: Data((chatPositionNamespace + ":" + account).utf8)).map { String(format: "%02x", $0) }.joined() }
+    private func chatPositionID(_ key: String) -> String { SHA256.hash(data: Data(key.utf8)).map { String(format: "%02x", $0) }.joined() }
+    private func storedChatPositions() -> [String: NativeChatReadingRecord] {
+        guard let data = UserDefaults.standard.data(forKey: chatPositionKey), data.count <= 512 * 1024,
+              let rows = try? JSONDecoder().decode([String: NativeChatReadingRecord].self, from: data) else { return [:] }
+        return rows.filter { $0.value.location.valid && $0.value.touchedAt.isFinite }
+    }
+    func chatScrollLocation(for key: String) -> NativeChatScrollLocation? {
+        if let location = chatScrollLocations[key] { return location }
+        guard !account.isEmpty, let row = storedChatPositions()[chatPositionID(key)] else { return nil }
+        chatScrollLocations[key] = row.location
+        return row.location
+    }
+    func persistChatScrollLocation(for key: String) {
+        guard !account.isEmpty, let location = chatScrollLocations[key], location.valid else { return }
+        var rows = storedChatPositions()
+        rows[chatPositionID(key)] = NativeChatReadingRecord(location: location, touchedAt: Date().timeIntervalSince1970)
+        let retained = rows.sorted { $0.value.touchedAt > $1.value.touchedAt }.prefix(200)
+        if let data = try? JSONEncoder().encode(Dictionary(uniqueKeysWithValues: retained.map { ($0.key, $0.value) })) { UserDefaults.standard.set(data, forKey: chatPositionKey) }
+    }
+    func clearChatScrollLocation(for key: String) {
+        chatScrollLocations.removeValue(forKey: key)
+        var rows = storedChatPositions()
+        guard rows.removeValue(forKey: chatPositionID(key)) != nil else { return }
+        if let data = try? JSONEncoder().encode(rows) { UserDefaults.standard.set(data, forKey: chatPositionKey) }
+    }
     var documentScrollOffsets: [String: CGFloat] = [:]
     private var documentPositionKey: String { "proteus.document-positions." + SHA256.hash(data: Data(account.utf8)).map { String(format: "%02x", $0) }.joined() }
     private var pendingDocumentPositions: [String: [String: Double]] = [:]
@@ -178,6 +207,7 @@ let nativeFixtureRelayOrigin = ""
     private let sharedCacheKey: () -> String?
     init(cacheWriter: NativeSharedCacheWriter = .shared, cacheRoot: URL? = nil, cacheKey: @escaping () -> String? = BrowserCacheKeychain.key) {
         self.cacheWriter = cacheWriter
+        chatPositionNamespace = cacheRoot?.path ?? ""
         sharedCacheRoot = cacheRoot ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Proteus")
         sharedCacheKey = cacheKey
         UserDefaults.standard.removeObject(forKey: "proteus.download-history"); loadDocumentTabs(); loadHistoryCache()

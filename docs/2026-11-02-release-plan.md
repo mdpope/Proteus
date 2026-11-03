@@ -1,8 +1,8 @@
 ## R26 — iPad question layout and chat reading performance
 
-The operator requests desktop parity for the iOS answer card and an in-depth correction of jumping, choppy chat scrolling and lost reading positions on iPad. Incremental deployment to the physical iPad is explicitly authorized as fixes validate. Preserve the accepted Mac candidate and current phone installation; wider distribution and Mnemosyne holds remain. The updater usability change remains held pending full Mac acceptance.
+The operator requests desktop parity for the iOS answer card and an in-depth correction of jumping, choppy chat scrolling and lost reading positions on iPad. Incremental deployment to the physical iPad and iPhone is explicitly authorized as fixes validate. Preserve the accepted Mac candidate; wider distribution and Mnemosyne holds remain. The updater usability change remains held pending full Mac acceptance.
 
-The first native correction places the answer form and attachment/Clear/Send controls inside the question's message surface, adds the persistent answer label and bordered editor, and accommodates narrow action layouts. Simulator bounds and interaction acceptance precede the next paid iPad build. Scroll investigation is independent and still open; no performance or reading-restoration fix is claimed by this layout change.
+The first native correction places the answer form and attachment/Clear/Send controls inside the question's message surface, adds the persistent answer label and bordered editor, and accommodates narrow action layouts. Simulator bounds and interaction acceptance precede the next paid iPad build. The scroll correction now uses one native follow owner, stable content-coordinate anchors, gesture/deceleration guards and durable reading bookmarks. The current iPad drag/settle/prepend/reopen sequence passes; cold-launch, larger-workload and final cross-device checks remain in progress. See [native scrolling acceptance](releases/2026-11-02/native-chat-scrolling.md).
 
 ## R24 — iOS and web connection stability
 

@@ -1,6 +1,6 @@
 ## Nov 2 — 0.2.41 candidate
 
-- Nov 2 R26: keep native question answer fields and controls inside their message card, with a visible label and bounded action layout. Incremental iPad acceptance is in progress; chat scrolling work remains open.
+- Nov 2 R26: keep native question answer fields and controls inside their message card, with a visible label and bounded action layout. Correct native reading restoration across rendered history windows, defer commands/prepends during momentum, coalesce viewport reporting and retain bounded reading bookmarks across launches. Incremental iPad acceptance is in progress.
 
 - Expose scoped, revision-checked owner scheduler controls with durable serial test receipts, status, exact stop/retry and explicit captured/future source refresh; retain paused/native ownership and constrained permissions.
 - Honor explicitly selected schedule MCPs with excluded defaults, preserving unrelated-default and disabled-source isolation.

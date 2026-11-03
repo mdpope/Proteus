@@ -17,10 +17,23 @@ struct NativeScrollSnapshot {
     let viewportWidth: CGFloat
     let viewportTop: CGFloat
     var bottomInset: CGFloat = 0
+    var topInset: CGFloat = 0
 
     var maxOffset: CGFloat { max(0, contentHeight - viewportHeight + bottomInset) }
     var canScroll: Bool { viewportHeight > 0 && maxOffset > 2 }
     var atEnd: Bool { canScroll && offset >= maxOffset - 24 }
+}
+
+/// A reference-only read of the current native viewport and safe-area insets.
+/// Reading it does not publish per-frame changes through SwiftUI.
+@MainActor final class NativeScrollViewport {
+    weak var scrollView: UIScrollView?
+    var snapshot: NativeScrollSnapshot? {
+        guard let scroll = scrollView else { return nil }
+        return NativeScrollSnapshot(offset: scroll.contentOffset.y, contentHeight: scroll.contentSize.height,
+            viewportHeight: scroll.bounds.height, viewportWidth: scroll.bounds.width,
+            viewportTop: scroll.convert(scroll.bounds, to: scroll.window).minY, bottomInset: scroll.adjustedContentInset.bottom, topInset: scroll.adjustedContentInset.top)
+    }
 }
 
 /// Observes the UIKit scroll view that hosts SwiftUI conversation content.
@@ -29,6 +42,7 @@ struct NativeScrollSnapshot {
 struct NativeScrollProbe: UIViewRepresentable {
     var command: NativeScrollCommand?
     var followBottom = false
+    var viewport: NativeScrollViewport? = nil
     var onSnapshot: (NativeScrollSnapshot) -> Void
     var onInteraction: (Bool) -> Void = { _ in }
     var onApplied: (UUID, NativeScrollSnapshot) -> Void = { _, _ in }
@@ -39,6 +53,8 @@ struct NativeScrollProbe: UIViewRepresentable {
     func updateUIView(_ view: UIView, context: Context) {
         let coordinator = context.coordinator
         coordinator.followBottom = followBottom
+        coordinator.viewport = viewport
+        viewport?.scrollView = coordinator.scrollView
         coordinator.onSnapshot = onSnapshot
         coordinator.onInteraction = onInteraction
         coordinator.onApplied = onApplied
@@ -58,6 +74,7 @@ struct NativeScrollProbe: UIViewRepresentable {
 
     @MainActor final class Coordinator: NSObject {
         weak var scrollView: UIScrollView?
+        var viewport: NativeScrollViewport?
         var followBottom = false
         var onSnapshot: (NativeScrollSnapshot) -> Void = { _ in }
         var onInteraction: (Bool) -> Void = { _ in }
@@ -72,14 +89,18 @@ struct NativeScrollProbe: UIViewRepresentable {
         private var lastReported: NativeScrollSnapshot?
         private var generation = 0
         private var active = true
+        private var updateScheduled = false
+        private var settling: Task<Void, Never>?
 
         func invalidate() {
             active = false
+            settling?.cancel(); settling = nil; updateScheduled = false
             generation += 1
             offsetObservation = nil
             sizeObservation = nil
             boundsObservation = nil
             scrollView?.panGestureRecognizer.removeTarget(self, action: #selector(handlePan(_:)))
+            if viewport?.scrollView === scrollView { viewport?.scrollView = nil }
             scrollView = nil
             pendingCommand = nil
             resolvedTarget = nil
@@ -97,27 +118,25 @@ struct NativeScrollProbe: UIViewRepresentable {
                     generation += 1
                     let attachedGeneration = generation
                     scrollView = scroll
+                    viewport?.scrollView = scroll
                     scroll.panGestureRecognizer.addTarget(self, action: #selector(handlePan(_:)))
                     offsetObservation = scroll.observe(\.contentOffset, options: [.new]) { [weak self] scroll, _ in
                         Task { @MainActor [weak self] in
                             guard let self, self.generation == attachedGeneration, self.scrollView === scroll else { return }
-                            self.report(scroll)
-                            self.verifyApplied(scroll)
+                            self.scheduleUpdate(scroll)
                         }
                     }
                     sizeObservation = scroll.observe(\.contentSize, options: [.new]) { [weak self] scroll, _ in
                         Task { @MainActor [weak self] in
                             guard let self, self.generation == attachedGeneration, self.scrollView === scroll else { return }
-                            self.applyPending()
-                            self.report(scroll)
+                            self.scheduleUpdate(scroll)
                         }
                     }
-                    boundsObservation = scroll.observe(\.bounds, options: [.new]) { [weak self] scroll, _ in
+                    boundsObservation = scroll.observe(\.bounds, options: [.old, .new]) { [weak self] scroll, change in
+                        guard change.oldValue?.size != change.newValue?.size else { return }
                         Task { @MainActor [weak self] in
                             guard let self, self.generation == attachedGeneration, self.scrollView === scroll else { return }
-                            if let previous = self.lastReported, abs(previous.viewportHeight - scroll.bounds.height) < 0.5 { return }
-                            self.applyPending()
-                            self.report(scroll)
+                            self.scheduleUpdate(scroll)
                         }
                     }
                     DispatchQueue.main.async { [weak self, weak scroll] in
@@ -136,14 +155,29 @@ struct NativeScrollProbe: UIViewRepresentable {
         @objc private func handlePan(_ recognizer: UIPanGestureRecognizer) {
             switch recognizer.state {
             case .began:
+                settling?.cancel(); settling = nil
                 // Stop pinning synchronously. SwiftUI gestures inside a WebKit
                 // message do not reliably see the containing scroll view's pan.
                 followBottom = false
                 pendingCommand = nil; resolvedTarget = nil
                 onInteraction(true)
             case .ended, .cancelled, .failed:
-                onInteraction(false)
-                if let scroll = scrollView { report(scroll) }
+                settling?.cancel()
+                let expected = generation
+                settling = Task { @MainActor [weak self] in
+                    // UIKit starts deceleration after the recognizer's ended callback.
+                    try? await Task.sleep(for: .milliseconds(32))
+                    guard let self else { return }
+                    while !Task.isCancelled, let scroll = self.scrollView, self.active, self.generation == expected {
+                        if !scroll.isTracking && !scroll.isDragging && !scroll.isDecelerating {
+                            self.report(scroll)
+                            self.onInteraction(false)
+                            self.scheduleUpdate(scroll)
+                            break
+                        }
+                        try? await Task.sleep(for: .milliseconds(16))
+                    }
+                }
             default: break
             }
         }
@@ -155,7 +189,20 @@ struct NativeScrollProbe: UIViewRepresentable {
                 appliedCommand = nil
             }
             pendingCommand = command
-            applyPending()
+            if let scroll = scrollView { scheduleUpdate(scroll) }
+        }
+
+        private func scheduleUpdate(_ scroll: UIScrollView) {
+            guard active, scrollView === scroll, !updateScheduled else { return }
+            updateScheduled = true
+            let expected = generation
+            DispatchQueue.main.async { [weak self, weak scroll] in
+                guard let self, let scroll, self.active, self.generation == expected else { return }
+                self.updateScheduled = false
+                self.applyPending()
+                self.report(scroll)
+                self.verifyApplied(scroll)
+            }
         }
 
         private func snapshot(_ scroll: UIScrollView) -> NativeScrollSnapshot {
@@ -164,7 +211,7 @@ struct NativeScrollProbe: UIViewRepresentable {
                                  viewportHeight: scroll.bounds.height,
                                  viewportWidth: scroll.bounds.width,
                                  viewportTop: scroll.convert(scroll.bounds, to: scroll.window).minY,
-                                 bottomInset: scroll.adjustedContentInset.bottom)
+                                 bottomInset: scroll.adjustedContentInset.bottom, topInset: scroll.adjustedContentInset.top)
         }
 
         private func report(_ scroll: UIScrollView) {
@@ -175,13 +222,16 @@ struct NativeScrollProbe: UIViewRepresentable {
                abs(previous.contentHeight - current.contentHeight) < 0.5,
                abs(previous.viewportHeight - current.viewportHeight) < 0.5,
                abs(previous.viewportWidth - current.viewportWidth) < 0.5,
-               abs(previous.viewportTop - current.viewportTop) < 0.5 { return }
+               abs(previous.viewportTop - current.viewportTop) < 0.5,
+               abs(previous.topInset - current.topInset) < 0.5,
+               abs(previous.bottomInset - current.bottomInset) < 0.5 { return }
             lastReported = current
             onSnapshot(current)
         }
 
         private func applyPending() {
-            guard active, let scroll = scrollView else { return }
+            guard active, let scroll = scrollView,
+                  !scroll.isTracking, !scroll.isDragging, !scroll.isDecelerating else { return }
             if followBottom && pendingCommand == nil && !scroll.isTracking && !scroll.isDragging && !scroll.isDecelerating {
                 let bottom = snapshot(scroll).maxOffset
                 if abs(scroll.contentOffset.y - bottom) > 0.5 { scroll.setContentOffset(CGPoint(x: scroll.contentOffset.x, y: bottom), animated: false) }
@@ -224,3 +274,19 @@ struct NativeScrollProbe: UIViewRepresentable {
         }
     }
 }
+
+#if DEBUG
+/// Native labels avoid invalidating the SwiftUI conversation for every sample.
+struct NativeChatScrollDiagnostics: UIViewRepresentable {
+    let measurements: NativeChatScrollMeasurements
+    func makeUIView(context: Context) -> UIStackView {
+        let offset = UILabel(); offset.accessibilityIdentifier = "chat-scroll-offset"; offset.isAccessibilityElement = true
+        let anchor = UILabel(); anchor.accessibilityIdentifier = "chat-scroll-anchor"; anchor.isAccessibilityElement = true
+        let stack = UIStackView(arrangedSubviews: [offset, anchor]); stack.spacing = 12
+        measurements.offsetLabel = offset; measurements.anchorLabel = anchor
+        measurements.updateDiagnostics()
+        return stack
+    }
+    func updateUIView(_ view: UIStackView, context: Context) { measurements.updateDiagnostics() }
+}
+#endif

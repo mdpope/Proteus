@@ -298,6 +298,55 @@ final class RemoteTests: XCTestCase {
         XCTAssertEqual(restored.documentScrollOffset(for: key), 820)
     }
 
+    @MainActor func testChatReadingPositionSurvivesNewStoreAndSeparatesAccounts() throws {
+        let account = "synthetic-chat-reading-" + UUID().uuidString, other = UUID().uuidString, scope = "chat:synthetic"
+        let defaultsKey = "proteus.chat-positions." + SHA256.hash(data: Data((":" + account).utf8)).map { String(format: "%02x", $0) }.joined()
+        defer { UserDefaults.standard.removeObject(forKey: defaultsKey) }
+        let first = SharedAppStore(); first.reset(for: account)
+        first.chatScrollLocations[scope] = NativeChatScrollLocation(anchor: 104, inset: 250, offset: 820, eventStart: 0, presentationStart: 80)
+        first.persistChatScrollLocation(for: scope)
+        let restored = SharedAppStore(); restored.reset(for: account)
+        XCTAssertEqual(restored.chatScrollLocation(for: scope)?.offset, 820)
+        XCTAssertEqual(restored.chatScrollLocation(for: scope)?.presentationStart, 80)
+        restored.reset(for: other); XCTAssertNil(restored.chatScrollLocation(for: scope))
+        restored.reset(for: account)
+        restored.chatScrollLocations[scope] = NativeChatScrollLocation(anchor: 104, inset: 0, offset: .infinity)
+        restored.persistChatScrollLocation(for: scope)
+        restored.chatScrollLocations.removeAll()
+        XCTAssertEqual(restored.chatScrollLocation(for: scope)?.offset, 820, "Invalid measurements cannot replace a bookmark")
+        restored.clearChatScrollLocation(for: scope)
+        let cleared = SharedAppStore(); cleared.reset(for: account)
+        XCTAssertNil(cleared.chatScrollLocation(for: scope), "Returning to latest clears the durable reading bookmark")
+    }
+    func testChatRawOffsetRequiresSamePresentedHistoryWindow() {
+        XCTAssertFalse(NativeChatScrollLocation(anchor: -1, inset: 0, offset: 1).valid)
+        let location = NativeChatScrollLocation(anchor: 104, inset: 250, offset: 820, eventStart: 0, presentationStart: 80, viewportWidth: 800, eventRevision: "revision")
+        XCTAssertTrue(location.restoresAbsoluteOffset(loadedStart: 0, presentedStart: 80, revision: "revision", width: 800, changedWindow: false))
+        XCTAssertFalse(location.restoresAbsoluteOffset(loadedStart: 0, presentedStart: 40, revision: "revision", width: 800, changedWindow: false))
+        XCTAssertFalse(location.restoresAbsoluteOffset(loadedStart: 0, presentedStart: 80, revision: "new-output", width: 800, changedWindow: false))
+        XCTAssertFalse(location.restoresAbsoluteOffset(loadedStart: 0, presentedStart: 80, revision: "revision", width: 390, changedWindow: false))
+        let measured = NativeChatEventFrame(start: 80, frame: CGRect(x: 0, y: 420, width: 800, height: 2000))
+        XCTAssertEqual(measured.contentTop, 420, "Content anchors remain independent of the viewport offset")
+    }
+    @MainActor func testNativeScrollCommandWaitsForMomentumToFinish() async throws {
+        let scroll = MomentumScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 600))
+        scroll.contentSize = CGSize(width: 400, height: 2400)
+        let child = UIView(); scroll.addSubview(child)
+        let coordinator = NativeScrollProbe.Coordinator()
+        coordinator.attach(from: child)
+        scroll.momentum = true
+        let token = UUID(); var applied = false
+        coordinator.onApplied = { id, _ in if id == token { applied = true } }
+        coordinator.apply(NativeScrollCommand(id: token, y: 1000))
+        try await Task.sleep(for: .milliseconds(80))
+        XCTAssertEqual(scroll.contentOffset.y, 0); XCTAssertFalse(applied)
+        scroll.momentum = false
+        scroll.contentSize.height += 1
+        try await Task.sleep(for: .milliseconds(80))
+        XCTAssertEqual(scroll.contentOffset.y, 1000); XCTAssertTrue(applied)
+        coordinator.invalidate()
+    }
+
     private func projectFixture() throws -> JSON {
         try JSONDecoder().decode(JSON.self, from: Data("""
         {"schemaVersion":1,"revision":"catalog-revision","projects":[
@@ -2959,4 +3008,9 @@ extension RemoteTests {
         XCTAssertTrue(nativeTextAttachmentRequired(String(repeating: "🙂", count: 65537)))
         XCTAssertFalse(nativeTextAttachmentRequired(String(repeating: "🙂", count: 65536)))
     }
+}
+
+@MainActor private final class MomentumScrollView: UIScrollView {
+    var momentum = false
+    override var isDecelerating: Bool { momentum }
 }

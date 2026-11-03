@@ -45,21 +45,23 @@ struct NativeUserQuestionCard: View {
                 ForEach(missingFiles, id: \.self) { file in
                     HStack { Text("Reattach " + file["name"].string + " before sending").font(.caption).foregroundStyle(.orange); Spacer(); Button("Remove missing file") { removeAttachmentRecord(store: store, draftKey: key + "-attachments", id: file["id"].string) } }
                 }
-                HStack {
-                    if !types.isEmpty {
-                        Menu {
-                            Button("Choose files", systemImage: "folder") { picking = true }
-                            Button("Choose photos", systemImage: "photo") { photos = true }
-                            Button("Paste image or file", systemImage: "doc.on.clipboard") { paste() }
-                        } label: { Image(systemName: "plus").frame(width: 44, height: 44) }.accessibilityLabel("Attach files to answer").disabled(busy)
-                    }
-                    Spacer()
-                    ViewThatFits(in: .horizontal) {
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 8) {
+                        attachmentMenu
+                        Spacer(minLength: 8)
                         HStack(spacing: 8) { clearButton; sendButton }.fixedSize(horizontal: true, vertical: false)
-                        VStack(alignment: .trailing, spacing: 8) { clearButton; sendButton }
                     }
-
-                }
+                    VStack(alignment: .leading, spacing: 8) {
+                        attachmentMenu
+                        HStack {
+                            Spacer(minLength: 0)
+                            ViewThatFits(in: .horizontal) {
+                                HStack(spacing: 8) { clearButton; sendButton }.fixedSize(horizontal: true, vertical: false)
+                                VStack(alignment: .trailing, spacing: 8) { clearButton; sendButton }
+                            }
+                        }
+                    }
+                }.font(.subheadline)
                 if busy { ProgressView().controlSize(.small) }
             } else { Text(question.status == "uncertain" ? "Answer delivery unconfirmed. Inspect this session before sending another answer." : question.answer.isEmpty ? question.status.capitalized : "Answered: " + question.answer + (question.deliveryState == "queued" ? " · queued for the next turn" : "")).font(.caption).foregroundStyle(.secondary) }
             if let error { Text(error).font(.caption).foregroundStyle(.orange) }
@@ -83,6 +85,16 @@ struct NativeUserQuestionCard: View {
             Task { do { for result in results { let data = try await selectedPhotoData(result.itemProvider); guard let image = UIImage(data: data), let png = image.pngData() else { throw RemoteError(message: "The photo could not be read.") }; try add(png, name: "Photo.png", mediaType: "image/png") } } catch { self.error = error.localizedDescription } }
         } }
         .sheet(isPresented: $confirm) { AttachmentSendReview(attachments: files, providerName: provider.capitalized, hostName: store.displayName) { Task { await deliver(submitted) } } }
+    }
+    @ViewBuilder private var attachmentMenu: some View {
+        if !types.isEmpty {
+            Menu {
+                Button("Choose files", systemImage: "folder") { picking = true }
+                Button("Choose photos", systemImage: "photo") { photos = true }
+                Button("Paste image or file", systemImage: "doc.on.clipboard") { paste() }
+            } label: { Image(systemName: "plus").frame(width: 44, height: 44) }
+                .accessibilityLabel("Attach files to answer").disabled(busy)
+        }
     }
     @ViewBuilder private var clearButton: some View {
         if !question.queueCleared && store.state["capabilities"].array.contains(.string("chat.questions.clear.v1")) {

@@ -728,7 +728,6 @@ struct ChatView: View {
     @State private var followLatest = true
     @State private var scrollCommand: NativeScrollCommand?
     @State private var fixtureScrollID: UUID?
-    @State private var fixtureScrollStep = 0
     @State private var scrollMeasurements = NativeChatScrollMeasurements()
     private var conversationOffset: CGFloat { get { scrollMeasurements.offset } nonmutating set { scrollMeasurements.offset = newValue } }
     private var conversationContentHeight: CGFloat { get { scrollMeasurements.contentHeight } nonmutating set { scrollMeasurements.contentHeight = newValue } }
@@ -740,8 +739,10 @@ struct ChatView: View {
     @State private var pendingHistoryRestore: NativeChatScrollLocation?
     @State private var historyWindowChanged = false
     @State private var pendingInitialRestore: NativeChatScrollLocation?
+    @State private var readingRestoreTask: Task<Void, Never>?
+    @State private var readingRestoreToken: UUID?
     @State private var restoreID: UUID?
-    private var eventFrames: [Int: (start: Int, frame: CGRect)] { get { scrollMeasurements.eventFrames } nonmutating set { scrollMeasurements.eventFrames = newValue } }
+    private var eventFrames: [Int: NativeChatEventFrame] { get { scrollMeasurements.eventFrames } nonmutating set { scrollMeasurements.eventFrames = newValue } }
     @State private var scrollTrace: [String] = []
     @State private var userReadingGesture = false
     @State private var loadingEarlier = false
@@ -857,6 +858,24 @@ struct ChatView: View {
     private var attachments: [NativeDraftAttachment] { shared.draftAttachments[attachmentScope] ?? [] }
     private var canSteerAttachments: Bool { let types = run["chatControls"]["steeringMediaTypes"].array.map(\.string); return attachments.allSatisfy { types.contains($0.mediaType) } }
     private var missingAttachments: [JSON] { missingAttachmentRecords(store: store, draftKey: attachmentDraftKey, items: attachments) }
+    @ViewBuilder private var scrollFixtureControls: some View {
+                #if DEBUG
+                if ProcessInfo.processInfo.arguments.contains("--show-scroll-fixture-controls") {
+                    HStack {
+                        Button("Read long fixture") {
+                            traceScroll("fixture tapped")
+                            followLatest = false; userReadingGesture = false; conversationReady = true
+                            cancelReadingRestore(); restoringConversation = false
+                            let token = UUID(); fixtureScrollID = token
+                            scrollCommand = NativeScrollCommand(id: token, y: 1500, minimumContentHeight: 2800)
+                        }.accessibilityIdentifier("read-long-message-fixture")
+                        Button("Prepend fixture") { prependFixtureHistory() }.accessibilityIdentifier("prepend-chat-fixture")
+                        NativeChatScrollDiagnostics(measurements: scrollMeasurements).frame(height: 24)
+                        Text(scrollTrace.joined(separator: " | ")).font(.system(size: 5)).lineLimit(2).accessibilityIdentifier("chat-scroll-trace")
+                    }.font(.caption).padding(6)
+                }
+                #endif
+    }
     private var chatLayout: some View {
         VStack(spacing: 0) {
             // No chat header: its actions are on the chat tab (press and hold), and the
@@ -878,6 +897,7 @@ struct ChatView: View {
                 Button("Replay desktop tab refresh") { shared.replayDesktopBrowserFixture(scope: chatBrowserScope) }.accessibilityIdentifier("replay-desktop-tabs")
             }
             #endif
+            scrollFixtureControls
             Divider()
             if let documentNotice { HStack { ProgressView().controlSize(.small); Text(documentNotice).font(.caption); Spacer(); Button("Cancel") { documentTask?.cancel(); self.documentNotice = nil } }.padding(8).background(NativeTheme.surface) }
             if !NativePhonePreview.enabled && !run["subagents"].array.isEmpty {
@@ -971,11 +991,11 @@ struct ChatView: View {
                 contextTier = options["contextTier"].string.isEmpty ? "default" : options["contextTier"].string; serviceTier = options["serviceTier"].string
                 if store.connected && !["rehearsal", "local-process"].contains(run["schedule"]["provider"].string) { await store.loadModels(provider: run["schedule"]["provider"].string) }
             }
-            .onDisappear { MessageSpeech.shared.stop() }
+            .onDisappear { MessageSpeech.shared.stop(); saveReadingPosition(); cancelReadingRestore() }
             .onChange(of: id) { _, _ in MessageSpeech.shared.stop() }
             .onChange(of: store.chats[id]) { previous, current in if previous != nil && current == nil { dismiss() } }
             .onChange(of: store.connection?.hostId) { _, _ in MessageSpeech.shared.stop() }
-            .onChange(of: scenePhase) { _, phase in if phase != .active { MessageSpeech.shared.stop() } }
+            .onChange(of: scenePhase) { _, phase in if phase != .active { MessageSpeech.shared.stop(); saveReadingPosition() } }
 
     }
     private func restoredDocumentTabs() -> [ChatDocumentTab] {
@@ -1041,18 +1061,22 @@ struct ChatView: View {
         else { documents.removeAll { $0.id == id }; shared.closeDocument(id, in: chatBrowserScope) }
         if selectedChild == id { selectedChild = "chat"; shared.selectChatChild("chat", for: chatBrowserScope) }
     }
-    private func messageTurn(at index: Int) -> JSON {
-        let events = run["events"].array
-        let turnID = events[index]["data"]["turnId"].string
-        guard !turnID.isEmpty, !events.prefix(index).contains(where: { $0["role"].string == "assistant" && $0["data"]["turnId"].string == turnID && !$0["text"].string.isEmpty }) else { return .null }
-        return run["turns"].array.first { $0["id"].string == turnID } ?? .null
-    }
     private func streamingTurn(for key: String) -> JSON {
         guard key == run["liveMessages"].object.keys.sorted().first, let turn = run["turns"].array.last else { return .null }
         return run["events"].array.contains { $0["role"].string == "assistant" && $0["data"]["turnId"].string == turn["id"].string && !$0["text"].string.isEmpty } ? .null : turn
     }
     private var conversation: some View {
         let recovery = ["chat", "scheduled", "manual", "schedule"].contains(run["trigger"].string) && run["chatControls"]["recovery"].bool ? NativeChatRecoveryState.read(run) : nil
+        // Derive question and turn associations once per presentation update,
+        // not once for every message (which repeatedly scanned the full history).
+        let events = run["events"].array
+        let questions = NativeUserQuestion.read(run)
+        let questionsByEvent = Dictionary(grouping: questions, by: \.eventIndex)
+        let turns = run["turns"].array.reduce(into: [String: JSON]()) { result, turn in result[turn["id"].string] = turn }
+        let firstAssistant = events.enumerated().reduce(into: [String: Int]()) { result, item in
+            let key = item.element["data"]["turnId"].string
+            if !key.isEmpty, item.element["role"].string == "assistant", !item.element["text"].string.isEmpty, result[key] == nil { result[key] = item.offset }
+        }
         return ScrollViewReader { proxy in
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
@@ -1064,13 +1088,13 @@ struct ChatView: View {
                 ForEach(visibleEventIndices, id: \.self) { absoluteIndex in
                     let index = absoluteIndex - run["eventStart"].int
                     let event = run["events"].array[index]
-                    let eventQuestions = NativeUserQuestion.read(run).filter { $0.eventIndex == absoluteIndex }
+                    let eventQuestions = questionsByEvent[absoluteIndex] ?? []
                     VStack(alignment: .leading, spacing: 0) {
                         if routineActivity(event) {
                             ChatActivityGroupView(events: activityGroup(startingAt: index), hostName: store.state["hostName"].string, runID: id, runStatus: run["status"].string, search: pageSearch, eventStart: absoluteIndex)
                         } else if event["role"].string != "assistant" || !event["text"].string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                             if !event["data"]["delivery"]["state"].string.isEmpty { Text(event["data"]["delivery"]["state"].string.capitalized).font(.caption2).foregroundStyle(.teal) }
-                            MessageView(role: event["role"].string == "assistant" ? assistantName(event) : event["role"].string, text: NativeUserQuestion.presentationText(event["text"].string, questions: eventQuestions), runID: id, timestamp: event["timestamp"].string.isEmpty ? event["at"].string : event["timestamp"].string, turn: event["role"].string == "assistant" ? messageTurn(at: index) : .null, actionID: MessageActions.eligible(event) ? "\(store.connection?.hostId ?? "local"):\(id):\(absoluteIndex):\(event["at"].string)" : nil, sentAttachments: event["data"]["attachments"].array, onDocumentLink: event["role"].string == "assistant" ? { source in openDocument(source) } : nil, onResize: { Task { @MainActor in await Task.yield(); if followLatest && !userReadingGesture && !restoringConversation && pageSearch.query.isEmpty { proxy.scrollTo("chat-end", anchor: .bottom) } } }, search: pageSearch, searchKey: absoluteIndex, viewport: CGRect(x: 0, y: conversationViewportTop, width: conversationViewportWidth, height: max(1, composerAvailableHeight)), questionContent: eventQuestions.isEmpty ? nil : AnyView(VStack(alignment: .leading, spacing: 0) {
+                            MessageView(role: event["role"].string == "assistant" ? assistantName(event) : event["role"].string, text: NativeUserQuestion.presentationText(event["text"].string, questions: eventQuestions), runID: id, timestamp: event["timestamp"].string.isEmpty ? event["at"].string : event["timestamp"].string, turn: firstAssistant[event["data"]["turnId"].string] == index ? turns[event["data"]["turnId"].string] ?? .null : .null, actionID: MessageActions.eligible(event) ? "\(store.connection?.hostId ?? "local"):\(id):\(absoluteIndex):\(event["at"].string)" : nil, sentAttachments: event["data"]["attachments"].array, onDocumentLink: event["role"].string == "assistant" ? { source in openDocument(source) } : nil, search: pageSearch, searchKey: absoluteIndex, viewport: CGRect(x: 0, y: conversationViewportTop, width: conversationViewportWidth, height: max(1, composerAvailableHeight)), questionContent: eventQuestions.isEmpty ? nil : AnyView(VStack(alignment: .leading, spacing: 0) {
                             ForEach(eventQuestions) { question in
                                 NativeUserQuestionCard(question: question, showHeading: !question.promptVisible(in: event["text"].string, among: eventQuestions.count), chatID: id) { value, messageID, delivery in
                                     var args = delivery; args["id"] = .string(id); args["answer"] = .string(value); args["messageId"] = .string(messageID); args[question.blocking ? "requestId" : "questionId"] = .string(question.id)
@@ -1092,42 +1116,22 @@ struct ChatView: View {
                     }.id(absoluteIndex)
                         .accessibilityElement(children: .contain)
                         .accessibilityIdentifier("chat-event-\(absoluteIndex)")
-                        .onGeometryChange(for: CGRect.self) { geometry in geometry.frame(in: .global) } action: { frame in
-                            if let prior = eventFrames[absoluteIndex], prior.start == renderedEventStart,
-                               abs(prior.frame.minY - frame.minY) < 1,
-                               abs(prior.frame.height - frame.height) < 1 { return }
-                            eventFrames[absoluteIndex] = (renderedEventStart, frame)
-                            if absoluteIndex == 0 { traceScroll("frame y\(Int(frame.minY)) h\(Int(frame.height)) f\(followLatest ? 1 : 0) r\(restoringConversation ? 1 : 0)") }
+                        // Content coordinates remain stable while UIKit scrolls. Global
+                        // frames arrive asynchronously and cannot be paired with a newer offset.
+                        .onGeometryChange(for: CGRect.self) { geometry in geometry.frame(in: .named("conversation-content")) } action: { frame in
+                            let measured = NativeChatEventFrame(start: renderedEventStart, frame: frame)
+                            eventFrames[absoluteIndex] = measured
                             if let reading = pendingAnchorRestore, reading.anchor == absoluteIndex,
                                frame.height >= max(1, (reading.eventRevision == run["updatedAt"].string && abs(reading.viewportWidth - conversationViewportWidth) < 2) ? reading.anchorHeight - 2 : 1),
                                let transaction = restoreID {
-                                scrollCommand = NativeScrollCommand(id: transaction, y: frame.minY - conversationViewportTop + reading.inset,
-                                    relativeToCurrent: true,
-                                    minimumContentHeight: reading.eventRevision == run["updatedAt"].string && abs(reading.viewportWidth - conversationViewportWidth) < 2 ? reading.contentHeight : 0)
-                                traceScroll("anchor \(absoluteIndex) y\(Int(frame.minY)) inset\(Int(reading.inset)) cmd\(transaction.uuidString.prefix(4))")
+                                let topInset = scrollMeasurements.viewport.snapshot?.topInset ?? 0
+                                scrollCommand = NativeScrollCommand(id: transaction, y: measured.contentTop + reading.inset - topInset)
+                                traceScroll("anchor \(absoluteIndex) contentY\(Int(frame.minY)) inset\(Int(reading.inset))")
                                 pendingAnchorRestore = nil
-                                return
-                            }
-                            guard !followLatest, !restoringConversation, frame.minY <= conversationViewportTop,
-                                  frame.maxY > conversationViewportTop else { return }
-                            let location = NativeChatScrollLocation(anchor: absoluteIndex, inset: conversationViewportTop - frame.minY, offset: conversationOffset,
-                                eventStart: run["eventStart"].int, contentHeight: conversationContentHeight, anchorHeight: frame.height,
-                                viewportWidth: conversationViewportWidth, eventRevision: run["updatedAt"].string)
-                            if let previous = shared.chatScrollLocations[chatBrowserScope],
-                               previous.anchor == absoluteIndex, previous.eventStart == location.eventStart,
-                               abs(previous.inset - location.inset) > 100 {
-                                // Lazy content can report an old frame after UIKit has moved the viewport.
-                                // Native offset deltas remain the source of truth until geometry catches up.
-                                return
-                            }
-                            if let previous = shared.chatScrollLocations[chatBrowserScope], previous.anchor == location.anchor,
-                               abs(previous.inset - location.inset) < 1,
-                               abs(previous.offset - location.offset) < 1 { return }
-                            shared.chatScrollLocations[chatBrowserScope] = location
-                            visibleAnchor = location
+                            } else if let snapshot = scrollMeasurements.viewport.snapshot { rememberReadingAnchor(snapshot) }
                         }
                 }
-                ForEach(run["liveMessages"].object.keys.sorted(), id: \.self) { key in MessageView(role: "\(assistantName(.null)) · streaming", text: run["liveMessages"][key].string, runID: id, turn: streamingTurn(for: key), onResize: { Task { @MainActor in await Task.yield(); if followLatest && !userReadingGesture && !restoringConversation { proxy.scrollTo("chat-end", anchor: .bottom) } } }) }
+                ForEach(run["liveMessages"].object.keys.sorted(), id: \.self) { key in MessageView(role: "\(assistantName(.null)) · streaming", text: run["liveMessages"][key].string, runID: id, turn: streamingTurn(for: key)) }
                 if pending != .null && !inlinePendingQuestion {
                     VStack(alignment: .leading, spacing: 12) {
                         Label("Your input is needed", systemImage: "person.crop.circle.badge.questionmark").font(.headline)
@@ -1181,46 +1185,51 @@ struct ChatView: View {
                     }.frame(maxWidth: .infinity, alignment: .leading)
                 }
                 Color.clear.frame(height: 1).id("chat-end")
-            }.padding().background(NativeScrollProbe(command: scrollCommand, followBottom: followLatest && !userReadingGesture && !restoringConversation && pageSearch.query.isEmpty, onSnapshot: { snapshot in
+            }.padding().coordinateSpace(name: "conversation-content").background(NativeScrollProbe(command: scrollCommand, followBottom: followLatest && !userReadingGesture && !restoringConversation && pageSearch.query.isEmpty, viewport: scrollMeasurements.viewport, onSnapshot: { snapshot in
                 guard snapshot.offset.isFinite else { return }
                 let previousOffset = conversationOffset
                 let previousHeight = conversationContentHeight
+                scrollMeasurements.latest = snapshot
                 if abs(conversationOffset - snapshot.offset) > 0.5 { conversationOffset = max(0, snapshot.offset) }
                 if abs(conversationContentHeight - snapshot.contentHeight) > 0.5 { conversationContentHeight = snapshot.contentHeight }
                 if abs(conversationViewportWidth - snapshot.viewportWidth) > 0.5 { conversationViewportWidth = snapshot.viewportWidth }
                 if abs(conversationViewportTop - snapshot.viewportTop) > 0.5 { conversationViewportTop = snapshot.viewportTop }
                 if let initial = pendingInitialRestore, snapshot.viewportWidth > 0 {
                     pendingInitialRestore = nil
-                    restoreConversation(initial, with: proxy)
+                    restoreConversation(initial)
                 }
                 if Int(previousOffset / 100) != Int(snapshot.offset / 100) ||
                    Int(previousHeight / 1000) != Int(snapshot.contentHeight / 1000) {
                     traceScroll("snap \(Int(snapshot.offset))/\(Int(snapshot.maxOffset)) h\(Int(snapshot.contentHeight)) v\(Int(snapshot.viewportHeight)) r\(restoringConversation ? 1 : 0) f\(followLatest ? 1 : 0)")
                 }
                 if snapshot.atEnd || !snapshot.canScroll { conversationReady = true }
-                // A growing Markdown layout is not a reading gesture. Keep following
-                // until the native scroll view reports an actual pan.
-                if !followLatest && conversationReady && !restoringConversation && !userReadingGesture && snapshot.atEnd && snapshot.offset > previousOffset + 0.5 { followLatest = true }
-                if !followLatest && !userReadingGesture && !restoringConversation && snapshot.canScroll && conversationOffset > 30 {
+                // Layout, keyboard and programmatic offsets never turn reading
+                // back into following. Only the end of a real native pan can.
+                if !followLatest && conversationReady && !restoringConversation && snapshot.canScroll {
                     var location = shared.chatScrollLocations[chatBrowserScope] ?? NativeChatScrollLocation(anchor: nil, inset: 0, offset: conversationOffset)
                     if location.anchor != nil { location.inset += conversationOffset - location.offset }
                     location.offset = conversationOffset
                     location.eventStart = run["eventStart"].int
+                    location.presentationStart = renderedEventStart
                     location.contentHeight = snapshot.contentHeight
                     location.viewportWidth = snapshot.viewportWidth
                     location.eventRevision = run["updatedAt"].string
                     shared.chatScrollLocations[chatBrowserScope] = location
                     visibleAnchor = location
+                    rememberReadingAnchor(snapshot)
                 }
-                // Keep preparing during the same upward pan and its momentum, rather
-                // than requiring another gesture after each revealed batch.
+                #if DEBUG
+                scrollMeasurements.updateDiagnostics()
+                #endif
+                // Fetch cache headroom during motion, but reveal/prepend only
+                // after the native pan and its deceleration have ended.
                 if !followLatest && !restoringConversation && abs(previousHeight - snapshot.contentHeight) < 1,
                    snapshot.offset < previousOffset - 1,
                    userReadingGesture || Date().timeIntervalSince1970 - lastReaderInteractionAt < 2 {
                     historyGestureAvailable = true
                 }
                 if conversationReady && !followLatest && snapshot.offset < snapshot.viewportHeight * 6 { prefetchEarlier() }
-                if !restoringConversation && !earlierError && hasEarlierMessages,
+                if !followLatest && !restoringConversation && !earlierError && hasEarlierMessages,
                    NativeHistoryWindow.shouldPrefetch(offset: snapshot.offset, viewport: snapshot.viewportHeight, content: snapshot.contentHeight, reading: historyGestureAvailable && !followLatest, ready: conversationReady) { loadEarlier() }
             }, onInteraction: { reading in
                 userReadingGesture = reading
@@ -1228,28 +1237,31 @@ struct ChatView: View {
                 if reading {
                     composerHasFocus = false; composerExpanded = false
                     followLatest = false; historyGestureAvailable = true; conversationReady = true
+                    cancelReadingRestore()
                     restoreID = nil; pendingAnchorRestore = nil; pendingInitialRestore = nil
                     scrollCommand = nil; restoringConversation = false
                     if !loadingEarlier { pendingHistoryRestore = nil; historyWindowChanged = false }
                     if !earlierError && hasEarlierMessages && conversationOffset < max(480, composerAvailableHeight * 2.5) { loadEarlier() }
+                } else {
+                    if scrollMeasurements.latest?.atEnd == true {
+                        followLatest = true
+                        shared.clearChatScrollLocation(for: chatBrowserScope)
+                    } else {
+                        shared.persistChatScrollLocation(for: chatBrowserScope)
+                        if !earlierError && hasEarlierMessages && conversationOffset < max(480, composerAvailableHeight * 2.5) && (scrollMeasurements.historyRevealPending || historyGestureAvailable) { loadEarlier() }
+                    }
+                    scrollMeasurements.historyRevealPending = false
                 }
             }, onApplied: { commandID, snapshot in
                 if fixtureScrollID == commandID {
-                    if fixtureScrollStep == 0 {
-                        fixtureScrollStep = 1
-                        let nextID = UUID()
-                        fixtureScrollID = nextID
-                        scrollCommand = NativeScrollCommand(id: nextID, y: 3000,
-                            relativeToCurrent: true, minimumContentHeight: 9500)
-                        return
-                    }
+                    traceScroll("fixture applied \(Int(snapshot.offset))")
                     fixtureScrollID = nil; userReadingGesture = false; followLatest = false; scrollCommand = nil
                     shared.chatScrollLocations.removeValue(forKey: chatBrowserScope)
                     visibleAnchor = nil
-                    if let measured = eventFrames[0], measured.frame.minY <= snapshot.viewportTop,
-                       measured.frame.maxY > snapshot.viewportTop {
-                        let location = NativeChatScrollLocation(anchor: 0, inset: snapshot.viewportTop - measured.frame.minY,
-                            offset: snapshot.offset, eventStart: run["eventStart"].int,
+                    if let measured = eventFrames[0], measured.contentTop <= snapshot.offset + snapshot.topInset,
+                       measured.contentTop + measured.frame.height > snapshot.offset + snapshot.topInset {
+                        let location = NativeChatScrollLocation(anchor: 0, inset: snapshot.offset + snapshot.topInset - measured.contentTop,
+                            offset: snapshot.offset, eventStart: run["eventStart"].int, presentationStart: renderedEventStart,
                             contentHeight: snapshot.contentHeight, anchorHeight: measured.frame.height,
                             viewportWidth: snapshot.viewportWidth, eventRevision: run["updatedAt"].string)
                         shared.chatScrollLocations[chatBrowserScope] = location; visibleAnchor = location
@@ -1262,62 +1274,104 @@ struct ChatView: View {
                 restoreID = nil
                 historyWindowChanged = false
                 restoringConversation = false
-                followLatest = snapshot.atEnd
+                // Restoring a bookmark is never consent to follow new output.
+                followLatest = false
+                rememberReadingAnchor(snapshot)
+                shared.persistChatScrollLocation(for: chatBrowserScope)
             }).frame(width: 1, height: 1).opacity(0))
-        }.coordinateSpace(name: "conversation-scroll").scrollDismissesKeyboard(.interactively).accessibilityIdentifier("chat-conversation-scroll").accessibilityLabel(run["title"].string.isEmpty ? "Conversation" : run["title"].string)
+        }.coordinateSpace(name: "conversation-scroll").scrollBounceBehavior(.always, axes: .vertical).scrollDismissesKeyboard(.interactively).accessibilityIdentifier("chat-conversation-scroll").accessibilityLabel(run["title"].string.isEmpty ? "Conversation" : run["title"].string)
             .simultaneousGesture(TapGesture().onEnded { composerHasFocus = false; composerExpanded = false })
-            .simultaneousGesture(DragGesture(minimumDistance: 4).onChanged { _ in
-                composerHasFocus = false; composerExpanded = false
-                if !userReadingGesture {
-                    composerHasFocus = false; composerExpanded = false
-                    composerHasFocus = false; composerExpanded = false; userReadingGesture = true; followLatest = false
-                    historyGestureAvailable = true
-                    restoreID = nil; pendingAnchorRestore = nil; pendingInitialRestore = nil; scrollCommand = nil; restoringConversation = false
-                    if !loadingEarlier { pendingHistoryRestore = nil; historyWindowChanged = false }
-                }
-            }.onEnded { _ in userReadingGesture = false }, including: NativePhonePreview.enabled ? .none : .all)
             .onAppear {
-                if let location = shared.chatScrollLocations[chatBrowserScope] {
+                if let location = shared.chatScrollLocation(for: chatBrowserScope) {
                     followLatest = false
                     conversationReady = true
-                    if let anchor = location.anchor { oldestVisibleEvent = max(run["eventStart"].int, anchor - NativeHistoryWindow.pageCount) }
+                    if let anchor = location.anchor { oldestVisibleEvent = max(run["eventStart"].int, location.presentationStart ?? anchor - NativeHistoryWindow.pageCount) }
                     pendingInitialRestore = location
                 }
             }
-            .onChange(of: run["events"]) { _, _ in if followLatest { proxy.scrollTo("chat-end", anchor: .bottom) } }
-            .onChange(of: renderedEventStart) { _, _ in
-                if let reading = pendingHistoryRestore { pendingHistoryRestore = nil; restoreConversation(reading, with: proxy) }
-                else if !followLatest, let reading = shared.chatScrollLocations[chatBrowserScope] { restoreConversation(reading, with: proxy) }
+            .onDisappear { saveReadingPosition(); cancelReadingRestore(); questionRevealTask?.cancel(); questionRevealTask = nil }
+            .onChange(of: store.connected) { _, connected in
+                if connected && !followLatest && !userReadingGesture && questionRevealTask == nil, let location = shared.chatScrollLocations[chatBrowserScope] { restoreConversation(location) }
             }
-            .onChange(of: run["liveMessages"]) { _, _ in if followLatest { proxy.scrollTo("chat-end", anchor: .bottom) } }
+            .onChange(of: renderedEventStart) { _, _ in
+                guard readingRestoreTask == nil, questionRevealTask == nil else { return }
+                if let reading = pendingHistoryRestore { pendingHistoryRestore = nil; restoreConversation(reading) }
+                else if !followLatest, let reading = shared.chatScrollLocations[chatBrowserScope] { restoreConversation(reading) }
+            }
             .safeAreaInset(edge: .top) {
-                NativeUserQuestionQueue(questions: NativeUserQuestion.read(run), chatKey: chatBrowserScope) { question in
+                NativeUserQuestionQueue(questions: questions, chatKey: chatBrowserScope) { question in
                     questionRevealTask?.cancel(); questionRevealTask = Task { await revealQuestion(question, with: proxy) }
                 }
             }
         }
             .safeAreaInset(edge: .bottom, spacing: 0) { if nativeRun { VStack { Text("Native Omi processing · outcomes are recorded by the worker.").font(.caption); if active { Button("Stop process", role: .destructive) { act("chat.cancel", [:]) } } }.padding().background(NativeTheme.surface) } else { composer } }
     }
-    private func restoreConversation(_ location: NativeChatScrollLocation, with proxy: ScrollViewProxy) {
+    private func rememberReadingAnchor(_ snapshot: NativeScrollSnapshot) {
+        guard !followLatest, conversationReady, !restoringConversation else { return }
+        let top = snapshot.offset + snapshot.topInset
+        guard let entry = eventFrames.filter({ $0.value.start == renderedEventStart && $0.value.contentTop <= top && $0.value.frame.maxY > top }).min(by: { $0.key < $1.key }) else { return }
+        let location = NativeChatScrollLocation(anchor: entry.key, inset: top - entry.value.contentTop,
+            offset: max(0, snapshot.offset), eventStart: run["eventStart"].int, presentationStart: renderedEventStart,
+            contentHeight: snapshot.contentHeight, anchorHeight: entry.value.frame.height,
+            viewportWidth: snapshot.viewportWidth, eventRevision: run["updatedAt"].string)
+        shared.chatScrollLocations[chatBrowserScope] = location; visibleAnchor = location
+        #if DEBUG
+        scrollMeasurements.updateDiagnostics()
+        #endif
+    }
+    private func saveReadingPosition() {
+        if followLatest { shared.clearChatScrollLocation(for: chatBrowserScope) }
+        else { shared.persistChatScrollLocation(for: chatBrowserScope) }
+    }
+    private func cancelReadingRestore() {
+        readingRestoreToken = nil
+        readingRestoreTask?.cancel(); readingRestoreTask = nil
+    }
+    private func restoreConversation(_ location: NativeChatScrollLocation, cacheReady: Bool = false) {
+        guard location.valid, readingRestoreTask == nil || cacheReady else { return }
         let transaction = UUID()
         restoreID = transaction
         restoringConversation = true
         pendingAnchorRestore = nil
         followLatest = false
+        if let anchor = location.anchor, anchor < run["eventStart"].int {
+            guard store.connected else { return } // Keep the bookmark for reconnect.
+            readingRestoreToken = transaction
+            readingRestoreTask = Task { @MainActor in
+                defer { if readingRestoreToken == transaction { readingRestoreTask = nil; readingRestoreToken = nil } }
+                do {
+                    while run["eventStart"].int > anchor {
+                        try Task.checkCancellation()
+                        let before = run["eventStart"].int
+                        let page = try await store.request("chat.get", ["id": .string(id), "beforeEvent": .number(Double(before))])
+                        try Task.checkCancellation()
+                        guard readingRestoreToken == transaction, page["eventStart"].int < before else { return }
+                        store.mergeChat(page)
+                    }
+                    oldestVisibleEvent = max(run["eventStart"].int, location.presentationStart ?? anchor - NativeHistoryWindow.pageCount)
+                    await Task.yield()
+                    guard !Task.isCancelled, readingRestoreToken == transaction else { return }
+                    restoreConversation(location, cacheReady: true)
+                } catch is CancellationError { } catch { store.error = error.localizedDescription }
+            }
+            return
+        }
         traceScroll("start \(transaction.uuidString.prefix(4)) anchor\(location.anchor ?? -1) inset\(Int(location.inset)) raw\(Int(location.offset)) from\(location.eventStart ?? -999) to\(run["eventStart"].int) minH\(Int(location.contentHeight))")
-        let sameLayout = location.eventRevision == run["updatedAt"].string &&
-            location.viewportWidth > 0 && abs(location.viewportWidth - conversationViewportWidth) < 2
-        if location.eventStart == run["eventStart"].int && pendingAnchorRestore == nil && location.anchor.map({ $0 >= renderedEventStart }) == true && sameLayout && !historyWindowChanged {
+        let sameLayout = location.restoresAbsoluteOffset(loadedStart: run["eventStart"].int, presentedStart: renderedEventStart,
+            revision: run["updatedAt"].string, width: conversationViewportWidth, changedWindow: historyWindowChanged)
+        if location.anchor.map({ $0 >= renderedEventStart }) == true && sameLayout {
             scrollCommand = NativeScrollCommand(id: transaction, y: location.offset, minimumContentHeight: location.contentHeight)
             traceScroll("raw restore \(Int(location.offset)) minH\(Int(location.contentHeight))")
         } else if let anchor = location.anchor, anchor >= run["eventStart"].int, anchor < run["eventStart"].int + run["events"].array.count {
             if let measured = eventFrames[anchor], measured.start == renderedEventStart, measured.frame.height > 0 {
-                scrollCommand = NativeScrollCommand(id: transaction, y: measured.frame.minY - conversationViewportTop + location.inset,
-                    relativeToCurrent: true, minimumContentHeight: sameLayout ? location.contentHeight : 0)
+                scrollCommand = NativeScrollCommand(id: transaction, y: measured.contentTop + location.inset - (scrollMeasurements.viewport.snapshot?.topInset ?? 0),
+                    minimumContentHeight: sameLayout ? location.contentHeight : 0)
                 traceScroll("known frame y\(Int(measured.frame.minY))")
             } else {
+                // This bounded VStack eagerly lays out every presented row. Wait
+                // for its content frame; a second SwiftUI scrollTo can complete
+                // after the native correction and overwrite the restored inset.
                 pendingAnchorRestore = location
-                proxy.scrollTo(anchor, anchor: .top)
             }
         } else {
             pendingAnchorRestore = nil
@@ -1625,6 +1679,8 @@ struct ChatView: View {
     }
     private func revealQuestion(_ question: NativeUserQuestion, with proxy: ScrollViewProxy) async {
         guard question.eventIndex >= 0 else { return }
+        defer { questionRevealTask = nil }
+        cancelReadingRestore(); restoreID = nil; scrollCommand = nil
         followLatest = false; pendingHistoryRestore = nil; pendingInitialRestore = nil; pendingAnchorRestore = nil; restoringConversation = false
         do {
             while run["eventStart"].int > question.eventIndex {
@@ -1670,6 +1726,7 @@ struct ChatView: View {
         }
     }
     private func loadEarlier() {
+        if userReadingGesture { scrollMeasurements.historyRevealPending = true; return }
         guard !loadingEarlier, pendingHistoryRestore == nil, !restoringConversation, hasEarlierMessages else { return }
         if prefetchingEarlier && renderedEventStart == run["eventStart"].int { return }
         historyGestureAvailable = false

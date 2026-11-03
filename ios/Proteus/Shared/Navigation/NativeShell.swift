@@ -1557,7 +1557,7 @@ struct AggregateChatsView: View {
                 Button(item.run["archived"].bool ? "Unarchive" : "Archive", systemImage: "archivebox") { Task { await archive(item) } }.disabled(chatHasPendingWork(item.run))
                 Button("Delete chat", systemImage: "trash", role: .destructive) { pendingDelete = item }.disabled(chatHasPendingWork(item.run))
             }
-        }
+        }.accessibilityIdentifier("chat-row-" + item.hostID + ":" + item.run["id"].string)
     }
     private func canManage(_ item: AggregateChat) -> Bool {
         guard let remote = destinations.remote(for: item.hostID) else { return false }
