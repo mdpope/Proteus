@@ -15,8 +15,8 @@
   },
   "priorRequestAudit": "docs/releases/2026-11-02/prior-release-audit.md",
   "previousAcceptedSourceCommit": "4456aea8837171ba60f82775859d9ce7f4ec0810",
-  "sourceCommit": "e973d4c117d326e7652d9ee2b409e4bbacfccaab",
-  "candidateSourceStatus": "R29 frozen a14aeac: relay and physical build2611.2.7 installed; Mac prepared; wider rollout/acceptance pending",
+  "sourceCommit": "474b219948a25ef36ff9a37ae171adef105ffb27",
+  "candidateSourceStatus": "R35 Mac installed and independently verified at 2a5525e8; Linux/Windows frozen a1cf6d4c native qualification pending with later test-only harness corrections; native build2611.2.10 retained; publication and live connection acceptance remain open",
   "widerDistributionHold": {
     "active": false,
     "reason": "Operator explicitly authorizes all configured devices, web and release closeout after connection fixes."
@@ -24,5 +24,13 @@
   "mnemosyneImplementationHold": {
     "active": true,
     "reason": "Broader product/UI/source/watcher extraction deferred this turn."
+  },
+  "acceptedSourcePins": {
+    "darwin-arm64": "2a5525e8d5392b0492708745eb98bcf92f4c8a5c",
+    "ios": "8d2e0df2807934ef72cc0bd1427b187ab61b5ed2"
+  },
+  "qualifyingSourcePins": {
+    "linux-x64": "a1cf6d4c985d2730b2de031c0c473cd9afea375d",
+    "win32-x64": "a1cf6d4c985d2730b2de031c0c473cd9afea375d"
   }
 }
