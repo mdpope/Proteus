@@ -15,8 +15,8 @@
   },
   "priorRequestAudit": "docs/releases/2026-11-02/prior-release-audit.md",
   "previousAcceptedSourceCommit": "4456aea8837171ba60f82775859d9ce7f4ec0810",
-  "sourceCommit": "474b219948a25ef36ff9a37ae171adef105ffb27",
-  "candidateSourceStatus": "R36 extension creation correction in source/native UI validation; not yet frozen or built. Installed Mac remains R35 2a5525e8; native build2611.2.10 retained. R35 Linux/Windows candidates do not contain R36 and are not final rollout artifacts.",
+  "sourceCommit": "9faf4e1947e07ff47f5bfb80f38850bcb0637e81",
+  "candidateSourceStatus": "R36 frozen 9faf4e1: full source 1486 passed/four skipped and static passed; controlled Mac source UI passed both creation orderings and close/move authority. Signed Mac packaging started; Linux/Windows source UI qualification pending. Prior R35 installed/artifacts retain original pins and do not contain R36. Native build2611.2.10 retained.",
   "widerDistributionHold": {
     "active": false,
     "reason": "Operator explicitly authorizes all configured devices, web and release closeout after connection fixes."
@@ -32,5 +32,6 @@
   "qualifyingSourcePins": {
     "linux-x64": "a1cf6d4c985d2730b2de031c0c473cd9afea375d",
     "win32-x64": "a1cf6d4c985d2730b2de031c0c473cd9afea375d"
-  }
+  },
+  "replacementSourceCommit": "9faf4e1947e07ff47f5bfb80f38850bcb0637e81"
 }
