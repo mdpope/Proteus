@@ -40,7 +40,9 @@ export function publishChatStreams(host, {summary, page}) {
         const delta=chatDelta(source,value,peer.historyCursor);peer.historyCursor=delta.historyCursor;
         // Replaceable per-peer patches are not global journal entries. Reconnect
         // starts with chat.get's current page and a fresh bounded cursor.
-        host.send(peer,{type:'event',event:'run',runId:id,data:delta,cursor:`${host.epoch}:${++host.sequence}`});
+        // Keep the last durable journal cursor: a private sequence increment
+        // would make sync miss lifecycle events after this replaceable patch.
+        host.send(peer,{type:'event',event:'run',runId:id,data:delta,cursor:`${host.epoch}:${host.sequence}`});
       }
       peer.runSignature=signature;
     }

@@ -16,6 +16,9 @@ try {
   app.process().stderr.on('data',data=>process.stderr.write(data));
   console.log(await app.evaluate(({app})=>({path:app.getAppPath(),data:app.getPath('userData'),ready:app.isReady()})));
   const page=await app.firstWindow({timeout:60000});page.setDefaultTimeout(15000);
+  // firstWindow can precede the owner's initial navigation. Reload only after
+  // the trusted shell is installed; never race it with an about:blank load.
+  await page.locator('#tab-add-menu').waitFor();
   await page.route('**/app.js',async route=>{const response=await route.fetch();await route.fulfill({response,body:(await response.text())+'\nwindow.surfaceRedrawFixture={render};\n'});});
   await page.reload();await page.locator('#tab-add-menu').waitFor();
   const tab=await page.evaluate(url=>window.desktop.browser({action:'create',url}),'http://127.0.0.1:'+server.address().port);

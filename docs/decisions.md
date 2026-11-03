@@ -3,7 +3,9 @@
 A legacy full-page watcher must not promote summary subscribers of the same chat. Send each peer
 only its negotiated representation, with bounded transient delta cursors and a full-page fallback.
 Incremental patches are replaceable presentation state; never replay them as global journal events
-or change command receipt identities. Reconnect reads the current page with its original pairing.
+or change command receipt identities. Their envelope retains the last durable journal cursor,
+so a reconnect can still replay intervening lifecycle events. Reconnect reads the current page
+with its original pairing.
 
 Native view tokens control watch lifetime across hidden phone areas, disappearance and foreground
 transitions. Conditional owner cleanup includes both chat ID and token so late cleanup cannot

@@ -161,7 +161,7 @@ test('authenticated mixed watches preserve deltas, summary isolation and conditi
   full.events=[];summary.events=[];delta.events=[];
   run.events[99]={...run.events[99],text:'changed'};run.updatedAt=new Date().toISOString();app.engine.persist(run);app.engine.emit('change',run);app.remote.publish();
   await until(()=>full.events.some(event=>event.event==='run')&&summary.events.some(event=>event.event==='run.changed')&&delta.events.some(event=>event.event==='run'));
-  const patch=delta.events.find(event=>event.event==='run').data;
+  const deltaEvent=delta.events.find(event=>event.event==='run'),checkpoint=deltaEvent.cursor,patch=deltaEvent.data;
   assert.deepEqual(patch.events,[]);assert.equal(patch.eventPatches.length,1);assert.equal(patch.eventPatches[0].index,99);
   assert.equal(summary.events.some(event=>event.event==='run'),false);assert.equal(full.events.some(event=>event.event==='run.changed'),false);
   assert.equal((await delta.request('chat.watch',{id:'stale-view',watch:'none'})).cleared,false);
@@ -169,6 +169,9 @@ test('authenticated mixed watches preserve deltas, summary isolation and conditi
   delta.events=[];run.events[99]={...run.events[99],text:'after leaving'};app.engine.persist(run);app.remote.publish();
   // A sync round trip drains prior packets without a timing-only assertion.
   await delta.request('sync');assert.equal(delta.events.some(event=>event.runId===run.id),false);
+  delta.close();app.remote.broadcast('chat.lifecycle',{id:run.id,archivedAt:'synthetic-reconnect'});
+  const restored=await connect(delta.capsule,delta.device);await restored.request('sync',{cursor:checkpoint});
+  assert.ok(restored.events.some(event=>event.event==='chat.lifecycle'&&event.data.archivedAt==='synthetic-reconnect'),'incremental pushes must preserve a replayable durable cursor');
 });
 test('a paired client can apply permissions to the current waiting chat and receive tool details', async t => {
   const { app, connect, workspace } = await fixture(t, { copilot: { run: async ({ ask, emit }) => {

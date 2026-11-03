@@ -7,7 +7,8 @@ one full watcher caused summary subscribers of the same chat to receive full pag
 
 R32 sends full/summary/indexed delta updates per authenticated transport. Native visible-view
 leases end hidden/disappeared chat watches through a negotiated, token-checked owner operation;
-old owners retain full-page compatibility. Delta cursors remain transient and bounded. Native
+old owners retain full-page compatibility. Delta cursors remain transient and bounded. Replaceable pushes retain the last durable replay
+cursor; an encrypted reconnect regression verifies that later lifecycle notices remain observable. Native
 merging preserves retained history, changed event positions and stale-response ordering, including
 a push arriving before its initial page. Pending mutation receipts and execution ownership do not
 change. Per-kind counters cover actual encrypted routing-frame bytes at queue transmission, with
