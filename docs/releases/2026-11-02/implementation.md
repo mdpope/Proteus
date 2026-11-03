@@ -1,3 +1,18 @@
+# R32 final candidate acceptance
+
+The corrected owner stream retains the last durable replay cursor for replaceable incremental
+updates. A real encrypted disconnect/reconnect test first reproduced a missed lifecycle notice,
+then passed after the correction; full Node validation remains 1,466 pass / four skip and static
+checks pass. Native source `8d2e0df` and final owner source `e7e2d4e` share all 57 native input
+hashes. The signed native artifact remains pinned to its original source.
+
+The exact signed Mac candidate passes all seven package UI checks: question cards, browser sizing,
+external-link chooser, chat setup, extension authentication, extensions and two-window draft
+header/conflict handling. Its official archive extraction and source companion match recorded
+runtime/build hashes. The first package was never accepted or installed; its protocol/test failure
+receipts remain separate. The corrected candidate is handed off for idle, not yet installed.
+See the latest rollout checkpoint for the physical-device blocker and simulator completion.
+
 # R31/R32 checkpoint — General match and subscription traffic
 
 The physical iPhone now runs frozen R31 build **2611.2.9** with all 307 current protected files

@@ -1,3 +1,30 @@
+# R32 deployment checkpoint — local Mac waiting for idle
+
+The corrected Mac candidate is accepted from source `e7e2d4e`, build
+`e7e2d4e4094b+src.ba30fe27c849`. All seven exact-package UI checks, official extraction,
+original Apple signing identity and corresponding source verification pass. Its new owner
+coordinator has handed off the update and waits for this release turn to finish. Installation
+and post-restart preservation/connection acceptance remain pending; do not repeat the completed
+R29 installation. The obsolete R29 coordinator's read-permission probe was stopped through a
+separate exact-chat cancellation grant, without approving its tool or changing its completed job.
+
+Both shared simulators now have exactly one **Proteus Preview / 2611.2.10**. Their 3,231 phone /
+2,668 tablet files were compared before launch, with no durable changes and both saved destinations
+and selection retained. Four completed test/runner apps were removed after a fresh inventory.
+No simulator reset, new pairing or full data backup was created.
+
+The physical iPhone remains on accepted **2611.2.9**, whose General owner read matches the
+desktop's 12 ordered IDs and revision3535. Signed **2611.2.10** is frozen and ready; two fresh
+device checks still require a passcode, so capture and installation have not started. Its frozen
+native source remains `8d2e0df`; all 57 native inputs are byte-identical to final Mac source
+`e7e2d4e`, whose later correction affects owner replay and test synchronization only. The existing
+native artifact was neither rebuilt nor relabeled. The physical iPad remains explicitly deferred
+on build7. Wider target rollout, sustained authenticated traffic/chat-send acceptance, updater
+usability after full local acceptance, public retention and final merge/closeout remain open.
+Broad Mnemosyne implementation stays deferred.
+
+Earlier entries below are historical checkpoints.
+
 # R31 live iPhone General comparison / R32 in validation
 
 The iPhone runs **0.2.41 / 2611.2.9**, frozen source `9199518`. Installation and launch
