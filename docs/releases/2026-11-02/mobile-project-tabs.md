@@ -22,12 +22,16 @@ four skipped; static checks pass.
 
 Frozen source `7f66c66` produces one signed universal physical artifact, **0.2.41 / 2611.2.6**,
 `355099832ade94e38f3f12c64b20c1ed1d380f8361fb3fe514832202ce4c762b`, with the existing paid
-bundle/team/profile and unchanged keychain entitlements. Physical installation is pending passcode
-unlock. Both Preview simulators already run this revision; their 3,230 phone / 2,667 tablet files
+bundle/team/profile and unchanged keychain entitlements. Both physical devices now run this build. All 302 phone / 199 tablet protected files match
+before first launch, each device retains its four destinations and selection, and exactly two verified
+recovery generations remain. Phone/tablet retention removes 153,927,342 / 133,367,817 logical bytes;
+observed free-space changes are +154,615,808 / +137,428,992 bytes amid concurrent work. Both Preview simulators already run this revision; their 3,230 phone / 2,667 tablet files
 were compared before launch, with no durable changes and saved destinations/selection retained.
 Each simulator has one current Proteus Preview; finished test apps/runners are removed.
 
-Independent live device membership comparison remains pending physical installation. A bounded
+Post-launch temporary receipts show successful owner reads on both physical clients, including
+Build Mac reads from the phone. The bounded receipts do not yet capture the exact General
+project membership on both devices, so that independent comparison remains open. A bounded
 temporary read receipt contains only scope, revision, tab IDs and time; saved pairing alone is not
 proof of authenticated sync. This correction does not establish that the separate relay instability
 is resolved. The accepted local Mac candidate remains unchanged; updater usability, wider

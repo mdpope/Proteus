@@ -17,8 +17,7 @@ unit pass. Both phone and iPad live fixtures pass owner close/open during discon
 same-screen reconciliation, project filtering and restored recents. Final iPad acceptance also
 rechecks both revision-race and read-evidence cases. A bounded temporary receipt records only
 canonical scope, revision, tab IDs and read time for independent device comparison; it contains
-no titles, URLs or message content. Both Preview simulators now run 2611.2.6 with protected data and destinations retained; the
-signed physical artifact is ready and installation awaits device unlock. See [mobile tab acceptance](mobile-project-tabs.md).
+no titles, URLs or message content. Both Preview simulators now run 2611.2.6 with protected data and destinations retained; both physical clients also run the signed build with pre-launch protected-file equality and saved destinations verified. See [mobile tab acceptance](mobile-project-tabs.md).
 Wider distribution, updater usability and Mnemosyne holds remain.
 
 ## R26 — first incremental iPad correction
