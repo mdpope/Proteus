@@ -1,3 +1,4 @@
+import {assertPrivate} from './helpers/permissions.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -23,7 +24,7 @@ test('shared draft revisions preserve conflicts, exact uncertain receipts and co
  await restored.save({...identity,text:'Newer correction',expectedRevision:1,operationId:randomUUID()});
  await restored.clearSent(identity,attempt.text);assert.equal(restored.get(identity).text,'Newer correction');
  await restored.clearSent(identity,'Newer correction');assert.equal(restored.get(identity).text,'');assert.equal(restored.get(identity).clearedRevision,2);
- const stored=fs.readFileSync(restored.file,'utf8');assert.doesNotMatch(stored,/PRIVATE_FILE|PRIVATE_CHOICE/);assert.equal(fs.statSync(restored.file).mode&0o777,0o600);
+ const stored=fs.readFileSync(restored.file,'utf8');assert.doesNotMatch(stored,/PRIVATE_FILE|PRIVATE_CHOICE/);assertPrivate(restored.file,0o600);
  await assert.rejects(restored.save({...attempt,text:'x'.repeat(200001),operationId:randomUUID()}),/bounded/);
 });
 

@@ -1,3 +1,4 @@
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';import os from 'node:os';import path from 'node:path';
@@ -8,7 +9,7 @@ import {RemoteHost,remoteRun} from '../src/services/remote/remote.js';
 import {chatQuestions} from '../public/features/chats/user-questions.js';
 const until=async fn=>{for(let i=0;i<200;i++){if(fn())return;await new Promise(resolve=>setTimeout(resolve,5));}throw Error('Synthetic question timed out');};
 function fixture(t,provider={async run(){}}){
- const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-user-question-'));let engine=new Engine(home,{codex:provider});
+ const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-user-question-'));let engine=new Engine(home,{codex:provider});
  const run=engine.createRun({schemaVersion:1,id:'questions',name:'Synthetic questions',enabled:false,provider:'codex',model:'fixture',workspace:{cwd:home,additionalDirectories:[]},cron:'0 9 * * 1-5',timezone:'UTC',misfire:'skip',prompt:'Synthetic test'},'chat');
  t.after(async()=>{await engine.close();fs.rmSync(home,{recursive:true,force:true});});
  return {engine,run,home};
@@ -83,7 +84,7 @@ test('remote question queue review is human-only and does not share answer or pe
 
 
 test('authenticated owner route clears only queue membership and returns review metadata to paged views',async()=>{
- const home=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'proteus-question-clear-api-')));let app;
+ const home=fs.realpathSync(privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-question-clear-api-')));let app;
  try{
   app=await startServer({home,port:0,timers:false,providers:{codex:{async run(){}}}});
   const run=app.engine.createRun({schemaVersion:1,id:'questions-api',name:'Synthetic questions',enabled:false,provider:'codex',model:'fixture',workspace:{cwd:home,additionalDirectories:[]},cron:'0 9 * * 1-5',timezone:'UTC',misfire:'skip',prompt:'Synthetic test'},'chat');await until(()=>run.status==='completed');const q=question(app.engine,run);
