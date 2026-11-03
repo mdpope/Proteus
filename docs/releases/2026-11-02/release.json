@@ -16,7 +16,7 @@
   "priorRequestAudit": "docs/releases/2026-11-02/prior-release-audit.md",
   "previousAcceptedSourceCommit": "4456aea8837171ba60f82775859d9ce7f4ec0810",
   "sourceCommit": "4bbec8cadc9c24916cc7514ead9b1b53f5a6051d",
-  "candidateSourceStatus": "Final R37 frozen 4bbec8c: Mac, Linux and Windows packages qualified with exact-package UI, source companions and original publisher signatures verified. Final web and Mac/Linux download publication are verified; native consumer installation and Windows transfer/publication remain open. Native 2611.2.10 is retained; iOS performance, composer growth and residual disconnect follow-ups are deferred to Nov 3.",
+  "candidateSourceStatus": "Final R37 source4bbec8c qualified and all three OS downloads published/HTTPS verified. Build Mac and Linux installed with independently matching package hashes and owner health; full Linux history and changed reading records retain explicit limits. Secondary Mac idle and two Windows installations/acceptance remain open. Native2611.2.10 retained; Mnemosyne and residual iOS/web issues deferred to Nov3.",
   "widerDistributionHold": {
     "active": false,
     "reason": "Operator explicitly authorizes all configured devices, web and release closeout after connection fixes."

@@ -3,7 +3,9 @@
 Application source is frozen at `4bbec8cadc9c24916cc7514ead9b1b53f5a6051d`.
 Mac, Linux and Windows packages passed their platform qualification, source integrity and original publisher-signature checks. Windows transition checks use simulated installer calls and retain the prior qualification of the unchanged installer recipe; its installer is Authenticode unsigned.
 
-Build Mac currently runs accepted R36; the final R37 update is prepared and awaits its destination-owned approval. The secondary Mac update is waiting for unrelated active work. Final Mac/Linux downloads are published and independently verified over HTTPS. Their unassigned destination coordinators are processing the final Linux and secondary Mac updates. Windows artifact transfer awaits restoration of its existing GitHub login. Dispatch and package staging do not establish completed consumer installations.
+Build Mac and Linux run the final R37 builds with verified owner health and independent installed package hashes. A fresh host macOS strict signature check passes; the earlier restricted-check trust failure remains recorded. Mac drafts, permissions, sources, pairings and window layouts compare identically; no prior navigation tab, history-entry or navigation-receipt IDs are missing. Source-library scan metadata refreshed; three reading-position records changed after restart and remain separately classified. Linux's six changed browser view IDs explicitly map to the same durable tab IDs, saved histories and logical selections. Full Linux navigation-database comparison and three reading-position changes remain unverified.
+
+All three final desktop releases are published: 32 files match the publication receipt, all 22 activated catalogs/pages match HTTPS hashes, and the immutable Windows artifacts passed independent HTTPS hashes alongside the unchanged Mac/Linux verification witness. Two Windows destination coordinators are processing that exact release. The secondary Mac remains waiting for a browser operation or download after its earlier planning prompt was cleared. Dispatch and staging do not establish installation.
 
 The final web build is unchanged after qualification. Its first capture stopped at the server recovery-retention guard before activation. Verified superseded payloads have now been retired while retaining the current site, shared data, the verified server recovery and the local recovery pair. A separate retry namespace preserves the failed attempt and runs the normal deployment guards. The final web build activated and all fourteen endpoint checks plus six served-asset hashes passed. Ordinary isolated restore failed; the existing fixed captured-state verification passed before activation. The authenticated session displayed the existing test reply without resending, then another disconnect occurred. That limited result does not establish sustained stability; the residual connection issue remains a Nov 3 follow-up.
 
@@ -11,7 +13,7 @@ Both physical iOS devices and shared Preview simulators retain build `2611.2.10`
 
 The historical sections below retain earlier evidence; they do not supersede this final status. Nov 2 remains open until rollout and closeout verify.
 
-## R37 final packages qualifying
+## Historical R37 qualification checkpoint
 
 Final source `4bbec8c` passes 1,489 source tests (four skipped), static checks, 34 focused updater regressions and disposable Electron interaction checks. Its signed Mac candidate passes all ten exact-package UI checks, official extraction and corresponding-source verification. Windows and Linux builders are qualifying the same immutable source. These are package acceptance results, not installed outcomes. Native 2611.2.10 remains installed on both physical devices.
 
@@ -23,7 +25,7 @@ The Mac R36 runtime and exact installed tree match the accepted signed package; 
 
 Both physical clients retain build 2611.2.10; no repeat installation occurred. Nine signed Mac package UI checks and four source-mode UI qualifiers on each native builder pass. Final Linux/Windows packages and their exact-package acceptance remain open. Authenticated mobile/web sends and incoming traffic must still be checked with updated consumers. Historical updater attention records remain preserved. Mnemosyne redesign is queued for [Nov 3](../../2026-11-03-mnemosyne-handoff.md).
 
-# Current: R36 source frozen; Mac candidate packaging
+# Historical R36 source freeze and packaging checkpoint
 
 Linux qualification proved that a supported extension-created blank tab can be removed by the first authoritative main-scope read before its creation intent is published. R36 carries intent from actual creation through active/background registration and preserves it across an older snapshot while retaining owner close/move authority. Source validation passes 1,486 tests with four skipped and static checks; the focused regressions and the source extension, authentication and two-window sidebar UI fixtures pass. The controlled native regression now passes both read orderings, inactive selection and owner close/move authority. Replacement-package acceptance remains pending. R35 packages do not contain R36. Source is frozen at `9faf4e1947e07ff47f5bfb80f38850bcb0637e81`. Signed Mac candidate packaging has started; Linux and Windows are qualifying that source before another package build. No publication or repeat physical-device installation is claimed.
 
