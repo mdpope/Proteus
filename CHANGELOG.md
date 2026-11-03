@@ -1,5 +1,7 @@
 ## Nov 2 — 0.2.41 candidate
 
+- Nov 2 R31: preserve an owner-rejected expired tab request in encrypted review state so it cannot indefinitely suppress fresh membership reads; keep uncertain retries unchanged. Add bounded, content-free reconciliation attempt diagnostics. Live iPhone General verification remains pending.
+
 - Nov 2 R30 follow-up: apply mobile project membership before optional browser-history paging while retaining matching complete histories; move desktop draft sync/conflict status into the chat header. Source validation and physical rollout remain separate.
 
 - Nov 2 R29: pace encrypted host and native request bursts, avoid replaying obsolete state snapshots, isolate overloaded clients through negotiated relay control, measure bounded wire traffic/close codes, and resume a visible project’s suspended owner without changing computer selection. Live rollout and stability acceptance follow.

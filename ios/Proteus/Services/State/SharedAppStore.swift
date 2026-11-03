@@ -174,6 +174,7 @@ let nativeFixtureRelayOrigin = ""
     // Temporary, bounded reconciliation evidence contains no URLs, titles, text or keys.
     // This lets a guided device check distinguish a live owner read from a saved cache.
     private var contentReadEvidence: [String: JSON] = [:]
+    private var contentReadAttempts: [String: JSON] = [:]
     private var contentEvidenceURL = FileManager.default.temporaryDirectory.appendingPathComponent("proteus-tab-sync-evidence.json")
     private let contentEvidenceQueue = DispatchQueue(label: "Proteus.tab-sync-evidence", qos: .utility)
     private func recordContentRead(_ snapshot: JSON, scope: String) {
@@ -183,7 +184,20 @@ let nativeFixtureRelayOrigin = ""
         contentReadEvidence[scope] = .object(["revision": snapshot["revision"], "tabIds": .array(ids), "at": .number(now)])
         let keep = contentReadEvidence.sorted { $0.value["at"].int > $1.value["at"].int }.prefix(64)
         contentReadEvidence = Dictionary(uniqueKeysWithValues: keep.map { ($0.key, $0.value) })
-        let value = JSON.object(["schemaVersion": .number(1), "scopes": .object(contentReadEvidence)])
+        writeContentEvidence()
+    }
+    private func recordContentAttempt(_ scope: String, phase: String, error: Error? = nil) {
+        let known = ["offline", "invalid-project", "pending-retry", "requesting", "received", "failed", "expired-retained"]
+        guard known.contains(phase) else { return }
+        let failure = (error as? RemoteError).map { $0.message == "Command expired. Refresh before trying again." ? "expired" : $0.code == "JOURNAL_BUSY" ? "journal-busy" : "owner-error" } ?? (error == nil ? "" : "transport-error")
+        let previous = contentReadAttempts[scope], now = Date().timeIntervalSince1970
+        if previous?["phase"].string == phase, previous?["failure"].string == failure, now - Double(previous?["at"].int ?? 0) < 5 { return }
+        contentReadAttempts[scope] = .object(["phase": .string(phase), "failure": .string(failure), "at": .number(now), "pendingCount": .number(Double(contentPending[scope]?.count ?? 0)), "hasReceipt": .bool(contentRequests[scope] != nil), "cachedRevision": contentSnapshots[scope]?["revision"] ?? .null])
+        contentReadAttempts = Dictionary(uniqueKeysWithValues: contentReadAttempts.sorted { $0.value["at"].int > $1.value["at"].int }.prefix(64).map { ($0.key, $0.value) })
+        writeContentEvidence()
+    }
+    private func writeContentEvidence() {
+        let value = JSON.object(["schemaVersion": .number(1), "scopes": .object(contentReadEvidence), "attempts": .object(contentReadAttempts)])
         guard let data = try? JSONEncoder().encode(value), data.count <= 1_000_000 else { return }
         let url = contentEvidenceURL
         contentEvidenceQueue.async { try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true); try? data.write(to: url, options: .atomic) }
@@ -558,10 +572,10 @@ let nativeFixtureRelayOrigin = ""
     }
     func refreshContentTabs(scope: String, remote: RemoteStore, kind: String, id: String) async {
         if remote.status.lowercased().contains("revoked"), let host = remote.connection?.hostId { revokeContentHost(host); return }
-        guard kind != "main", remote.connected, remote.state["capabilities"].array.contains(.string("content-tabs.v1")), let host = remote.connection?.hostId else { return }
+        guard kind != "main", remote.connected, remote.state["capabilities"].array.contains(.string("content-tabs.v1")), let host = remote.connection?.hostId else { recordContentAttempt(scope, phase: "offline"); return }
         if kind == "project" {
             guard remote.supportsProjects, scope == "project:" + host + ":" + id,
-                  remote.projectCatalog.project(id: id)?["id"].string == id else { return }
+                  remote.projectCatalog.project(id: id)?["id"].string == id else { recordContentAttempt(scope, phase: "invalid-project"); return }
         }
         if let previous = contentHosts[scope], previous != host { contentSnapshots[scope] = nil; contentPending[scope] = nil }
         contentHosts[scope] = host
@@ -581,10 +595,11 @@ let nativeFixtureRelayOrigin = ""
             guard remote.connected, remote.connection?.hostId == host, contentHosts[scope] == host else { return }
         }
         if contentPending[scope]?.isEmpty == true && contentRequests[scope] == nil { contentPending[scope] = nil }
-        if contentPending[scope] != nil { await flushContentTabs(scope); return }
+        if contentPending[scope] != nil { recordContentAttempt(scope, phase: "pending-retry"); await flushContentTabs(scope); return }
         guard !contentBusy.contains(scope) else { return }; contentBusy.insert(scope); defer { contentBusy.remove(scope) }
         do {
             let readRevision = contentSnapshots[scope]?["revision"].int ?? -1
+            recordContentAttempt(scope, phase: "requesting")
             var response = try await remote.request("tabs.get", ["scope": .string(kind), "id": .string(id)])
             guard remote.connection?.hostId == host, remote.connected, contentHosts[scope] == host else { return }
             if response["revision"].int == 0 && contentSnapshots[scope] == nil && !Self.isOrganizationalScope(scope) {
@@ -601,13 +616,13 @@ let nativeFixtureRelayOrigin = ""
                 // screen while optional Back/Forward history pages wait or disconnect.
                 applyContentTabs(response, scope: scope, afterReadingRevision: readRevision)
                 guard contentSnapshots[scope]?["revision"] == response["revision"] else { return }
-                contentReadAt[scope] = Date(); recordContentRead(response, scope: scope)
+                contentReadAt[scope] = Date(); recordContentRead(response, scope: scope); recordContentAttempt(scope, phase: "received")
                 let complete = try await completeNavigationLists(response, remote: remote, kind: kind, scopeID: id)
                 guard remote.connection?.hostId == host, remote.connected, contentHosts[scope] == host,
                       contentPending[scope] == nil, contentSnapshots[scope]?["revision"] == response["revision"] else { return }
                 applyContentTabs(complete, scope: scope)
             }
-        } catch { /* Offline clients retain bounded descriptors; reads grant no content access. */ }
+        } catch { recordContentAttempt(scope, phase: "failed", error: error) }
     }
     func confirmSetupRegistration(_ tabID: String, scope: String, remote: RemoteStore, kind: String, id: String) async throws {
         for _ in 0..<100 {
@@ -735,6 +750,17 @@ let nativeFixtureRelayOrigin = ""
             await refreshContentTabs(scope: scope, remote: remote, kind: kind, id: id)
         }
     }
+    // Only an authenticated, terminal expiry rejection leaves the active outbox.
+    // Timeouts and uncertain delivery keep the original request unchanged.
+    @discardableResult func retainExpiredContentRequest(_ scope: String, error: Error) -> Bool {
+        guard let refusal = error as? RemoteError, refusal.message == "Command expired. Refresh before trying again.",
+              let request = contentRequests[scope], let pending = contentPending[scope], !pending.isEmpty else { return false }
+        let key = scope + ":expired:" + request["id"].string
+        legacyContentReview[key] = .object(["scope": .string(scope), "operations": .array(pending), "request": request, "reason": .string("owner-rejected-expired-request")])
+        contentRequests[scope] = nil; contentPending[scope] = nil
+        saveDocumentTabs(); recordContentAttempt(scope, phase: "expired-retained", error: error)
+        return true
+    }
     private func flushContentTabs(_ scope: String) async {
         guard !scope.hasPrefix("main:"), !contentBusy.contains(scope), let config = contentSync[scope], config.remote.connected,
               let pending = contentPending[scope], !pending.isEmpty else { return }
@@ -812,7 +838,15 @@ let nativeFixtureRelayOrigin = ""
             }
         } catch {
             guard account == requestAccount, contentHosts[scope] == config.host, contentSync[scope]?.remote === config.remote else { return }
-            if (error as? RemoteError)?.code == "JOURNAL_BUSY" {
+            if retainExpiredContentRequest(scope, error: error) {
+                let readRevision = contentSnapshots[scope]?["revision"].int ?? -1
+                if let fresh = try? await config.remote.request("tabs.get", ["scope": .string(config.kind), "id": .string(config.id)]),
+                   account == requestAccount, config.remote.connected, config.remote.connection?.hostId == config.host, contentPending[scope] == nil {
+                    applyContentTabs(fresh, scope: scope, afterReadingRevision: readRevision)
+                    recordContentRead(fresh, scope: scope)
+                }
+                self.error = "Expired offline tab edits were retained for review. Refresh Tabs and repeat only changes you still want."
+            } else if (error as? RemoteError)?.code == "JOURNAL_BUSY" {
                 let prior = contentBackoff[config.host], attempts = (prior?.attempts ?? 0) + 1, date = Date()
                 let notify = date.timeIntervalSince(prior?.notified ?? .distantPast) >= 60
                 contentBackoff[config.host] = (date.addingTimeInterval(min(60, pow(2, Double(min(attempts - 1, 6))))), attempts, notify ? date : prior!.notified)
@@ -838,7 +872,7 @@ let nativeFixtureRelayOrigin = ""
         // Host-scoped pending operations survive account changes, so their retry
         // identities must survive too. Clearing sync bindings pauses dispatch
         // until the new account reconnects to that owner with its own grants.
-        contentReadEvidence = [:]
+        contentReadEvidence = [:]; contentReadAttempts = [:]
         let evidenceURL = contentEvidenceURL
         contentEvidenceQueue.async { try? FileManager.default.removeItem(at: evidenceURL) }
         for download in Array(downloads.values) { download.cancel() }; exportFile?.cleanup(); exportFile = nil; linkChatDraft = nil; restoring = true; contentSync = [:]; contentBackoff = [:]; workspaceContentDescriptors = Dictionary(uniqueKeysWithValues: contentSnapshots.filter { Self.isOrganizationalScope($0.key) }.map { (scope, snapshot) in (scope, Self.projectContentOperations(contentPending[scope] ?? [], onto: snapshot["tabs"].array)) }); account = identity; snapshot = .null; accountConnected = false; error = cacheFailure; browserPreviews = [:]; browserFavicons = [:]; faviconAttempts = [:]; unloadBrowsers(); browserTabs = []; unloadedBrowsers = []; selectedBrowser = nil; selectedMainBrowser = nil; scopedSelection = [:]; browserTouched = [:]; standupOrders = [:]; standupCompleted = [:]; documentContents = [:]; documentSessions = [:]; previewVersions = [:]; profileStores = [:]; draftAttachments = [:]; chatScrollLocations = [:]; documentScrollOffsets = [:]; draftMessageIDs = [:]; draftSessionIDs = [:]

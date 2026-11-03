@@ -1,3 +1,22 @@
+# R31 investigation — retained retry can suppress the owner read
+
+The operator confirms the iPhone still shows a different General list after build8. A fresh
+build8 device receipt has 57 recent scopes but no successful read for Build Mac’s exact
+General project; the Mac remains at 12 tabs / revision3534. This is not accepted as synchronized.
+
+Inspection found a separate failure path: a saved tab mutation suppresses ordinary reads while
+its original request is retried. An authenticated terminal expiry rejection previously left
+that envelope in the active outbox indefinitely. The follow-up preserves the exact original
+request and operations in the existing encrypted review store, then permits a fresh owner read.
+A timeout or uncertain failure retains the original active request unchanged. No new mutation
+identity is created, and later reads do not authorize replaying those retained edits.
+
+Private reconciliation evidence now distinguishes offline, invalid-project, pending retry,
+requesting, received, failed and expiry-retained states using fixed labels and counts only.
+It remains bounded to 64 scopes / one megabyte, excludes titles, URLs, draft text and keys, and
+clears on account reset. This diagnostic is needed to establish the live cause rather than
+assuming the missing successful-read receipt proves an expiry. Validation and rollout are pending.
+
 # R30 follow-up — membership before history
 
 The operator still observes mismatched iPhone General tabs and disconnects while sending after

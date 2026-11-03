@@ -1,3 +1,10 @@
+## Nov 2 R31 investigation in validation
+
+The iPhone General mismatch remains confirmed after build8. Follow-up source handles only
+authenticated terminal expiry rejections, preserves original edits/receipts for review, and adds
+bounded attempt diagnostics to identify the live blocker. It is not yet installed or accepted.
+The physical iPad follow-up is explicitly deferred. Other rollout and closeout obligations remain.
+
 ## Nov 2 follow-up in validation
 
 Immediate mobile tab membership ahead of optional browser-history paging and desktop draft-status

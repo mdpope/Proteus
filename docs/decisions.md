@@ -3174,3 +3174,12 @@ the default selected computer, preserving suspended-command and immutable-owner 
 ## Nov 2 follow-up: membership is independent of history hydration
 
 Publish a valid owner membership response immediately. Optional complete Back/Forward paging must not keep obsolete tabs on screen. Retain matching complete local histories, and apply later hydration only while its owner scope/revision and absence of local pending intent still match. Draft synchronization status belongs in the desktop chat heading, keeping conflict recovery available outside message entry.
+
+
+## Nov 2: terminal expiry differs from uncertain delivery
+
+An authenticated owner rejection with the exact command-expiry message permits retiring that
+request from the active tab outbox, while retaining its original envelope and operations in
+encrypted review state. Do not issue a new mutation identity or replay those edits as new intent.
+Timeouts and unknown failures preserve the active retry unchanged. A subsequent read can reconcile
+canonical membership independently; newer local intent must still win over an in-flight read.

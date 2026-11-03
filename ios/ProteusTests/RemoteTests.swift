@@ -2085,6 +2085,27 @@ final class NativeParityTests: XCTestCase {
         XCTAssertFalse(try XCTUnwrap(removed.first { $0.id == remote.id }).available)
         XCTAssertFalse(nativeInferenceProviderChoices(["shared-llm": .object([:])], ownerName: "Owner").contains { $0.provider == "shared-llm" })
     }
+    @MainActor func testExpiredOwnerRejectionRetainsExactIntentWithoutTreatingTimeoutAsExpiry() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString), key = RemoteCrypto.random()
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let scope = "project:" + UUID().uuidString + ":synthetic", intent = UUID().uuidString, requestID = UUID().uuidString
+        let operation: JSON = .object(["action": .string("close"), "id": .string("obsolete"), "intentId": .string(intent)])
+        let receipt: JSON = .object(["id": .string(requestID), "issuedAt": .string("2026-10-31T20:00:00Z"), "args": .object(["expectedRevision": .number(4), "operations": .array([operation])])])
+        let payload: JSON = .object(["contentPending": .object([scope: .array([operation])]), "contentRequests": .object([scope: receipt])])
+        try Data(RemoteCrypto.seal(payload, key: key, aad: "proteus-mobile-document-tabs-v1").utf8).write(to: root.appendingPathComponent("document-tabs.enc"))
+        let shared = SharedAppStore(cacheWriter: NativeSharedCacheWriter(), cacheRoot: root, cacheKey: { key })
+        XCTAssertFalse(shared.retainExpiredContentRequest(scope, error: RemoteError(message: "Request timed out. PRIVATE")))
+        XCTAssertEqual(shared.contentPending[scope], [operation]); XCTAssertTrue(shared.hasPendingContent(in: scope))
+        XCTAssertTrue(shared.retainExpiredContentRequest(scope, error: RemoteError(message: "Command expired. Refresh before trying again.")))
+        XCTAssertFalse(shared.hasPendingContent(in: scope)); XCTAssertNil(shared.contentPending[scope])
+        let retained = shared.legacyContentReview[scope + ":expired:" + requestID]
+        XCTAssertEqual(retained?["request"], receipt); XCTAssertEqual(retained?["operations"], .array([operation]))
+        XCTAssertNil(shared.flushCachedState())
+        let restored = SharedAppStore(cacheWriter: NativeSharedCacheWriter(), cacheRoot: root, cacheKey: { key })
+        XCTAssertEqual(restored.legacyContentReview[scope + ":expired:" + requestID], retained)
+        XCTAssertFalse(restored.hasPendingContent(in: scope))
+    }
     @MainActor func testLegacyInferredDeletionRetainsOriginalReceiptWithoutReplaying() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString), key = RemoteCrypto.random()
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
