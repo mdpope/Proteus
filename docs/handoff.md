@@ -8,6 +8,8 @@ source refresh. Schedule-specific MCP selection no longer disappears with exclud
 Current runtime/installed versions below are historical until the new exact source/package and
 preservation receipts verify. Private source/build/device/update routing is in the operator record.
 
+R23 source is frozen/synchronized at `e973d4c`. Full suite is 1,454 pass/four skip; static checks and six signed-package Mac UI checks pass. One paid iOS artifact 0.2.41/2611.2.3 is verified. A new unassigned local updater is preparing the accepted developer candidate; actual installation remains unverified. Physical iPad is locked and iPhone unavailable, so neither new capture/install has started. See the [rollout ledger](releases/2026-11-02/rollout.md) for exact artifact identities, retained historical maintenance issues and the unresolved simulator rotation check.
+
 ## Mnemosyne boundary clarification received — no implementation authorization
 
 Read the updated product-boundary proposal and UI concept. Desktop/web share one visual and action
