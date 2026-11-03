@@ -1,3 +1,7 @@
+## Nov 2 R35 — native qualification preserves platform privacy and source identity
+
+Windows fixtures must exercise private ACLs through the existing helpers instead of assuming POSIX mode bits. Never weaken application-home validation for a test. Linux packages must record the actual full source commit, short revision and dirty state in provenance, independently of historical transfer metadata. Keep strict release-source input verification. Qualification-only changes do not relabel or rebuild an already accepted Mac package whose runtime/build inputs remain identical; retain each artifact's original source pin and companion archive.
+
 ## Nov 2 R35 — sidebar refreshes read their owner connection
 
 A peer state notification is evidence already delivered to the desktop owner. Renderer sidebar refreshes must consume that authenticated snapshot rather than fetch context and full sync again. Keep a compact, memory-only navigation projection per current peer session, discard source-entry/provider/progress detail, and return detached values. Validate outgoing access, pairing, pause, session readiness and current connection status on every read. Offline cache rows cannot claim a live connection. Existing connection heartbeat/recovery supplies push-loss fallback; explicit configuration requests continue through the normal scoped remote service. Window placement and execution owner remain independent.

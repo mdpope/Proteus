@@ -7,16 +7,17 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
-import { createDesktopSnapshot, createProvenance, verifyDesktopMetadata, fileDigest as digest, desktopPackageIgnore } from './desktop-build.mjs';
+import { createDesktopSnapshot, verifyDesktopMetadata, fileDigest as digest, desktopPackageIgnore } from './desktop-build.mjs';
+import {linuxBuildIdentity} from './linux-build-identity.mjs';
 
 if (process.platform !== 'linux') throw new Error('Build the Linux application on Linux.');
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 await import('./build-terminal.mjs');
 const metadata = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-const { runtimeFiles, buildInputs, sourceFingerprint, verifySource, verifyCopied } = createDesktopSnapshot(root, ['package.json', 'package-lock.json', 'scripts/package-linux.mjs', 'scripts/desktop-build.mjs', 'scripts/build-terminal.mjs', 'scripts/prepare-pty.mjs','scripts/prepare-extensions.mjs', 'docs/linux-upstream-source.json']);
-const buildRevision = `linux.${sourceFingerprint.slice(0, 12)}`;
+const { runtimeFiles, buildInputs, verifySource, verifyCopied } = createDesktopSnapshot(root, ['package.json', 'package-lock.json', 'scripts/package-linux.mjs', 'scripts/linux-build-identity.mjs', 'scripts/desktop-build.mjs', 'scripts/build-terminal.mjs', 'scripts/prepare-pty.mjs','scripts/prepare-extensions.mjs', 'docs/linux-upstream-source.json']);
 const upstream = JSON.parse(fs.readFileSync(path.join(root, 'docs/linux-upstream-source.json'), 'utf8'));
-const provenance = createProvenance({ version: metadata.version, buildRevision, upstream, runtimeFiles, buildInputs });
+const provenance = linuxBuildIdentity({root,version:metadata.version,upstream,runtimeFiles,buildInputs});
+const {sourceFingerprint,buildRevision}=provenance;
 const out = process.env.PROTEUS_PACKAGE_OUTPUT || path.join(root, 'dist');
 const bundles = await packager({
   dir: root, out, overwrite: true, name: 'Proteus', executableName: 'proteus',
