@@ -48,6 +48,8 @@ const remoteEntry = entry => ({ ...pick(entry, entryKeys), ...(entry.agent ? { u
 const remoteProjects = service => { const value=service.workspaceProjects.get(service.engine);return {...value,sourceEntries:value.sourceEntries.map(remoteEntry)}; };
 const mutationMethods = new Set(["draft.text.save",'inference.start','inference.cancel','computer.access.update','chat.retry-without-agents','projects.update','sources.update','browser.live.instruct','browser.history.record','browser.history.delete','browser.history.settings','tabs.mutate','tabs.manage','workspace.delete','chat.start', 'chat.clear-question', 'chat.answer-question', 'chat.reply', 'chat.resume', 'chat.recover', 'chat.cancel', 'chat.send', 'chat.steer-queued','chat.edit-queued','chat.remove-queued', 'chat.review', 'chat.archive', 'chat.move', 'chat.delete', 'chat.rename', 'chat.promote', 'chat.documents.request', 'chat.attachments.begin', 'chat.attachments.chunk', 'chat.attachments.finish', 'chat.attachments.authorize', 'schedule.run', 'schedule.save', 'context.update', 'context.refresh', 'context.mode', 'context.favorite', 'context.addFolders', 'chat.context', 'chat.permissions', 'mcp.login','integrations.check','integrations.recover', 'notifications.read','notifications.open', 'attention.clear', 'resources.action', 'connection.revoke']);
 const canonical = value => Array.isArray(value) ? value.map(canonical) : value && typeof value === 'object' ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value;
+const measuredReplies=new Set(['sync','tabs.get','tabs.history','projects.get','context.get','chat.get','provider.status','notifications.list']);
+const replyKind=method=>'reply:'+(measuredReplies.has(method)?method:'other');
 export const ownerChatControls = (run,engine) => ({steering:typeof engine.providers[run.schedule.provider]?.steer==='function',recovery:!!engine.recovery,...(engine.recovery?{scheduledRecovery:true,activeTimeContinuationProviders:activeTimeProviders}:{}),...(engine.allowance?{allowanceContinuation:true}:{}),steeringMediaTypes:engine.providers[run.schedule.provider]?.acceptedSteeringMediaTypes||[]});
 // Fusion attribution for the visible history window plus the latest turn. Each
 // turn is bounded metadata (no draft/critic content); older pages bring their own.
@@ -82,7 +84,7 @@ export function remoteState(service) {
   const visibleRuns = runs.filter(run=>!run.archivedAt);
   const workspaceProjects=service.workspaceProjects?remoteProjects(service):null;
   const schedules = timedSync(service.performanceDiagnostics,'remote.state.schedules',()=>service.engine.schedules.list().map(s => pick(s, scheduleKeys)));
-  return { attention:timedSync(service.performanceDiagnostics,'remote.state.attention',()=>service.attention?.()||[]),hostName: service.remote?.config.label || os.hostname(), ...hostPlatformMetadata(),
+  const state = { attention:timedSync(service.performanceDiagnostics,'remote.state.attention',()=>service.attention?.()||[]),hostName: service.remote?.config.label || os.hostname(), ...hostPlatformMetadata(),
     appearance: {showProviderUsage:defaults.appearance?.showProviderUsage!==false,providerUsageCollapsed:defaults.appearance?.providerUsageCollapsed===true},
     ...(defaults.appearance?.showProviderUsage!==false?{providerUsage:remoteUsage({providers:service.usage?.providers})}:{}), schedules,
     ...(workspaceProjects?{workspaceProjects}:{}),
@@ -91,6 +93,7 @@ export function remoteState(service) {
     attentionCount: visibleRuns.filter(needsAttention).length,
     context: { ...pick(context, ['revision', 'refreshedAt', 'rootStatus', 'defaultWorkspaceId', 'workspaces', 'universalFolders', 'libraryFolders', 'documents','modes','favorites', 'errors']), entries: context.entries.map(remoteEntry) },
     defaults: pick(defaults, ['provider', 'model', 'reasoningMode', 'reasoningEffort', 'contextTier', 'serviceTier', 'timezone', 'internetSearches']), providerStatus: service.catalog?.value || null, providerStatuses: Object.fromEntries(Object.entries(service.catalogs || {}).map(([id, catalog]) => [id, catalog.value])),questionAttachmentMediaTypes:Object.fromEntries(Object.keys(service.engine.providers).map(id=>[id,questionAttachmentMediaTypes.filter(type=>service.engine.providers[id]?.acceptedMediaTypes?.includes(type))])),attachmentMediaTypes:Object.fromEntries(Object.keys(service.engine.providers).map(id=>[id,service.engine.providers[id]?.acceptedMediaTypes||[]])),mcpStatusProviders:Object.keys(service.engine.providers).filter(id=>typeof service.engine.providers[id]?.mcpStatus==='function'),mcpLoginProviders:Object.keys(service.engine.providers).filter(id=>typeof service.engine.providers[id]?.mcpLogin==='function'),capabilities:[...(service.sharedInference?['inference.shared.v1']:[]),...(service.computerAccess?['computer.access.v1']:[]),...(service.projectFollow?['tabs.follow.v1']:[]),'chat.subagents.v1','chat.agent-control.v1','chat.send-model-options.v1','chat.build-coordinator.v1','chat.update-coordinator.v1','chat.update-release.v1','attention.ack.v1','chat.pages.v1','chat.watch.v1','chat.delta.v1','draft.text.v1','host.platform.v1',...(service.workspaceProjects?['projects.v1','projects.move.v1','source-library.v1']:[]),'chat.paths.v1','chat.export.v1','chat.previews.v1','content-tabs.v1','chat.index.v1','chat.queue-edit.v1','integrations.health.v1','chat.review.v1','chat.lifecycle.v1','chat.rename.v1','chat.retry-without-agents.v1','chat.attachments.view.v1','chat.internet.v1','workspaces.v1',...(service.engine.permissions?.preserveInheritedDefaults?['chat.permissions.shared.v1']:[]),'chat.permissions.folders.v1','chat.permissions.chat.v1','chat.permissions.pending.v1','chat.documents.v1','chat.attachments.v1','chat.question-attachments.v1','chat.questions.clear.v1','notifications.v1',...(service.openWebsiteNotification?['website.notifications.v1']:[]),'authenticated-revocation.v1','connection-self-revoke.v1',...(service.browserHistory?['browser.history.v1','browser.navigation.v1']:[]),...(service.liveBrowser?['browser.live.v1']:[]),...(service.resources?['resources.v1']:[])],protocol: 1 };
+  service.performanceDiagnostics?.stateShape?.(state);return state;
   });
 }
 function validateRelayURL(value) {
@@ -195,7 +198,7 @@ export class RemoteHost {
     }
     return this.outbound.enqueue(peer,payload,kind);
   }
-  send(peer, value) { const seq=++peer.outgoing,box=timedSync(this.service.performanceDiagnostics,'remote.send.encrypt',()=>seal(peer.device.key,value,`${peer.prefix}:host:${seq}`));return timedSync(this.service.performanceDiagnostics,'remote.send.transport',()=>this.raw(peer,{type:'data',seq,box},value.type==='event'?value.event:value.type==='result'?'reply':'other')); }
+  send(peer, value, method) { const seq=++peer.outgoing,box=timedSync(this.service.performanceDiagnostics,'remote.send.encrypt',()=>seal(peer.device.key,value,`${peer.prefix}:host:${seq}`));return timedSync(this.service.performanceDiagnostics,'remote.send.transport',()=>this.raw(peer,{type:'data',seq,box},value.type==='event'?value.event:value.type==='result'?replyKind(method):'other')); }
   async pairing(publicURL,{management=false}={}) {
     if (this.status !== 'online') throw new Error('Enable remote access and wait for the relay to connect.');
     const relay = validateRelayURL(publicURL || (this.config.mode === 'external' ? this.config.publicURL : this.addresses()[0] || `ws://127.0.0.1:${this.config.port}`));
@@ -269,8 +272,8 @@ export class RemoteHost {
     if (!this.config.devices.some(d => d.id === peer.device.id) || packet.type !== 'data' || packet.seq !== peer.incoming + 1) throw new Error('Invalid sequence.');
     const message = unseal(peer.device.key, packet.box, `${peer.prefix}:client:${packet.seq}`); peer.incoming = packet.seq;
     if (typeof message.id !== 'string' || !/^[a-f0-9-]{36}$/i.test(message.id)) throw new Error('Invalid request ID.');
-    try { const result = await this.command(peer, message); if (this.peers.get(peer.id) === peer) this.send(peer, { type: 'result', id: message.id, result }); }
-    catch (error) { if (this.peers.get(peer.id) === peer) this.send(peer, { type: 'result', id: message.id, error: error.message, ...(error.code === 'JOURNAL_BUSY' ? {code:error.code,details:error.details} : {}) }); }
+    try { const result = await this.command(peer, message); if (this.peers.get(peer.id) === peer) this.send(peer, { type: 'result', id: message.id, result }, message.method); }
+    catch (error) { if (this.peers.get(peer.id) === peer) this.send(peer, { type: 'result', id: message.id, error: error.message, ...(error.code === 'JOURNAL_BUSY' ? {code:error.code,details:error.details} : {}) }, message.method); }
   }
   requireCommandGrants(peer, method, args) {
     if (!this.config.devices.some(device => device.id === peer.device?.id)) throw new Error('Unknown paired device.');

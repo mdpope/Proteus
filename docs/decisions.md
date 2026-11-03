@@ -1,3 +1,7 @@
+## Nov 2 R34 — attribute wire traffic before changing refresh behavior
+
+A visible online session and zero host closes cannot establish acceptable transport load. Measure actual encrypted bytes where the outbound writer transmits them, and classify replies only into a fixed source-owned set of read methods plus Other. Keep the existing aggregate categories. Separately label sampled JSON projection sizes as plaintext estimates; retain fixed section names and counts only, never values. Limit projection sampling to once per ten seconds. No change to command delivery, replay, authentication or saved pairings is implied by this diagnostic addition.
+
 ## Nov 2 R33 — preservation describes the final checkpoint
 
 A final renderer checkpoint can update canonical descriptors and drafts. Complete it before recording preservation, then recheck idleness and the handoff phase before starting the helper. A failed checkpoint leaves the application open. Save document chat associations on every surface, independently of their current project placement. Keep strict preservation/identity/barrier verification and classify timeout failures using fixed reasons without logging private owner responses.

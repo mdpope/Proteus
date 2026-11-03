@@ -1,3 +1,7 @@
+## Nov 2 R34 — bounded traffic attribution
+
+- Attribute encrypted reply bytes to fixed read-method buckets and sample plaintext snapshot-section sizes at most once per ten seconds. Keep payloads, permission scope, retry identities and connection behavior unchanged. Live bandwidth acceptance remains open.
+
 ## Nov 2 R33 — update preservation correction
 
 - Finish renderer checkpoints before capturing update preservation, and retain document chat associations in saved window/Team tabs. Keep all identity, data and idle guards; report a bounded recovery-check reason on timeout.

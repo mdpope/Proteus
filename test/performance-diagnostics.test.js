@@ -31,6 +31,27 @@ test('wire categories count transmitted bytes without retaining arbitrary event 
   assert.equal(value.windows[0].sentKinds.state.bytes,1000);
   assert.equal(JSON.stringify(value).includes('PRIVATE_CHAT_TITLE'),false);
 });
+test('reply wire measurements retain fixed method buckets and fold arbitrary labels',()=>{
+ const {diagnostics}=fixture();
+ diagnostics.transport({direction:'send',bytes:1200,kind:'reply:sync'});
+ diagnostics.transport({direction:'send',bytes:700,kind:'reply:tabs.get'});
+ for(let i=0;i<100;i++)diagnostics.transport({direction:'send',bytes:1,kind:'reply:PRIVATE_'+i});
+ const value=diagnostics.snapshot().remoteTransport;
+ assert.deepEqual(value.sentKinds,{reply:{packets:102,bytes:2000}});
+ assert.deepEqual(value.sentReplies,{sync:{packets:1,bytes:1200},'tabs.get':{packets:1,bytes:700},other:{packets:100,bytes:100}});
+ assert.deepEqual(value.windows[0].sentReplies,value.sentReplies);
+ assert.doesNotMatch(JSON.stringify(value),/PRIVATE/);
+});
+test('state projection measurements retain only byte counts and sample at bounded frequency',()=>{
+ const f=fixture(),state={context:{entries:['PRIVATE_SOURCE']},runs:[{title:'PRIVATE_TITLE'}],PRIVATE_FIELD:'PRIVATE_VALUE'};
+ f.diagnostics.stateShape(state);const first=f.diagnostics.snapshot().remoteStateShape;
+ assert.equal(first.plaintextBytes,Buffer.byteLength(JSON.stringify(state)));
+ assert.equal(first.fields.context,Buffer.byteLength(JSON.stringify(state.context)));
+ f.diagnostics.stateShape({context:{}});assert.deepEqual(f.diagnostics.snapshot().remoteStateShape,first);
+ f.advance(10000);f.diagnostics.stateShape({context:{}});assert.notDeepEqual(f.diagnostics.snapshot().remoteStateShape,first);
+ assert.doesNotMatch(JSON.stringify(first),/PRIVATE/);
+ assert.equal(Object.keys(first.fields).length,7);
+});
 
 test('completed slow sync phases correlate with lag; async waits remain explicitly separate', async () => {
   const f = fixture(); f.diagnostics.start();

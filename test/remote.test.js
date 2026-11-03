@@ -37,6 +37,16 @@ test('AES-GCM authenticates the payload and routing context', () => {
   assert.throws(() => unseal(secret(), box, 'connection:client:1'));
   const corrupt = Buffer.from(box, 'base64'); corrupt[14] ^= 1; assert.throws(() => unseal(key, corrupt.toString('base64'), 'connection:client:1'));
 });
+test('encrypted reply measurements identify fixed read methods at actual wire send',async t=>{
+ const {app,connect}=await fixture(t),client=await connect();
+ const snapshot=await client.request('sync');assert.ok(snapshot.state.context);
+ const tabs=await client.request('tabs.get',{scope:'main',id:'main'});assert.ok(Array.isArray(tabs.tabs));
+ await until(()=>app.performanceDiagnostics.snapshot().remoteTransport?.sentReplies?.['tabs.get']?.packets>0);
+ const traffic=app.performanceDiagnostics.snapshot().remoteTransport;
+ assert.ok(traffic.sentReplies.sync.bytes>Buffer.byteLength(JSON.stringify(snapshot)),'wire count includes encrypted encoding');
+ assert.equal(traffic.sentReplies['tabs.get'].packets,1);
+ assert.ok(traffic.sentKinds.reply.bytes>=traffic.sentReplies.sync.bytes+traffic.sentReplies['tabs.get'].bytes);
+});
 test('relay registration rejection remains actionable during retry and clears after a successful connection', async t => {
   const { app } = await fixture(t);
   const token = app.remote.config.relayToken;

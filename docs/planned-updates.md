@@ -1,3 +1,7 @@
+## Nov 2 R34 — large reply attribution
+
+R33 is installed and owner-health verified. Independent strict signature checks and the installed package/source hash match after verification outside the restricted shell. Both physical clients run native build10 and their current General list matches the owner. A 92-second live R33 sample measured 4.36 MB/s, dominated by replies and full state; no host close or congestion was recorded in that sample. This does not establish sustained acceptance. Bounded fixed read-method byte counters and ten-second snapshot-section measurements will identify the remaining large payload without recording content or changing polling/retry behavior. R25 usability remains held until full local acceptance; Mnemosyne remains deferred.
+
 ## Nov 2 R33 — recovery investigation and iPad follow-through
 
 The last Mac candidate and rollback both timed out during recovery verification; the previous owner is running, without a completed recovery-health receipt. A read-only comparison found two document descriptors lost their chat association between the pre-Quit inventory and the cold snapshot. Source now preserves that metadata and checkpoints before the preservation snapshot. Recovery diagnostics retain only fixed check reasons. Existing recovery guards and historical evidence remain; deployment and sustained connection acceptance are still open. The operator has now authorized the physical iPad follow-up using the existing signed build10. R25 usability and the wider Mnemosyne redesign remain held/deferred.

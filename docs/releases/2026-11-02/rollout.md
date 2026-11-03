@@ -1,3 +1,9 @@
+# R33 installed / R34 diagnostics pending
+
+The corrected R33 Mac update completed with verified owner health and its durable continuation delivered. Independent strict signature verification and fresh installed-package hashing match the accepted artifact and source. Desktop observation succeeded; Accessibility and Screen Recording are granted. Both physical clients run native build10; a fresh comparison finds the same 13 ordered General tab IDs and revision 3572 on phone, tablet and owner. No mobile reinstall is needed.
+
+Sustained transport acceptance is open. The recorded R33 interval averages 4.36 MB/s, primarily replies/state, with no host close/congestion during that sample. R34 diagnostic attribution is in validation before a targeted correction. Historical attention/unregistered recovery records remain preserved; broader deployment, R25 usability after full acceptance, final web/OS distribution, merge and closeout remain unfinished.
+
 # R33 current installation status
 
 The physical iPad follow-up is now authorized and complete on **0.2.41 / 2611.2.10**, reusing the accepted native artifact. All **199 protected files** matched before first launch; four saved destinations, selection and original signing/keychain groups remain. Two verified recoveries are retained. Oldest accepted recovery retirement removed 138,825,276 logical bytes, with observed free space +139,239,424 bytes. The incomplete earlier build8 copy was retired separately after proving it had no completed capture or install intent; failure receipts remain.

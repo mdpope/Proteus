@@ -1,3 +1,7 @@
+# R34 attribution in validation
+
+R33 completed local owner installation and health verification. Independent verification confirms the accepted installed package/source hashes and original strict Apple signing identity. The previous restricted-shell trust error was not reproduced with normal host verification. Native10 is installed on both physical clients, with current tab membership matching. Remaining wire traffic is still high: the recorded 92-second sample averages 4.36 MB/s, mostly replies/state. R34 adds fixed reply-type counters at actual transmission and bounded snapshot-section size estimates. It does not yet claim a bandwidth fix or sustained connection acceptance.
+
 # R33 recovery correction in validation
 
 The preceding Mac update returned to the previous runtime after candidate and rollback verification timeouts. The cold snapshot differs from the pre-Quit navigation receipt only in two document chat associations; adding their original binding reproduces the saved hashes. Source now saves those associations and completes renderer checkpoints before the preservation inventory. Timeout diagnostics retain fixed check reasons. No failure journal is rewritten and no validation predicate is relaxed. Focused updater and recovery tests pass. Full Node validation passes 1,472 tests with four skipped; static checks pass. Replacement package acceptance follows. Existing native build10 is reused without relabeling its frozen source.
