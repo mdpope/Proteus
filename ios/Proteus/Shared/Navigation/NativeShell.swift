@@ -1106,6 +1106,14 @@ struct NativeShell: View {
         shared.saveShellNavigation(.object(["tabs": tabs, "selected": .string(selectedTab ?? restoredSelection ?? ""), "area": .string(area.rawValue), "phoneWorkspaceHost": .string(phoneWorkspace?.hostID ?? ""), "phoneWorkspaceID": .string(phoneWorkspace?.workspaceID ?? ""), "phoneCurrentID": .string(phoneChrome.currentID)]))
     }
     private func restoreNavigation() {
+        #if DEBUG && targetEnvironment(simulator)
+        // A fresh restoration rehearsal must not inherit another test's selected
+        // chat. Its second, ordinary launch still exercises the saved navigation.
+        if Bundle.main.bundleIdentifier == "org.proteusapp.proteus.mobile-tests", ProcessInfo.processInfo.arguments.contains("--synthetic-clean-navigation") {
+            restoringTabs = false
+            return
+        }
+        #endif
         let saved = shared.loadShellNavigation()
         if let data = try? JSONEncoder().encode(saved["tabs"]), let tabs = try? JSONDecoder().decode([NativeContentTab].self, from: data) {
             opened = tabs.filter { tab in tab.kind == "browser" ? shared.tabs(in: "main").contains(where: { $0.id == tab.id }) : ["chat", "schedule", "workspace", "chat-setup", "document"].contains(tab.kind) && tab.hostID.map { destinations.remote(for: $0) != nil } == true }

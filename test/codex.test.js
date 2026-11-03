@@ -214,3 +214,10 @@ test('Codex verified child approvals use the parent policy and unverified thread
   f.rpc.notice('turn/completed',{turn:{status:'completed'}});await task;
  }finally{await f.provider.close();}
 });
+
+
+test('explicit schedule MCP servers survive excluded defaults without enabling unrelated native defaults',async()=>{
+ const f=fixture();f.run.schedule.mcpServers={scoped:{command:'/synthetic/not-executed'},blocked:{command:'never-start'}};f.provider.context.providerContext=()=>({instructionText:'selected only',customAgents:[],disabledLegacyMcp:['blocked','unselected'],disabledSkills:[],mcpServers:{}});
+ const approvals=[];f.args.ask=async request=>{approvals.push(request);return 'approve';};
+ try{const task=f.provider.run(f.args);await until(()=>f.rpc.turn===1);const config=f.rpc.calls.find(call=>call.method==='thread/start').params.config.mcp_servers;assert.equal(config.scoped.command,'/synthetic/not-executed');assert.equal(config.unselected.enabled,false);assert.equal(config.blocked,undefined);assert.deepEqual(approvals.filter(request=>request.details?.kind==='mcp').map(request=>request.details.serverName),['scoped']);f.rpc.notice('turn/completed',{turn:{status:'completed'}});await task;}finally{await f.provider.close();}
+});

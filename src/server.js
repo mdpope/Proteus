@@ -1,3 +1,4 @@
+import {ScheduleControl} from './services/scheduling/schedule-control.js';
 import {clearQuestionFromQueue} from './services/chats/user-questions.js';
 import {localInputOrigin} from './services/chats/input-origin.js';
 import {attachmentDates} from './services/chats/attachment-dates.js';
@@ -243,10 +244,12 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
     return { ok: true, runId: run.id };
   }
   async function buildChatSchedule(value,{attachmentOnly=false}={}){
+    let requestedMcpServers=value.mcpServers;
     const defaults=settings.get();
     const updateCoordinator=value.purpose==='update',buildCoordinator=value.purpose==='build';
     if(updateCoordinator&&value.chatType==='internet')throw Error('Update coordinators require an ordinary unassigned chat.');
     if(updateCoordinator){
+      requestedMcpServers={};
       const {updateCoordinatorConfiguration,updateCoordinatorPrompt}=await import('./services/updates/update-coordinator.js');
       value={...value,reasoningEffort:'',contextTier:'default',serviceTier:'',...await updateCoordinatorConfiguration(defaults,catalogs),workspaceId:null,projectId:null,includeDefaults:false,selectedIds:[],agentId:null,skillDirectories:[],mcpServers:{},workspace:defaults.workspace,prompt:updateCoordinatorPrompt(value.prompt||'Check and install the explicitly requested release after required validation.')};
     }
@@ -259,6 +262,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
     }
     if(value.workspaceId){ const profile = context.scope(value.workspaceId); value = {...profile.defaults,...value}; }
     if(value.chatType==='internet'){
+      requestedMcpServers={};
       const provider=value.provider,configured=defaults.internetSearches?.[provider];
       if(!configured?.model)throw new Error('Configure Internet Searches for this provider in Engine Room first.');
       const catalog=await catalogs[provider]?.get(),model=catalog?.models?.find(m=>m.id===configured.model);
@@ -269,7 +273,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
     const snapshot=context.capture({workspaceId:value.workspaceId,workspace:value.workspace||(!value.workspaceId?defaults.workspace:undefined),selectedIds:value.selectedIds,agentId:value.agentId,includeDefaults:value.includeDefaults});
     if(updateCoordinator)Object.assign(snapshot,{workspaceId:null,workspaceName:null,workspace:structuredClone(defaults.workspace),baseWorkspace:structuredClone(defaults.workspace),includeDefaults:false,selectedIds:[],agentId:null,entries:[]});
     const chatTitle=typeof value.name==='string'?value.name.trim():'';
-    const schedule=validateSchedule({schemaVersion:1,id:`chat-${Date.now()}-${randomBytes(4).toString('hex')}`,name:chatTitle||'Workspace chat',chatType:value.chatType==='internet'?'internet':'user',chatTitleManual:!!chatTitle,...(buildCoordinator?{purpose:'build'}:{}),...(updateCoordinator?{purpose:'update',updateAuthorization:{tool:'proteus_update',scopeVersion:2,hostId:remote.info().hostId,grantedAt:new Date().toISOString()}}:{}),enabled:false,cron:'0 9 * * 1-5',timezone:value.timezone||defaults.timezone,provider:value.provider||defaults.provider,model:value.model||defaults.model,reasoningMode:value.reasoningMode,reasoningEffort:value.reasoningEffort??((value.model||defaults.model)===defaults.model&&(value.provider||defaults.provider)===defaults.provider?defaults.reasoningEffort:undefined),contextTier:value.contextTier??((value.model||defaults.model)===defaults.model&&(value.provider||defaults.provider)===defaults.provider?defaults.contextTier:undefined),serviceTier:value.serviceTier??((value.model||defaults.model)===defaults.model&&(value.provider||defaults.provider)===defaults.provider?defaults.serviceTier:undefined),workspace:snapshot.workspace,context:snapshot,skillDirectories:value.skillDirectories||defaults.skillDirectories,mcpServers:value.mcpServers||defaults.mcpServers,editorContext:value.editorContext,misfire:'skip',prompt:attachmentOnly&&!value.prompt?.trim()?attachmentPrompt:value.prompt});
+    const schedule=validateSchedule({schemaVersion:1,id:`chat-${Date.now()}-${randomBytes(4).toString('hex')}`,name:chatTitle||'Workspace chat',chatType:value.chatType==='internet'?'internet':'user',chatTitleManual:!!chatTitle,...(buildCoordinator?{purpose:'build'}:{}),...(updateCoordinator?{purpose:'update',updateAuthorization:{tool:'proteus_update',scopeVersion:2,hostId:remote.info().hostId,grantedAt:new Date().toISOString()}}:{}),enabled:false,cron:'0 9 * * 1-5',timezone:value.timezone||defaults.timezone,provider:value.provider||defaults.provider,model:value.model||defaults.model,reasoningMode:value.reasoningMode,reasoningEffort:value.reasoningEffort??((value.model||defaults.model)===defaults.model&&(value.provider||defaults.provider)===defaults.provider?defaults.reasoningEffort:undefined),contextTier:value.contextTier??((value.model||defaults.model)===defaults.model&&(value.provider||defaults.provider)===defaults.provider?defaults.contextTier:undefined),serviceTier:value.serviceTier??((value.model||defaults.model)===defaults.model&&(value.provider||defaults.provider)===defaults.provider?defaults.serviceTier:undefined),workspace:snapshot.workspace,context:snapshot,skillDirectories:value.skillDirectories||defaults.skillDirectories,mcpServers:requestedMcpServers??(snapshot.includeDefaults===false?{}:value.mcpServers||defaults.mcpServers),editorContext:value.editorContext,misfire:'skip',prompt:attachmentOnly&&!value.prompt?.trim()?attachmentPrompt:value.prompt});
     if(attachmentOnly&&!value.prompt?.trim())schedule.prompt='';return schedule;
   }
   const token = randomBytes(32).toString('hex'); let origin; let remote; const schedulerErrors = []; const eventClients = new Set();
@@ -381,6 +385,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       }
       if(url.pathname==='/api/terminal-agent'&&req.method==='POST'){if(!service.terminalAgent)throw Error('Terminal agent access requires the host desktop.');return json(200,await service.terminalAgent(await body(req,128000),'operator'));}
       if(url.pathname==='/api/tabs/manage'&&req.method==='POST')return json(200,await service.tabManagement.handle(await body(req,64000)));
+      if(url.pathname==='/api/schedule-control'&&req.method==='POST')return json(200,await service.scheduleControl.handle(await body(req,64000),'operator'));
       if(url.pathname==='/api/chat-control'&&req.method==='POST')return json(200,await service.chatControl.handle(await body(req,64000),'operator'));
       if(url.pathname==='/api/chat-workspace'&&req.method==='POST'){
         const value=await body(req,16000);
@@ -784,7 +789,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   atomicJSON(path.join(home, 'connection.json'), { origin, token, pid: process.pid });
   const timer = timers ? setInterval(() => { void performanceDiagnostics.measure('scheduler.tick', () => engine.tick()).catch(error => engine.emit('scheduler-error', { error: error.message, at: new Date().toISOString() })); }, 1000) : null;
   const service = { readChatAttachment, desktopControl,workspaceProjects:preview, desktopPreview:desktopPreview?preview:null, performanceDiagnostics, notify, desktopAttention:()=>[...(service.browserAttention?.()||[]),...remote.documents.list().filter(item=>!item.approvedAt).map(item=>({id:'document:'+item.requestId,kind:'document',title:item.deviceName+' requests '+item.title,requestId:item.requestId,path:item.path,at:new Date(Date.parse(item.expiresAt)-600000).toISOString()})),...service.attention()], attention:()=>[...integrations.consumers().filter(item=>['needs-auth','failed'].includes(item.connection)).map(item=>({id:'integration:'+item.id,kind:'connection',title:(item.profile.label||item.server)+' needs attention',section:'integrations',at:item.checkedAt})),...activity.notifications().items.filter(item=>!item.readAt).map(item=>({id:'notification:'+item.id,notificationId:item.id,kind:'notification',title:item.title,body:item.body,chatId:item.chatId,silent:item.silent===true,...(item.browserIssue?{browserIssue:item.browserIssue,silent:item.silent===true}:{}),at:item.createdAt}))], browserProfiles, integrations, engine, settings, context, standup, omi, life, account, activity, workspaceFiles, attachments, buildChatSchedule, usage, catalog, catalogs, origin, token, home, url: `${origin}/?token=${token}`, async close() {
-    await stateProjection.close();await service.updates?.close();await service.chatControl?.close();await desktopControl?.close();
+    await stateProjection.close();await service.updates?.close();await service.scheduleControl?.close();await service.chatControl?.close();await desktopControl?.close();
     activity.log('info','app.stopping','Proteus is shutting down.');clearInterval(integrationTimer);await integrations.close(); if(activityTimer)clearInterval(activityTimer); if (timer) clearInterval(timer); if (catalogTimer) clearInterval(catalogTimer); await Promise.all(Object.values(catalogs).map(c => c.pending)); await providerAuth.close(); await service.sharedInference.close(); await remote.close(); let engineCloseError; try { await engine.close(); } catch (error) { engineCloseError=error; } await attachments.close(); await copilot.close(); await codex.close(); await claude.close(); await life.close?.(); await service.browserHistory?.close(); await service.sharedDrafts?.close(); let activityCloseError; try { await activity.close(); } catch (error) { activityCloseError=error; }
     for (const client of eventClients) client.end(); eventClients.clear();
     await new Promise(resolve => {
@@ -831,6 +836,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   sharedInference=service.sharedInference=new SharedInference(service);
   remote = service.remote = new RemoteHost(service); activity.attach(engine,()=>remote.info().hostId,()=>remote.info().label); activity.log('info','app.started','Proteus started.'); await remote.start();
   service.chatControl=new ChatControl(service);
+  service.scheduleControl=new ScheduleControl(service);
   for(const adapter of Object.values(adapters))adapter.chatControl=service.chatControl;
   const integrationTimer=timers?setInterval(()=>void integrations.tick(),300000):null;
   const activityTimer = timers ? setInterval(()=>void activity.flush(),60000) : null;

@@ -3116,3 +3116,15 @@ native owners and prepared-disabled alternatives rather than reassign lifecycle 
 identity, execution claim and contribution lineage are distinct and join through source maps;
 applied, not-applicable and delegated outcomes must not collapse into a generic completion state.
 This design direction grants no production UI build, watcher/owner migration or rollout authority.
+
+
+## November 2 — scheduler repair stays in a scoped owner boundary
+
+Separate scheduler grants from chat access and store exact schedule IDs/actions tied to the originating
+context. Remember only an exact schedule-scope approval; generic tool rules cannot widen it. Keep the
+persisted rule kind backward-compatible for rollback. Distinguish future definitions, captured sources
+and captured test retries. Persist test intent before run creation and include its receipt in the
+initial durable run, so ambiguous delivery can reconcile without creating another execution. Preserve
+paused triggers and forbid native replacement takeover. Check permission configuration separately,
+never resolve a pending approval, and keep bounded operational results distinct from external success.
+Local desktop/physical-device update authorization does not lift wider distribution or Mnemosyne holds.

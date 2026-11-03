@@ -1,3 +1,7 @@
+## Nov 2 — targeted update authorization and acceptance
+
+The latest operator instruction authorizes this local Mac and physical iPhone/iPad after R23 scheduler fixes. It supersedes the historical simulator-only hold for these targets. Wider distribution and broad Mnemosyne implementation remain held. Native source acceptance and the unresolved simulator rotation check are recorded in the [release implementation](releases/2026-11-02/implementation.md); signed artifact and device preservation receipts remain distinct from UI tests.
+
 ## Nov 2 — simulator review before rollout
 
 Use the existing shared phone/tablet with separate Proteus Preview identities and an isolated

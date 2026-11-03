@@ -10,11 +10,19 @@
   "rollout": "docs/releases/2026-11-02/rollout.md",
   "closeout": "docs/releases/2026-11-02/closeout.md",
   "mobileReviewHold": {
-    "active": true,
-    "reason": "Review both simulator apps before new physical builds/installations or desktop packaging/publication/rollout."
+    "active": false,
+    "reason": "Operator explicitly authorized this local desktop and physical iPhone/iPad update after targeted fixes including scheduler controls."
   },
   "priorRequestAudit": "docs/releases/2026-11-02/prior-release-audit.md",
   "previousAcceptedSourceCommit": "4456aea8837171ba60f82775859d9ce7f4ec0810",
   "sourceCommit": null,
-  "candidateSourceStatus": "R18 preview refreshed; R19 schedule tools pending; R20 queue review and R21 scoped next-turn send implemented/tested; rollout held"
+  "candidateSourceStatus": "R23 source/protocol acceptance passed; targeted signed builds and local/physical installation pending",
+  "widerDistributionHold": {
+    "active": true,
+    "reason": "Wider app distribution waits for Mnemosyne review and a later accepted build."
+  },
+  "mnemosyneImplementationHold": {
+    "active": true,
+    "reason": "Broader product/UI/source/watcher extraction deferred this turn."
+  }
 }

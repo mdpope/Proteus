@@ -1,3 +1,13 @@
+## R23 — scheduler fixes and local/physical update authorized
+
+The latest operator instruction supersedes the earlier hold only for this desktop and the physical
+iPhone/iPad after targeted fixes including owner scheduler control. Wider app distribution and broad
+Mnemosyne work remain deferred. `proteus_schedules` passes source/protocol acceptance, with
+revision-checked edits, exact owner scopes, durable serial-test start/status/retry/stop and explicit
+source refresh. Schedule-specific MCP selection no longer disappears with excluded defaults.
+Current runtime/installed versions below are historical until the new exact source/package and
+preservation receipts verify. Private source/build/device/update routing is in the operator record.
+
 ## Mnemosyne boundary clarification received — no implementation authorization
 
 Read the updated product-boundary proposal and UI concept. Desktop/web share one visual and action

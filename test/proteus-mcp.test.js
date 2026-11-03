@@ -1,5 +1,6 @@
 import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import {until} from './remote-client.mjs';
+import {revision} from '../src/services/scheduling/schedules.js';
 import {randomUUID} from 'node:crypto';
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import {spawn} from 'node:child_process';import {createInterface} from 'node:readline';import {startServer} from '../src/server.js';
 test('external stdio MCP lists/filter tabs and applies revision-checked operations through the authenticated owner service',async t=>{
@@ -15,5 +16,11 @@ test('external stdio MCP lists/filter tabs and applies revision-checked operatio
  const run=service.engine.createRun(await service.buildChatSchedule({provider:'copilot',model:'fixture',reasoningEffort:'low',prompt:'Synthetic captured model'}),'chat');await until(()=>run.status==='completed');
  const sent=(await request('tools/call',{name:'proteus_chats',arguments:{action:'send',hostId:service.remote.config.hostId,chatId:run.id,prompt:'Synthetic next turn',operationId:randomUUID(),modelScope:'next-turn',model:'fixture',reasoningEffort:'high'}})).result;
  assert.equal(sent.isError,undefined,JSON.stringify(sent));const receipt=JSON.parse(sent.content[0].text);assert.equal(receipt.state,'accepted');assert.equal(receipt.modelSelection.options.reasoningEffort,'high');await until(()=>run.status==='completed');assert.equal(run.schedule.reasoningEffort,'high');assert.equal(run.initialSchedule.reasoningEffort,'low');
+ const scheduleTool=catalog.find(tool=>tool.name==='proteus_schedules');assert.ok(scheduleTool);assert.ok(scheduleTool.inputSchema.properties.action.enum.includes('start-test'));
+ const definition={...run.schedule,id:'registered-scheduler-test',name:'Registered synthetic scheduler',prompt:'Synthetic scheduled acceptance',enabled:false};service.engine.schedules.save(definition);
+ const scheduler=async args=>{const result=(await request('tools/call',{name:'proteus_schedules',arguments:{hostId:service.remote.config.hostId,...args}})).result;assert.equal(result.isError,undefined,JSON.stringify(result));return JSON.parse(result.content[0].text);};
+ const inspected=await scheduler({action:'read',scheduleId:definition.id});assert.equal(inspected.revision,revision(definition));
+ const testStart=await scheduler({action:'start-test',scheduleId:definition.id,expectedRevision:inspected.revision,operationId:randomUUID(),settingsScope:'future-runs'});assert.ok(testStart.taskId);assert.ok(testStart.runId);await until(()=>service.engine.getRun(testStart.runId).status==='completed');
+ const outcome=await scheduler({action:'status',scheduleId:definition.id,runId:testStart.runId});assert.equal(outcome.operationId,testStart.operationId);assert.equal(outcome.externalOutcomeVerified,false);assert.equal(service.engine.schedules.get(definition.id).enabled,false);
  assert.ok(!JSON.stringify(list).includes(service.token));child.stdin.end();
 });

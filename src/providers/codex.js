@@ -156,7 +156,7 @@ export class CodexProvider {
   const native=await client.request('config/read',{includeLayers:true});const existing={};for(const layer of native.layers||[])Object.assign(existing,layer.config?.mcp_servers||{});
   Object.assign(existing,native.config?.mcp_servers||{});
   const plugins={};for(const layer of native.layers||[])Object.assign(plugins,layer.config?.plugins||{});Object.assign(plugins,native.config?.plugins||{});
-  const selected=managed?{...Object.fromEntries(Object.entries(snapshot.includeDefaults!==false?run.schedule.mcpServers||{}:{}).filter(([name])=>!managed.disabledLegacyMcp.includes(name))),...managed.mcpServers}:run.schedule.mcpServers||{};
+  const selected=managed?{...Object.fromEntries(Object.entries(run.schedule.mcpServers||{}).filter(([name])=>!managed.disabledLegacyMcp.includes(name))),...managed.mcpServers}:run.schedule.mcpServers||{};
   if(run.schedule.skillDirectories?.length && snapshot?.includeDefaults!==false)throw new Error('For Codex, select individual skills from the context list; legacy skill directories are not supported.');
   const mcp=Object.fromEntries(Object.keys(existing).map(name=>[name,{enabled:false}]));
   for(const [name,def] of Object.entries(selected)){

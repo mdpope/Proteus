@@ -1,3 +1,12 @@
+# R23 — targeted local/physical update now authorized
+
+The operator explicitly requests this local desktop plus physical iPhone/iPad after scheduler fixes.
+The prior simulator-only hold is lifted for these targets. Wider desktop/website distribution and
+broader Mnemosyne implementation remain held. Current source validation/build work is in progress;
+no new installation is claimed until owner updater/device preservation receipts verify. Use one
+new frozen Mac package and one signed iOS artifact, preserving each target's data and two recovery
+generations. Do not promote earlier accepted payloads as the current source.
+
 # R17 — source-only scrolling correction
 
 Required local suite (1,436 pass/four skip), static checks, web build and focused actual Electron

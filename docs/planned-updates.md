@@ -1,3 +1,35 @@
+## R23 — scoped owner scheduler controls and targeted local update
+
+The operator authorized finishing scheduler fixes and updating only this desktop and the physical
+iPhone/iPad. Wider distribution and the broader Mnemosyne UI/source/owner extraction remain held.
+Historical simulator-only holds below are superseded for these three targets only.
+
+`proteus_schedules` is registered through the same shared owner service for provider tools and the
+local stdio MCP adapter. It explicitly targets this owning computer, with separate context-bound
+grants for exact schedule IDs: read, update, test, stop, source refresh and permission configuration.
+Generic chat/filesystem grants do not authorize scheduler actions. Saved approval rules match an
+exact normalized schedule/action scope; broad tool rules cannot mint new scheduler scopes. Grants
+have a separate private store, and remembered rules use a backward-compatible custom-tool record.
+
+Inventory is bounded and revision-aware; updates/enable/disable require current schedule revisions
+and explicit future-runs scope. They preserve unknown definition fields and captured runs. Pausing
+remains available while a provider is offline. Repository-owned definitions retain their source
+workflow boundary. Editing future permission profiles requires its own scope and cannot introduce
+blanket automatic/shell/tool approvals. No action approves a pending provider tool request.
+
+Test start/retry has durable operation identity and run linkage written before provider execution,
+source/model/tool-configuration/permission preflight, overlap protection and explicit future-versus-
+captured settings. Uncertain starts reconcile an existing linked run; missing claims never replay
+automatically. Exact manual/test stop is independently idempotent, never a recurring-job cancel.
+Status exposes pending human approvals, bounded results and reported usage, distinguishing model
+completion from verified external effects. Native service replacements cannot be started/enabled
+through this tool; their existing owners and takeover gates remain untouched.
+
+Source refresh explicitly chooses future-runs or an idle existing run and checks both schedule and
+captured revisions. Earlier context/history/model choices are retained. Explicit scheduled Codex MCP
+servers now survive `includeDefaults:false`; unrelated chat/workspace defaults remain excluded and
+disabled sources remain disabled. Dedicated Internet Search and update coordinator isolation remain.
+
 ## R22 — shared Mnemosyne operations design and staged product boundary
 
 Record one desktop/web design with existing web schedule authority preserved. Mnemosyne core and

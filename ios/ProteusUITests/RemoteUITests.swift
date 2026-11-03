@@ -2792,7 +2792,7 @@ final class NativeReleaseParityUITests: XCTestCase {
     @MainActor func testPhoneRestoresProjectBrowserWithLargeHistoryAndBoundedOverview() throws {
         try XCTSkipIf(UIDevice.current.userInterfaceIdiom != .phone, "Phone restoration fixture")
         let app = nativeFixtureApplication()
-        app.launchArguments = ["--reset-pairing", "--synthetic-destinations", "--synthetic-long-chat", "--synthetic-workspace-tab-icons", "--synthetic-workspace-browser-selection", "--synthetic-project-restore", "--synthetic-large-browser"]
+        app.launchArguments = ["--reset-pairing", "--synthetic-clean-navigation", "--synthetic-destinations", "--synthetic-long-chat", "--synthetic-workspace-tab-icons", "--synthetic-workspace-browser-selection", "--synthetic-project-restore", "--synthetic-large-browser"]
         app.launch()
         let drawer = app.buttons["phone-app-navigation"]
         XCTAssertTrue(drawer.waitForExistence(timeout: 15)); drawer.tap()

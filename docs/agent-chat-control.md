@@ -182,3 +182,17 @@ mobile grant-management UI, installed-feature acceptance or deployment is claime
 At integration, the overlap remained limited to `CHANGELOG.md`, `docs/handoff.md` and
 `docs/planned-updates.md`; their newer entries were preserved. Private test receipts and the
 desktop screenshot are retained outside the repository.
+
+
+## Owner scheduler tool
+
+Use `proteus_schedules computers`, then request an exact schedule-ID/action scope before listing or
+reading through an internal agent. Read each definition's revision before update, enable, disable,
+preflight or test. Updates use `settingsScope: future-runs`; captured source refresh uses `existing-run`
+with an idle `runId` and `expectedRunRevision`. Retry selects `future-runs` or `captured-run` explicitly.
+Start, retry and stop use stable UUID operation IDs. `status` gives schedule-to-run linkage and bounded
+results; its `model-turn-completed` outcome is not proof that a workflow filed or changed anything.
+Pause/test do not enable recurring triggers, stop targets one exact manual/test run, and no scheduler
+action can approve provider tool requests. Permission configuration is separately scoped from ordinary
+schedule updates. Only the explicit local owning host is supported; use that host's registered tool
+rather than falling back across machines. Existing remote web scheduling authority is unchanged.

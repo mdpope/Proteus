@@ -244,17 +244,17 @@ export class Engine extends EventEmitter {
     this.runWriter.writeNow(run);this.emit('change',run);
     return {id:run.id,failureEventAt:run.failureEventAt,failureReviewedAt:run.failureReviewedAt,attentionRequired:false};
   }
-  createRun(schedule, trigger = 'manual', slot = null, {deferStart=false,attachmentOnly=false,inputOrigin=null,setupId=null} = {}) {
+  createRun(schedule, trigger = 'manual', slot = null, {deferStart=false,attachmentOnly=false,inputOrigin=null,setupId=null,prepared=false,scheduleTest=null} = {}) {
     if(trigger!=='scheduled')this.updateGuard?.();
     const submittedPrompt=schedule.prompt;
     if(attachmentOnly&&deferStart)schedule={...schedule,prompt:attachmentPrompt};
-    schedule = this.prepareSchedule ? this.prepareSchedule(schedule, trigger) : schedule;
+    schedule = !prepared&&this.prepareSchedule ? this.prepareSchedule(schedule, trigger) : schedule;
     validateSchedule(schedule);
     if (this.stopping) throw new Error('Runner is stopping.');
     if ([...this.runs.values()].some(run => run.schedule.id === schedule.id && active.has(run.status))) throw new Error('This schedule already has an active run.');
     for (const dir of [schedule.workspace.cwd, ...schedule.workspace.additionalDirectories]) if (!fs.statSync(dir).isDirectory()) throw new Error(`Workspace directory unavailable: ${dir}`);
     const run = {
-      id: randomUUID(), ...(setupId?{setupId}:{}), schedule: structuredClone(schedule), scheduleRevision: revision(schedule),
+      id: randomUUID(),...(scheduleTest?{scheduleTest:structuredClone(scheduleTest)}:{}), ...(setupId?{setupId}:{}), schedule: structuredClone(schedule), scheduleRevision: revision(schedule),
       title: trigger === 'chat' ? (schedule.chatTitleManual ? schedule.name.trim() : suggestedChatTitle(schedule.prompt)) : schedule.name,
       ...(trigger === 'chat' ? { titleKind: schedule.chatTitleManual ? 'manual' : 'generated', titleRevision: randomUUID() } : {}),
       chatType:trigger==='chat'&&schedule.chatType==='internet'?'internet':trigger==='chat'?'user':'scheduled',
