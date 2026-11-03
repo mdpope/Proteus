@@ -17,6 +17,7 @@ let nativeFixtureRelayOrigin = ""
 @MainActor final class SharedAppStore: ObservableObject {
     // App-session presentation survives drawer/view recreation; never sync it to an owner.
     @Published var sidebarWorkspaces = Set<String>()
+    @Published var sidebarProjects = Set<String>()
     @Published var sidebarOtherComputers = false
     @Published var expandedQuestionQueues = Set<String>()
     @Published var snapshot: JSON = .null
@@ -170,6 +171,24 @@ let nativeFixtureRelayOrigin = ""
     private var contentReadSessions: [String: Int] = [:]
     private var contentHosts: [String: String] = [:]
     private var contentSnapshots: [String: JSON] = [:]
+    // Temporary, bounded reconciliation evidence contains no URLs, titles, text or keys.
+    // This lets a guided device check distinguish a live owner read from a saved cache.
+    private var contentReadEvidence: [String: JSON] = [:]
+    private var contentEvidenceURL = FileManager.default.temporaryDirectory.appendingPathComponent("proteus-tab-sync-evidence.json")
+    private let contentEvidenceQueue = DispatchQueue(label: "Proteus.tab-sync-evidence", qos: .utility)
+    private func recordContentRead(_ snapshot: JSON, scope: String) {
+        let ids = snapshot["tabs"].array.map { $0["id"] }
+        let previous = contentReadEvidence[scope], now = Date().timeIntervalSince1970
+        if previous?["revision"] == snapshot["revision"], previous?["tabIds"] == .array(ids), now - Double(previous?["at"].int ?? 0) < 30 { return }
+        contentReadEvidence[scope] = .object(["revision": snapshot["revision"], "tabIds": .array(ids), "at": .number(now)])
+        let keep = contentReadEvidence.sorted { $0.value["at"].int > $1.value["at"].int }.prefix(16)
+        contentReadEvidence = Dictionary(uniqueKeysWithValues: keep.map { ($0.key, $0.value) })
+        let value = JSON.object(["schemaVersion": .number(1), "scopes": .object(contentReadEvidence)])
+        guard let data = try? JSONEncoder().encode(value), data.count <= 1_000_000 else { return }
+        let url = contentEvidenceURL
+        contentEvidenceQueue.async { try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true); try? data.write(to: url, options: .atomic) }
+    }
+
     private(set) var contentPending: [String: [JSON]] = [:]
     private var contentRequests: [String: JSON] = [:]
     private(set) var legacyContentReview: [String: JSON] = [:]
@@ -207,6 +226,7 @@ let nativeFixtureRelayOrigin = ""
     private let sharedCacheKey: () -> String?
     init(cacheWriter: NativeSharedCacheWriter = .shared, cacheRoot: URL? = nil, cacheKey: @escaping () -> String? = BrowserCacheKeychain.key) {
         self.cacheWriter = cacheWriter
+        if let cacheRoot { contentEvidenceURL = cacheRoot.appendingPathComponent("proteus-tab-sync-evidence.json") }
         chatPositionNamespace = cacheRoot?.path ?? ""
         sharedCacheRoot = cacheRoot ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Proteus")
         sharedCacheKey = cacheKey
@@ -315,13 +335,17 @@ let nativeFixtureRelayOrigin = ""
             Task { await flushContentTabs(scope) }
         }
     }
-    func applyContentTabs(_ response: JSON, scope: String) {
-        guard response["revision"].int >= (contentSnapshots[scope]?["revision"].int ?? -1) else { return }
+    func contentTabSnapshot(in scope: String) -> JSON { contentSnapshots[scope] ?? .null }
+    func applyContentTabs(_ response: JSON, scope: String, afterReadingRevision: Int? = nil) {
+        let cachedRevision = contentSnapshots[scope]?["revision"].int ?? -1
+        // A serialized owner read may replace an older cache incarnation, but
+        // never a newer snapshot applied while that read was in flight.
+        guard response["revision"].int >= cachedRevision || afterReadingRevision == cachedRevision else { return }
         if Self.isOrganizationalScope(scope), let config = contentSync[scope] {
             NativeWorkspaceNavigation.adoptOwnerChats(response["tabs"].array, navigationKey: config.kind + "-navigation:" + config.id, remote: config.remote)
         }
         if contentSnapshots[scope] == response && localContentTabs(scope) == response["tabs"].array { return }
-        guard response["revision"].int >= (contentSnapshots[scope]?["revision"].int ?? -1) else { return }
+        guard response["revision"].int >= cachedRevision || afterReadingRevision == cachedRevision else { return }
         applyingContent = true; defer { applyingContent = false }
         if Self.isOrganizationalScope(scope) { workspaceContentDescriptors[scope] = response["tabs"].array }
         var seen = Set<String>()
@@ -552,14 +576,19 @@ let nativeFixtureRelayOrigin = ""
         if contentPending[scope] != nil { await flushContentTabs(scope); return }
         guard !contentBusy.contains(scope) else { return }; contentBusy.insert(scope); defer { contentBusy.remove(scope) }
         do {
+            let readRevision = contentSnapshots[scope]?["revision"].int ?? -1
             var response = try await remote.request("tabs.get", ["scope": .string(kind), "id": .string(id)])
             guard remote.connection?.hostId == host, remote.connected, contentHosts[scope] == host else { return }
             if response["revision"].int == 0 && contentSnapshots[scope] == nil && !Self.isOrganizationalScope(scope) {
                 let retained = localContentTabs(scope)
                 if !retained.isEmpty { response = try await remote.request("tabs.mutate", ["scope": .string(kind), "id": .string(id), "expectedRevision": .number(0), "operations": .array(retained.map { .object(["action": .string("open"), "tab": $0]) })]) }
             }
+            guard case .array = response["tabs"], case .number(let revision) = response["revision"],
+                  revision.isFinite, revision >= 0, revision <= 9_007_199_254_740_991, revision.rounded(.down) == revision else {
+                throw RemoteError(message: "The host did not return a valid tab snapshot. Cached tabs are retained.")
+            }
             // A user edit made during the fetch wins locally and is sent with its original operation.
-            if contentPending[scope] == nil { let complete = try await completeNavigationLists(response, remote: remote, kind: kind, scopeID: id); guard remote.connection?.hostId == host, remote.connected, contentHosts[scope] == host else { return }; if contentPending[scope] == nil { applyContentTabs(complete, scope: scope); contentReadAt[scope] = Date() } else { contentSnapshots[scope] = complete } }
+            if contentPending[scope] == nil { let complete = try await completeNavigationLists(response, remote: remote, kind: kind, scopeID: id); guard remote.connection?.hostId == host, remote.connected, contentHosts[scope] == host else { return }; if contentPending[scope] == nil { applyContentTabs(complete, scope: scope, afterReadingRevision: readRevision); contentReadAt[scope] = Date(); if contentSnapshots[scope]?["revision"] == complete["revision"] { recordContentRead(complete, scope: scope) } } else { contentSnapshots[scope] = complete } }
         } catch { /* Offline clients retain bounded descriptors; reads grant no content access. */ }
     }
     func confirmSetupRegistration(_ tabID: String, scope: String, remote: RemoteStore, kind: String, id: String) async throws {
@@ -784,13 +813,16 @@ let nativeFixtureRelayOrigin = ""
     var lists: [JSON] { snapshot["teamLists"].array }
     func reset(for identity: String) {
         guard account != identity else { return }
-        sidebarWorkspaces = []; sidebarOtherComputers = false; expandedQuestionQueues = []
+        sidebarWorkspaces = []; sidebarProjects = []; sidebarOtherComputers = false; expandedQuestionQueues = []
         saveBrowsers()
         let cacheFailure = flushCachedState()
         mainBrowserSelectionRequest = nil
         // Host-scoped pending operations survive account changes, so their retry
         // identities must survive too. Clearing sync bindings pauses dispatch
         // until the new account reconnects to that owner with its own grants.
+        contentReadEvidence = [:]
+        let evidenceURL = contentEvidenceURL
+        contentEvidenceQueue.async { try? FileManager.default.removeItem(at: evidenceURL) }
         for download in Array(downloads.values) { download.cancel() }; exportFile?.cleanup(); exportFile = nil; linkChatDraft = nil; restoring = true; contentSync = [:]; contentBackoff = [:]; workspaceContentDescriptors = Dictionary(uniqueKeysWithValues: contentSnapshots.filter { Self.isOrganizationalScope($0.key) }.map { (scope, snapshot) in (scope, Self.projectContentOperations(contentPending[scope] ?? [], onto: snapshot["tabs"].array)) }); account = identity; snapshot = .null; accountConnected = false; error = cacheFailure; browserPreviews = [:]; browserFavicons = [:]; faviconAttempts = [:]; unloadBrowsers(); browserTabs = []; unloadedBrowsers = []; selectedBrowser = nil; selectedMainBrowser = nil; scopedSelection = [:]; browserTouched = [:]; standupOrders = [:]; standupCompleted = [:]; documentContents = [:]; documentSessions = [:]; previewVersions = [:]; profileStores = [:]; draftAttachments = [:]; chatScrollLocations = [:]; documentScrollOffsets = [:]; draftMessageIDs = [:]; draftSessionIDs = [:]
         if let cacheURL, let key = BrowserCacheKeychain.key(), let data = try? Data(contentsOf: cacheURL), let payload = try? RemoteCrypto.open(String(decoding: data, as: UTF8.self), key: key, aad: account), let decoded = try? JSONDecoder().decode([BrowserDescriptor].self, from: JSONEncoder().encode(payload["tabs"] == .null ? payload : payload["tabs"])) {
             browserTabs = decoded.compactMap(Self.retainedDescriptor); snapshot = payload["accountSnapshot"]; profilesVerified = snapshot["browserProfiles"] != .null

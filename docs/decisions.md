@@ -3142,3 +3142,19 @@ initial durable run, so ambiguous delivery can reconcile without creating anothe
 paused triggers and forbid native replacement takeover. Check permission configuration separately,
 never resolve a pending approval, and keep bounded operational results distinct from external success.
 Local desktop/physical-device update authorization does not lift wider distribution or Mnemosyne holds.
+
+
+## November 2 — recent history and canonical project tab membership
+
+Project recents remain historical navigation with counts and paging, including chats whose tab
+has closed. They are distinct from the duplicate sidebar open-tab navigation lists the operator
+removed. Restoring recents must preserve existing resource/session identities and avoid polling
+the sidebar every few seconds.
+
+A workspace tab manager defaults to its General project, with an explicit project choice and All
+projects view. Reconnection refreshes the visible scope through the shared canonical owner read.
+An obsolete cache incarnation may have a higher revision than the current owner: permit an
+authenticated serialized read to replace it only when the cached revision has not changed during
+the read. Unsolicited stale snapshots and concurrent newer updates retain their protections.
+Failed mutations refresh owner state without replaying uncertain actions. Do not delete another
+project's tabs to make differently scoped views appear equal.

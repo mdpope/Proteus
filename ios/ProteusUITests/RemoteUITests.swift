@@ -211,6 +211,40 @@ final class RemoteUITests: XCTestCase {
         let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Pairing success and retained computers in Connections"; shot.lifetime = .keepAlways; add(shot)
     }
 
+    @MainActor func testWorkspaceTabsUseExplicitProjectAndReconcileAfterReconnect() async throws {
+        func post(_ route: String, _ value: [String: Any]) async throws {
+            var request = URLRequest(url: URL(string: nativeFixtureHTTPOrigin + route)!); request.httpMethod = "POST"
+            request.httpBody = try JSONSerialization.data(withJSONObject: value); request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            _ = try await URLSession.shared.data(for: request)
+        }
+        let (data, _) = try await URLSession.shared.data(from: URL(string: nativeFixtureHTTPOrigin + "/pair?projects=1")!)
+        let fixture = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let project = try XCTUnwrap(fixture["projectId"] as? String), workspaceID = try XCTUnwrap(fixture["workspaceId"] as? String)
+        let app = nativeFixtureApplication(); app.launchArguments = ["--reset-pairing", "--synthetic-clean-navigation"]; app.launch()
+        submitPairing(app, code: try XCTUnwrap(fixture["code"] as? String))
+        XCTAssertTrue(app.staticTexts["pairing-success"].waitForExistence(timeout: 15))
+        if UIDevice.current.userInterfaceIdiom == .phone {
+            let navigation = app.buttons.matching(identifier: "phone-app-navigation").firstMatch
+            XCTAssertTrue(navigation.waitForExistence(timeout: 10)); navigation.tap()
+            XCTAssertTrue(app.scrollViews["phone-navigation-drawer"].waitForExistence(timeout: 10))
+        }
+        let workspace = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND identifier ENDSWITH %@", "workspace-tree-open-", workspaceID)).firstMatch
+        XCTAssertTrue(workspace.waitForExistence(timeout: 20)); workspace.tap()
+        let tabs = app.buttons["workspace-page-Tabs"]; XCTAssertTrue(tabs.waitForExistence(timeout: 10)); tabs.tap()
+        let filter = app.buttons["workspace-tabs-project-filter"]
+        XCTAssertTrue(filter.waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["workspace-managed-title-native-project-browser"].exists, "General must not aggregate Design review")
+        XCTAssertFalse(app.buttons["workspace-managed-title-native-direct-browser"].exists, "General must not import direct workspace tabs")
+        filter.tap(); app.buttons["Design review"].tap()
+        let old = app.buttons["workspace-managed-title-native-project-browser"]
+        XCTAssertTrue(old.waitForExistence(timeout: 15))
+        try await post("/tab-reconnect-fixture", ["action": "disconnect"])
+        XCTAssertTrue(app.staticTexts["Offline · cached tabs"].waitForExistence(timeout: 15))
+        try await post("/tab-sync-fixture", ["scope": "project", "id": project, "operations": [["action": "close", "id": "native-project-browser"], ["action": "open", "tab": ["id": "native-reconnected-browser", "type": "browser", "title": "Owner after reconnect", "url": nativeFixtureHTTPOrigin + "/browser/one"]]]])
+        try await post("/tab-reconnect-fixture", ["action": "connect"])
+        XCTAssertTrue(app.buttons["workspace-managed-title-native-reconnected-browser"].waitForExistence(timeout: 20))
+        XCTAssertFalse(old.exists, "An online owner refresh must remove the old cached tab without leaving this page")
+    }
     @MainActor func testNativeProjectsOwnerLifecycleAndScopedTabs() async throws {
         let (data, _) = try await URLSession.shared.data(from: URL(string: "\(nativeFixtureHTTPOrigin)/pair?projects=1")!)
         let fixture = try JSONSerialization.jsonObject(with: data) as! [String: Any]
@@ -3012,7 +3046,7 @@ final class NativeReleaseFollowupUITests: XCTestCase {
         let app = nativeFixtureApplication()
         app.launchArguments = ["--reset-pairing", "--native-design-preview", "--phone-preview-fixture", "--synthetic-browser-workspace", "--native-app-fixture"]
         app.launch()
-        let workspace = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "workspace-tree-open-")).firstMatch
+        let workspace = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@", "workspace-tree-open-", "Studio")).firstMatch
         func revealNavigation() {
             if !workspace.isHittable, let navigation = app.buttons.matching(identifier: "phone-app-navigation").allElementsBoundByIndex.first(where: { $0.isHittable }) { navigation.tap() }
         }
@@ -3024,11 +3058,17 @@ final class NativeReleaseFollowupUITests: XCTestCase {
         XCTAssertEqual(workspaceToggle.value as? String, "Collapsed")
         workspace.tap(); revealNavigation()
         XCTAssertEqual(workspaceToggle.value as? String, "Expanded")
-        let project = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "project-tree-open-")).firstMatch
+        let project = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@", "project-tree-open-", "Design review")).firstMatch
         XCTAssertTrue(project.waitForExistence(timeout: 10))
         project.tap(); revealNavigation()
-        XCTAssertFalse(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "project-tree-toggle-")).firstMatch.exists)
-        XCTAssertFalse(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "project-recent-")).firstMatch.exists)
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "project-tree-toggle-")).firstMatch.exists)
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "project-recent-")).firstMatch.waitForExistence(timeout: 10))
+        let key = String(project.identifier.dropFirst("project-tree-open-".count))
+        let count = app.staticTexts["project-tree-count-" + key]
+        XCTAssertTrue(count.exists)
+        XCTAssertGreaterThan(Int(count.label) ?? 0, 0)
+        let recent = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "project-recent-")).allElementsBoundByIndex.first { $0.isHittable }
+        XCTAssertNotNil(recent); recent?.tap(); revealNavigation()
         XCTAssertFalse(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "scope-tab-")).firstMatch.exists)
         XCTAssertEqual(workspaceToggle.value as? String, "Expanded", "Opening a project and recreating navigation preserves workspace expansion")
         let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Workspace and project name auto expansion"; shot.lifetime = .keepAlways; add(shot)

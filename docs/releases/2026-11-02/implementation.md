@@ -1,3 +1,25 @@
+## R27/R28 — project recents and canonical mobile tab lists
+
+Restore project recents, counts, expansion, paging and project-scoped activation while preserving the
+removal of duplicate open-tab navigation lists. Desktop source and native use historical chat summaries
+and visible resource descriptors; native never polls every five seconds for this sidebar.
+
+The native workspace Tabs page now defaults to General and exposes an explicit project choice, with
+All projects available separately. Its rendered snapshot follows the shared canonical scope, refreshes
+on reconnect and reacts to child-project changes. All owner reads and retries retain existing history,
+pending-intent and revision protections. A serialized current-owner read may replace an older cache
+incarnation only if the local revision has not changed since that read began. Malformed snapshots and
+unsolicited stale responses remain rejected. Offline host actions are disabled; failed actions trigger
+read-only refresh rather than blind mutation retries.
+
+The focused actual Electron recents checks, 175 native unit tests and additional bounded-read-evidence
+unit pass. Both phone and iPad live fixtures pass owner close/open during disconnect followed by
+same-screen reconciliation, project filtering and restored recents. Final iPad acceptance also
+rechecks both revision-race and read-evidence cases. A bounded temporary receipt records only
+canonical scope, revision, tab IDs and read time for independent device comparison; it contains
+no titles, URLs or message content. Combined deployment follows; wider distribution, updater
+usability and Mnemosyne holds remain.
+
 ## R26 — first incremental iPad correction
 
 Native question controls now share their message bubble instead of appearing as an adjacent sibling. The form has a visible answer label, a desktop-style bordered field and actions with a narrow-width fallback. The current iPad interaction test additionally checks that the answer field and action buttons are geometrically contained in the message card. The iPad simulator interaction/bounds test passes (choices, typing, Clear, retained draft and Return); static checks pass. Signing and incremental physical deployment follow this source freeze. The separate scroll correction and its remaining acceptance are documented in [native chat scrolling](native-chat-scrolling.md). The first signed question-card build is installed and running on iPad, with all 195 protected files hash-matched before launch, four saved destinations retained and two verified recovery generations. The combined native correction now passes final phone/tablet gesture, prepend, reopen, cold-launch and question-card acceptance. Both physical clients and both distinct Preview simulators run 0.2.41/2611.2.5; preservation timing and the remaining live-review limits are recorded in the linked report.

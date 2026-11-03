@@ -298,6 +298,41 @@ final class RemoteTests: XCTestCase {
         XCTAssertEqual(restored.documentScrollOffset(for: key), 820)
     }
 
+    @MainActor func testAuthenticatedTabReadRecordsOnlyBoundedSyncEvidence() async throws {
+        let (data, _) = try await URLSession.shared.data(from: URL(string: nativeFixtureHTTPOrigin + "/pair?projects=1")!)
+        let fixture = try JSONDecoder().decode(JSON.self, from: data)
+        let remote = RemoteStore(); remote.forget(); try remote.pair(fixture["code"].string)
+        defer { remote.forget() }
+        try await wait { remote.connected && remote.supportsProjects }
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let shared = SharedAppStore(cacheRoot: root, cacheKey: { nil })
+        let scope = "project:" + (remote.connection?.hostId ?? "") + ":" + fixture["projectId"].string
+        await shared.refreshContentTabs(scope: scope, remote: remote, kind: "project", id: fixture["projectId"].string)
+        let url = root.appendingPathComponent("proteus-tab-sync-evidence.json")
+        for _ in 0..<100 where !FileManager.default.fileExists(atPath: url.path) { try await Task.sleep(for: .milliseconds(10)) }
+        let evidence = try JSONDecoder().decode(JSON.self, from: Data(contentsOf: url))
+        let row = evidence["scopes"][scope]
+        XCTAssertEqual(row["tabIds"].array, shared.contentTabSnapshot(in: scope)["tabs"].array.map { $0["id"] })
+        XCTAssertTrue(row["tabIds"].array.contains(.string("native-project-browser")))
+        XCTAssertEqual(Set(row.object.keys), ["at", "tabIds", "revision"])
+        XCTAssertLessThanOrEqual(evidence["scopes"].object.count, 16)
+    }
+    @MainActor func testFreshOwnerReadReplacesOldCacheIncarnationWithoutOverwritingConcurrentState() {
+        let shared = SharedAppStore(cacheRoot: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString), cacheKey: { nil })
+        let scope = "project:synthetic:canonical"
+        func snapshot(_ revision: Int, _ ids: [String]) -> JSON {
+            .object(["revision": .number(Double(revision)), "tabs": .array(ids.map { .object(["id": .string($0), "type": .string("chat"), "chatId": .string($0), "title": .string($0)]) })])
+        }
+        shared.applyContentTabs(snapshot(100, ["kept", "obsolete"]), scope: scope)
+        shared.applyContentTabs(snapshot(12, ["kept"]), scope: scope)
+        XCTAssertEqual(shared.contentTabSnapshot(in: scope)["tabs"].array.count, 2, "Unsolicited stale snapshots stay rejected")
+        shared.applyContentTabs(snapshot(12, ["kept"]), scope: scope, afterReadingRevision: 100)
+        XCTAssertEqual(shared.contentTabSnapshot(in: scope)["tabs"].array.map { $0["id"].string }, ["kept"], "The desktop read removes obsolete membership without replaying it")
+        shared.applyContentTabs(snapshot(20, ["kept", "newer"]), scope: scope)
+        shared.applyContentTabs(snapshot(12, ["kept"]), scope: scope, afterReadingRevision: 12)
+        XCTAssertEqual(shared.contentTabSnapshot(in: scope)["revision"].int, 20, "A concurrently applied newer snapshot wins")
+    }
     @MainActor func testChatReadingPositionSurvivesNewStoreAndSeparatesAccounts() throws {
         let account = "synthetic-chat-reading-" + UUID().uuidString, other = UUID().uuidString, scope = "chat:synthetic"
         let defaultsKey = "proteus.chat-positions." + SHA256.hash(data: Data((":" + account).utf8)).map { String(format: "%02x", $0) }.joined()

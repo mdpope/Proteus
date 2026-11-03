@@ -157,13 +157,15 @@ struct NativeSourceLibraryView: View {
     private func mutate(_ values: [String: JSON]) { busy = true; failure = ""; Task { defer { busy = false }; do { var args = values; args["expectedRevision"] = store.state["workspaceProjects"]["revision"]; _ = try await store.updateSources(args); path = "" } catch { failure = error.localizedDescription } } }
 }
 
-// Sidebar navigation ends at projects. Open resource tabs belong to the project strip/overview.
+// Project recents are history shortcuts; open-tab navigation stays in the strip/overview.
 struct NativeWorkspaceTree: View {
     @EnvironmentObject var destinations: DestinationStore
     @EnvironmentObject var shared: SharedAppStore
     var activeWorkspace: String?
     var onOpen: (NativeWorkspaceIdentity) -> Void
     var onBrowse: (() -> Void)? = nil
+    @State private var limits: [String: Int] = [:]
+    @State private var resourceRows: [String: [JSON]] = [:]
     private var workspaces: [NativeWorkspaceIdentity] { NativeWorkspaceIdentity.all(destinations) }
     var body: some View {
         VStack(spacing: 8) {
@@ -171,7 +173,7 @@ struct NativeWorkspaceTree: View {
                 if let onBrowse { Button(action: onBrowse) { Label("Workspaces", systemImage: "square.grid.2x2").frame(minHeight: 44) } }
                 else { Text("Workspaces").font(.caption).foregroundStyle(.secondary) }
                 Spacer()
-                Button { shared.sidebarWorkspaces.removeAll(); shared.sidebarOtherComputers = false } label: { NativeSidebarIcon(kind: "collapse").frame(width: 44, height: 44) }.accessibilityLabel("Collapse all workspaces")
+                Button { shared.sidebarWorkspaces.removeAll(); shared.sidebarProjects.removeAll(); limits.removeAll(); shared.sidebarOtherComputers = false } label: { NativeSidebarIcon(kind: "collapse").frame(width: 44, height: 44) }.accessibilityLabel("Collapse all workspaces")
             }.padding(.horizontal, 8)
             Divider()
             ForEach(workspaces.filter { $0.hostID == destinations.selectedID }) { workspace in workspaceRow(workspace) }
@@ -206,16 +208,106 @@ struct NativeWorkspaceTree: View {
                 }.padding(.leading, 8)
                 if shared.sidebarWorkspaces.contains(workspace.id) {
                     ForEach(remote.projectCatalog.projects(in: workspace.workspaceID), id: \.self) { project in
-                        let selected = activeWorkspace == workspace.id && remote.draft("workspace-selected-project:" + workspace.workspaceID).string == project["id"].string
-                        Button {
-                            remote.setDraft("workspace-selected-project:" + workspace.workspaceID, project["id"])
-                            onOpen(workspace)
-                        } label: {
-                            Label(project["name"].string, systemImage: "folder").font(.system(size: 14)).lineLimit(2).frame(maxWidth: .infinity, minHeight: 40, alignment: .leading).padding(.leading, 18).background(selected ? NativeSidebarStyle.selected : .clear, in: RoundedRectangle(cornerRadius: 8))
-                        }.accessibilityIdentifier("project-tree-open-" + workspace.hostID + ":" + project["id"].string).accessibilityValue(selected ? "Active" : "Inactive")
+                        projectGroup(project, workspace: workspace, remote: remote)
                     }
                 }
             }.background(activeWorkspace == workspace.id ? NativeSidebarStyle.group : NativeTheme.rail, in: RoundedRectangle(cornerRadius: 13))
+            .task(id: String(shared.sidebarWorkspaces.contains(workspace.id)) + remote.connected.description + remote.projectCatalog.revision.string) {
+                guard shared.sidebarWorkspaces.contains(workspace.id), remote.connected, remote.supportsProjects else { return }
+                if remote.allRuns.isEmpty { await remote.loadAllRuns() }
+                while remote.allRuns.count < remote.allRunCount && !Task.isCancelled {
+                    let before = remote.allRuns.count; await remote.loadAllRuns()
+                    if remote.allRuns.count == before { break }
+                }
+                for project in remote.projectCatalog.projects(in: workspace.workspaceID) {
+                    guard !Task.isCancelled else { return }
+                    let scope = "project:" + workspace.hostID + ":" + project["id"].string
+                    await shared.refreshContentTabs(scope: scope, remote: remote, kind: "project", id: project["id"].string)
+                    let snapshot = shared.contentTabSnapshot(in: scope)
+                    if snapshot != .null { resourceRows[scope] = snapshot["tabs"].array }
+                }
+            }
         }
     }
+    private func projectGroup(_ project: JSON, workspace: NativeWorkspaceIdentity, remote: RemoteStore) -> some View {
+        let key = workspace.hostID + ":" + project["id"].string
+        let scope = "project:" + key
+        let items = recents(project, workspace: workspace, remote: remote)
+        let selected = activeWorkspace == workspace.id && remote.draft("workspace-selected-project:" + workspace.workspaceID).string == project["id"].string
+        return VStack(spacing: 2) {
+            HStack(spacing: 6) {
+                Button { open(project, workspace: workspace, remote: remote) } label: { HStack(spacing: 7) { NativeSidebarIcon(kind: "folder").foregroundStyle(selected ? NativeTheme.accent : NativeSidebarStyle.muted); Text(project["name"].string).font(.system(size: 14)).lineLimit(2); Spacer(minLength: 0); Text(countLabel(items, scope: scope, remote: remote)).accessibilityIdentifier("project-tree-count-" + key).font(.caption2).foregroundStyle(selected ? NativeSidebarStyle.selectedInk : NativeSidebarStyle.muted) }.frame(minHeight: 40).contentShape(Rectangle()) }.accessibilityIdentifier("project-tree-open-" + key)
+                Button { if !shared.sidebarProjects.insert(key).inserted { shared.sidebarProjects.remove(key); limits[key] = nil } } label: { Image(systemName: shared.sidebarProjects.contains(key) ? "chevron.down" : "chevron.right").font(.caption).frame(width: 32, height: 40) }.accessibilityLabel((shared.sidebarProjects.contains(key) ? "Collapse " : "Expand ") + project["name"].string).accessibilityIdentifier("project-tree-toggle-" + key).accessibilityValue(shared.sidebarProjects.contains(key) ? "Expanded" : "Collapsed")
+            }.padding(.leading, NativeDesignPreview.enabled ? 9 : 10).foregroundStyle(selected ? NativeSidebarStyle.strong : NativeSidebarStyle.ink)
+            if shared.sidebarProjects.contains(key) {
+                ForEach(Array(items.prefix(limits[key] ?? 7)), id: \.self) { item in
+                    let picked = selected && remote.draft("project-navigation:" + project["id"].string)["selected"].string == item["navigationID"].string
+                    Button { open(project, workspace: workspace, remote: remote, item: item) } label: {
+                        HStack(alignment: .top, spacing: 7) { resourceIcon(item, selected: picked).frame(width: 16); Text(item["title"].string).lineLimit(2).frame(maxWidth: .infinity, alignment: .leading); TimelineView(.periodic(from: .now, by: 60)) { timeline in Text(age(item, now: timeline.date)).foregroundStyle(picked ? NativeSidebarStyle.selectedInk : NativeSidebarStyle.muted).font(.system(size: 10)).fixedSize() } }.font(.caption).padding(.leading, NativeDesignPreview.enabled ? 18 : 10).padding(.trailing, 10).padding(.vertical, 8).foregroundStyle(picked ? NativeSidebarStyle.selectedInk : NativeSidebarStyle.ink).background(picked ? NativeSidebarStyle.selected : .clear, in: RoundedRectangle(cornerRadius: 7)).overlay(alignment: .leading) { if picked { Capsule().fill(NativeTheme.accent).frame(width: 3).padding(.vertical, 5) } }
+                    }.accessibilityIdentifier("project-recent-" + item["id"].string).accessibilityValue(picked ? "Active" : "Inactive").accessibilityAddTraits(picked ? .isSelected : [])
+                }
+                if items.isEmpty { Text(remote.connected ? "No recent items" : "Offline · no cached items").font(.caption).foregroundStyle(.secondary).padding(8) }
+                if items.count > (limits[key] ?? 7) { Button("More") { limits[key] = (limits[key] ?? 7) + 4 }.font(.caption).padding(8) }
+            }
+        }.background(selected && shared.sidebarProjects.contains(key) ? NativeSidebarStyle.button : .clear, in: RoundedRectangle(cornerRadius: 10))
+            .overlay { RoundedRectangle(cornerRadius: 10).strokeBorder(selected && shared.sidebarProjects.contains(key) ? NativeSidebarStyle.border : .clear, lineWidth: 1) }.padding(.horizontal, 5)
+
+    }
+    private func recents(_ project: JSON, workspace: NativeWorkspaceIdentity, remote: RemoteStore) -> [JSON] {
+        let scope = "project:" + workspace.hostID + ":" + project["id"].string
+        let rows = shared.workspaceContentDescriptors[scope] ?? resourceRows[scope] ?? []
+        var items = rows.filter { !$0["hidden"].bool }.map { tab in
+            var row = tab.object
+            if tab["type"].string == "chat" {
+                let run = NativeWorkspaceNavigation.run(tab["chatId"].string, remote: remote)
+                if tab["title"].string.isEmpty { row["title"] = run["title"] }
+                row["lastActivityAt"] = run["lastActivityAt"]; row["chatType"] = run["chatType"]; row["navigationID"] = .string("chat:" + tab["chatId"].string)
+            } else {
+                row["navigationID"] = .string(tab["type"].string == "browser" ? (shared.tabs(in: scope).first { ($0.contentTabId ?? $0.id) == tab["id"].string }?.id ?? "remote:" + tab["id"].string) : "remote:" + tab["id"].string)
+            }
+            return JSON.object(row)
+        }
+        var chats = Set(items.filter { $0["type"].string == "chat" }.map { $0["chatId"].string })
+        for run in remote.allRuns + remote.state["runs"].array {
+            let member = remote.projectCatalog.membership(for: run)
+            guard !run["archived"].bool, run["archivedAt"].string.isEmpty,
+                  member["workspaceId"].string == workspace.workspaceID, member["projectId"].string == project["id"].string,
+                  !run["id"].string.isEmpty, chats.insert(run["id"].string).inserted else { continue }
+            var row = run.object
+            row["type"] = .string("chat"); row["chatId"] = run["id"]
+            row["navigationID"] = .string("chat:" + run["id"].string)
+            items.append(.object(row))
+        }
+        return NativeProjectActivity.newestFirst(items)
+    }
+    private func countLabel(_ items: [JSON], scope: String, remote: RemoteStore) -> String {
+        String(items.count)
+    }
+    @ViewBuilder private func resourceIcon(_ item: JSON, selected: Bool) -> some View {
+        if item["type"].string == "browser", item["favicon"].string.hasPrefix("data:image/png;base64,"), item["favicon"].string.count < 200_000,
+           let encoded = item["favicon"].string.split(separator: ",", maxSplits: 1).last, let bytes = Data(base64Encoded: String(encoded)), let image = UIImage(data: bytes) {
+            Image(uiImage: image).resizable().scaledToFit().frame(width: 16, height: 16)
+        } else if NativeDesignPreview.enabled && item["type"].string == "browser" { Text("◎").font(.system(size: 16)).foregroundStyle(selected ? NativeTheme.accent : NativeSidebarStyle.muted) }
+        else if NativeDesignPreview.enabled && item["type"].string == "chat" && item["chatType"].string != "internet" { NativeSidebarIcon(kind: "chat").frame(width: 16, height: 16).foregroundStyle(selected ? NativeTheme.accent : NativeSidebarStyle.muted) }
+        else { Image(systemName: NativeTabSymbol.name(kind: item["type"].string, chatType: item["chatType"].string, mediaType: item["mediaType"].string)).foregroundStyle(selected ? NativeTheme.accent : NativeSidebarStyle.muted) }
+    }
+    private func age(_ item: JSON, now: Date) -> String { guard let date = NativeProjectActivity.date(item) else { return "" }; let minutes = max(0, Int(now.timeIntervalSince(date) / 60)); return minutes == 0 ? "<1m" : minutes < 60 ? "\(minutes)m" : minutes < 1440 ? "\(minutes / 60)h" : "\(minutes / 1440)d" }
+    private func open(_ project: JSON, workspace: NativeWorkspaceIdentity, remote: RemoteStore, item: JSON = .null) {
+        shared.sidebarWorkspaces.insert(workspace.id); shared.sidebarProjects.insert(workspace.hostID + ":" + project["id"].string)
+        remote.setDraft("workspace-selected-project:" + workspace.workspaceID, project["id"])
+        if item["type"].string == "chat" { NativeWorkspaceNavigation.openChat(item["chatId"].string, workspaceID: workspace.workspaceID, projectID: project["id"].string, remote: remote, shared: shared) }
+        else if item != .null {
+            Task {
+                let scope = "project:" + workspace.hostID + ":" + project["id"].string
+                if item["type"].string == "browser", remote.connected { await shared.refreshContentTabs(scope: scope, remote: remote, kind: "project", id: project["id"].string) }
+                let key = "project-navigation:" + project["id"].string
+                var navigation = remote.draft(key).object
+                navigation["selected"] = item["type"].string == "browser" ? .string(shared.tabs(in: scope).first { ($0.contentTabId ?? $0.id) == item["id"].string }?.id ?? item["navigationID"].string) : item["navigationID"]
+                remote.setDraft(key, .object(navigation)); onOpen(workspace)
+            }
+            return
+        }
+        onOpen(workspace)
+    }
+
 }

@@ -1,5 +1,9 @@
 ## Nov 2 — 0.2.41 candidate
 
+- Scope native tab management to the selected project and reconcile owner snapshots after reconnect, including earlier cache incarnations; retain other projects and unconfirmed mutation identities.
+
+- Restore expandable project recents, paging and right-side totals while leaving additional open-tab navigation lists removed.
+
 - Nov 2 R26: keep native question answer fields and controls inside their message card, with a visible label and bounded action layout. Correct native reading restoration across rendered history windows, defer commands/prepends during momentum, coalesce viewport reporting and retain bounded reading bookmarks across launches. Phone/tablet simulator acceptance passes and the local physical clients are updated for review.
 
 - Expose scoped, revision-checked owner scheduler controls with durable serial test receipts, status, exact stop/retry and explicit captured/future source refresh; retain paused/native ownership and constrained permissions.

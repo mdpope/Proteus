@@ -54,15 +54,24 @@ struct NativeWorkspaceTabsView: View {
     var projectID: String? = nil
     var onOpen: (JSON) -> Void = { _ in }
     @State private var snapshot: JSON = .null
+    @State private var snapshotScope = ""
     @State private var busy = false
+    @State private var loading = false
+    @State private var loadID: UUID?
+    @State private var projectFilter: String?
     @State private var moveTab: JSON = .null
     @State private var moving = false
     @State private var destination = "main:main"
     @State private var catalog: JSON = .null
-    private var scopeKind: String { projectID == nil ? "workspace" : "project" }
-    private var scopeID: String { projectID ?? workspaceID }
+    private var resolvedProjectID: String? {
+        if let projectID { return projectID }
+        if projectFilter == "*" { return nil }
+        return projectFilter ?? store.projectCatalog.defaultProject(in: workspaceID)?["id"].string
+    }
+    private var scopeKind: String { resolvedProjectID == nil ? "workspace" : "project" }
+    private var scopeID: String { resolvedProjectID ?? workspaceID }
     private var scope: String { "\(scopeKind):\(store.connection?.hostId ?? ""):\(scopeID)" }
-    private var rows: [JSON] { snapshot["tabs"].array }
+    private var rows: [JSON] { snapshotScope == scope ? snapshot["tabs"].array : [] }
     private var filterKey: String { "tab-filter:" + scope }
     private var query: String { store.draft(filterKey)["query"].string }
     private var type: String { store.draft(filterKey)["type"].string }
@@ -75,6 +84,12 @@ struct NativeWorkspaceTabsView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 6) {
                 Text("Open tabs").font(.title2.bold()); if !store.connected { Text("Offline · cached tabs").font(.caption).foregroundStyle(.orange) }; Text("Hidden tabs remain open.").font(.caption).foregroundStyle(.secondary)
+                if projectID == nil && store.supportsProjects {
+                    Picker("Project", selection: Binding(get: { projectFilter ?? resolvedProjectID ?? "*" }, set: { projectFilter = $0 })) {
+                        ForEach(store.projectCatalog.projects(in: workspaceID), id: \.self) { project in Text(project["name"].string).tag(project["id"].string) }
+                        Text("All projects").tag("*")
+                    }.accessibilityIdentifier("workspace-tabs-project-filter")
+                }
                 HStack {
                     Picker("Type", selection: Binding(get: { type }, set: { setFilter("type", $0) })) { Text("All types").tag(""); Text("Browser").tag("browser"); Text("Chats").tag("chat"); Text("Documents").tag("document"); Text("Terminal").tag("terminal") }
                     TextField("Filter tabs", text: Binding(get: { query }, set: { setFilter("query", $0) })).textInputAutocapitalization(.never).autocorrectionDisabled().accessibilityIdentifier("workspace-tabs-filter")
@@ -97,10 +112,10 @@ struct NativeWorkspaceTabsView: View {
                         .background(NativeTheme.surface.opacity(tab["hidden"].bool ? 0.5 : 1), in: RoundedRectangle(cornerRadius: 10))
                 }
             }.padding()
-        }.disabled(busy).task { await load() }
+        }.disabled(busy).refreshable { await load() }.task(id: scope + ":" + store.connected.description + ":" + store.projectCatalog.revision.string) { await load() }
         // Tab actions report owner refusals here instead of silently doing nothing.
         .alert("Tab action", isPresented: Binding(get: { store.error != nil && !moving }, set: { if !$0 { store.error = nil } })) { Button("OK") { store.error = nil } } message: { Text(store.error ?? "") }
-        .onChange(of: shared.workspaceContentDescriptors[scope]) { _, _ in Task { await load() } }
+        .onChange(of: shared.workspaceContentDescriptors) { _, _ in if !loading { loadCachedTabs() } }
         .sheet(isPresented: $moving) {
             NavigationStack { Form {
                 NativeMoveDestinationPicker(groups: NativeMoveLocations.groups(context: catalog, projects: store.projectCatalog.raw, chats: store.state["runs"].array, containersOnly: moveTab["type"].string == "chat"), selection: $destination)
@@ -139,7 +154,7 @@ struct NativeWorkspaceTabsView: View {
             // Close uses the same owner tab-list mutation as the tab strip, which this
             // device may already perform; cross-scope Move/Persist need resource access.
             Button(role: .destructive) { mutate([.object(["action": .string("close"), "id": tab["id"]])], tab: tab) } label: { Image(systemName: "xmark").frame(width: 30, height: 32) }.accessibilityLabel("Close " + label(tab)).accessibilityIdentifier("workspace-managed-close-" + tab["id"].string)
-        }.buttonStyle(.plain).foregroundStyle(NativeTheme.accent).font(.system(size: 15, weight: .medium))
+        }.buttonStyle(.plain).foregroundStyle(NativeTheme.accent).font(.system(size: 15, weight: .medium)).disabled(!store.connected)
     }
     private func toggleHidden(_ tab: JSON) { mutate([.object(["action": .string("visibility"), "id": tab["id"], "hidden": .bool(!tab["hidden"].bool)])], tab: tab) }
     private func beginMove(_ tab: JSON) {
@@ -148,38 +163,47 @@ struct NativeWorkspaceTabsView: View {
     }
     private func date(_ value: String) -> String { ProviderAllowance.date(value)?.formatted(date: .abbreviated, time: .shortened) ?? "—" }
     private func load() async {
-        if !store.connected { loadCachedTabs(); return }
-        do {
-            var result = try await store.request("tabs.get", ["scope": .string(scopeKind), "id": .string(scopeID)])
-            var rows = result["tabs"].array.map { tab -> JSON in var row = tab.object; row["ownerScope"] = .string(scopeKind); row["ownerID"] = .string(scopeID); row["ownerRevision"] = result["revision"]; return .object(row) }
-            if projectID == nil && store.supportsProjects {
+        let transaction = UUID(); loadID = transaction; loading = true
+        defer { if loadID == transaction { loading = false; loadID = nil } }
+        if store.connected {
+            await shared.refreshContentTabs(scope: scope, remote: store, kind: scopeKind, id: scopeID)
+            if resolvedProjectID == nil && store.supportsProjects {
                 for project in store.projectCatalog.projects(in: workspaceID) {
-                    let child = try await store.request("tabs.get", ["scope": .string("project"), "id": project["id"]])
+                    guard !Task.isCancelled, loadID == transaction else { return }
                     await shared.refreshContentTabs(scope: "project:" + (store.connection?.hostId ?? "") + ":" + project["id"].string, remote: store, kind: "project", id: project["id"].string)
-                    rows += child["tabs"].array.map { tab -> JSON in var row = tab.object; row["ownerScope"] = .string("project"); row["ownerID"] = project["id"]; row["ownerRevision"] = child["revision"]; row["projectName"] = project["name"]; return .object(row) }
                 }
             }
-            var fields = result.object; fields["tabs"] = .array(rows); result = .object(fields); snapshot = result
-        } catch { loadCachedTabs(); if store.connected { store.error = error.localizedDescription } }
+        }
+        guard !Task.isCancelled, loadID == transaction else { return }
+        loadCachedTabs()
     }
     private func loadCachedTabs() {
-        let cached = shared.workspaceContentDescriptors[scope] ?? []
-        let browserRows: [JSON] = shared.tabs(in: scope).filter { browser in !cached.contains { $0["id"].string == (browser.contentTabId ?? browser.id) } }.map { .object(["id": .string($0.contentTabId ?? $0.id), "type": .string("browser"), "title": .string($0.title), "url": .string($0.url ?? ""), "openedAt": $0.openedAt.map(JSON.string) ?? .null, "lastTouchedAt": $0.lastTouchedAt.map(JSON.string) ?? .null]) }
-        var rows = cached + browserRows
-        if projectID == nil {
-            for project in store.projectCatalog.projects(in: workspaceID) {
-                let childScope = "project:" + (store.connection?.hostId ?? "") + ":" + project["id"].string
-                rows += (shared.workspaceContentDescriptors[childScope] ?? []).map { tab in var fields = tab.object; fields["ownerScope"] = .string("project"); fields["ownerID"] = project["id"]; fields["projectName"] = project["name"]; return .object(fields) }
+        func rows(_ key: String, kind: String, id: String, name: String = "") -> [JSON] {
+            let owner = shared.contentTabSnapshot(in: key)
+            let cached = owner == .null ? (shared.workspaceContentDescriptors[key] ?? []) : owner["tabs"].array
+            return cached.map { tab in
+                var row = tab.object; row["ownerScope"] = .string(kind); row["ownerID"] = .string(id)
+                row["ownerRevision"] = owner["revision"]; if !name.isEmpty { row["projectName"] = .string(name) }
+                return .object(row)
             }
         }
-        snapshot = .object(["tabs": .array(rows)])
+        var result = rows(scope, kind: scopeKind, id: scopeID)
+        if resolvedProjectID == nil {
+            for project in store.projectCatalog.projects(in: workspaceID) {
+                let key = "project:" + (store.connection?.hostId ?? "") + ":" + project["id"].string
+                result += rows(key, kind: "project", id: project["id"].string, name: project["name"].string)
+            }
+        }
+        var seen = Set<String>()
+        snapshotScope = scope
+        snapshot = .object(["revision": shared.contentTabSnapshot(in: scope)["revision"], "tabs": .array(result.filter { seen.insert($0["ownerScope"].string + ":" + $0["ownerID"].string + ":" + $0["id"].string).inserted })])
     }
     private func mutate(_ operations: [JSON], tab: JSON = .null) { busy = true; Task { defer { busy = false }; do {
         let kind = tab["ownerScope"].string.isEmpty ? scopeKind : tab["ownerScope"].string
         let id = tab["ownerID"].string.isEmpty ? scopeID : tab["ownerID"].string
         _ = try await store.request("tabs.mutate", ["scope": .string(kind), "id": .string(id), "expectedRevision": tab == .null ? snapshot["revision"] : tab["ownerRevision"], "operations": .array(operations)])
         await shared.refreshContentTabs(scope: "\(kind):\(store.connection?.hostId ?? ""):\(id)", remote: store, kind: kind, id: id); await load()
-    } catch { store.error = error.localizedDescription } } }
+    } catch { let failure = error.localizedDescription; await load(); store.error = failure } } }
     private func open(_ tab: JSON) { Task { do {
         if tab["hidden"].bool {
             _ = try await store.request("tabs.mutate", ["scope": tab["ownerScope"] == .null ? .string(scopeKind) : tab["ownerScope"], "id": tab["ownerID"] == .null ? .string(scopeID) : tab["ownerID"], "expectedRevision": tab["ownerRevision"] == .null ? snapshot["revision"] : tab["ownerRevision"], "operations": .array([.object(["action": .string("visibility"), "id": tab["id"], "hidden": .bool(false)])])])

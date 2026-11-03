@@ -1,3 +1,27 @@
+## R28 — canonical tab scope and reconnect reconciliation
+
+The native workspace tab manager previously merged all projects without an explicit location and
+held a view-local snapshot across scope changes/reconnects. Default to the canonical General project,
+with an explicit project picker and All projects option; do not delete legitimate items in other
+projects. Read through the shared owner boundary, observe child project snapshots, refresh on
+connection/catalog/scope changes and keep action revisions with their owning scope. Hide a previous
+scope's rows during a new selection, disable host mutations offline and refresh after an uncertain
+response without retrying the mutation. Serialized fresh reads can replace an older cache incarnation
+only if no newer cache revision arrived while reading; unsolicited stale snapshots remain rejected.
+Validation includes a genuine disconnect, owner close/open while offline and reconnect on the same
+screen. Combined R27/R28 phone/tablet delivery is in progress; existing holds remain unchanged.
+
+## R27 — restore project recents and counts
+
+The operator clarifies that project recents and their right-side counts must remain, matching
+desktop. Only the additional open-tab/navigation lists were meant to be removed. Restore the
+expandable recent-item shortcuts, paging and project-scoped activation without reinstating those
+extra lists. Native summaries include project chats even when their tab is closed, plus visible
+resource descriptors, deduplicated and sorted by activity. Fetch metadata only for expanded
+workspaces on expansion/catalog change/reconnect; do not restore five-second polling.
+Source implementation and native/desktop validation are in progress. Incremental phone/tablet
+updates remain authorized; wider distribution, updater usability and Mnemosyne holds persist.
+
 ## R26 — iPad question layout and chat reading performance
 
 The operator requests desktop parity for the iOS answer card and an in-depth correction of jumping, choppy chat scrolling and lost reading positions on iPad. Incremental deployment to the physical iPad and iPhone is explicitly authorized as fixes validate. Preserve the accepted Mac candidate; wider distribution and Mnemosyne holds remain. The updater usability change remains held pending full Mac acceptance.
