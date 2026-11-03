@@ -2,9 +2,10 @@
 import fs from 'node:fs';import os from 'node:os';import path from 'node:path';
 import {randomUUID} from 'node:crypto';import {createRequire} from 'node:module';import {createServer} from 'node:http';
 import {seedDesktopPreview} from '../src/desktop-preview.js';import {atomicJSON} from '../src/shared/files.js';import {revision} from '../src/services/scheduling/schedules.js';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 const require=createRequire(import.meta.url),{initializePreviewRoot,preparePreviewFixtures}=require('../desktop/preview-runtime.cjs'),{WorkspaceSession}=require('../desktop/windows/workspace-session.cjs');
 export async function sidebarFixture(){
- const temporary=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'proteus-sidebar-ui-'))),locations=initializePreviewRoot(path.join(temporary,'preview')),auth=path.join(temporary,'empty-codex');fs.mkdirSync(auth);
+ const temporary=fs.realpathSync(privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-sidebar-ui-'))),locations=initializePreviewRoot(path.join(temporary,'preview')),auth=path.join(temporary,'empty-codex');fs.mkdirSync(auth);
  const requests=[];const server=createServer((request,response)=>{requests.push(request.url);response.writeHead(200,{'Content-Type':'text/html'});response.end('<!doctype html><title>Synthetic sidebar browser</title><h1>Disposable sidebar browser</h1>');});await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
  const origin='http://127.0.0.1:'+server.address().port;
  const seeded=seedDesktopPreview({home:locations.home,workFolders:preparePreviewFixtures(locations),sourceFolders:[locations.sourceRoot]}),studio=seeded.workspaces.find(row=>row.name==='Studio'),personal=seeded.workspaces.find(row=>row.name==='Personal'),project=seeded.projects.find(row=>row.workspaceId===studio.id&&row.name==='Design review'),personalProject=seeded.projects.find(row=>row.workspaceId===personal.id&&row.name==='Research');
