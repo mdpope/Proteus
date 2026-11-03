@@ -16,7 +16,7 @@
   "priorRequestAudit": "docs/releases/2026-11-02/prior-release-audit.md",
   "previousAcceptedSourceCommit": "4456aea8837171ba60f82775859d9ce7f4ec0810",
   "sourceCommit": "e973d4c117d326e7652d9ee2b409e4bbacfccaab",
-  "candidateSourceStatus": "R29 connection fixes in validation; local physical clients remain accepted R28 build until new rollout",
+  "candidateSourceStatus": "R29 frozen a14aeac: relay and physical build2611.2.7 installed; Mac prepared; wider rollout/acceptance pending",
   "widerDistributionHold": {
     "active": false,
     "reason": "Operator explicitly authorizes all configured devices, web and release closeout after connection fixes."

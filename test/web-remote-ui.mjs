@@ -66,6 +66,8 @@ try{
   const answers=commands.filter(command=>command.method==='chat.answer-question'),uploads=commands.filter(command=>command.method==='chat.attachments.begin');assert.equal(answers.length,2);assert.deepEqual(answers[0].args,answers[1].args);assert.equal(uploads.length,1);assert.equal(answers[0].args.providerId,'copilot');assert.equal(answers[0].args.id,run.id);assert.ok(answers[0].args.consentId);
   assert.equal(app.syntheticAttachmentDeliveries.length,1);assert.deepEqual(app.syntheticAttachmentDeliveries[0],[{name:'question-evidence.txt',mediaType:'text/plain',bytes:fileBytes}]);assert.equal(apps[1].syntheticAttachmentDeliveries.length,0);
   assert.equal(run.events.filter(event=>event.data?.questionReply).length,3);assert.equal(await page.locator('#remote-composer [name=prompt]').inputValue(),'Keep this unsent composer draft');assert.deepEqual(errors,[]);console.log(JSON.stringify({passed:true,encryptedOwnerQuestions:true,choiceAndCustomAnswer:true,sameOwnerChat:true,attachmentsWithConsent:true,ownerRetainedAcrossNavigation:true,uncertainDeliveryRetriedOnceWithSameIdentity:true,narrowLayout:true}));
+ }else if(process.env.PROTEUS_TEST_CONNECTIONS_ONLY==='1'){
+  await exerciseConnections(page,apps[0],root,origin);assert.deepEqual(errors,[]);console.log(JSON.stringify({passed:true,authenticatedConnections:true,lossAndRecovery:true,pairingRenameRaces:true}));
  }else if(process.env.PROTEUS_TEST_CORRECTIONS_ONLY==='1'){
   await exerciseWebCorrections(page,apps[0]);assert.deepEqual(errors,[]);
  }else{

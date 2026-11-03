@@ -1,3 +1,35 @@
+# R29 rollout checkpoint — November 3
+
+The operator authorized all configured devices and web deployment after the connection fixes.
+The broader Mnemosyne implementation remains deferred. Release closeout is still pending.
+
+The frozen application source is `a14aeac0b5ca107cb89ea0f1a7577dde7b7bfe8e`.
+Both physical iPhone and iPad now run **0.2.41 / 2611.2.7**. All 302/199 protected files
+matched before launch; each device retained its four destinations, selection and signing identity.
+Two verified recovery generations remain per device. Live gestures and sustained authenticated
+reconnect are separate acceptance work; the bounded iPhone sample still did not include General,
+so its membership is not yet verified. The earlier iPad General comparison matched the Mac's 12 IDs.
+
+The relay is updated to the frozen source and passes internal and public HTTPS health checks.
+The first image failed under the production user because copied code retained private permissions;
+automatic rollback restored the prior service. The corrected packaging explicitly makes code
+readable and checks UID 999 before activation. Registration credentials are unchanged, and the
+prior container/image are retained for rollback. This is not yet proof of sustained client stability.
+
+The accepted Mac package is prepared in a new owner update job; installation remains pending.
+Historical pre-install attention jobs cannot use the current post-install-only reconciliation guard.
+Their evidence is preserved. Maintenance cleanup is blocked; ordinary handoff has its own owner
+checks. The coordinator currently awaits a human-only approval to read its acceptance receipt.
+
+Validation: Node 1,463 pass / four skip; native 179 pass; final phone reconnect tests pass;
+six current packaged Mac UI tests pass; web PHP 106 tests / 926 assertions pass; direct browser
+connection loss/recovery and pairing race checks pass. The legacy full Mac and web harnesses
+stop at obsolete hidden-input locators and are not claimed passing. Website packaging/deployment,
+other desktops, simulator refresh, stable live connectivity, updater usability after local acceptance,
+and final Git/public retention closeout remain outstanding.
+
+Earlier entries below are historical checkpoints.
+
 ## R29 — transport stability and visible project owners
 
 The operator reports continued iPad disconnects and an obsolete iPhone General tab cache. A physical
