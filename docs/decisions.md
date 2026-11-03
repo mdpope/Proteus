@@ -1,3 +1,7 @@
+## Nov 2 R35 — sidebar refreshes read their owner connection
+
+A peer state notification is evidence already delivered to the desktop owner. Renderer sidebar refreshes must consume that authenticated snapshot rather than fetch context and full sync again. Keep a compact, memory-only navigation projection per current peer session, discard source-entry/provider/progress detail, and return detached values. Validate outgoing access, pairing, pause, session readiness and current connection status on every read. Offline cache rows cannot claim a live connection. Existing connection heartbeat/recovery supplies push-loss fallback; explicit configuration requests continue through the normal scoped remote service. Window placement and execution owner remain independent.
+
 ## Nov 2 R34 — attribute wire traffic before changing refresh behavior
 
 A visible online session and zero host closes cannot establish acceptable transport load. Measure actual encrypted bytes where the outbound writer transmits them, and classify replies only into a fixed source-owned set of read methods plus Other. Keep the existing aggregate categories. Separately label sampled JSON projection sizes as plaintext estimates; retain fixed section names and counts only, never values. Limit projection sampling to once per ten seconds. No change to command delivery, replay, authentication or saved pairings is implied by this diagnostic addition.

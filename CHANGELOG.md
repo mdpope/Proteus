@@ -1,3 +1,7 @@
+## Nov 2 R35 — stop sidebar catalog refetch loops
+
+- Desktop sidebars consume compact workspace metadata already received by their authenticated owner connection. Peer changes no longer trigger full context and sync network requests from every renderer window. Keep live rename/project updates, offline/paused/revoked boundaries and explicit configuration reads.
+
 ## Nov 2 R34 — bounded traffic attribution
 
 - Attribute encrypted reply bytes to fixed read-method buckets and sample plaintext snapshot-section sizes at most once per ten seconds. Keep payloads, permission scope, retry identities and connection behavior unchanged. Live bandwidth acceptance remains open.

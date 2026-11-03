@@ -17,9 +17,10 @@ function remember(row){const id=key(row.hostId,row.id);localStorage.setItem('pro
 function localCatalog(){for(const tab of ui.state.tabs.filter(t=>t.type==='workspace'&&t.hostId)){if(!catalogs.has(tab.hostId))catalogs.set(tab.hostId,{hostId:tab.hostId,hostName:tab.hostName||tab.hostId,online:false,context:{workspaces:[]}});const rows=catalogs.get(tab.hostId).context.workspaces;if(!rows.some(w=>w.id===tab.workspaceId))rows.push({id:tab.workspaceId,name:tab.workspaceName||tab.label});}catalogs.set('local',{context:ui.state.data.context,hostId:'local',hostName:computerName(ui.state.data.hostName),online:true});}
 export function recentWorkspaces(){localCatalog();const rows=[...catalogs.values()].flatMap(c=>c.context.workspaces.map(w=>({...w,hostId:c.hostId,hostName:c.hostName})));const ids=recent();return rows.sort((a,b)=>{const ai=ids.indexOf(key(a.hostId,a.id)),bi=ids.indexOf(key(b.hostId,b.id));return (ai<0?999:ai)-(bi<0?999:bi)||a.name.localeCompare(b.name);}).slice(0,7);}
 async function loadPeerCatalog(hostId,hostName){
- const context=await request(hostId,'context.get');
- let snapshot;
- try{snapshot=(await request(hostId,'sync')).state;}catch(error){if(!/unsupported|unknown|unexpected/i.test(error.message))throw error;}
+ // Every renderer window reads one owner's authenticated push snapshot. A
+ // sidebar redraw must not start another full context+sync network round trip.
+ const snapshot=await window.desktop.peers({action:'workspace-snapshot',hostId});
+ const context=snapshot.context;
  const value={context,hostId,hostName:hostName||snapshot?.hostName||catalogs.get(hostId)?.hostName||hostId,online:true,capabilities:snapshot?.capabilities||[],runs:snapshot?.runs||catalogs.get(hostId)?.runs||[],projectTabs:catalogs.get(hostId)?.projectTabs||{},workspaceProjects:snapshot?.capabilities?.includes('projects.v1')?snapshot.workspaceProjects:undefined};
  catalogs.set(hostId,value);
  if(value.workspaceProjects&&ui.state.tabs.some(tab=>tab.hostId===hostId&&(value.workspaceProjects.projects.some(project=>project.id===tab.projectId&&project.workspaceId!==tab.workspaceId)||value.workspaceProjects.projectRedirects?.[tab.projectId]||tab.type==='remote-run'&&value.workspaceProjects.memberships?.[tab.runId]?.projectId&&!ui.state.tabs.some(parent=>parent.id===tab.parentId&&parent.type==='workspace'&&parent.projectId===value.workspaceProjects.memberships[tab.runId].projectId)))){

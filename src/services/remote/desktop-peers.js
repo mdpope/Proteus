@@ -1,3 +1,4 @@
+import {workspaceSnapshot} from './workspace-snapshot.js';
 import {atomicRename} from '../../shared/atomic-rename.cjs';
 import {hostRunningChatCount} from '../../../public/services/remote/computer-identity.js';
 import { readHostPlatformMetadata } from '../../shared/host-platform.js';
@@ -63,7 +64,15 @@ export class DesktopPeers extends EventEmitter {
   adoptHostState(hostId,session,state){
     if(this.blocked()||this.closed||this.sessions.get(hostId)!==session||session.client.status!=='online'||!this.records.has(hostId))return;
     session.metadata=readHostPlatformMetadata(state);
+    session.workspaceState=workspaceSnapshot(state);
     this.adoptHostName(hostId,session,state?.hostName);
+  }
+  workspaceState(hostId){
+    this.assertOutgoing();this.load();const record=this.records.get(hostId),session=this.sessions.get(hostId);
+    if(!record)throw Error('This computer is not paired. Open Connections to pair it.');
+    if(record.paused)throw Error('This connection is paused on this computer. Choose Resume in computer Connections.');
+    if(!session?.ready||session.client.status!=='online'||!session.workspaceState)throw Error('Reconnecting to this computer automatically. Its workspace snapshot is not ready.');
+    return structuredClone(session.workspaceState);
   }
   adoptHostName(hostId,session,name){
     if(this.blocked()||this.closed||this.sessions.get(hostId)!==session||session.client.status!=='online'||typeof name!=='string')return;
@@ -171,6 +180,6 @@ export class DesktopPeers extends EventEmitter {
     return this.list();
   }
   disconnect(hostId){this.recoveryFor(hostId).suspended=true;this.cancelRecovery(hostId);const session=this.sessions.get(hostId);this.sessions.delete(hostId);session?.client.close();this.indexAt=0;this.lastIndex=null;this.emitState(hostId,{status:'disconnected'});return this.list();}
-  async handle(value){if(!value||typeof value!=='object'||this.closed)throw new Error('Desktop connections are unavailable.');if(value.action==='network-restored'){this.resumeConnections();return this.list();}if(value.action==='list')return this.list();if(value.action==='pair')return this.pair(value.code,value.label);if(!uuid.test(value.hostId||''))throw new Error('Choose an explicit paired computer.');if(value.action==='connect')return this.connect(value.hostId,{automatic:value.automatic===true});if(value.action==='pause'||value.action==='resume')return this.pause(value.hostId,value.action==='pause');if(value.action==='remove')return this.remove(value.hostId);if(value.action==='disconnect')return this.disconnect(value.hostId);if(value.action==='read'){const session=this.sessions.get(value.hostId);if(session)session.unread=false;return this.list();}if(value.action==='request')return this.request(value.hostId,value.method,value.args,value.options);throw new Error('Unknown desktop peer action.');}
+  async handle(value){if(!value||typeof value!=='object'||this.closed)throw new Error('Desktop connections are unavailable.');if(value.action==='network-restored'){this.resumeConnections();return this.list();}if(value.action==='list')return this.list();if(value.action==='pair')return this.pair(value.code,value.label);if(!uuid.test(value.hostId||''))throw new Error('Choose an explicit paired computer.');if(value.action==='connect')return this.connect(value.hostId,{automatic:value.automatic===true});if(value.action==='pause'||value.action==='resume')return this.pause(value.hostId,value.action==='pause');if(value.action==='remove')return this.remove(value.hostId);if(value.action==='disconnect')return this.disconnect(value.hostId);if(value.action==='read'){const session=this.sessions.get(value.hostId);if(session)session.unread=false;return this.list();}if(value.action==='workspace-snapshot')return this.workspaceState(value.hostId);if(value.action==='request')return this.request(value.hostId,value.method,value.args,value.options);throw new Error('Unknown desktop peer action.');}
   close(){this.accessPolicy?.off('change',this.accessListener);this.closed=true;for(const hostId of this.recovery.keys())this.cancelRecovery(hostId);this.recovery.clear();for(const session of this.sessions.values())session.client.close();for(const client of this.pairing.values())client.close();this.sessions.clear();this.pairing.clear();}
 }
