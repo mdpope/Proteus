@@ -1,3 +1,7 @@
+## Nov 3 queue — Mnemosyne redesign
+
+The operator moved the wider Mnemosyne design and staged product-boundary implementation to Nov 3. See [the preserved handoff](2026-11-03-mnemosyne-handoff.md). Nov 2 deployment and closeout continue independently; prototype review and native-owner safeguards remain.
+
 ## Nov 2 R36 — extension creation intent in validation
 
 Native Linux qualification reproduced a real blank-tab loss through the supported extension API: an existing main scope's first authoritative read captured a newly created tab without local pending intent and removed its native view. Source now carries creation intent only from the actual extension creation callback into foreground/background registration, preserves it across an older read snapshot and settles it on owner acknowledgement. Confirmed owner closes and moves retain authority. Focused owner/callback regressions pass; full source, native UI and replacement-package acceptance remain required. Earlier R35 packages retain their original pins and do not contain this correction. The separate intermittent extension-runtime exit remains unproven.

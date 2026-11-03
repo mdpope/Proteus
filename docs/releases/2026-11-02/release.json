@@ -16,17 +16,17 @@
   "priorRequestAudit": "docs/releases/2026-11-02/prior-release-audit.md",
   "previousAcceptedSourceCommit": "4456aea8837171ba60f82775859d9ce7f4ec0810",
   "sourceCommit": "9faf4e1947e07ff47f5bfb80f38850bcb0637e81",
-  "candidateSourceStatus": "R36 frozen 9faf4e1: full source 1486 passed/four skipped and static passed; controlled Mac source UI passed both creation orderings and close/move authority. Signed Mac packaging started; Linux/Windows source UI qualification pending. Prior R35 installed/artifacts retain original pins and do not contain R36. Native build2611.2.10 retained.",
+  "candidateSourceStatus": "R36 9faf4e19 installed locally and owner healthy. Independent full installed hash and strict signature match. Nine signed-package UI tests pass; Linux/Windows four source-mode UI qualifiers pass, final packages pending. Native 2611.2.10 retained. Live connection and wider rollout acceptance remain open.",
   "widerDistributionHold": {
     "active": false,
     "reason": "Operator explicitly authorizes all configured devices, web and release closeout after connection fixes."
   },
   "mnemosyneImplementationHold": {
     "active": true,
-    "reason": "Broader product/UI/source/watcher extraction deferred this turn."
+    "reason": "Operator moved broader Mnemosyne redesign and staged product-boundary work to Nov 3; preserved in docs/2026-11-03-mnemosyne-handoff.md."
   },
   "acceptedSourcePins": {
-    "darwin-arm64": "2a5525e8d5392b0492708745eb98bcf92f4c8a5c",
+    "darwin-arm64": "9faf4e1947e07ff47f5bfb80f38850bcb0637e81",
     "ios": "8d2e0df2807934ef72cc0bd1427b187ab61b5ed2"
   },
   "qualifyingSourcePins": {
