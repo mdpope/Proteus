@@ -22,7 +22,7 @@ struct NativeChatWorkspaceMoveView: View {
                 ToolbarItem(placement: .confirmationAction) { Button("Move") { move() }.disabled(busy || destination.isEmpty || !store.connected) }
             }.task { do {
                 catalog = try await store.request("context.get", [:])
-                let chat = try await store.request("chat.get", ["id": .string(chatID)])
+                let chat = try await store.readChat(["id": .string(chatID)])
                 workspace = NativeWorkspaceIdentity.workspaceID(chat)
                 project = store.projectCatalog.membership(for: chat)["projectId"].string
                 destination = project.isEmpty ? "workspace:" + workspace : "project:" + project
@@ -37,7 +37,7 @@ struct NativeChatWorkspaceMoveView: View {
         else { workspace = parts[1]; project = store.projectCatalog.defaultProject(in: workspace)?["id"].string ?? "" }
         busy = true; Task { defer { busy = false }; do {
         if store.supportsProjects {
-            let chat = try await store.request("chat.get", ["id": .string(chatID)])
+            let chat = try await store.readChat(["id": .string(chatID)])
             _ = try await store.moveChatToProject(id: chatID, workspaceID: workspace, projectID: project, expectedUpdatedAt: chat["updatedAt"].string)
         } else { _ = try await store.request("chat.move", ["id": .string(chatID), "workspaceId": .string(workspace)]) }
         await store.refresh(); await store.openChat(chatID)

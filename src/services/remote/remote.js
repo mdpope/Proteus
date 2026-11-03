@@ -1,3 +1,4 @@
+import {publishChatStreams,setChatWatch,clearChatWatch} from './chat-streams.js';
 import {RemoteOutbound} from './remote-outbound.js';
 import {validateAgentSendModelOptions} from '../chats/send-model-options.js';
 import {clearQuestionFromQueue} from '../chats/user-questions.js';
@@ -89,7 +90,7 @@ export function remoteState(service) {
     runningChatCount: countRunningChats(visibleRuns),
     attentionCount: visibleRuns.filter(needsAttention).length,
     context: { ...pick(context, ['revision', 'refreshedAt', 'rootStatus', 'defaultWorkspaceId', 'workspaces', 'universalFolders', 'libraryFolders', 'documents','modes','favorites', 'errors']), entries: context.entries.map(remoteEntry) },
-    defaults: pick(defaults, ['provider', 'model', 'reasoningMode', 'reasoningEffort', 'contextTier', 'serviceTier', 'timezone', 'internetSearches']), providerStatus: service.catalog?.value || null, providerStatuses: Object.fromEntries(Object.entries(service.catalogs || {}).map(([id, catalog]) => [id, catalog.value])),questionAttachmentMediaTypes:Object.fromEntries(Object.keys(service.engine.providers).map(id=>[id,questionAttachmentMediaTypes.filter(type=>service.engine.providers[id]?.acceptedMediaTypes?.includes(type))])),attachmentMediaTypes:Object.fromEntries(Object.keys(service.engine.providers).map(id=>[id,service.engine.providers[id]?.acceptedMediaTypes||[]])),mcpStatusProviders:Object.keys(service.engine.providers).filter(id=>typeof service.engine.providers[id]?.mcpStatus==='function'),mcpLoginProviders:Object.keys(service.engine.providers).filter(id=>typeof service.engine.providers[id]?.mcpLogin==='function'),capabilities:[...(service.sharedInference?['inference.shared.v1']:[]),...(service.computerAccess?['computer.access.v1']:[]),...(service.projectFollow?['tabs.follow.v1']:[]),'chat.subagents.v1','chat.agent-control.v1','chat.send-model-options.v1','chat.build-coordinator.v1','chat.update-coordinator.v1','chat.update-release.v1','attention.ack.v1','chat.pages.v1','draft.text.v1','host.platform.v1',...(service.workspaceProjects?['projects.v1','projects.move.v1','source-library.v1']:[]),'chat.paths.v1','chat.export.v1','chat.previews.v1','content-tabs.v1','chat.index.v1','chat.queue-edit.v1','integrations.health.v1','chat.review.v1','chat.lifecycle.v1','chat.rename.v1','chat.retry-without-agents.v1','chat.attachments.view.v1','chat.internet.v1','workspaces.v1',...(service.engine.permissions?.preserveInheritedDefaults?['chat.permissions.shared.v1']:[]),'chat.permissions.folders.v1','chat.permissions.chat.v1','chat.permissions.pending.v1','chat.documents.v1','chat.attachments.v1','chat.question-attachments.v1','chat.questions.clear.v1','notifications.v1',...(service.openWebsiteNotification?['website.notifications.v1']:[]),'authenticated-revocation.v1','connection-self-revoke.v1',...(service.browserHistory?['browser.history.v1','browser.navigation.v1']:[]),...(service.liveBrowser?['browser.live.v1']:[]),...(service.resources?['resources.v1']:[])],protocol: 1 };
+    defaults: pick(defaults, ['provider', 'model', 'reasoningMode', 'reasoningEffort', 'contextTier', 'serviceTier', 'timezone', 'internetSearches']), providerStatus: service.catalog?.value || null, providerStatuses: Object.fromEntries(Object.entries(service.catalogs || {}).map(([id, catalog]) => [id, catalog.value])),questionAttachmentMediaTypes:Object.fromEntries(Object.keys(service.engine.providers).map(id=>[id,questionAttachmentMediaTypes.filter(type=>service.engine.providers[id]?.acceptedMediaTypes?.includes(type))])),attachmentMediaTypes:Object.fromEntries(Object.keys(service.engine.providers).map(id=>[id,service.engine.providers[id]?.acceptedMediaTypes||[]])),mcpStatusProviders:Object.keys(service.engine.providers).filter(id=>typeof service.engine.providers[id]?.mcpStatus==='function'),mcpLoginProviders:Object.keys(service.engine.providers).filter(id=>typeof service.engine.providers[id]?.mcpLogin==='function'),capabilities:[...(service.sharedInference?['inference.shared.v1']:[]),...(service.computerAccess?['computer.access.v1']:[]),...(service.projectFollow?['tabs.follow.v1']:[]),'chat.subagents.v1','chat.agent-control.v1','chat.send-model-options.v1','chat.build-coordinator.v1','chat.update-coordinator.v1','chat.update-release.v1','attention.ack.v1','chat.pages.v1','chat.watch.v1','chat.delta.v1','draft.text.v1','host.platform.v1',...(service.workspaceProjects?['projects.v1','projects.move.v1','source-library.v1']:[]),'chat.paths.v1','chat.export.v1','chat.previews.v1','content-tabs.v1','chat.index.v1','chat.queue-edit.v1','integrations.health.v1','chat.review.v1','chat.lifecycle.v1','chat.rename.v1','chat.retry-without-agents.v1','chat.attachments.view.v1','chat.internet.v1','workspaces.v1',...(service.engine.permissions?.preserveInheritedDefaults?['chat.permissions.shared.v1']:[]),'chat.permissions.folders.v1','chat.permissions.chat.v1','chat.permissions.pending.v1','chat.documents.v1','chat.attachments.v1','chat.question-attachments.v1','chat.questions.clear.v1','notifications.v1',...(service.openWebsiteNotification?['website.notifications.v1']:[]),'authenticated-revocation.v1','connection-self-revoke.v1',...(service.browserHistory?['browser.history.v1','browser.navigation.v1']:[]),...(service.liveBrowser?['browser.live.v1']:[]),...(service.resources?['resources.v1']:[])],protocol: 1 };
   });
 }
 function validateRelayURL(value) {
@@ -180,7 +181,7 @@ export class RemoteHost {
       } catch { /* Reject malformed routing frames without taking the host down. */ }
     });
   }
-  raw(peer, packet) {
+  raw(peer, packet, kind='other') {
     if(this.peers&&this.peers.get(peer.id)!==peer&&packet.type!=='rejected')return;
     if(this.socket?.readyState!==WebSocket.OPEN)return;
     const payload=JSON.stringify({clientId:peer.id,packet});
@@ -188,13 +189,13 @@ export class RemoteHost {
       this.outbound?.stop();
       this.outbound=new RemoteOutbound(this.socket,{
         reject:target=>{this.service.projectFollow?.removeActor(target.id);this.service.sharedInference?.jobs.disconnect(target.id);this.peers?.delete(target.id);if(!this.relayClientDisconnect||!this.outbound.control(JSON.stringify({type:'client.disconnect',clientId:target.id})))this.socket.close(1013,'Transport congestion; relay upgrade required for client isolation.');},
-        sent:(size,buffered)=>this.service.performanceDiagnostics?.transport({direction:'send',bytes:size,buffered}),
+        sent:(size,buffered,kind)=>this.service.performanceDiagnostics?.transport({direction:'send',bytes:size,buffered,kind}),
         congested:buffered=>this.service.performanceDiagnostics?.transport({congested:true,buffered}),
       });
     }
-    return this.outbound.enqueue(peer,payload);
+    return this.outbound.enqueue(peer,payload,kind);
   }
-  send(peer, value) { const seq=++peer.outgoing,box=timedSync(this.service.performanceDiagnostics,'remote.send.encrypt',()=>seal(peer.device.key,value,`${peer.prefix}:host:${seq}`));return timedSync(this.service.performanceDiagnostics,'remote.send.transport',()=>this.raw(peer,{type:'data',seq,box})); }
+  send(peer, value) { const seq=++peer.outgoing,box=timedSync(this.service.performanceDiagnostics,'remote.send.encrypt',()=>seal(peer.device.key,value,`${peer.prefix}:host:${seq}`));return timedSync(this.service.performanceDiagnostics,'remote.send.transport',()=>this.raw(peer,{type:'data',seq,box},value.type==='event'?value.event:value.type==='result'?'reply':'other')); }
   async pairing(publicURL,{management=false}={}) {
     if (this.status !== 'online') throw new Error('Enable remote access and wait for the relay to connect.');
     const relay = validateRelayURL(publicURL || (this.config.mode === 'external' ? this.config.publicURL : this.addresses()[0] || `ws://127.0.0.1:${this.config.port}`));
@@ -377,7 +378,7 @@ export class RemoteHost {
     if (method === 'sync') {
       return timed(this.service.performanceDiagnostics, 'remote.sync', () => {
       const index = this.journal.findIndex(event => event.cursor === args.cursor);
-      if (index >= 0) for (const event of this.journal.slice(index + 1)) if (event.event !== 'state' && (!event.runId || event.runId === peer.runId)) this.send(peer, event);
+      if (index >= 0) for (const event of this.journal.slice(index + 1)) if (event.event !== 'state' && !(event.event === 'run' && (peer.summaryOnly || peer.deltaOnly)) && !(event.event === 'run.changed' && !peer.summaryOnly) && (!event.runId || event.runId === peer.runId)) this.send(peer, event);
       return { state: remoteState(this.service), cursor: `${this.epoch}:${this.sequence}` };
       });
     }
@@ -435,7 +436,8 @@ export class RemoteHost {
       }else result=await this.service.contentTabs.getAsync(args.scope,args.id,{historyLimit:args.historyLimit??32});
       return {...result,tabs:result.tabs.filter(tab=>tab.type!=='document'||canDocuments)};
     }
-    if (method === 'chat.get') { const run = engine.getRun(args.id); if(args.agentId)return run.subagents?.some(row=>row.id===args.agentId)?subagentPage(run,args.agentId,args.beforeEvent):engine.delegation.page(run.id,args.agentId,args.beforeEvent); if(args.watch!=='none'){peer.runId = run.id;peer.summaryOnly=args.watch==='summary';} const view={...remoteRun(run, Math.max(0, Math.floor(Number(args.offset) || 0)), engine.permissions, args.beforeEvent,ownerChatControls(run,engine)),...this.service.workspaceProjects?.membership(run),...(run.schedule.purpose==='update'?{update:updateObservation(this.service,run)}:{})};return args.historyCursor?chatDelta(run,view,args.historyCursor):{...view,...(!args.offset&&args.beforeEvent===undefined?chatDelta(run,view):{})}; }
+    if (method === 'chat.watch') { if(args.watch!=='none'||typeof args.id!=='string')throw Error('Choose a chat to stop watching.');return {cleared:clearChatWatch(peer,args.id,args.watchToken)}; }
+    if (method === 'chat.get') { const run = engine.getRun(args.id); if(args.agentId)return run.subagents?.some(row=>row.id===args.agentId)?subagentPage(run,args.agentId,args.beforeEvent):engine.delegation.page(run.id,args.agentId,args.beforeEvent); if(args.watchToken!==undefined&&(typeof args.watchToken!=='string'||!/^[a-f0-9-]{36}$/i.test(args.watchToken)))throw Error('Invalid chat watch token.');if(args.watch!=='none')setChatWatch(peer,run.id,args.watch,args.watchToken); const view={...remoteRun(run, Math.max(0, Math.floor(Number(args.offset) || 0)), engine.permissions, args.beforeEvent,ownerChatControls(run,engine)),...this.service.workspaceProjects?.membership(run),...(run.schedule.purpose==='update'?{update:updateObservation(this.service,run)}:{})};const result=args.historyCursor?chatDelta(run,view,args.historyCursor):{...view,...(!args.offset&&args.beforeEvent===undefined?chatDelta(run,view):{})};if(peer.deltaOnly&&peer.runId===run.id&&args.watch!=='none'&&result.historyCursor)peer.historyCursor=result.historyCursor;return result; }
     if(method==='chat.previews.list'||method==='chat.previews.read'){
       this.requireDocumentAccess(peer);const run=engine.getRun(args.id);
       const result=await(method.endsWith('.list')?this.service.previews.list(run):this.service.previews.read(run,args.documentId));
@@ -583,16 +585,7 @@ export class RemoteHost {
     return timedSync(this.service.performanceDiagnostics, 'remote.publish', () => {
     const state = remoteState(this.service); const signature = timedSync(this.service.performanceDiagnostics, 'remote.publish.serialize', () => JSON.stringify(state));
     if (signature !== this.signature) { this.signature = signature; this.broadcast('state', state); }
-    const watched = new Set([...this.peers.values()].filter(p => p.device).map(p => p.runId).filter(Boolean));
-    for(const id of this.runSignatures?.keys()||[])if(!watched.has(id)){this.runSignatures.delete(id);this.runVersions?.delete(id);}
-    for (const id of watched) {
-      if (!this.service.engine.runs.has(id)) continue;
-      const summaryOnly=[...this.peers.values()].filter(peer=>peer.device&&peer.runId===id).every(peer=>peer.summaryOnly);
-      if(summaryOnly){const source=this.service.engine.getRun(id),summary={...runSummary(source),version:this.runVersions?.get(id)||0},hash=JSON.stringify(summary);if(this.runSignatures?.get(id)===hash)continue;this.runSignatures??=new Map();this.runSignatures.set(id,hash);this.broadcast('run.changed',summary,id);continue;}
-      const run = timedSync(this.service.performanceDiagnostics, 'remote.run.assemble', () => ({...remoteRun(this.service.engine.getRun(id), 0, this.service.engine.permissions,undefined,ownerChatControls(this.service.engine.getRun(id),this.service.engine)),...this.service.workspaceProjects?.membership(this.service.engine.getRun(id))})); const hash = timedSync(this.service.performanceDiagnostics, 'remote.run.serialize', () => createHash('sha256').update(JSON.stringify({...run,observedAt:undefined})).digest('hex'));
-      if (this.runSignatures?.get(id) === hash) continue;
-      this.runSignatures ??= new Map(); this.runSignatures.set(id, hash);this.broadcast('run',run,id);
-    }
+    publishChatStreams(this,{summary:runSummary,page:source=>timedSync(this.service.performanceDiagnostics,'remote.run.assemble',()=>({...remoteRun(source,0,this.service.engine.permissions,undefined,ownerChatControls(source,this.service.engine)),...this.service.workspaceProjects?.membership(source)}))});
     });
   }
   broadcastFollow(data) {
@@ -602,12 +595,12 @@ export class RemoteHost {
       this.send(peer,{type:'event',event:'project-follow',data});
     }
   }
-  broadcast(event, data, runId) {
+  broadcast(event, data, runId, accepts = () => true) {
     const value = { type: 'event', event, data, ...(runId ? { runId } : {}), cursor: `${this.epoch}:${++this.sequence}` };
     const bytes=Buffer.byteLength(JSON.stringify(value));this.journalBytes=(this.journalBytes||0)+bytes;
     this.journal.push(value);(this.journalSizes??=[]).push(bytes);
     while(this.journal.length>100||this.journalBytes>8_000_000){this.journal.shift();this.journalBytes-=this.journalSizes.shift();}
-    for (const peer of this.peers.values()) if (peer.device && (!runId || peer.runId === runId)) this.send(peer, value);
+    for (const peer of this.peers.values()) if (peer.device && (!runId || peer.runId === runId) && accepts(peer)) this.send(peer, value);
   }
   async stop() {
     clearTimeout(this.reconnect);clearTimeout(this.stableConnectionTimer); this.invite = null;this.documents.clear();

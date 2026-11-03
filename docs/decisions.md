@@ -1,3 +1,18 @@
+## Nov 2 R32 — presentation subscriptions belong to each transport and visible view
+
+A legacy full-page watcher must not promote summary subscribers of the same chat. Send each peer
+only its negotiated representation, with bounded transient delta cursors and a full-page fallback.
+Incremental patches are replaceable presentation state; never replay them as global journal events
+or change command receipt identities. Reconnect reads the current page with its original pairing.
+
+Native view tokens control watch lifetime across hidden phone areas, disappearance and foreground
+transitions. Conditional owner cleanup includes both chat ID and token so late cleanup cannot
+unsubscribe a replacement view, including another view of the same chat. Action-result reads after
+leaving a view may refresh its cache but cannot silently restore its watch. Merge indexed patches
+with older retained pages and reject stale patches, including when a push beats the initial read.
+Packet-kind diagnostics accept only fixed labels and actual encoded byte counts; no content,
+URLs, titles, client IDs, pairing data or arbitrary event labels are recorded.
+
 ## Nov 2: native conversation reading has one scroll owner
 
 Use the UIKit conversation probe as the sole owner of automatic bottom following and bookmark

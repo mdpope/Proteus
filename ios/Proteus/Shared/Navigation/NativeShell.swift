@@ -1038,7 +1038,7 @@ struct NativeShell: View {
         }
         guard !route.chatID.isEmpty else { notificationFallback(); return }
         if remote.chats[route.chatID] == nil, remote.connected {
-            do { remote.mergeChat(try await remote.request("chat.get", ["id": .string(route.chatID)])) }
+            do { remote.mergeChat(try await remote.readChat(["id": .string(route.chatID)])) }
             catch { notificationFallback("This chat could not be opened. Reconnect \(destinations.selectedLabel) and open it from Chats."); return }
         }
         guard remote.chats[route.chatID] != nil else {

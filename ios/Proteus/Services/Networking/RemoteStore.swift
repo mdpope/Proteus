@@ -59,6 +59,8 @@ struct RemoteHostInfo: Equatable {
     var runtimeClockOffset: TimeInterval?
     var error: String?
     var selectedChat: String?
+    @ObservationIgnored private var chatVisibilityManaged = false
+    @ObservationIgnored private var visibleChat: (id: String, token: UUID)?
     var paired = false
     // Draft edits belong to their editor, not to every view observing host state.
     // Keep the in-memory value current without invalidating the loaded transcript;
@@ -480,10 +482,34 @@ struct RemoteHostInfo: Equatable {
         }
         saveCache()
     }
+    func showChat(_ id: String, token: UUID) async -> Bool {
+        chatVisibilityManaged = true; visibleChat = (id, token); selectedChat = id
+        return await openChat(id)
+    }
+    func hideChat(_ id: String, token: UUID) async {
+        guard visibleChat?.id == id, visibleChat?.token == token else { return }
+        visibleChat = nil
+        if selectedChat == id { selectedChat = nil }
+        guard connected, state["capabilities"].array.contains(.string("chat.watch.v1")) else { return }
+        // This controls only this transport's presentation subscription. It never
+        // cancels the chat, deletes its cache, or changes pending command identity.
+        do { _ = try await request("chat.watch", ["id": .string(id), "watch": .string("none"), "watchToken": .string(token.uuidString)]) } catch { }
+    }
     @discardableResult func openChat(_ id: String) async -> Bool {
-        selectedChat = id
-        guard connected else { return false } // Offline opening is a cache read; it never sends or changes hosts.
-        do { mergeChat(try await request("chat.get", ["id": .string(id)])); saveCache(); return true } catch { self.error = error.localizedDescription; return false }
+        let watching = !chatVisibilityManaged || visibleChat?.id == id
+        if watching { selectedChat = id }
+        guard connected else { return false }
+        let delta = state["capabilities"].array.contains(.string("chat.delta.v1"))
+        let watch = watching ? (delta ? "delta" : "full") : "none"
+        var arguments: [String: JSON] = ["id": .string(id), "watch": .string(watch)]
+        if watching, let visibleChat, state["capabilities"].array.contains(.string("chat.watch.v1")) { arguments["watchToken"] = .string(visibleChat.token.uuidString) }
+        do { mergeChat(try await request("chat.get", arguments)); saveCache(); return true } catch { self.error = error.localizedDescription; return false }
+    }
+    /// History, previews and action preflight must not change the visible view's
+    /// subscription or silently promote its incremental stream back to full pages.
+    func readChat(_ arguments: [String: JSON]) async throws -> JSON {
+        var value = arguments; value["watch"] = .string("none")
+        return try await request("chat.get", value)
     }
     func recoverChat(_ run: JSON, action: String, expectedFailureEventAt: JSON) async throws -> JSON {
         let id = run["id"].string
@@ -492,7 +518,7 @@ struct RemoteHostInfo: Equatable {
             // Only this explicit old-owner rejection permits the equivalent
             // manual continuation. A timeout never falls through to another send.
             guard action == "continue", ["manual", "scheduled", "schedule"].contains(run["trigger"].string), let rejection = error as? RemoteError, rejection.message.contains("Open an ordinary chat before continuing.") else { throw error }
-            let fresh = try await request("chat.get", ["id": .string(id), "watch": .string("summary")])
+            let fresh = try await readChat(["id": .string(id)])
             let deliveryID = "continue_" + id + "_" + expectedFailureEventAt.string.filter { $0 >= "0" && $0 <= "9" }
             if fresh["events"].array.contains(where: { $0["data"]["delivery"]["id"].string == deliveryID }) { return .object(["runId": .string(id)]) }
             guard ["failed", "interrupted"].contains(fresh["status"].string), fresh["archivedAt"].string.isEmpty, fresh["pending"] == .null, fresh["failureEventAt"] == expectedFailureEventAt, fresh["providerSessionId"] == run["providerSessionId"], fresh["schedule"]["provider"] == run["schedule"]["provider"] else { throw RemoteError(message: "This remote chat changed. Refresh before continuing.") }
@@ -514,7 +540,10 @@ struct RemoteHostInfo: Equatable {
         if let observed = ProviderAllowance.date(value["observedAt"].string) { runtimeClockOffset = observed.timeIntervalSinceNow }
         let id = value["id"].string
         guard !id.isEmpty else { return }
-        guard let old = chats[id] else { chats[id] = value; return }
+        if chats[id] == nil && value["eventPatches"] == .null { chats[id] = value; return }
+        // A push may beat its initial chat.get response. Retain its indexed
+        // patches now so that the older full response cannot overwrite them.
+        let old = chats[id] ?? .object(["events": .array([]), "eventCount": .number(0)])
         // Older paged replies may still add history but cannot replace current
         // status, selection-related metadata, questions or streaming content.
         let incomingAt = ProviderAllowance.date(value["observedAt"].string) ?? ProviderAllowance.date(value["updatedAt"].string) ?? .distantPast
@@ -524,6 +553,14 @@ struct RemoteHostInfo: Equatable {
         for page in old["retainedHistory"].array + (incomingIsCurrent ? [old, value] : [value, old]) {
             for (index, event) in page["events"].array.enumerated() { events[page["eventStart"].int + index] = event }
         }
+        if incomingIsCurrent {
+            for patch in value["eventPatches"].array {
+                guard case .number(let index) = patch["index"], index.isFinite, index >= 0,
+                      index.rounded(.down) == index, index < Double(value["eventCount"].int),
+                      patch["event"] != .null else { return }
+                events[Int(index)] = patch["event"]
+            }
+        }
         var pages: [(start: Int, events: [JSON])] = []
         for key in events.keys.sorted() {
             if let last = pages.last, last.start + last.events.count == key { pages[pages.count - 1].events.append(events[key]!) }
@@ -531,6 +568,7 @@ struct RemoteHostInfo: Equatable {
         }
         let latest = pages.popLast() ?? (start: 0, events: [])
         var merged = (incomingIsCurrent ? value : old).object
+        merged.removeValue(forKey: "eventPatches")
         merged["events"] = .array(latest.events)
         merged["eventStart"] = .number(Double(latest.start)); merged["earlier"] = merged["eventStart"]
         merged["retainedHistory"] = .array(pages.map { .object(["eventStart": .number(Double($0.start)), "events": .array($0.events)]) })
@@ -571,7 +609,7 @@ struct RemoteHostInfo: Equatable {
         if active && (paired || invite != nil) { retryTask?.cancel(); retryTask = Task { try? await Task.sleep(for: .seconds(3)); if !Task.isCancelled { connect() } } }
     }
     func disconnect() { sentRequests = []; capacityWaiter?.resume(); capacityWaiter = nil; generation = UUID(); readTask?.cancel(); retryTask?.cancel(); socket?.cancel(with: .goingAway, reason: nil); socket = nil; connected = false; status = paired ? "Offline · cached history" : "Not paired" }
-    func forget() { active = false; suspend(); if legacyCredentials { DeviceKeychain.clear() }; connection = nil; invite = nil; paired = false; state = .null; chats = [:]; allRuns = []; allRunOffset = 0; drafts = [:]; draftRevision &+= 1; selectedChat = nil; cursor = ""; cacheTimer?.cancel(); removeCache(); for c in waiting.values { c.resume(throwing: RemoteError(message: "Device forgotten.")) }; waiting.removeAll(); pendingCommands.removeAll(); timeouts.values.forEach { $0.cancel() }; timeouts.removeAll() }
+    func forget() { active = false; suspend(); if legacyCredentials { DeviceKeychain.clear() }; connection = nil; invite = nil; paired = false; state = .null; chats = [:]; allRuns = []; allRunOffset = 0; drafts = [:]; draftRevision &+= 1; selectedChat = nil; visibleChat = nil; chatVisibilityManaged = false; cursor = ""; cacheTimer?.cancel(); removeCache(); for c in waiting.values { c.resume(throwing: RemoteError(message: "Device forgotten.")) }; waiting.removeAll(); pendingCommands.removeAll(); timeouts.values.forEach { $0.cancel() }; timeouts.removeAll() }
     // A host switch never leaves a retry behind. Commands already accepted by the host continue there.
     func suspend(reason: String = "Computer selection changed. An unconfirmed action may have reached that computer; refresh its history before retrying.") {
         flushCache(); active = false; disconnect(); sendTask?.cancel(); sendTask = nil

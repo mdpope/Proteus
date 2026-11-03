@@ -1,3 +1,13 @@
+# R31 — live General membership verified
+
+The operator opened General after iPhone build **2611.2.9**. Independent fresh owner inventory
+and device read diagnostics match all **12 ordered IDs and revision 3535**, including the three
+hidden owner entries. The device reports `received`, zero pending operations and no active retry
+receipt for that scope. The earlier iPad comparison matched the same 12 IDs; its build8+ update
+is explicitly deferred. No device cache was cleared and no pairing was recreated. The exact
+historical cause is not inferred solely from this successful comparison. Sustained connectivity,
+chat submission and the separate traffic correction retain their own acceptance requirements.
+
 # R27/R28 — project recents and mobile tab reconciliation
 
 The workspace Tabs page now defaults to its canonical General project and offers an explicit

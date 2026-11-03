@@ -1,3 +1,30 @@
+# R31/R32 checkpoint — General match and subscription traffic
+
+The physical iPhone now runs frozen R31 build **2611.2.9** with all 307 current protected files
+verified before launch and its four saved destinations/selection retained. Fresh authenticated
+General read evidence matches the desktop's 12 ordered IDs and revision 3535. This comparison
+supersedes earlier missing-read samples without inferring the exact historical cause. The physical
+iPad update remains explicitly deferred on build 7; its earlier exact 12-ID match is preserved.
+
+R32 moves watched-chat delivery into a per-transport stream service. Summary clients remain on
+summaries beside legacy full subscribers; new native clients negotiate bounded indexed patches.
+Visible-view tokens prevent late cleanup from clearing a replacement watch, including the same
+chat. Hidden views and completed ancillary reads cannot restore a watch. Native merging preserves
+older pages and newer streamed values, including initial-response races. Bounded diagnostics count
+actual encoded bytes in six fixed packet categories without retaining content or arbitrary labels.
+
+Final Node validation passes 1,466 tests with four skipped; static checks pass. All 184 native
+unit cases pass. Actual phone/tablet subscription and phone General reconnect checks pass; the
+corrected iPad prepend/reopen check and final phone reading, bounded heavy-scroll and repeated
+chat-switching checks pass. Earlier harness/geometry failures remain in the private receipts.
+
+ Production bandwidth,
+sustained authenticated chat sending, local Mac full acceptance, final desktop/web deployment,
+R25 after its acceptance gate and release closeout remain distinct unfinished work. Broad Mnemosyne
+implementation remains deferred.
+
+Earlier entries below are historical checkpoints.
+
 # R29 rollout checkpoint — November 3
 
 The operator authorized all configured devices and web deployment after the connection fixes.

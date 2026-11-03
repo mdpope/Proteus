@@ -22,6 +22,16 @@ function fixture(options = {}) {
     sample: () => { const [id, fn] = scheduled.entries().next().value; scheduled.delete(id); fn(); } };
 }
 
+test('wire categories count transmitted bytes without retaining arbitrary event labels',()=>{
+  const {diagnostics}=fixture();
+  diagnostics.transport({direction:'send',bytes:1000,kind:'state'});
+  diagnostics.transport({direction:'send',bytes:500,kind:'PRIVATE_CHAT_TITLE'});
+  const value=diagnostics.snapshot().remoteTransport;
+  assert.deepEqual(value.sentKinds,{state:{packets:1,bytes:1000},other:{packets:1,bytes:500}});
+  assert.equal(value.windows[0].sentKinds.state.bytes,1000);
+  assert.equal(JSON.stringify(value).includes('PRIVATE_CHAT_TITLE'),false);
+});
+
 test('completed slow sync phases correlate with lag; async waits remain explicitly separate', async () => {
   const f = fixture(); f.diagnostics.start();
   let finish; const pending = f.diagnostics.measure('peer.heartbeat', () => new Promise(resolve => { finish = resolve; }));

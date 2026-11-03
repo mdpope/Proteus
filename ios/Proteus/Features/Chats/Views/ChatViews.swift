@@ -692,6 +692,7 @@ struct ChatView: View {
     @EnvironmentObject var shared: SharedAppStore
     @EnvironmentObject private var phoneChrome: NativePhoneChrome
     @Environment(\.nativePhoneAreaActive) private var phoneAreaActive
+    @State private var chatWatchToken = UUID()
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
@@ -982,16 +983,24 @@ struct ChatView: View {
 
             .onChange(of: desiredDraftKey) { _, key in composerDraftKey = key; replyDraft.activate(store: store, key: key) }
             .sheet(isPresented: $reorderTabs) { NativeTabReorderSheet(items: shared.orderedChatChildren(in: chatBrowserScope, documentIDs: documents.map(\.id)).map { child in (id: child, title: shared.tabs(in: chatBrowserScope).first { $0.id == child }?.title ?? documents.first { $0.id == child }?.title ?? "Tab") }) { ids in shared.reorderChatChildren(ids, in: chatBrowserScope, documentIDs: documents.map(\.id)) } }
-            .task(id: id) {
+            .task(id: id + ":" + contentRefreshIdentity) {
+                guard scenePhase == .active, !NativePhonePreview.enabled || phoneAreaActive else {
+                    await store.hideChat(id, token: chatWatchToken); return
+                }
+                let token = UUID(); chatWatchToken = token
                 composerDraftKey = desiredDraftKey; replyDraft.activate(store: store, key: composerDraftKey)
-                let fetched = await store.openChat(id)
+                let fetched = await store.showChat(id, token: token)
+                guard !Task.isCancelled, scenePhase == .active, !NativePhonePreview.enabled || phoneAreaActive else { return }
                 if fetched { await Task.yield(); await store.reviewFailure(id) }
                 let options = run["nextModelOptions"] == .null ? run["schedule"] : run["nextModelOptions"]
                 model = options["model"].string; effort = options["reasoningEffort"].string
                 contextTier = options["contextTier"].string.isEmpty ? "default" : options["contextTier"].string; serviceTier = options["serviceTier"].string
                 if store.connected && !["rehearsal", "local-process"].contains(run["schedule"]["provider"].string) { await store.loadModels(provider: run["schedule"]["provider"].string) }
             }
-            .onDisappear { MessageSpeech.shared.stop(); saveReadingPosition(); cancelReadingRestore() }
+            .onDisappear {
+                MessageSpeech.shared.stop(); saveReadingPosition(); cancelReadingRestore()
+                let token = chatWatchToken; Task { await store.hideChat(id, token: token) }
+            }
             .onChange(of: id) { _, _ in MessageSpeech.shared.stop() }
             .onChange(of: store.chats[id]) { previous, current in if previous != nil && current == nil { dismiss() } }
             .onChange(of: store.connection?.hostId) { _, _ in MessageSpeech.shared.stop() }
@@ -1119,6 +1128,7 @@ struct ChatView: View {
                         // Content coordinates remain stable while UIKit scrolls. Global
                         // frames arrive asynchronously and cannot be paired with a newer offset.
                         .onGeometryChange(for: CGRect.self) { geometry in geometry.frame(in: .named("conversation-content")) } action: { frame in
+                            let previous = eventFrames[absoluteIndex]
                             let measured = NativeChatEventFrame(start: renderedEventStart, frame: frame)
                             eventFrames[absoluteIndex] = measured
                             if let reading = pendingAnchorRestore, reading.anchor == absoluteIndex,
@@ -1128,6 +1138,18 @@ struct ChatView: View {
                                 scrollCommand = NativeScrollCommand(id: transaction, y: measured.contentTop + reading.inset - topInset)
                                 traceScroll("anchor \(absoluteIndex) contentY\(Int(frame.minY)) inset\(Int(reading.inset))")
                                 pendingAnchorRestore = nil
+                            } else if !followLatest, !userReadingGesture, !restoringConversation,
+                                      let previous, previous.start == renderedEventStart,
+                                      abs(previous.contentTop - measured.contentTop) > 0.5,
+                                      let reading = shared.chatScrollLocations[chatBrowserScope], reading.anchor == absoluteIndex,
+                                      let snapshot = scrollMeasurements.viewport.snapshot {
+                                // An earlier Markdown row can finish sizing after a
+                                // prepend's first offset acknowledgement. Preserve
+                                // the reader's point instead of bookmarking that
+                                // late prefix-height change as intentional movement.
+                                let transaction = UUID(); restoreID = transaction; restoringConversation = true
+                                scrollCommand = NativeScrollCommand(id: transaction, y: measured.contentTop + reading.inset - snapshot.topInset)
+                                traceScroll("settle anchor \(absoluteIndex) shift\(Int(measured.contentTop - previous.contentTop))")
                             } else if let snapshot = scrollMeasurements.viewport.snapshot { rememberReadingAnchor(snapshot) }
                         }
                 }
@@ -1343,7 +1365,7 @@ struct ChatView: View {
                     while run["eventStart"].int > anchor {
                         try Task.checkCancellation()
                         let before = run["eventStart"].int
-                        let page = try await store.request("chat.get", ["id": .string(id), "beforeEvent": .number(Double(before))])
+                        let page = try await store.readChat(["id": .string(id), "beforeEvent": .number(Double(before))])
                         try Task.checkCancellation()
                         guard readingRestoreToken == transaction, page["eventStart"].int < before else { return }
                         store.mergeChat(page)
@@ -1574,7 +1596,7 @@ struct ChatView: View {
         func verifySteering() async throws {
             guard store.connected, store.connection?.hostId == hostID else { throw RemoteError(message: "The destination changed. Review the files again.") }
             guard mode == "steer" else { return }
-            let fresh = try await store.request("chat.get", ["id": .string(id)])
+            let fresh = try await store.readChat(["id": .string(id)])
             guard store.connection?.hostId == hostID, fresh["status"].string == "running", fresh["schedule"]["provider"].string == providerID,
                   fresh["turns"].array.last?["id"] == turnID, fresh["chatControls"]["steering"].bool,
                   selectedFiles.allSatisfy({ fresh["chatControls"]["steeringMediaTypes"].array.contains(.string($0.mediaType)) })
@@ -1686,7 +1708,7 @@ struct ChatView: View {
             while run["eventStart"].int > question.eventIndex {
                 try Task.checkCancellation()
                 let before = run["eventStart"].int
-                let value = try await store.request("chat.get", ["id": .string(id), "beforeEvent": .number(Double(before))])
+                let value = try await store.readChat(["id": .string(id), "beforeEvent": .number(Double(before))])
                 guard value["eventStart"].int < before else { throw RemoteError(message: "Earlier messages are unavailable.") }
                 store.mergeChat(value)
             }
@@ -1718,7 +1740,7 @@ struct ChatView: View {
         prefetchingEarlier = true
         Task {
             do {
-                let value = try await store.request("chat.get", ["id": .string(id), "beforeEvent": .number(Double(first))])
+                let value = try await store.readChat(["id": .string(id), "beforeEvent": .number(Double(first))])
                 store.mergeChat(value) // Preserve the presentation window; only fill its cache headroom.
                 prefetchingEarlier = false
                 if historyGestureAvailable && conversationOffset < max(480, composerAvailableHeight * 2.5) { loadEarlier() }
@@ -1744,7 +1766,7 @@ struct ChatView: View {
             return
         }
         Task { defer { loadingEarlier = false }
-            do { let value = try await store.request("chat.get", ["id": .string(id), "offset": .number(Double(offset)), "beforeEvent": .number(Double(oldFirst))]);
+            do { let value = try await store.readChat(["id": .string(id), "offset": .number(Double(offset)), "beforeEvent": .number(Double(oldFirst))]);
                 oldestVisibleEvent = value["eventStart"].int + NativeHistoryWindow.start(events: value["events"].array, preparingOlder: true)
                 store.mergeChat(value) }
             catch { earlierError = true; store.error = error.localizedDescription }
@@ -2709,7 +2731,7 @@ private struct NativeSubagentConversation: View {
         do {
             var args: [String: JSON] = ["id": .string(parentID), "agentId": .string(agent), "watch": .string("none")]
             if let before { args["beforeEvent"] = before }
-            let result = try await store.request("chat.get", args)
+            let result = try await store.readChat(args)
             guard !Task.isCancelled, agent == selected else { return }
             guard result["id"].string == agent else { throw RemoteError(message: "This owner version does not provide agent transcripts.") }
             page = result; loading = false

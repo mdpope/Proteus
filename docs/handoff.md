@@ -1,3 +1,21 @@
+## R31 live General accepted / R32 traffic validation
+
+The iPhone runs build 2611.2.9 with prelaunch hash preservation of all 307 current protected files,
+four saved destinations/selection and signing identity retained. A fresh General owner-read receipt
+matches the desktop's exact 12 ordered IDs and revision 3535, including three hidden entries. No
+pending operation or retry envelope remains for that scope. The iPad remains explicitly deferred
+on build 7; its earlier exact 12-ID comparison stands without a new device operation.
+
+R32 source isolates full/summary/incremental chat watches per transport, releases native hidden
+view watches using conditional tokens, and merges indexed patches while preserving retained history
+and stale ordering. History/preview/preflight reads are explicitly non-subscribing. Old owners use
+full pages; mutation retry identities are unchanged. Fixed packet-kind counters measure encoded
+bytes at transmission. See the connection report for validation and production acceptance limits.
+Final source checks pass: 1,466 Node tests / four skipped, static checks, 184 native units and
+focused phone/tablet subscription, reading and heavy-scroll UI checks. Do not call sustained
+remote connectivity or the release closed from source tests alone. R25 updater
+usability remains held until full local Mac acceptance; broader Mnemosyne stays deferred.
+
 ## R29 — transport stability and visible project owners
 
 The operator reports continued iPad disconnects and an obsolete iPhone General tab cache. A physical

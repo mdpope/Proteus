@@ -1,5 +1,9 @@
 ## Nov 2 — 0.2.41 candidate
 
+- Preserve the idle message anchor when preceding content finishes sizing after a history prepend; retain native gesture ownership and reading state across reopen.
+
+- Nov 2 R32: keep chat subscriptions with their visible native view; isolate full, summary and incremental delivery per client, merge indexed streaming patches without losing history, and count bounded wire bytes by packet kind. Production bandwidth acceptance follows deployment.
+
 - Nov 2 R31: preserve an owner-rejected expired tab request in encrypted review state so it cannot indefinitely suppress fresh membership reads; keep uncertain retries unchanged. Add bounded, content-free reconciliation attempt diagnostics. Live iPhone General verification remains pending.
 
 - Nov 2 R30 follow-up: apply mobile project membership before optional browser-history paging while retaining matching complete histories; move desktop draft sync/conflict status into the chat header. Source validation and physical rollout remain separate.

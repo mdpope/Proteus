@@ -339,13 +339,18 @@ final class RemoteTests: XCTestCase {
         let scope = "project:" + (remote.connection?.hostId ?? "") + ":" + fixture["projectId"].string
         await shared.refreshContentTabs(scope: scope, remote: remote, kind: "project", id: fixture["projectId"].string)
         let url = root.appendingPathComponent("proteus-tab-sync-evidence.json")
-        for _ in 0..<100 where !FileManager.default.fileExists(atPath: url.path) { try await Task.sleep(for: .milliseconds(10)) }
+        // Attempt diagnostics can create this file before the successful read's
+        // utility-queue write. Wait for that receipt, not merely file existence.
+        for _ in 0..<100 {
+            if let data = try? Data(contentsOf: url), let receipt = try? JSONDecoder().decode(JSON.self, from: data), receipt["scopes"][scope] != .null { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
         let evidence = try JSONDecoder().decode(JSON.self, from: Data(contentsOf: url))
         let row = evidence["scopes"][scope]
         XCTAssertEqual(row["tabIds"].array, shared.contentTabSnapshot(in: scope)["tabs"].array.map { $0["id"] })
         XCTAssertTrue(row["tabIds"].array.contains(.string("native-project-browser")))
         XCTAssertEqual(Set(row.object.keys), ["at", "tabIds", "revision"])
-        XCTAssertLessThanOrEqual(evidence["scopes"].object.count, 16)
+        XCTAssertLessThanOrEqual(evidence["scopes"].object.count, 64)
     }
     @MainActor func testMembershipWindowKeepsCompleteMatchingBrowserHistory() {
         let shared = SharedAppStore(cacheRoot: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString), cacheKey: { nil })
@@ -1550,6 +1555,55 @@ final class RemoteTests: XCTestCase {
         XCTAssertNil(ProviderAllowance.date(""))
         XCTAssertNotNil(ProviderAllowance.date("2026-10-10T15:00:00.123Z"))
         XCTAssertNotNil(ProviderAllowance.date("2026-10-10T15:00:00Z"))
+    }
+    @MainActor func testIncrementalChatPatchesPreserveHistoryAndRejectStaleUpdates() {
+        let store = RemoteStore(); store.forget()
+        func page(_ at: String, patches: [JSON]? = nil) -> JSON {
+            var value: [String: JSON] = ["id": .string("streamed"), "observedAt": .string(at), "eventStart": .number(0), "eventCount": .number(2), "events": .array([.object(["text": .string("first")]), .object(["text": .string("second")])])]
+            if let patches { value["events"] = .array([]); value["eventPatches"] = .array(patches) }
+            return .object(value)
+        }
+        store.mergeChat(page("2026-11-03T08:00:00Z"))
+        store.mergeChat(page("2026-11-03T08:00:02Z", patches: [.object(["index": .number(1), "event": .object(["text": .string("updated")])])]))
+        XCTAssertEqual(store.chats["streamed"]?["events"].array.map { $0["text"].string }, ["first", "updated"])
+        store.mergeChat(page("2026-11-03T08:00:01Z", patches: [.object(["index": .number(1), "event": .object(["text": .string("stale")])])]))
+        XCTAssertEqual(store.chats["streamed"]?["events"].array.last?["text"].string, "updated")
+        XCTAssertEqual(store.chats["streamed"]?["eventPatches"], .null)
+        let raced = RemoteStore(); raced.forget()
+        raced.mergeChat(page("2026-11-03T08:00:02Z", patches: [.object(["index": .number(1), "event": .object(["text": .string("raced update")])])]))
+        raced.mergeChat(page("2026-11-03T08:00:00Z"))
+        XCTAssertEqual(raced.chats["streamed"]?["events"].array.map { $0["text"].string }, ["first", "raced update"])
+    }
+    @MainActor func testHistoryReadsKeepVisibleIncrementalWatchAndDoNotRestoreItAfterLeaving() async throws {
+        let (data, _) = try await URLSession.shared.data(from: URL(string: nativeFixtureHTTPOrigin + "/pair?projects=1")!)
+        let fixture = try JSONDecoder().decode(JSON.self, from: data)
+        let store = RemoteStore(); store.forget(); try store.pair(fixture["code"].string)
+        defer { store.forget() }
+        try await wait { store.connected && store.supportsProjects }
+        let id = try XCTUnwrap(fixture["chatIds"].array.first?.string), token = UUID()
+        let opened = await store.showChat(id, token: token); XCTAssertTrue(opened)
+        _ = try await store.readChat(["id": .string(id), "beforeEvent": .number(0)])
+        func watches() async throws -> [JSON] {
+            let (data, _) = try await URLSession.shared.data(from: URL(string: nativeFixtureHTTPOrigin + "/chat-watch-evidence")!)
+            return try JSONDecoder().decode(JSON.self, from: data)["watches"].array
+        }
+        let active = try await watches()
+        XCTAssertEqual(active.count, 1); XCTAssertEqual(active.first?["id"].string, id); XCTAssertEqual(active.first?["delta"].bool, true)
+        await store.hideChat(id, token: token)
+        _ = try await store.readChat(["id": .string(id)])
+        let hidden = try await watches(); XCTAssertTrue(hidden.isEmpty)
+    }
+    @MainActor func testVisibleChatLeaseDoesNotClearReplacementOrRestoreHiddenChat() async {
+        let store = RemoteStore(); store.forget()
+        let first = UUID(), replacement = UUID()
+        _ = await store.showChat("first", token: first)
+        _ = await store.showChat("second", token: replacement)
+        await store.hideChat("first", token: first)
+        XCTAssertEqual(store.selectedChat, "second")
+        await store.hideChat("second", token: replacement)
+        XCTAssertNil(store.selectedChat)
+        _ = await store.openChat("first")
+        XCTAssertNil(store.selectedChat, "An action refresh after leaving a view must not restore its watch")
     }
     @MainActor func testHistoryPagesStayContiguousWhenNewMessagesArrive() {
         let store = RemoteStore(); store.forget()

@@ -1,3 +1,19 @@
+## Nov 2 R32 — validated source, live traffic acceptance pending
+
+The iPhone build9 live General read now matches the desktop's 12 ordered tab IDs and revision.
+The iPad's earlier exact match remains recorded; its follow-up installation is explicitly deferred.
+
+An iPad prepend rehearsal also found late layout drift; source now preserves the idle message
+anchor as earlier content finishes sizing. The corrected iPad prepend/reopen rehearsal passes.
+
+Source now isolates full/summary/incremental chat delivery per transport and stops native watches
+when their view leaves the active surface. Indexed patches retain history, stale-response guards
+and old-owner full-page compatibility. Watch tokens protect a replacement view of the same chat
+from late cleanup. Fixed packet-kind counters measure actual encoded outbound bytes without
+retaining arbitrary labels or content. Source validation is distinct from installed bandwidth and
+sustained authenticated chat-send acceptance. Broader Mnemosyne work remains deferred, updater
+usability stays held until full local acceptance, and final distribution/closeout remains open.
+
 ## Nov 2 R31 investigation in validation
 
 The iPhone General mismatch remains confirmed after build8. Follow-up source handles only

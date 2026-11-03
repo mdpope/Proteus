@@ -165,5 +165,5 @@ test('remote publication remains ordered and suppresses only unchanged state/run
   permissionRevision = 'two'; RemoteHost.prototype.publish.call(host);
   assert.equal(host.journal.at(-1).event, 'run'); assert.equal(host.journal.at(-1).data.permissionRevision, 'two');
   assert.deepEqual(host.journal.map(e => e.cursor), host.journal.map((_, i) => 'rehearsal:' + (i + 1)));
-  host.peers.clear(); RemoteHost.prototype.publish.call(host); assert.equal(host.runSignatures.size, 0);
+  const priorRunEvents=host.journal.filter(event=>event.event==='run').length;host.peers.clear(); RemoteHost.prototype.publish.call(host);assert.equal(host.journal.filter(event=>event.event==='run').length,priorRunEvents);
 });

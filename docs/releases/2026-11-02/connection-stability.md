@@ -1,3 +1,26 @@
+# R32 — subscription traffic correction in validation
+
+The R29 Mac's aggregate outbound traffic remains several megabytes per second in observed
+intervals despite no recorded host closes/congestion. That is not accepted as stable bandwidth.
+Source inspection found that native views retained full chat watches after leaving them, while
+one full watcher caused summary subscribers of the same chat to receive full pages too.
+
+R32 sends full/summary/indexed delta updates per authenticated transport. Native visible-view
+leases end hidden/disappeared chat watches through a negotiated, token-checked owner operation;
+old owners retain full-page compatibility. Delta cursors remain transient and bounded. Native
+merging preserves retained history, changed event positions and stale-response ordering, including
+a push arriving before its initial page. Pending mutation receipts and execution ownership do not
+change. Per-kind counters cover actual encrypted routing-frame bytes at queue transmission, with
+six fixed labels and bounded ten-second windows. They retain no content or arbitrary labels.
+
+A synthetic million-byte history update changes one event: its incremental representation is
+under one percent of the full page. Encrypted mixed-client relay acceptance verifies separate
+summary/full/patch delivery and conditional unwatch; this is not an overall production bandwidth
+claim. The full Node suite passes 1,466 tests with four skipped. All 184 native units and visible-view phone/tablet
+subscription checks pass. Final phone prepend/reopen, heavy-scroll and repeated switching pass;
+the corrected iPad prepend/reopen check passes separately. Installed measurements remain separate. General membership on iPhone build9 is independently
+verified at 12 matching IDs/revision3535; broader sustained authenticated acceptance remains open.
+
 # R31 investigation — retained retry can suppress the owner read
 
 The operator confirms the iPhone still shows a different General list after build8. A fresh

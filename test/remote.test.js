@@ -148,6 +148,28 @@ test('paired chat archive and delete synchronize without resurrecting cached his
   assert.equal((await second.request('runs.list',{includeArchived:true})).length,0);
   assert.equal((await app.activity.logs(40)).items.some(item=>item.event==='chat.undefined'),false);
 });
+test('authenticated mixed watches preserve deltas, summary isolation and conditional unwatch',async t=>{
+  const {app,connect,workspace}=await fixture(t),full=await connect(),summary=await connect(),delta=await connect();
+  const run=app.engine.createRun({...app.engine.schedules.list()[0],workspace:{cwd:workspace,additionalDirectories:[]}},'chat',null,{deferStart:true});
+  run.deferredStart=false;run.status='completed';
+  run.events=Array.from({length:100},(_,index)=>({type:'assistant',text:'x'.repeat(1000),at:new Date().toISOString(),index}));app.engine.persist(run);
+  assert.ok((await delta.request('sync')).state.capabilities.includes('chat.delta.v1'));
+  await full.request('chat.get',{id:run.id});await summary.request('chat.get',{id:run.id,watch:'summary'});
+  const initial=await delta.request('chat.get',{id:run.id,watch:'delta'});assert.equal(initial.events.length,100);
+  await delta.request('chat.get',{id:run.id,beforeEvent:50,watch:'none'});
+  app.remote.publish();await until(()=>delta.events.some(event=>event.event==='run'));
+  full.events=[];summary.events=[];delta.events=[];
+  run.events[99]={...run.events[99],text:'changed'};run.updatedAt=new Date().toISOString();app.engine.persist(run);app.engine.emit('change',run);app.remote.publish();
+  await until(()=>full.events.some(event=>event.event==='run')&&summary.events.some(event=>event.event==='run.changed')&&delta.events.some(event=>event.event==='run'));
+  const patch=delta.events.find(event=>event.event==='run').data;
+  assert.deepEqual(patch.events,[]);assert.equal(patch.eventPatches.length,1);assert.equal(patch.eventPatches[0].index,99);
+  assert.equal(summary.events.some(event=>event.event==='run'),false);assert.equal(full.events.some(event=>event.event==='run.changed'),false);
+  assert.equal((await delta.request('chat.watch',{id:'stale-view',watch:'none'})).cleared,false);
+  assert.equal((await delta.request('chat.watch',{id:run.id,watch:'none'})).cleared,true);
+  delta.events=[];run.events[99]={...run.events[99],text:'after leaving'};app.engine.persist(run);app.remote.publish();
+  // A sync round trip drains prior packets without a timing-only assertion.
+  await delta.request('sync');assert.equal(delta.events.some(event=>event.runId===run.id),false);
+});
 test('a paired client can apply permissions to the current waiting chat and receive tool details', async t => {
   const { app, connect, workspace } = await fixture(t, { copilot: { run: async ({ ask, emit }) => {
     emit('tool', 'Read fixture', { tool: { callId: 'fixture-read', name: 'view', summary: 'Read fixture', status: 'running', arguments: '{"path":"fixture.md"}', output: 'Visible progress' } });

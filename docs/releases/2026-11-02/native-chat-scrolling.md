@@ -1,3 +1,18 @@
+# R32 — preserve the reading anchor after late prefix layout
+
+The iPad prepend/reopen rehearsal exposed 64 pixels of drift inside the same message, exceeding
+its existing 35-pixel tolerance. The first native offset acknowledgement can precede a height
+change in earlier rendered content. While the reader is idle, a later change to the current
+anchor's content position now adjusts the native offset using its retained message inset.
+The correction is driven by that anchor's actual geometry, with no polling or per-frame observed
+SwiftUI state. Active gestures and existing restoration retain their independent ownership.
+
+The corrected iPad rehearsal passes prepend, navigation away/back and cold relaunch. Final phone
+reading, heavy-scroll and subscription checks also pass, together with all 184 native unit cases.
+The thousand-event workload keeps at most 16 rich renderers; retained simulator CPU/memory metrics
+do not establish physical-device frame rate. This is simulator evidence;
+the physical iPad follow-up remains explicitly deferred and is not described as installed.
+
 # Native chat reading position and scrolling — R26
 
 ## Findings and correction

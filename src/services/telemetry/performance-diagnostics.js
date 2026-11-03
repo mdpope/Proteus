@@ -97,7 +97,7 @@ export class PerformanceDiagnostics {
     ring(this.integrationBatches,counts,32);this.dirty=true;
   }
   // Aggregate wire metadata only; callers cannot supply payloads or labels.
-  transport({direction,bytes=0,buffered=0,closeCode,congested=false}={}) {
+  transport({direction,bytes=0,buffered=0,closeCode,congested=false,kind}={}) {
     if(!this.enabled||this.closed)return;
     this.remoteTransport ??= {receivedPackets:0,receivedBytes:0,sentPackets:0,sentBytes:0,maxPacketBytes:0,maxBufferedBytes:0,congestionCount:0,closes:{},windows:[]};
     const value=this.remoteTransport, size=Math.max(0,Math.min(16_000_000,Math.trunc(Number(bytes)||0))), now=this.clock.wall();
@@ -106,6 +106,10 @@ export class PerformanceDiagnostics {
       const bucket=Math.floor(now/10000)*10000;
       let window=value.windows.at(-1);if(window?.at!==bucket){window={at:bucket,receivedBytes:0,sentBytes:0,receivedPackets:0,sentPackets:0};ring(value.windows,window,12);}
       window[prefix+'Bytes']+=size;window[prefix+'Packets']++;
+      if(direction==='send'){
+        const category=['state','run','run.changed','tabs','reply'].includes(kind)?kind:'other';
+        for(const target of [value,window]){target.sentKinds??={};const row=target.sentKinds[category]??={packets:0,bytes:0};row.packets++;row.bytes+=size;}
+      }
     }
     value.maxBufferedBytes=Math.max(value.maxBufferedBytes,Math.max(0,Math.min(32_000_000,Number(buffered)||0)));
     if(congested)value.congestionCount++;

@@ -6,14 +6,14 @@ export class RemoteOutbound {
   constructor(socket,{reject=()=>{},sent=()=>{},congested=()=>{},clock=()=>Date.now()}={}) {
     Object.assign(this,{socket,reject,sent,congested,clock});this.queue=[];this.bytes=0;this.history=[];this.closed=false;this.writing=false;this.inflightBytes=0;
   }
-  enqueue(peer,payload) {
+  enqueue(peer,payload,kind='other') {
     if(this.closed||this.socket.readyState!==1)return false;
     const bytes=Buffer.byteLength(payload);
     if(bytes>limits.packetBytes||this.bytes+this.inflightBytes+bytes>limits.queuedSendBytes||this.queue.length>=limits.hostWindowPackets) {
       this.congested(this.bytes+this.inflightBytes+bytes);this.remove(peer.id);this.reject(peer);
       return false;
     }
-    this.queue.push({peer:peer.id,payload,bytes});this.bytes+=bytes;clearTimeout(this.timer);this.timer=null;this.pump();return true;
+    this.queue.push({peer:peer.id,payload,bytes,kind});this.bytes+=bytes;clearTimeout(this.timer);this.timer=null;this.pump();return true;
   }
   control(payload) {
     const bytes=Buffer.byteLength(payload);
@@ -35,7 +35,7 @@ export class RemoteOutbound {
     });
     if(index<0){const bufferBlocked=this.queue.some(row=>this.socket.bufferedAmount+row.bytes>limits.bufferedBytes),delay=bufferBlocked?25:Math.max(1,(this.history[0]?.at??now)+limits.windowMs-now);this.timer=setTimeout(()=>{this.timer=null;this.pump();},delay);this.timer.unref?.();return;}
     const [row]=this.queue.splice(index,1);
-    this.bytes-=row.bytes;this.writing=true;this.inflightBytes=row.bytes;this.history.push({at:now,peer:row.peer,bytes:row.bytes});this.sent(row.bytes,this.socket.bufferedAmount+row.bytes);
+    this.bytes-=row.bytes;this.writing=true;this.inflightBytes=row.bytes;this.history.push({at:now,peer:row.peer,bytes:row.bytes});this.sent(row.bytes,this.socket.bufferedAmount+row.bytes,row.kind);
     try{this.socket.send(row.payload,error=>{this.writing=false;this.inflightBytes=0;if(error){this.stop();return;}this.pump();});}catch{this.stop();}
   }
   stop(){this.closed=true;clearTimeout(this.timer);this.timer=null;this.queue=[];this.bytes=0;this.history=[];}
