@@ -1,3 +1,9 @@
+## R26 — iPad question layout and chat reading performance
+
+The operator requests desktop parity for the iOS answer card and an in-depth correction of jumping, choppy chat scrolling and lost reading positions on iPad. Incremental deployment to the physical iPad is explicitly authorized as fixes validate. Preserve the accepted Mac candidate and current phone installation; wider distribution and Mnemosyne holds remain. The updater usability change remains held pending full Mac acceptance.
+
+The first native correction places the answer form and attachment/Clear/Send controls inside the question's message surface, adds the persistent answer label and bordered editor, and accommodates narrow action layouts. Simulator bounds and interaction acceptance precede the next paid iPad build. Scroll investigation is independent and still open; no performance or reading-restoration fix is claimed by this layout change.
+
 ## R24 — iOS and web connection stability
 
 The operator reports both clients repeatedly reconnecting/offline against Build Mac, with web worse. Investigate on the accepted updated desktop baseline, distinguishing owner relay availability, transport backpressure/size, authenticated handshake, request timeouts and client reconnect behavior. Preserve pairing keys, drafts, selection and retry receipts; do not reset pairing or weaken permissions as a shortcut. Current cause and fix remain unverified. This follow-up does not lift wider distribution or Mnemosyne implementation holds.

@@ -2706,6 +2706,18 @@ final class PhoneSidebarPreviewUITests: XCTestCase {
     XCTAssertEqual(input.value as? String, "Keep the same session")
     let clear = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "question-clear-")).firstMatch
     XCTAssertTrue(clear.isHittable)
+    let questionID = String(input.identifier.dropFirst("question-answer-".count))
+    let bubble = app.otherElements.matching(identifier: "question-card-" + questionID).firstMatch
+    XCTAssertTrue(bubble.exists, "Question and answer controls have a bounded, associated card")
+    if bubble.exists {
+        for control in [input, clear, app.buttons["Send answer"].firstMatch] {
+            XCTAssertGreaterThanOrEqual(control.frame.minX, bubble.frame.minX - 1)
+            XCTAssertLessThanOrEqual(control.frame.maxX, bubble.frame.maxX + 1)
+            XCTAssertGreaterThanOrEqual(control.frame.minY, bubble.frame.minY - 1)
+            XCTAssertLessThanOrEqual(control.frame.maxY, bubble.frame.maxY + 1)
+        }
+        let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Question, answer field and actions share one message card"; shot.lifetime = .keepAlways; XCTContext.runActivity(named: "Question card bounds") { $0.add(shot) }
+    }
     XCTAssertLessThanOrEqual(clear.frame.maxX, app.buttons["Send answer"].firstMatch.frame.minX + 1)
     clear.tap()
     let reviewed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: remaining)

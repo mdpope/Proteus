@@ -26,12 +26,21 @@ struct NativeUserQuestionCard: View {
     private var files: [NativeDraftAttachment] { shared.draftAttachments[key] ?? [] }
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
+            Divider().overlay(NativeTheme.line)
             if question.blocking && question.status == "pending" { Label("Your input is needed", systemImage: "person.crop.circle.badge.questionmark").font(.headline) }
             if question.queueCleared && question.status == "pending" { Text("Cleared from queue · You can still answer here.").font(.caption).foregroundStyle(.secondary) }
             if showHeading { Text(question.text).font(.subheadline.weight(.semibold)) }
             if question.status == "pending" {
                 ForEach(question.choices, id: \.self) { choice in Button { send(choice) } label: { VStack(alignment: .leading, spacing: 3) { Text(choice); if let description = question.choiceDescriptions[choice] { Text(description).font(.caption).foregroundStyle(.secondary) } } }.buttonStyle(.bordered).disabled(busy) }
-                TextField("Your answer", text: $answer, axis: .vertical).textFieldStyle(.roundedBorder).lineLimit(2...6).modifier(ChatReturnKey(text: $answer, submit: { send(answer) })).disabled(busy).accessibilityIdentifier("question-answer-" + question.id)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Your answer").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                    TextField("", text: $answer, axis: .vertical).textFieldStyle(.plain).lineLimit(2...6)
+                        .modifier(ChatReturnKey(text: $answer, submit: { send(answer) })).disabled(busy)
+                        .padding(10).frame(maxWidth: .infinity, minHeight: 68, alignment: .topLeading)
+                        .background(NativeTheme.background, in: RoundedRectangle(cornerRadius: 8))
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(NativeTheme.line))
+                        .accessibilityLabel("Your answer").accessibilityIdentifier("question-answer-" + question.id)
+                }
                 ForEach(files) { file in HStack { Text(file.name).font(.caption); Spacer(); Button("Remove", systemImage: "xmark") { shared.draftAttachments[key]?.removeAll { $0.id == file.id }; removeAttachmentRecord(store: store, draftKey: key + "-attachments", id: file.id) }.disabled(busy) } }
                 ForEach(missingFiles, id: \.self) { file in
                     HStack { Text("Reattach " + file["name"].string + " before sending").font(.caption).foregroundStyle(.orange); Spacer(); Button("Remove missing file") { removeAttachmentRecord(store: store, draftKey: key + "-attachments", id: file["id"].string) } }
@@ -45,17 +54,17 @@ struct NativeUserQuestionCard: View {
                         } label: { Image(systemName: "plus").frame(width: 44, height: 44) }.accessibilityLabel("Attach files to answer").disabled(busy)
                     }
                     Spacer()
-                    if !question.queueCleared && store.state["capabilities"].array.contains(.string("chat.questions.clear.v1")) {
-                        Button("Clear from queue") {
-                            Task { busy = true; defer { busy = false }; do { _ = try await store.request("chat.clear-question", ["id": .string(chatID), "questionId": .string(question.id)]); await store.openChat(chatID) } catch { self.error = error.localizedDescription } }
-                        }.disabled(busy || store.draft(key)["attempt"] != .null).accessibilityIdentifier("question-clear-" + question.id)
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 8) { clearButton; sendButton }.fixedSize(horizontal: true, vertical: false)
+                        VStack(alignment: .trailing, spacing: 8) { clearButton; sendButton }
                     }
-                    Button("Send answer") { send(answer) }.disabled(busy || !missingFiles.isEmpty || answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && files.isEmpty)
+
                 }
                 if busy { ProgressView().controlSize(.small) }
             } else { Text(question.status == "uncertain" ? "Answer delivery unconfirmed. Inspect this session before sending another answer." : question.answer.isEmpty ? question.status.capitalized : "Answered: " + question.answer + (question.deliveryState == "queued" ? " · queued for the next turn" : "")).font(.caption).foregroundStyle(.secondary) }
             if let error { Text(error).font(.caption).foregroundStyle(.orange) }
-        }.padding(.vertical, 12)
+        }.frame(maxWidth: .infinity, alignment: .leading).padding(.top, 12)
+            .accessibilityElement(children: .contain).accessibilityIdentifier("question-card-" + question.id)
         .onAppear {
             answer = store.draft(key)["answer"].string
             if question.blocking {
@@ -74,6 +83,19 @@ struct NativeUserQuestionCard: View {
             Task { do { for result in results { let data = try await selectedPhotoData(result.itemProvider); guard let image = UIImage(data: data), let png = image.pngData() else { throw RemoteError(message: "The photo could not be read.") }; try add(png, name: "Photo.png", mediaType: "image/png") } } catch { self.error = error.localizedDescription } }
         } }
         .sheet(isPresented: $confirm) { AttachmentSendReview(attachments: files, providerName: provider.capitalized, hostName: store.displayName) { Task { await deliver(submitted) } } }
+    }
+    @ViewBuilder private var clearButton: some View {
+        if !question.queueCleared && store.state["capabilities"].array.contains(.string("chat.questions.clear.v1")) {
+            Button("Clear from queue") {
+                Task { busy = true; defer { busy = false }; do { _ = try await store.request("chat.clear-question", ["id": .string(chatID), "questionId": .string(question.id)]); await store.openChat(chatID) } catch { self.error = error.localizedDescription } }
+            }.buttonStyle(.bordered).disabled(busy || store.draft(key)["attempt"] != .null)
+                .accessibilityIdentifier("question-clear-" + question.id)
+        }
+    }
+    private var sendButton: some View {
+        Button("Send answer") { send(answer) }.buttonStyle(.bordered)
+            .disabled(busy || !missingFiles.isEmpty || answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && files.isEmpty)
+            .accessibilityIdentifier("question-send-" + question.id)
     }
     private func add(_ bytes: Data, name: String, mediaType: String, createdAt: String? = nil, modifiedAt: String? = nil) throws {
         guard files.count < 4 else { throw RemoteError(message: "Question answers accept up to four files.") }

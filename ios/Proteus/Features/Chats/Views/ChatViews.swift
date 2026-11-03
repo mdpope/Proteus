@@ -1070,10 +1070,7 @@ struct ChatView: View {
                             ChatActivityGroupView(events: activityGroup(startingAt: index), hostName: store.state["hostName"].string, runID: id, runStatus: run["status"].string, search: pageSearch, eventStart: absoluteIndex)
                         } else if event["role"].string != "assistant" || !event["text"].string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                             if !event["data"]["delivery"]["state"].string.isEmpty { Text(event["data"]["delivery"]["state"].string.capitalized).font(.caption2).foregroundStyle(.teal) }
-                            MessageView(role: event["role"].string == "assistant" ? assistantName(event) : event["role"].string, text: NativeUserQuestion.presentationText(event["text"].string, questions: eventQuestions), runID: id, timestamp: event["timestamp"].string.isEmpty ? event["at"].string : event["timestamp"].string, turn: event["role"].string == "assistant" ? messageTurn(at: index) : .null, actionID: MessageActions.eligible(event) ? "\(store.connection?.hostId ?? "local"):\(id):\(absoluteIndex):\(event["at"].string)" : nil, sentAttachments: event["data"]["attachments"].array, onDocumentLink: event["role"].string == "assistant" ? { source in openDocument(source) } : nil, onResize: { Task { @MainActor in await Task.yield(); if followLatest && !userReadingGesture && !restoringConversation && pageSearch.query.isEmpty { proxy.scrollTo("chat-end", anchor: .bottom) } } }, search: pageSearch, searchKey: absoluteIndex, viewport: CGRect(x: 0, y: conversationViewportTop, width: conversationViewportWidth, height: max(1, composerAvailableHeight)))
-                            if event["role"].string == "assistant", let turn = NativeFusion.turn(run, id: event["data"]["fusion"]["fusionId"].string) {
-                                NativeFusionAttribution(run: run, turn: turn).padding(.horizontal, 4).padding(.bottom, 6)
-                            }
+                            MessageView(role: event["role"].string == "assistant" ? assistantName(event) : event["role"].string, text: NativeUserQuestion.presentationText(event["text"].string, questions: eventQuestions), runID: id, timestamp: event["timestamp"].string.isEmpty ? event["at"].string : event["timestamp"].string, turn: event["role"].string == "assistant" ? messageTurn(at: index) : .null, actionID: MessageActions.eligible(event) ? "\(store.connection?.hostId ?? "local"):\(id):\(absoluteIndex):\(event["at"].string)" : nil, sentAttachments: event["data"]["attachments"].array, onDocumentLink: event["role"].string == "assistant" ? { source in openDocument(source) } : nil, onResize: { Task { @MainActor in await Task.yield(); if followLatest && !userReadingGesture && !restoringConversation && pageSearch.query.isEmpty { proxy.scrollTo("chat-end", anchor: .bottom) } } }, search: pageSearch, searchKey: absoluteIndex, viewport: CGRect(x: 0, y: conversationViewportTop, width: conversationViewportWidth, height: max(1, composerAvailableHeight)), questionContent: eventQuestions.isEmpty ? nil : AnyView(VStack(alignment: .leading, spacing: 0) {
                             ForEach(eventQuestions) { question in
                                 NativeUserQuestionCard(question: question, showHeading: !question.promptVisible(in: event["text"].string, among: eventQuestions.count), chatID: id) { value, messageID, delivery in
                                     var args = delivery; args["id"] = .string(id); args["answer"] = .string(value); args["messageId"] = .string(messageID); args[question.blocking ? "requestId" : "questionId"] = .string(question.id)
@@ -1081,6 +1078,10 @@ struct ChatView: View {
                                     await store.openChat(id)
                                 }
                                 .id("user-question-" + question.id)
+                            }
+                            }))
+                            if event["role"].string == "assistant", let turn = NativeFusion.turn(run, id: event["data"]["fusion"]["fusionId"].string) {
+                                NativeFusionAttribution(run: run, turn: turn).padding(.horizontal, 4).padding(.bottom, 6)
                             }
                             if let recovery, recovery.event == event {
                                 NativeChatRecoveryControls(state: recovery, run: run, disabled: busy || !store.connected) { action in
@@ -2042,6 +2043,7 @@ struct MessageView: View {
     var search: NativePageSearch? = nil
     var searchKey = 0
     var viewport: CGRect? = nil
+    var questionContent: AnyView? = nil
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack { Text(role.uppercased()).font(.caption2.weight(.bold)); Spacer(); if role != "user" && turn != .null { RuntimeTimerView(turns:[turn]) }; if let date = ProviderAllowance.date(timestamp) { Text(nativeTimestamp(date, timezone: timeZone.identifier)).font(.caption2).accessibilityIdentifier("message-timestamp") } }.foregroundStyle(.secondary)
@@ -2060,6 +2062,7 @@ struct MessageView: View {
                     }.font(.caption).padding(6).background(Color.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
                 }.buttonStyle(.plain).disabled(!viewable || loadingAttachment != nil).accessibilityLabel(viewable ? "Open " + item["name"].string : item["name"].string)
             }
+            if let questionContent { questionContent }
             if let actionID { MessageActionBar(messageID: actionID, markdown: text) }
         }.onGeometryChange(for: Bool.self) { geometry in
             guard let viewport, viewport.width > 0 else { return true }

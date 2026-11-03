@@ -1,3 +1,7 @@
+## R26 — first incremental iPad correction
+
+Native question controls now share their message bubble instead of appearing as an adjacent sibling. The form has a visible answer label, a desktop-style bordered field and actions with a narrow-width fallback. The current iPad interaction test additionally checks that the answer field and action buttons are geometrically contained in the message card. The iPad simulator interaction/bounds test passes (choices, typing, Clear, retained draft and Return); static checks pass. Signing and incremental physical deployment follow this source freeze. The requested scroll performance and reading-position investigation remains open.
+
 ## R23 — scoped owner scheduler controls and targeted local update
 
 The operator authorized finishing scheduler fixes and updating only this desktop and the physical
