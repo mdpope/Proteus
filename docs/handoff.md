@@ -1,3 +1,7 @@
+## R23 physical rollout complete; R24 connection stability remains open
+
+Physical iPhone/iPad run 0.2.41/2611.2.3 with all 300/198 protected files hash-matched before launch, four saved destinations/selection each retained and two verified recoveries each. Physical gesture, push and authenticated reconnect are not established. Same local desktop owner job is handed off/waiting for idle; parent must yield for restart. Installed Mac is still 0.2.40 until independent verification. The operator reports repeated reconnecting/offline on both iOS and web against this Mac; do not mistake saved metadata for connection acceptance. Complete desktop preservation/health and trace owner/relay/client connection behavior before claiming resolution. Private recovery/update receipts and continuation routing are in the operator record. Wider distribution/Mnemosyne holds remain.
+
 ## R23 — scheduler fixes and local/physical update authorized
 
 The latest operator instruction supersedes the earlier hold only for this desktop and the physical

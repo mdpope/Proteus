@@ -16,7 +16,7 @@
   "priorRequestAudit": "docs/releases/2026-11-02/prior-release-audit.md",
   "previousAcceptedSourceCommit": "4456aea8837171ba60f82775859d9ce7f4ec0810",
   "sourceCommit": "e973d4c117d326e7652d9ee2b409e4bbacfccaab",
-  "candidateSourceStatus": "R23 signed local Mac and paid iOS artifacts accepted; local owner handed off and waiting for idle; physical install blocked by unlock/connectivity",
+  "candidateSourceStatus": "R23 physical iPhone/iPad installed, preservation/launch/two-generation retention verified; same local desktop job handed off and waiting for idle; iOS/web connection stability unresolved",
   "widerDistributionHold": {
     "active": true,
     "reason": "Wider app distribution waits for Mnemosyne review and a later accepted build."

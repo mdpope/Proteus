@@ -1,3 +1,11 @@
+# R23 — physical devices verified; local desktop waiting for idle
+
+Both physical clients now run **0.2.41 / 2611.2.3**, using the accepted artifact below. The iPhone's 300 protected files and iPad's 198 protected files all match recovery hashes before first launch. Running processes and each device's four saved connections/selection verify afterward. Established bundle, signing/profile and keychain entitlements remain unchanged. Exactly two verified recovery generations remain per device. Retention removes 150,625,440 logical bytes for phone and 109,338,600 for tablet; observed free-space changes are +14,671,872 and -23,019,520 bytes respectively while concurrent work continues, not an isolated allocation measurement.
+
+An interruption stopped the first iPad attempt before any install intent. Its data subsequently differed from the cold capture; the helper correctly refused installation. A fresh current snapshot replaced that invalidated in-flight payload after both accepted predecessors verified; compact original evidence remains. The partial iPhone capture resumed its verified files rather than starting another full copy. Both successful installation requests were issued once.
+
+The local Mac remains on 0.2.40. Its same prepared owner job has been handed off again and waits for this chat and browser activity to become idle; no desktop installation or preservation result is inferred. Wider distribution and broad Mnemosyne implementation remain held. The operator now reports persistent iOS/web reconnecting/offline against this Mac; authenticated stability remains unresolved despite preserved pairing records. Verify the updated owner/relay path after restart, then continue R24 investigation.
+
 # R23 — targeted local/physical update now authorized
 
 The operator explicitly requests this local desktop plus physical iPhone/iPad after scheduler fixes.

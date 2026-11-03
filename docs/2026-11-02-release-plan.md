@@ -1,3 +1,7 @@
+## R24 — iOS and web connection stability
+
+The operator reports both clients repeatedly reconnecting/offline against Build Mac, with web worse. Investigate on the accepted updated desktop baseline, distinguishing owner relay availability, transport backpressure/size, authenticated handshake, request timeouts and client reconnect behavior. Preserve pairing keys, drafts, selection and retry receipts; do not reset pairing or weaken permissions as a shortcut. Current cause and fix remain unverified. This follow-up does not lift wider distribution or Mnemosyne implementation holds.
+
 ## R23 — scoped owner scheduler controls and targeted local update
 
 The operator authorized finishing scheduler fixes and updating only this desktop and the physical
