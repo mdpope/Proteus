@@ -3158,3 +3158,14 @@ authenticated serialized read to replace it only when the cached revision has no
 the read. Unsolicited stale snapshots and concurrent newer updates retain their protections.
 Failed mutations refresh owner state without replaying uncertain actions. Do not delete another
 project's tabs to make differently scoped views appear equal.
+
+
+## November 2 — congestion must not impersonate authentication failure
+
+Pace ordered wire output inside unchanged relay ceilings instead of closing the shared host for a
+normal burst. Retain bounded queues and per-client fairness. Negotiate targeted temporary relay
+disconnects; an old relay falls back honestly instead of treating congestion as revoked access.
+Current sync state supersedes obsolete replayed state snapshots; lifecycle and mutation receipts
+retain their existing meanings. Measure wire bytes, queue pressure and numeric close codes without
+persisting payloads or credentials. Resume an explicitly visible project's owner independently of
+the default selected computer, preserving suspended-command and immutable-owner boundaries.

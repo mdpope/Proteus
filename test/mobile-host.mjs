@@ -140,6 +140,7 @@ const fixture = http.createServer(async (req, res) => {
     if(query.get('enabled')==='1')failedHistoryScopes.add(id);else failedHistoryScopes.delete(id);
     res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify({synthetic:true}));return;
   }
+  if(req.url==='/transport-evidence'){res.setHeader('Content-Type','application/json');res.end(JSON.stringify({host:app.remote.status,wire:app.performanceDiagnostics?.snapshot().remoteTransport,relay:relay.diagnostics?.()}));return;}
   if(req.url==='/tab-reconnect-fixture'&&req.method==='POST'){
     let raw='';for await(const chunk of req){raw+=chunk;if(raw.length>1024)throw Error('Synthetic request too large');}
     const value=JSON.parse(raw);if(value.action==='disconnect')await app.remote.stop();else if(value.action==='connect')await app.remote.start();else throw Error('Unknown synthetic connection action');

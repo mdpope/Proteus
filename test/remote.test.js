@@ -52,6 +52,24 @@ test('relay registration rejection remains actionable during retry and clears af
   await until(() => app.remote.status === 'online');
   assert.equal(app.remote.info().error, null);
 });
+test('oversize client output disconnects only that client and retains authenticated pairing',async t=>{
+ const {app,connect}=await fixture(t),invite=RemoteClient.capsule((await app.remote.pairing()).code),first=await connect(invite),second=await connect();
+ await until(()=>app.remote.relayClientDisconnect===true);
+ const peer=[...app.remote.peers.values()].find(peer=>peer.device?.id===first.device.id);
+ app.remote.raw(peer,{type:'synthetic',value:'x'.repeat(8_000_000)});
+ await until(()=>first.ws.readyState===3);
+ assert.equal(app.remote.status,'online');assert.ok((await second.request('sync')).state.capabilities.includes('content-tabs.v1'));
+ const restored=await connect(invite,first.device);assert.ok((await restored.request('sync')).state.capabilities.includes('content-tabs.v1'));
+});
+test('reconnect sync skips obsolete state snapshots while retaining lifecycle replay',async t=>{
+ const {app,connect}=await fixture(t),invite=RemoteClient.capsule((await app.remote.pairing()).code),first=await connect(invite);
+ app.remote.broadcast('synthetic-anchor',{});await until(()=>first.events.some(event=>event.event==='synthetic-anchor'));
+ const cursor=first.events.find(event=>event.event==='synthetic-anchor').cursor;first.close();
+ for(let i=0;i<5;i++)app.remote.broadcast('state',{obsolete:i});
+ app.remote.broadcast('chat.lifecycle',{id:'synthetic-retained',archivedAt:'synthetic'});
+ const next=await connect(invite,first.device),result=await next.request('sync',{cursor});
+ assert.ok(result.state.capabilities.includes('content-tabs.v1'));assert.equal(next.events.some(event=>event.event==='state'),false);assert.equal(next.events.some(event=>event.event==='chat.lifecycle'&&event.data.id==='synthetic-retained'),true);
+});
 test('protocol v1 mobile peers discover this host platform, reconnect and retain device grants',async t=>{
   const {app,connect}=await fixture(t);const invitation=RemoteClient.capsule((await app.remote.pairing()).code),first=await connect(invitation);
   const state=(await first.request('sync')).state,metadata=hostPlatformMetadata();

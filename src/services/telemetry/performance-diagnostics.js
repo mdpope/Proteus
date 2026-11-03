@@ -96,6 +96,22 @@ export class PerformanceDiagnostics {
     const counts=Object.fromEntries(['runs','candidates','skipped','probed','rejected','globalEnumerations','batches'].map(key=>[key,Math.max(0,Math.min(1000000,Math.trunc(Number(values[key])||0)))]));
     ring(this.integrationBatches,counts,32);this.dirty=true;
   }
+  // Aggregate wire metadata only; callers cannot supply payloads or labels.
+  transport({direction,bytes=0,buffered=0,closeCode,congested=false}={}) {
+    if(!this.enabled||this.closed)return;
+    this.remoteTransport ??= {receivedPackets:0,receivedBytes:0,sentPackets:0,sentBytes:0,maxPacketBytes:0,maxBufferedBytes:0,congestionCount:0,closes:{},windows:[]};
+    const value=this.remoteTransport, size=Math.max(0,Math.min(16_000_000,Math.trunc(Number(bytes)||0))), now=this.clock.wall();
+    if(direction==='receive'||direction==='send') {
+      const prefix=direction==='receive'?'received':'sent';value[prefix+'Packets']++;value[prefix+'Bytes']+=size;value.maxPacketBytes=Math.max(value.maxPacketBytes,size);
+      const bucket=Math.floor(now/10000)*10000;
+      let window=value.windows.at(-1);if(window?.at!==bucket){window={at:bucket,receivedBytes:0,sentBytes:0,receivedPackets:0,sentPackets:0};ring(value.windows,window,12);}
+      window[prefix+'Bytes']+=size;window[prefix+'Packets']++;
+    }
+    value.maxBufferedBytes=Math.max(value.maxBufferedBytes,Math.max(0,Math.min(32_000_000,Number(buffered)||0)));
+    if(congested)value.congestionCount++;
+    if(Number.isInteger(closeCode)&&closeCode>=1000&&closeCode<=4999){const code=[1000,1001,1006,1008,1009,1012,1013].includes(closeCode)?String(closeCode):'other';value.closes[code]=(value.closes[code]||0)+1;}
+    this.dirty=true;
+  }
   snapshot() {
     const phases = [...this.metrics].map(([key, values]) => {
       const split = key.indexOf(':'), totalMs = values.reduce((sum, value) => sum + value, 0);
@@ -105,6 +121,7 @@ export class PerformanceDiagnostics {
     return { version: 1, enabled: this.enabled, started: this.started, closed: this.closed, createdAt: this.createdAt,
       observedAt: this.clock.wall(), uptimeMs: rounded(this.clock.monotonic() - this.startedMono),
       limits: { phaseSamples: 128, slowPhases: 64, eventLoop: 32, longEventLoop: 16, fileBytes: MAX_FILE_BYTES },
+      remoteTransport: this.remoteTransport ? structuredClone(this.remoteTransport) : null,
       phases, integrationBatches: structuredClone(this.integrationBatches), slowPhases: structuredClone(this.slowPhases), eventLoop: structuredClone(this.eventLoop), longEventLoop: structuredClone(this.longEventLoop),
       activeAsyncPhases: [...this.active].map(([name, value]) => ({ name, count: value.count, elapsedMs: rounded(this.clock.monotonic() - value.startMono) })),
       persistence: { failures: this.writeFailures } };

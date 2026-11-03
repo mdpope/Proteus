@@ -1,3 +1,4 @@
+import {RemoteOutbound} from './remote-outbound.js';
 import {validateAgentSendModelOptions} from '../chats/send-model-options.js';
 import {clearQuestionFromQueue} from '../chats/user-questions.js';
 import {inputOrigin} from '../chats/input-origin.js';
@@ -19,7 +20,6 @@ import os from 'node:os';
 import path from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
 import { WebSocket } from 'ws';
-import { remoteTransportLimits } from './remote-transport.js';
 import QRCode from 'qrcode';
 import { atomicJSON, readJSON } from '../../shared/files.js';
 import { revision } from '../scheduling/schedules.js';
@@ -154,32 +154,45 @@ export class RemoteHost {
   connect() {
     if (!this.config.enabled || this.closed) return;
     this.status = 'connecting';
+    this.outbound?.stop();this.relayClientDisconnect=false;
     const base = this.config.mode === 'local' ? `ws://127.0.0.1:${this.config.port}` : this.config.relayURL;
     const ws = this.socket = new WebSocket(`${base}/socket?role=host&host=${this.config.hostId}`, { headers: { Authorization: `Bearer ${this.config.relayToken}` }, maxPayload: 8_000_000, handshakeTimeout: 8000 });
     ws.on('open', () => { if (this.socket !== ws) return;this.status='online';this.error=null;clearTimeout(this.stableConnectionTimer);this.stableConnectionTimer=setTimeout(()=>{this.reconnectAttempt=0;},30000);this.stableConnectionTimer.unref?.();const since=this.config.offlineSince;if(since){const elapsed=Math.max(0,Math.floor((Date.now()-Date.parse(since))/1000));this.service.activity?.add('device.reconnected',{hostId:this.config.hostId,offlineSeconds:elapsed});delete this.config.offlineSince;this.save();}this.service.activity?.log('info','transport.online','Connected to the relay.',{hostId:this.config.hostId}); });
     ws.on('error', error => { if (this.socket === ws) this.error = /Unexpected server response: (401|403)\b/.test(error.message) ? 'The relay rejected this computer’s registration. Check its relay registration token or whether this computer is already connected elsewhere. To connect to another computer, use that computer’s pairing code; incoming access here is not required.' : error.message; });
-    ws.on('close', () => {
+    ws.on('close', (code) => {
+      this.service.performanceDiagnostics?.transport({closeCode:code});
       if (this.socket !== ws) return;
-      for(const id of this.peers.keys()){this.service.projectFollow?.removeActor(id);this.service.sharedInference?.jobs.disconnect(id);}this.peers.clear(); this.status = 'offline';this.config.offlineSince ||= new Date().toISOString();this.save();this.service.activity?.log('warning','transport.offline','Connection to the relay was interrupted.',{hostId:this.config.hostId});
+      this.outbound?.stop();
+      for(const id of this.peers.keys()){this.service.projectFollow?.removeActor(id);this.service.sharedInference?.jobs.disconnect(id);}this.peers.clear(); this.status = 'offline';this.config.offlineSince ||= new Date().toISOString();this.save();this.service.activity?.log('warning','transport.offline','Connection to the relay was interrupted.',{hostId:this.config.hostId,closeCode:code,remoteTransport:this.service.performanceDiagnostics?.snapshot().remoteTransport});
       clearTimeout(this.stableConnectionTimer);
       if (!this.closed && this.config.enabled) {const delay=Math.min(30000,1000*2**Math.min(this.reconnectAttempt||0,5))*(.75+Math.random()*.5);this.reconnectAttempt=(this.reconnectAttempt||0)+1;this.reconnect = setTimeout(() => this.connect(), delay);}
     });
     ws.on('message', bytes => {
+      this.service.performanceDiagnostics?.transport({direction:'receive',bytes:bytes.length});
       try {
         const message = JSON.parse(bytes);
+        if(message.type==='relay.ready'){this.relayClientDisconnect=message.capabilities?.includes('client.disconnect.v1')===true;return;}
         if (message.type === 'connect') {
           const peer = { id: message.clientId, challenge: secret(), incoming: 0, outgoing: 0, joined: Date.now() };
           this.peers.set(peer.id, peer); this.raw(peer, { type: 'challenge', challenge: peer.challenge });
-        } else if (message.type === 'disconnect') {this.service.projectFollow?.removeActor(message.clientId);this.service.sharedInference?.jobs.disconnect(message.clientId);this.peers.delete(message.clientId);}
+        } else if (message.type === 'disconnect') {this.outbound?.remove(message.clientId);this.service.projectFollow?.removeActor(message.clientId);this.service.sharedInference?.jobs.disconnect(message.clientId);this.peers.delete(message.clientId);}
         else { const peer = this.peers.get(message.clientId); if (peer) void this.receive(peer, message.packet).catch(() => { this.service.projectFollow?.removeActor(peer.id);this.peers.delete(peer.id); this.raw(peer, { type: 'rejected' }); }); }
       } catch { /* Reject malformed routing frames without taking the host down. */ }
     });
   }
   raw(peer, packet) {
+    if(this.peers&&this.peers.get(peer.id)!==peer&&packet.type!=='rejected')return;
     if(this.socket?.readyState!==WebSocket.OPEN)return;
-    const payload=JSON.stringify({clientId:peer.id,packet}),bytes=Buffer.byteLength(payload);
-    if(bytes>remoteTransportLimits.packetBytes||this.socket.bufferedAmount+bytes>remoteTransportLimits.bufferedBytes){this.socket.close(1013,'Transport is busy; reconnect and refresh.');return;}
-    this.socket.send(payload);
+    const payload=JSON.stringify({clientId:peer.id,packet});
+    if(!this.outbound||this.outbound.socket!==this.socket) {
+      this.outbound?.stop();
+      this.outbound=new RemoteOutbound(this.socket,{
+        reject:target=>{this.service.projectFollow?.removeActor(target.id);this.service.sharedInference?.jobs.disconnect(target.id);this.peers?.delete(target.id);if(!this.relayClientDisconnect||!this.outbound.control(JSON.stringify({type:'client.disconnect',clientId:target.id})))this.socket.close(1013,'Transport congestion; relay upgrade required for client isolation.');},
+        sent:(size,buffered)=>this.service.performanceDiagnostics?.transport({direction:'send',bytes:size,buffered}),
+        congested:buffered=>this.service.performanceDiagnostics?.transport({congested:true,buffered}),
+      });
+    }
+    return this.outbound.enqueue(peer,payload);
   }
   send(peer, value) { const seq=++peer.outgoing,box=timedSync(this.service.performanceDiagnostics,'remote.send.encrypt',()=>seal(peer.device.key,value,`${peer.prefix}:host:${seq}`));return timedSync(this.service.performanceDiagnostics,'remote.send.transport',()=>this.raw(peer,{type:'data',seq,box})); }
   async pairing(publicURL,{management=false}={}) {
@@ -364,7 +377,7 @@ export class RemoteHost {
     if (method === 'sync') {
       return timed(this.service.performanceDiagnostics, 'remote.sync', () => {
       const index = this.journal.findIndex(event => event.cursor === args.cursor);
-      if (index >= 0) for (const event of this.journal.slice(index + 1)) if (!event.runId || event.runId === peer.runId) this.send(peer, event);
+      if (index >= 0) for (const event of this.journal.slice(index + 1)) if (event.event !== 'state' && (!event.runId || event.runId === peer.runId)) this.send(peer, event);
       return { state: remoteState(this.service), cursor: `${this.epoch}:${this.sequence}` };
       });
     }
@@ -419,7 +432,7 @@ export class RemoteHost {
         }
         if((value.operations||[]).some(op=>op.action==='close'&&this.service.contentTabs.get(value.scope,value.id).tabs.some(tab=>tab.id===op.id&&tab.type==='terminal')))this.requireResourceAccess(peer);
         result=await this.service.mutateContentTabs(value);
-      }else result=await this.service.contentTabs.getAsync(args.scope,args.id,{historyLimit:args.historyLimit});
+      }else result=await this.service.contentTabs.getAsync(args.scope,args.id,{historyLimit:args.historyLimit??32});
       return {...result,tabs:result.tabs.filter(tab=>tab.type!=='document'||canDocuments)};
     }
     if (method === 'chat.get') { const run = engine.getRun(args.id); if(args.agentId)return run.subagents?.some(row=>row.id===args.agentId)?subagentPage(run,args.agentId,args.beforeEvent):engine.delegation.page(run.id,args.agentId,args.beforeEvent); if(args.watch!=='none'){peer.runId = run.id;peer.summaryOnly=args.watch==='summary';} const view={...remoteRun(run, Math.max(0, Math.floor(Number(args.offset) || 0)), engine.permissions, args.beforeEvent,ownerChatControls(run,engine)),...this.service.workspaceProjects?.membership(run),...(run.schedule.purpose==='update'?{update:updateObservation(this.service,run)}:{})};return args.historyCursor?chatDelta(run,view,args.historyCursor):{...view,...(!args.offset&&args.beforeEvent===undefined?chatDelta(run,view):{})}; }
@@ -598,7 +611,7 @@ export class RemoteHost {
   }
   async stop() {
     clearTimeout(this.reconnect);clearTimeout(this.stableConnectionTimer); this.invite = null;this.documents.clear();
-    const socket = this.socket; this.socket = null; socket?.terminate(); for(const id of this.peers.keys()){this.service.projectFollow?.removeActor(id);this.service.sharedInference?.jobs.disconnect(id);}this.peers.clear();
+    this.outbound?.stop();const socket = this.socket; this.socket = null; socket?.terminate(); for(const id of this.peers.keys()){this.service.projectFollow?.removeActor(id);this.service.sharedInference?.jobs.disconnect(id);}this.peers.clear();
     if (this.relay) { await this.relay.close(); this.relay = null; }
     this.status = 'disabled';
   }

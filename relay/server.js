@@ -13,6 +13,7 @@ export function sendRelayPacket(ws,value){
   const encoded=JSON.stringify(value),bytes=Buffer.byteLength(encoded);
   if(bytes>limits.packetBytes){ws.close(1009,'Message too large');return false;}
   if(ws.bufferedAmount+bytes>limits.bufferedBytes){ws.close(1013,'Slow connection');return false;}
+  if(ws.proteusWire){ws.proteusWire.sentPackets++;ws.proteusWire.sentBytes+=bytes;}
   ws.send(encoded);return true;
 }
 const send=sendRelayPacket;
@@ -46,7 +47,7 @@ export async function startRelay({ port = 4318, bind = '127.0.0.1', token = proc
   const origins = relayOrigins(allowedClientOrigins);
   const hostTokens = relayHostTokens(hostTokensFile);
   if (!hostTokens && !/^[a-f0-9]{64}$/.test(token || '')) throw new Error('Set a random 32-byte PROTEUS_RELAY_TOKEN or an owner-only host token map.');
-  const hosts = new Map(); const clients = new Map();
+  const hosts = new Map(); const clients = new Map(); const closedConnections=[];
   const server = http.createServer((req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     res.writeHead(req.url === '/health' ? 200 : 404, { 'Content-Type': 'application/json' });
@@ -62,14 +63,19 @@ export async function startRelay({ port = 4318, bind = '127.0.0.1', token = proc
     if (role === 'host' && (!registrationToken || !equal(req.headers.authorization, `Bearer ${registrationToken}`) || hosts.has(hostId))) return reject();
     if (wss.clients.size >= 64) return reject();
     wss.handleUpgrade(req, socket, head, ws => {
+      ws.proteusWire={receivedPackets:0,receivedBytes:0,sentPackets:0,sentBytes:0};
+      ws.on('message',bytes=>{ws.proteusWire.receivedPackets++;ws.proteusWire.receivedBytes+=bytes.length;});
+      ws.on('close',(code,reason)=>{const known=['Host traffic budget exceeded','Client traffic budget exceeded','Message too large','Slow connection','Host disconnected','Temporary congestion; reconnect','Pairing timed out','Device access ended'];closedConnections.push({role,code,reason:known.includes(reason.toString())?reason.toString():'other',...ws.proteusWire});if(closedConnections.length>32)closedConnections.shift();});
       ws.alive = true; ws.on('pong', () => { ws.alive = true; }); ws.on('error', () => {});
       if (role === 'host') {
         hosts.set(hostId, ws);
+        send(ws,{type:'relay.ready',capabilities:['client.disconnect.v1']});
         const budget=transportBudget({packets:limits.hostWindowPackets,bytes:limits.hostWindowBytes});
         ws.on('message', bytes => {
           if(!budget(bytes.length)){ws.close(1013,'Host traffic budget exceeded');return;}
           try {
             const message = JSON.parse(bytes); const client = clients.get(message.clientId);
+            if(message.type==='client.disconnect'&&client?.hostId===hostId){client.ws.close(1013,'Temporary congestion; reconnect');return;}
             if (client?.hostId === hostId) {
               if(!client.outboundBudget(bytes.length)){client.ws.close(1013,'Client traffic budget exceeded');return;}
               if (message.packet?.type === 'ready') clearTimeout(client.authenticationTimer);
@@ -98,7 +104,7 @@ export async function startRelay({ port = 4318, bind = '127.0.0.1', token = proc
   const heartbeat = setInterval(() => { for (const ws of wss.clients) { if (!ws.alive) ws.terminate(); else { ws.alive = false; ws.ping(); } } }, 20_000);
   try { await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, bind, resolve); }); }
   catch (error) { clearInterval(heartbeat); throw error; }
-  return { port: server.address().port, async close() { clearInterval(heartbeat); for (const ws of wss.clients) ws.terminate(); await new Promise(resolve => wss.close(resolve)); await new Promise(resolve => server.close(resolve)); } };
+  return { port: server.address().port, diagnostics:()=>({closedConnections:structuredClone(closedConnections)}), async close() { clearInterval(heartbeat); for (const ws of wss.clients) ws.terminate(); await new Promise(resolve => wss.close(resolve)); await new Promise(resolve => server.close(resolve)); } };
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const relay = await startRelay({ port: Number(process.env.PORT || 4318), bind: process.env.BIND || '0.0.0.0' });

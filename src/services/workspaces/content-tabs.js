@@ -56,6 +56,14 @@ export class ContentTabs {
   async history({scope,id,tabId,...query}){const tab=this.get(scope,id).tabs.find(tab=>tab.id===tabId&&tab.type==='browser');if(!tab){const error=new Error('This browser tab is no longer open.');error.code='NAVIGATION_TAB_CLOSED';throw error;}return this.historyStore.navigationGet({...query,tabId:this.navigationKey(scope,id,tabId)});}
   async getAsync(scope,id,{historyLimit}={}){
     const result=this.get(scope,id);if(!this.historyStore)return result;
+    // Concurrent devices reading one unchanged scope share only the active read,
+    // never a persistent result. A new membership revision gets a distinct read.
+    this.readFlights??=new Map();const key=JSON.stringify([scope,id,result.revision,historyLimit??null]);
+    let task=this.readFlights.get(key);
+    if(!task){if(this.readFlights.size>=128)throw Error('Tab reads are busy. Retry shortly.');task=this.hydrateRead(scope,id,result,historyLimit);this.readFlights.set(key,task);}
+    try{return structuredClone(await task);}finally{if(this.readFlights.get(key)===task)this.readFlights.delete(key);}
+  }
+  async hydrateRead(scope,id,result,historyLimit){
     const hydrated=[];for(let offset=0;offset<result.tabs.length;offset+=8)hydrated.push(...await Promise.all(result.tabs.slice(offset,offset+8).map(async tab=>{
       if(tab.type!=='browser')return tab;
       const tabId=this.navigationKey(scope,id,tab.id);

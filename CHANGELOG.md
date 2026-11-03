@@ -1,5 +1,7 @@
 ## Nov 2 — 0.2.41 candidate
 
+- Nov 2 R29: pace encrypted host and native request bursts, avoid replaying obsolete state snapshots, isolate overloaded clients through negotiated relay control, measure bounded wire traffic/close codes, and resume a visible project’s suspended owner without changing computer selection. Live rollout and stability acceptance follow.
+
 - Scope native tab management to the selected project and reconcile owner snapshots after reconnect, including earlier cache incarnations; retain other projects and unconfirmed mutation identities.
 
 - Restore expandable project recents, paging and right-side totals while leaving additional open-tab navigation lists removed.

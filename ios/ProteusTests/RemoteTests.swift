@@ -298,6 +298,35 @@ final class RemoteTests: XCTestCase {
         XCTAssertEqual(restored.documentScrollOffset(for: key), 820)
     }
 
+    func testNativeWireBudgetBoundsRequestBurstsAndResetsAfterWindow() {
+        var budget = NativeSendBudget()
+        for _ in 0..<80 { XCTAssertEqual(budget.delay(bytes: 100, now: 0), 0); budget.record(bytes: 100, now: 0) }
+        XCTAssertEqual(budget.delay(bytes: 100, now: 0), 10)
+        XCTAssertEqual(budget.delay(bytes: 100, now: 10), 0)
+        XCTAssertTrue(budget.sent.isEmpty)
+        budget.record(bytes: 20_000_000, now: 10)
+        XCTAssertEqual(budget.delay(bytes: 5_000_000, now: 10), 10)
+    }
+    @MainActor func testNativeRequestBurstStaysConnectedWithinRelayBudget() async throws {
+        let (data, _) = try await URLSession.shared.data(from: URL(string: nativeFixtureHTTPOrigin + "/pair?projects=1")!)
+        let fixture = try JSONDecoder().decode(JSON.self, from: data)
+        let remote = RemoteStore(); remote.forget(); try remote.pair(fixture["code"].string)
+        defer { remote.forget() }
+        try await wait { remote.connected && remote.supportsProjects }
+        let generation = remote.authenticationGeneration
+        do {
+            try await withThrowingTaskGroup(of: Void.self) { group in
+                for _ in 0..<110 { group.addTask { @MainActor in _ = try await remote.request("tabs.get", ["scope": .string("project"), "id": fixture["projectId"]]) } }
+                try await group.waitForAll()
+            }
+        } catch {
+            print("Burst failure type=\(String(reflecting: type(of: error))), status=\(remote.status), connected=\(remote.connected), authGeneration=\(remote.authenticationGeneration), pending=\(remote.pendingCommandCount), message=\(error.localizedDescription)")
+            if let (diagnostic, _) = try? await URLSession.shared.data(from: URL(string: nativeFixtureHTTPOrigin + "/transport-evidence")!) { print("Synthetic burst transport evidence: " + String(decoding: diagnostic, as: UTF8.self)) }
+            throw error
+        }
+        XCTAssertTrue(remote.connected)
+        XCTAssertEqual(remote.authenticationGeneration, generation, "Pacing must avoid a relay disconnect/re-authentication")
+    }
     @MainActor func testAuthenticatedTabReadRecordsOnlyBoundedSyncEvidence() async throws {
         let (data, _) = try await URLSession.shared.data(from: URL(string: nativeFixtureHTTPOrigin + "/pair?projects=1")!)
         let fixture = try JSONDecoder().decode(JSON.self, from: data)
@@ -1627,6 +1656,26 @@ final class DestinationTests: XCTestCase {
         let restored = DestinationStore(root: root, keychainService: service)
         XCTAssertEqual(restored.selected?.draft("reply:same-id").string, "Personal draft")
         destinations.activity(false); restored.activity(false)
+    }
+    @MainActor func testVisibleProjectResumesOnlyItsSuspendedOwnerWithoutChangingSelection() throws {
+        let (root, service) = try fixture(); let destinations = DestinationStore(root: root, keychainService: service)
+        defer { destinations.resetForTesting(); try? FileManager.default.removeItem(at: root) }
+        let a = credential(UUID().uuidString), b = credential(UUID().uuidString)
+        try destinations.register(a, label: "First"); let first = try XCTUnwrap(destinations.selected)
+        first.setDraft("reply:retained", .string("Retained draft"))
+        try destinations.register(b, label: "Second")
+        destinations.activateVisibleOwner(a.hostId)
+        XCTAssertEqual(first.status, "Offline · cached history", "Background views cannot activate connections")
+        destinations.activity(true); first.suspend()
+        destinations.activateVisibleOwner(a.hostId)
+        XCTAssertEqual(first.status, "Connecting…")
+        XCTAssertEqual(first.connection?.hostId, a.hostId)
+        XCTAssertEqual(destinations.selectedID, b.hostId)
+        XCTAssertEqual(first.draft("reply:retained").string, "Retained draft")
+        first.status = "Waiting for retry"
+        destinations.activateVisibleOwner(a.hostId)
+        XCTAssertEqual(first.status, "Waiting for retry", "An already active owner retains its retry state")
+        destinations.activity(false)
     }
     @MainActor func testSwitchFailsUnconfirmedCommandsAndOldViewCannotSendToNewHost() async throws {
         let (root, service) = try fixture(); let destinations = DestinationStore(root: root, keychainService: service)

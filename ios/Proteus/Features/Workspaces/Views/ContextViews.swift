@@ -748,7 +748,7 @@ struct NativeWorkspaceContentView: View {
             .onChange(of: areaActive) { _, active in if active { claimBack() } else if NativePhonePreview.enabled { phoneChrome.contentOwnsBack = false } }
             .onDisappear { if NativePhonePreview.enabled { phoneChrome.contentOwnsBack = false } }
             // Poll only while this project is on screen; hidden phone areas stay mounted.
-            .task(id: scope + String(areaActive) + String(scenePhase == .active)) { guard areaActive, scenePhase == .active else { return }; migrateSetupPlaceholders(); while !Task.isCancelled { await shared.refreshContentTabs(scope: scope, remote: store, kind: scopeKind, id: scopeID); try? await Task.sleep(for: .seconds(3)) } }
+            .task(id: scope + String(areaActive) + String(scenePhase == .active) + String(store.connected)) { guard areaActive, scenePhase == .active else { return }; destinations.activateVisibleOwner(hostID); migrateSetupPlaceholders(); while !Task.isCancelled { await shared.refreshContentTabs(scope: scope, remote: store, kind: scopeKind, id: scopeID); try? await Task.sleep(for: .seconds(3)) } }
     }
     private var workspacePageNames: [String] { projectID == nil ? (store.supportsProjects ? ["Projects", "Chats", "Tabs", "Configuration"] : ["Chats", "Tabs", "Configuration"]) : [] }
     private var homeTabID: String { selected == "workspace" ? (projectID == nil ? "page:" + page : "page:home") : selected }
