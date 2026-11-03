@@ -1,3 +1,14 @@
+# R27/R28 — emulator update complete; physical unlock pending
+
+Both Preview simulators run **0.2.41 / 2611.2.6** from frozen source `7f66c66`, with unchanged
+protected data, destinations and selection. Exactly one Preview remains on each simulator.
+The same signed universal paid build is frozen for both physical devices; each currently reports
+passcode required. No physical capture or installation for this revision has begun.
+See [mobile project tabs](mobile-project-tabs.md) for behavior, acceptance and remaining limits.
+The Mac candidate and all wider distribution/Mnemosyne/updater-usability holds remain unchanged.
+
+Earlier entries below are historical checkpoints.
+
 # R26 — native correction installed locally
 
 Both physical devices and both shared Preview simulators run **0.2.41 / 2611.2.5** from frozen

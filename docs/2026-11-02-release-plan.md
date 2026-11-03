@@ -9,7 +9,7 @@ scope's rows during a new selection, disable host mutations offline and refresh 
 response without retrying the mutation. Serialized fresh reads can replace an older cache incarnation
 only if no newer cache revision arrived while reading; unsolicited stale snapshots remain rejected.
 Validation includes a genuine disconnect, owner close/open while offline and reconnect on the same
-screen. Combined R27/R28 phone/tablet delivery is in progress; existing holds remain unchanged.
+screen. Both Preview simulators run 0.2.41/2611.2.6 with protected data and destinations retained; physical installation awaits device unlock. See [mobile tab acceptance](releases/2026-11-02/mobile-project-tabs.md). Existing holds remain unchanged.
 
 ## R27 — restore project recents and counts
 
@@ -19,7 +19,8 @@ expandable recent-item shortcuts, paging and project-scoped activation without r
 extra lists. Native summaries include project chats even when their tab is closed, plus visible
 resource descriptors, deduplicated and sorted by activity. Fetch metadata only for expanded
 workspaces on expansion/catalog change/reconnect; do not restore five-second polling.
-Source implementation and native/desktop validation are in progress. Incremental phone/tablet
+Source implementation and phone/tablet/focused desktop validation pass. The combined signed
+update is ready; physical devices currently require their passcodes. Incremental phone/tablet
 updates remain authorized; wider distribution, updater usability and Mnemosyne holds persist.
 
 ## R26 — iPad question layout and chat reading performance
