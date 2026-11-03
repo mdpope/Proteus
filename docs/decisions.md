@@ -1,3 +1,7 @@
+## Nov 2 R37 — one idle inventory for guard and diagnostics
+
+Derive live updater waiting details from the same execution inventory used at each idle barrier. Background executions are keyed by lane, so resolve their chat IDs from slot values. Include orphan execution ownership conservatively rather than trusting a terminal chat status. Diagnostics are read-only; a tool approval remains an operator decision and no cancellation is added. A new-input checkpoint reset is distinct from active work and is cleared only by a revision-checked handoff.
+
 ## Nov 2 R36 — creation intent originates at creation
 
 Only an actual new extension browser-tab callback may declare creation intent; observing a locally missing ID, selecting a tab or restoring a saved view cannot declare a reopen. Carry the intent into active or background renderer registration and retain it until owner acknowledgement, including when it arrives after a synchronization snapshot. Confirmed owner close/move tombstones override it. Background extension creation uses the existing focus guard and registers without changing selection. Keep authoritative first-read behavior for ordinary stale mirrors.

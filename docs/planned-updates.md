@@ -1,3 +1,11 @@
+## R37 — updater waiting diagnostics implemented for final qualification
+
+The earlier R25 usability request is implemented after local R36 preservation and signing acceptance. Live owner status names all blocking chats and precise execution/retry/background/owner reasons, distinguishes the coordinator and checkpoint-review reset, and gives safe next steps. The same inventory guards restart. Source and disposable UI checks pass; final packaged qualification and rollout remain open. Newly reported iOS performance/composer/disconnect follow-ups and Mnemosyne redesign remain in the Nov 3 queue.
+
+## Nov 3 queue — iOS performance, composer and residual disconnect
+
+The actual iPhone test message arrived, but the operator reports very poor app performance, a message editor that does not grow with its text, and one subsequent disconnect. These follow-ups are explicitly moved to [the Nov 3 issues list](2026-11-03-issues.md). Continue Nov 2 rollout and closeout independently; do not call one delivered message sustained connection acceptance.
+
 ## Nov 3 queue — Mnemosyne redesign
 
 The operator moved the wider Mnemosyne design and staged product-boundary implementation to Nov 3. See [the preserved handoff](2026-11-03-mnemosyne-handoff.md). Nov 2 deployment and closeout continue independently; prototype review and native-owner safeguards remain.

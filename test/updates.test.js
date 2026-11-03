@@ -78,7 +78,7 @@ test('update handoff waits for terminal startup, then the attached child, before
 });
 
 test('completed updater card clears an old idle blocker while preserving real failure evidence',async t=>{
- const f=fixture(t);await prepare(f);writeJob(f.controller.file,{phase:'waiting-for-idle',blocker:'A model turn is active.'});assert.match(f.controller.status().job.blocker,/active/);
+ const f=fixture(t);await prepare(f);writeJob(f.controller.file,{phase:'waiting-for-idle',blocker:'A model turn is active.'});assert.match(f.controller.status().job.blocker,/final idle check/);
  writeJob(f.controller.file,{phase:'complete',outcome:'updated',error:'Retained diagnostic',blocker:'A model turn is active.'});const status=f.controller.status();assert.equal(status.job.blocker,null);assert.equal(status.job.error,'Retained diagnostic');assert.equal(status.job.outcome,'updated');
  writeJob(f.controller.file,{phase:'attention',blocker:'Inspect uncertain continuation before retrying.'});assert.match(f.controller.status().job.blocker,/uncertain continuation/);
 });
@@ -282,4 +282,14 @@ test('package workers are bounded and shutdown waits for queued work without sta
  const pending=Array.from({length:4},()=>f.controller.packageWork('inventoryStorage',f.controller.root,{home:f.home,installation:f.installation}).catch(error=>error.message));
  await assert.rejects(f.controller.packageWork('inventoryStorage',f.controller.root),/busy/);
  await f.controller.close();assert.deepEqual(await Promise.all(pending),Array(4).fill('The updater is closing.'));assert.equal(f.controller.packagePending,0);
+});
+
+test('live idle diagnostics follow statuses and lane-owned work without losing checkpoint reset semantics',async t=>{
+ const f=fixture(t);const job=await prepare(f);f.run.status='running';f.engine.persist(f.run);await handoff(f,job);
+ let live=f.controller.status().job;assert.equal(live.idle.blockers[0].chatId,f.run.id);assert.equal(live.idle.blockers[0].coordinator,true);
+ f.run.status='completed';f.engine.persist(f.run);f.engine.backgroundRuns.set('synthetic-lane',{id:f.run.id});
+ live=f.controller.status().job;assert.equal(live.idle.blockers[0].reasons[0].code,'background');await f.controller.advance();assert.equal(f.calls.length,0);
+ f.engine.backgroundRuns.clear();f.run.capacityRetry={nextAttemptAt:'2026-11-04T00:00:00Z'};live=f.controller.status().job;assert.equal(live.idle.blockers[0].reasons[0].code,'capacity-retry');
+ delete f.run.capacityRetry;f.controller.newInput();live=f.controller.status().job;assert.equal(live.phase,'prepared');assert.equal(live.idle.checkpointReviewRequired,true);assert.match(live.idle.nextStep,/Ending a turn alone/);assert.equal(f.calls.length,0);
+ await handoff(f,live);live=f.controller.status().job;assert.equal(live.idle.checkpointReviewRequired,false);assert.deepEqual(live.idle.blockers,[]);await f.controller.advance();assert.ok(f.calls.includes('quit'));
 });

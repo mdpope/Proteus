@@ -1,3 +1,11 @@
+# R37 final updater diagnostics
+
+After the independently verified local R36 preservation/signature checks and actual authenticated iPhone message delivery, resume the previously held updater usability work. The operator explicitly queues the newly reported iOS performance, non-growing composer and residual disconnect for Nov 3, alongside Mnemosyne redesign. This does not claim sustained stability or remove the remaining compatible-consumer traffic measurement.
+
+R37 adds live, structured waiting diagnostics with full chat identities, titles, status, capacity-retry times, execution/background reasons, coordinator identification and precise owner/build blockers. It shares the idle inventory with the existing repeated race-safe guard; a completed run with a live background lane still blocks restart. New-input checkpoint reset has its own review-required state and next steps. Settings and update-chat cards use the same escaped presentation. No unrelated work is cancelled.
+
+Full source validation: 1,489 passed, four skipped; static checks passed. Focused owner regression: 34 passed, including multiple blockers, status transitions, lane ownership, checkpoint resets, handoff and no cancellation. Disposable Electron UI verifies names/IDs, safe guidance, escaped text and review-state transitions. Exact-package and final multi-platform rollout follow; R36's immutable source/package pins remain unchanged.
+
 # R36 extension creation correction in validation
 
 The native gate regression also exposed inactive adapter selection for blank pages and Overview. Inactive creation now restores only the current or unchanged prior selection, or clears the adapter’s automatic activation of the new background view. Team window normalization preserves pending browser creation across reload. A relay fixture could consume a readiness control frame as a connect packet; its waits now filter packet types and fail within a bound, preserving all authorization assertions. Final full validation passes 1,486 tests with four skipped, plus static checks. The corrected relay fixture retains all five assertions; the prior stranded run and isolated diagnostic are preserved separately.

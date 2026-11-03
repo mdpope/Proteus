@@ -1,3 +1,8 @@
+## Nov 2 R37 — actionable update waiting status
+
+- Show every blocking chat by title, full ID, status and reason, including capacity retries and background execution; distinguish the update coordinator's own active turn. Show precise application/build blockers and safe next steps.
+- Explain when new input resets handoff to a checkpoint requiring review. Keep live status accurate as work finishes without cancelling chats or weakening the repeated idle checks.
+
 ## Nov 2 R36 — retain extension-created tabs during first sync
 
 - Carry explicit creation intent for active and background extension tabs through owner synchronization, including a creation event arriving during a pending read. Background creation retains the selected tab. Existing selection and restoration cannot reopen owner-closed or moved identities.
