@@ -4,6 +4,27 @@ import Combine
 @testable import Proteus
 
 final class NativeProjectionTests: XCTestCase {
+    @MainActor func testSidebarIgnoresProgressAndTextButKeepsLiveActivityAndMembership() {
+        let remote = RemoteStore(connection: nil, legacyCredentials: false)
+        var run: [String: JSON] = ["id": .string("a"), "title": .string("Chat"), "lastActivityAt": .string("2026-11-03T01:00:00Z"), "projectId": .string("one")]
+        remote.updateState(.object(["runs": .array([.object(run)])]))
+        let invalidation = ProjectionInvalidation()
+        withObservationTracking { _ = remote.sidebarRunState } onChange: { invalidation.mark() }
+        run["progress"] = .object(["tick": .number(1)]); run["updatedAt"] = .string("2026-11-03T01:00:01Z")
+        remote.updateState(.object(["runs": .array([.object(run)])]))
+        XCTAssertFalse(invalidation.changed)
+        run["projectId"] = .string("two")
+        remote.updateState(.object(["runs": .array([.object(run)])]))
+        XCTAssertTrue(invalidation.changed)
+        XCTAssertEqual(remote.sidebarRunState["index"]["a"]["projectId"].string, "two")
+        remote.chats["a"] = .object(run)
+        let textInvalidation = ProjectionInvalidation()
+        withObservationTracking { _ = remote.sidebarRunState } onChange: { textInvalidation.mark() }
+        run["events"] = .array([.object(["text": .string("streaming")])]); remote.chats["a"] = .object(run)
+        XCTAssertFalse(textInvalidation.changed)
+        run["lastActivityAt"] = .string("2026-11-03T01:01:00Z"); remote.chats["a"] = .object(run)
+        XCTAssertTrue(textInvalidation.changed)
+    }
     @MainActor func testChromePublishesTransitionsWithoutPublishingNoopAssignments() {
         let chrome = NativePhoneChrome(), publications = NSMutableArray()
         let token = chrome.objectWillChange.sink { publications.add(1) }

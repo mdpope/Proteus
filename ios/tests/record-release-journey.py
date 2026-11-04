@@ -9,12 +9,15 @@ import os
 import pathlib
 import subprocess
 import time
+import signal
 
 p = argparse.ArgumentParser()
 p.add_argument('--device', required=True)
 p.add_argument('--bundle', required=True)
 p.add_argument('--log', required=True)
 p.add_argument('--output', required=True)
+p.add_argument('--start-now', action='store_true', help='Capture an already-running stalled preparation; not a matched journey.')
+p.add_argument('--seconds', type=int, default=600)
 args = p.parse_args()
 if not args.bundle.startswith('org.proteusapp.proteus.journey-'):
     p.error('Only the dedicated journey identities may be profiled.')
@@ -26,7 +29,9 @@ marker = 'arm=' + args.bundle + ' step=cold-to-interactive'
 deadline = time.monotonic() + 180
 while time.monotonic() < deadline:
     log = pathlib.Path(args.log)
-    if log.exists() and marker in log.read_text():
+    if log.exists() and '** TEST EXECUTE FAILED **' in log.read_text():
+        raise SystemExit('Journey failed before its cold-start marker; no matched capture.')
+    if args.start_now or log.exists() and marker in log.read_text():
         break
     time.sleep(.2)
 else:
@@ -36,4 +41,11 @@ processes = subprocess.check_output(['ps', '-ax', '-o', 'pid=,command='], text=T
 matches = [row.split(None, 1)[0] for row in processes.splitlines() if row.strip().split(None, 1)[-1].startswith(container + '/Proteus')]
 if len(matches) != 1:
     raise SystemExit('The exact benchmark process is unavailable or ambiguous.')
-subprocess.run(['xcrun', 'xctrace', 'record', '--template', 'Time Profiler', '--device', args.device, '--attach', matches[0], '--time-limit', '600s', '--output', str(output)], env=env, check=True)
+recorder = subprocess.Popen(['xcrun', 'xctrace', 'record', '--template', 'Time Profiler', '--device', args.device, '--attach', matches[0], '--time-limit', str(args.seconds) + 's', '--output', str(output)], env=env)
+while recorder.poll() is None:
+    if 'JOURNEY arm=' + args.bundle + ' finished' in pathlib.Path(args.log).read_text():
+        recorder.send_signal(signal.SIGINT)
+        break
+    time.sleep(.2)
+if recorder.wait() != 0:
+    raise SystemExit('Instruments did not finalize the journey recording.')

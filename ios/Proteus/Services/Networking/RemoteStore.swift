@@ -62,9 +62,18 @@ struct RemoteHostInfo: Equatable {
         return titleField!.value.object
     }
     private func updateTitleProjection() {
+        if let sidebarRunField {
+            let next = NativeSidebarRunProjection.value(state: _state, allRuns: _allRuns, chats: _chats)
+            if sidebarRunField.value != next { sidebarRunField.value = next }
+        }
         guard let titleField else { return }
         let next = NativeRunAttentionProjection.titles(state: _state, allRuns: _allRuns, chats: _chats)
         if titleField.value != next { titleField.value = next }
+    }
+    @ObservationIgnored private var sidebarRunField: NativeRemoteStateField?
+    var sidebarRunState: JSON {
+        if sidebarRunField == nil { sidebarRunField = NativeRemoteStateField(NativeSidebarRunProjection.value(state: _state, allRuns: _allRuns, chats: _chats)) }
+        return sidebarRunField!.value
     }
     var attentionRunSummaries: [JSON] {
         if attentionRunField == nil { attentionRunField = NativeRemoteStateField(NativeRunAttentionProjection.value(_state["runs"])) }

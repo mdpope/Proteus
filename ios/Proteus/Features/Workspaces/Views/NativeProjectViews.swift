@@ -256,19 +256,23 @@ struct NativeWorkspaceTree: View {
     private func recents(_ project: JSON, workspace: NativeWorkspaceIdentity, remote: RemoteStore) -> [JSON] {
         let scope = "project:" + workspace.hostID + ":" + project["id"].string
         let rows = shared.workspaceContentDescriptors[scope] ?? resourceRows[scope] ?? []
+        // The Release trace showed tabs(in:) inside this per-resource map.
+        // Resolve aliases once, preserving the same first descriptor per owner ID.
+        let browserIDs = Dictionary(shared.tabs(in: scope).map { ($0.contentTabId ?? $0.id, $0.id) }, uniquingKeysWith: { first, _ in first })
+        let runState = remote.sidebarRunState
         var items = rows.filter { !$0["hidden"].bool }.map { tab in
             var row = tab.object
             if tab["type"].string == "chat" {
-                let run = NativeWorkspaceNavigation.run(tab["chatId"].string, remote: remote)
+                let run = runState["index"][tab["chatId"].string]
                 if tab["title"].string.isEmpty { row["title"] = run["title"] }
                 row["lastActivityAt"] = run["lastActivityAt"]; row["chatType"] = run["chatType"]; row["navigationID"] = .string("chat:" + tab["chatId"].string)
             } else {
-                row["navigationID"] = .string(tab["type"].string == "browser" ? (shared.tabs(in: scope).first { ($0.contentTabId ?? $0.id) == tab["id"].string }?.id ?? "remote:" + tab["id"].string) : "remote:" + tab["id"].string)
+                row["navigationID"] = .string(tab["type"].string == "browser" ? (browserIDs[tab["id"].string] ?? "remote:" + tab["id"].string) : "remote:" + tab["id"].string)
             }
             return JSON.object(row)
         }
         var chats = Set(items.filter { $0["type"].string == "chat" }.map { $0["chatId"].string })
-        for run in remote.allRuns + remote.stateValue("runs").array {
+        for run in runState["runs"].array {
             let member = remote.projectCatalog.membership(for: run)
             guard !run["archived"].bool, run["archivedAt"].string.isEmpty,
                   member["workspaceId"].string == workspace.workspaceID, member["projectId"].string == project["id"].string,

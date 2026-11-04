@@ -26,15 +26,15 @@ if(retained.length){
 }else for(let i=0;i<1500;i++){
  const schedule=await app.buildChatSchedule({workspaceId,projectId:project,name:i<3?'Journey chat '+i:'Synthetic General chat '+i,prompt:'Synthetic only',provider:'rehearsal'});
  const run=app.engine.createRun(schedule,'chat',null,{deferStart:true});run.status=i===0?'running':'completed';run.title=schedule.name;
- run.events=Array.from({length:i===0?3000:3},(_,j)=>({role:j%2?'assistant':'user',text:'Message '+j+' '+('Rich **markdown** and `code`. '.repeat(i===0?30:1)),at:new Date().toISOString()}));
+ run.events=Array.from({length:i===0?3000:3},(_,j)=>({role:i===0&&j%10===0?'tool':j%2?'assistant':'user',text:'Message '+j+' '+('Rich **markdown** and `code`. '.repeat(i===0?30:1)),...(i===0&&j%10===0?{data:{tool:{callId:'journey-tool-'+j,name:'Read',status:'completed',input:{path:'synthetic.txt'},output:'Synthetic tool output\n'.repeat(100)}}}:{}),at:new Date().toISOString()}));
  app.workspaceProjects.associate(run,app.workspaceProjects.get(app.engine).projects.find(p=>p.id===project),app.engine);runs.push(run);
 }
 const tabs=runs.slice(0,3).map(run=>({action:'open',tab:{id:'chat:'+run.id,type:'chat',chatId:run.id,title:run.schedule.name}}));
 for(let i=0;i<200;i++)tabs.push({action:'open',tab:{id:'journey-browser-'+i,type:'browser',title:'Journey browser '+i,url:'https://example.com/'}});
-const existing=app.contentTabs.get('project',project);
+const existing=await app.contentTabs.getAsync('project',project);
 if(existing.tabs.length){
  const tab=existing.tabs.find(t=>t.id==='journey-browser-0');const id=crypto.randomUUID();
- await app.mutateContentTabs({scope:'project',id:project,expectedRevision:existing.revision,operations:[{action:'browser-navigate',tabId:tab.id,operationId:id,eventId:id,baseRevision:tab.history?.revision||0,entryId:crypto.randomUUID(),url:'https://example.com/',title:'Journey browser 0',profileId:'default',visitedAt:new Date().toISOString()}]});
+ if(tab.url!=='https://example.com/')await app.mutateContentTabs({scope:'project',id:project,expectedRevision:existing.revision,operations:[{action:'browser-navigate',tabId:tab.id,operationId:id,eventId:id,baseRevision:tab.history?.revision||0,entryId:crypto.randomUUID(),url:'https://example.com/',title:'Journey browser 0',profileId:'default',visitedAt:new Date().toISOString()}]});
 }else for(let i=0;i<tabs.length;i+=100)app.contentTabs.mutate({scope:'project',id:project,expectedRevision:app.contentTabs.get('project',project).revision,operations:tabs.slice(i,i+100)});
 // Keep the rich conversation in the first summary page after bulk creation.
 for(const run of runs.slice(0,3))run.createdAt=run.updatedAt=run.lastActivityAt=new Date(Date.now()+10000).toISOString();

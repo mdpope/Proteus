@@ -622,7 +622,7 @@ struct NativeWorkspaceCreateView: View {
     @State private var folder = ""
     @State private var busy = false
     @State private var message = ""
-    private var roots: [String] { Array(Set((destinations.remote(for: hostID)?.state["context"]["workspaces"].array ?? []).flatMap { [$0["cwd"].string] + $0["additionalDirectories"].array.map(\.string) })).filter { !$0.isEmpty }.sorted() }
+    private var roots: [String] { Array(Set((destinations.remote(for: hostID)?.stateValue("context")["workspaces"].array ?? []).flatMap { [$0["cwd"].string] + $0["additionalDirectories"].array.map(\.string) })).filter { !$0.isEmpty }.sorted() }
     var body: some View {
         NavigationStack {
             Form {
@@ -875,7 +875,7 @@ struct NativeWorkspaceCopyView: View {
     @State private var message = ""
     @State private var mappings: [String: String] = [:]
     private var sourceRoots: [String] { Array(Set([source.profile["cwd"].string] + source.profile["additionalDirectories"].array.map(\.string) + source.profile["libraryFolders"].array.map(\.string) + source.profile["universalFolders"].array.map(\.string))).filter { !$0.isEmpty }.sorted() }
-    private var targetRoots: [String] { Array(Set((destinations.remote(for: hostID)?.state["context"]["workspaces"].array ?? []).flatMap { [$0["cwd"].string] + $0["additionalDirectories"].array.map(\.string) + $0["libraryFolders"].array.map(\.string) })).filter { !$0.isEmpty }.sorted() }
+    private var targetRoots: [String] { Array(Set((destinations.remote(for: hostID)?.stateValue("context")["workspaces"].array ?? []).flatMap { [$0["cwd"].string] + $0["additionalDirectories"].array.map(\.string) + $0["libraryFolders"].array.map(\.string) })).filter { !$0.isEmpty }.sorted() }
     var body: some View {
         NavigationStack {
             Form {
