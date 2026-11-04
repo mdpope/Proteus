@@ -15,7 +15,17 @@ export function mergeChatHistory(previous, incoming) {
   // A field delta carries only changed metadata, and an older page may still arrive after one.
   const incomingIsCurrent=(incoming.eventCount || 0) >= (previous.eventCount || 0);
   const metadata = !incoming.fieldDelta&&!previous.fieldDelta ? (incomingIsCurrent ? incoming : previous) : incomingIsCurrent ? {...previous,...incoming} : {...incoming,...previous};
-  if(incomingIsCurrent)for(const key of incoming.removedFields||[])delete metadata[key];
+  if(incoming.fieldDelta||previous.fieldDelta){
+    // History reads can complete after several field deltas. Keep removals until
+    // a newer projection explicitly restores the field, so stale pages cannot
+    // resurrect deleted metadata (or lose an earlier delta's removal list).
+    const current=incomingIsCurrent?incoming:previous,older=incomingIsCurrent?previous:incoming;
+    const removed=new Set(older.removedFields||[]);
+    for(const key of Object.keys(current))removed.delete(key);
+    for(const key of current.removedFields||[])removed.add(key);
+    for(const key of removed)delete metadata[key];
+    metadata.removedFields=[...removed];
+  }
   // Fusion attribution arrives per history window; keep turns for every retained page.
   // Newer projections of the same turn replace older ones; the set stays bounded.
   const turns = new Map();

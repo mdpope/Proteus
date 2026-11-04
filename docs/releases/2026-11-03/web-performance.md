@@ -55,8 +55,9 @@ Environments without Worker retain the direct implementation.
 Identical authenticated state pushes advance the replay cursor but skip cache encryption,
 workspace invalidation and rendering. Changed pushes render at most once per animation
 frame. State processing remains ordered; acknowledgements and lifecycle events are not
-dropped or merged. Shared transcript DOM reuse remains in use. No public/shared, owner,
-desktop, relay or iOS source was changed.
+dropped or merged. Shared transcript DOM reuse remains in use. The initial implementation
+changed no public/shared, owner, desktop, relay or iOS source; the later shared history
+helper correction is recorded in the visible-chat follow-up below.
 
 Composer submission previously regenerated its request identity when the user edited
 after an uncertain send. The web draft now retains the prepared command, original identity
@@ -277,3 +278,76 @@ temporary directory (`TMPDIR=/private/tmp npm test`), the complete Node suite pa
 checks pass as well. No application source fix was needed to resolve the previous eleven
 failures. This follow-up changes validation evidence only; it does not replace the earlier
 measured performance run or establish production/native Electron acceptance.
+
+## Visible-chat history and metadata deltas
+
+After merging coordinator branch `claude/nov3-release` at `65d4fc2`, the visible web chat
+requests `chat.get` with `watch:'delta', fieldDelta:'v1'`. The five auxiliary read paths
+now explicitly use `watch:'none'`: attachment-send preflight, older-history prefetch,
+workspace-routing lookup, promote/action preflight, and move/context preflight. These
+reads cannot move the transport's selected chat, downgrade its mode or reset its cursor.
+
+One page-owned watch controller reuses the current lease during visible refreshes.
+When `chat.watch.v1` is advertised, it adds a UUID watchToken and releases the matching
+id/token on section/chat departure or document hiding. Returning to the page reacquires
+with a new token; reconnect binds to the replacement transport. Subscription and release
+are serialized, so hiding during a slow read releases after that subscription rather
+than clearing first and accidentally subscribing afterward. A late response cannot
+paint a chat that has since been left. Page teardown also closes the transport, releasing
+its owner-held watch. Legacy owners receive no token/unsupported release operation;
+without the release capability their last watch can remain until selection or disconnect.
+
+One small **shared renderer change** was necessary in
+`public/features/chats/chat-history.js`: a field removed by a delta could be restored by
+a late older history page. The merger now retains removal tombstones across subsequent
+deltas and stale pages, while an explicit newer value restores a field. A deterministic
+web regression covers multiple removals, stale history, restoration and read-only inputs.
+No owner, desktop, relay or iOS implementation was edited in this follow-up.
+
+### Real-owner traffic measurement
+
+Run `TMPDIR=/private/tmp node --test test/web-chat-delta.test.js`. Unlike the preceding
+synthetic page benchmark, this test starts the actual server/engine, RemoteHost and
+encrypted loopback relay. Two authenticated browser-protocol transports subscribe to
+the same synthetic chat: the former full-page behavior and the production visible-watch
+controller. Its real captured-context projection contains 100 source records; captured
+context plus schedule metadata measures **74,695 bytes**. The initial history has 100
+roughly 900-character assistant events. Twelve deterministic engine.stream/event updates
+pass through the actual owner publication path; each next step waits for both clients
+to receive the previous step. This is a bytes-per-update test, not a timed twelve-second
+provider or latency measurement. No model or production data is used.
+
+The measured encrypted owner-to-relay routing JSON includes clientId, sequence and AES-GCM
+base64 payload, excluding WebSocket/TLS/IP overhead. Received update counts verify all
+measured frames completed delivery. The initial chat.get response and first published
+update are separated from steady-state costs:
+
+| Delivery | Former full page | History + metadata delta |
+| --- | ---: | ---: |
+| First published update after chat.get | 229,873 bytes | 102,789 bytes |
+| Twelve steady updates, total | 2,762,750 bytes | 26,328 bytes |
+| Mean steady update | 230,229 bytes | 2,194 bytes |
+| Steady update range | 229,957–230,502 bytes | 2,121–2,262 bytes |
+
+The first delta still repeats captured metadata once: the owner's initial chat.get
+seeds event hashes without the field hashes used by omitUnchanged. Subsequent updates
+omit context/schedule and carry eventPatches plus changed metadata. An optional owner
+follow-up is to seed those field hashes on the initial fieldDelta-enabled chat.get;
+this lane leaves that owner code unchanged and does not hide the first-delivery cost.
+Initial snapshots and later genuine metadata changes still have their ordinary cost.
+
+Regressions verify unchanged metadata remains available after merging, streaming content
+matches the full subscriber, non-subscribing reads of both older history and another chat
+retain the current watch token/mode/cursor, removed fields stay removed after a late page,
+and stale-token cleanup cannot clear a replacement watch. Both older-owner modes pass:
+ignoring all watch options and returning full pages, or supporting history deltas while
+ignoring fieldDelta and repeating full metadata.
+
+Validation: all 19 web Node tests and four existing history tests pass; the three new
+real-owner tests pass. The complete Node suite passes **1,532 tests, zero failures and
+four skips** with `TMPDIR=/private/tmp`. The PHP suite passes 106 tests/926 assertions,
+the Vite build and static checks pass, and built-web acceptance verifies delta/fieldDelta
+subscription, hidden-page release/new-token resume, section-leave release, reconnect,
+retained pairing and no-op DOM suppression. The earlier full-browser/find-highlight
+limitation remains. These tests do not establish sustained production connectivity,
+real-provider latency, or physical device acceptance. Nothing was published or deployed.
