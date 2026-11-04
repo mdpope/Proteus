@@ -2810,7 +2810,7 @@ final class PhoneComposerPreviewUITests: XCTestCase {
         XCTAssertEqual(editor.value as? String, draft, "iPhone Return adds a newline without sending")
         XCTAssertGreaterThan(editor.frame.height, initialHeight)
         let expandedShot = XCTAttachment(screenshot: app.screenshot()); expandedShot.name = "Final iPhone expanded composer controls"; expandedShot.lifetime = .keepAlways; add(expandedShot)
-        app.scrollViews["chat-conversation-scroll"].coordinate(withNormalizedOffset: CGVector(dx: 0.01, dy: 0.01)).tap()
+        app.scrollViews["chat-conversation-scroll"].coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.25)).tap()
         XCTAssertTrue(compact.waitForExistence(timeout: 5)); XCTAssertEqual(compact.value as? String, draft)
         XCTAssertFalse(app.buttons["send-message"].exists)
         compact.tap(); XCTAssertTrue(editor.waitForExistence(timeout: 5)); XCTAssertEqual(editor.value as? String, draft)
@@ -2884,9 +2884,8 @@ final class NativeReleaseParityUITests: XCTestCase {
         !editor.exists || (editor.value as? String ?? "").isEmpty
     }, object: editor)
     XCTAssertEqual(XCTWaiter.wait(for: [cleared], timeout: 15), .completed)
-    // Dismiss through empty scroll padding; after editor growth, content coordinates
-    // can land on the question's Clear control and invalidate this assertion.
-    app.scrollViews["chat-conversation-scroll"].coordinate(withNormalizedOffset: CGVector(dx: 0.01, dy: 0.01)).tap()
+    // Successful submission already dismisses the keyboard. A second content tap
+    // can activate Clear on a question after the growing editor changes layout.
     let notice = app.buttons["Dismiss notification"]; if notice.exists { notice.tap() }
     let queue = app.buttons["chat-question-queue-toggle"]
     XCTAssertTrue(queue.waitForExistence(timeout: 10)); if queue.value as? String != "Expanded" { queue.tap() }
@@ -2914,7 +2913,7 @@ final class TabletComposerPreviewUITests: XCTestCase {
         let draft = String(repeating: "Unsent tablet preview draft ", count: 30)
         XCTAssertEqual(editor.value as? String, draft)
         XCTAssertGreaterThan(editor.frame.height, initialHeight)
-        app.scrollViews["chat-conversation-scroll"].coordinate(withNormalizedOffset: CGVector(dx: 0.01, dy: 0.01)).tap()
+        app.scrollViews["chat-conversation-scroll"].swipeDown()
         XCTAssertTrue(editor.exists); XCTAssertEqual(editor.value as? String, draft)
         XCTAssertTrue(app.buttons["send-message"].exists); XCTAssertFalse(app.buttons["composer-preview"].exists)
         let card = app.descendants(matching: .any).matching(identifier: "reply-composer-card").firstMatch

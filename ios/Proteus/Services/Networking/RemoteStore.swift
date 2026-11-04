@@ -54,6 +54,8 @@ struct RemoteHostInfo: Equatable {
     /// available for serialization and legacy consumers during incremental migration.
     func stateValue(_ key: String) -> JSON {
         if let field = stateFields[key] { return field.value }
+        // Use untracked backing storage on first access too, or the initial body
+        // would subscribe to the complete snapshot until its next evaluation.
         let field = NativeRemoteStateField(_state[key]); stateFields[key] = field; return field.value
     }
     /// Rebuilt only when host state changes; sidebar rows and chat filters read it per item.
