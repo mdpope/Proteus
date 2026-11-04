@@ -1,4 +1,4 @@
-# R37 — final qualification and deployment in progress
+# R37 — rollout complete; release closed
 
 Application source is frozen at `4bbec8cadc9c24916cc7514ead9b1b53f5a6051d`.
 Mac, Linux and Windows packages passed their platform qualification, source integrity and original publisher-signature checks. Windows transition checks use simulated installer calls and retain the prior qualification of the unchanged installer recipe; its installer is Authenticode unsigned.
@@ -17,7 +17,7 @@ A transitional 381-second sample measured approximately 2.94 MB/s outbound, 583 
 
 A final 113-second transport sample with the five intended desktop installations updated measured about 1.95 MB/s outbound and 118 B/s inbound, zero new recorded closes or congestion, and zero context.get replies. About 197 MB was pushed state. This remains a short observation, not sustained-stability acceptance; the bandwidth work continues in Nov 3.
 
-The historical sections below retain earlier evidence; they do not supersede this final status. All intended installations are complete. Final integration and artifact closeout are in progress at the operator’s explicit closeout request.
+The historical sections below retain earlier evidence; they do not supersede this final status. All intended installations are complete. PR 29 merged as `9aa0752cabb10662ee5d4558172b3a3167c2afc3`, remote main was verified, and the operator’s Nov 2 closeout request is complete with the qualified limits and active-use cleanup hold recorded in [closeout.md](closeout.md).
 
 ## Historical R37 qualification checkpoint
 

@@ -1,3 +1,7 @@
+## Nov 2 closed — Nov 3 follow-up queue
+
+Nov 2 / 0.2.41 is merged to main and deployed to every intended target. See the [closeout record](releases/2026-11-02/closeout.md) for verified outcomes and qualified limits. The [Nov 3 issue list](2026-11-03-issues.md) carries remaining iOS/web performance, composer and connection work, high pushed-state traffic, Desktop Control setup and the permanent tab-restoration fix. Mnemosyne’s design is preserved separately. Earlier checkpoints below are historical.
+
 ## R37 — updater waiting diagnostics implemented for final qualification
 
 The earlier R25 usability request is implemented after local R36 preservation and signing acceptance. Live owner status names all blocking chats and precise execution/retry/background/owner reasons, distinguishes the coordinator and checkpoint-review reset, and gives safe next steps. The same inventory guards restart. Source and disposable UI checks pass; final packaged qualification and rollout remain open. Newly reported iOS performance/composer/disconnect follow-ups and Mnemosyne redesign remain in the Nov 3 queue.

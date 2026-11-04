@@ -3,7 +3,7 @@
   "id": "2026-11-02",
   "name": "Nov 2",
   "version": "0.2.41",
-  "status": "open",
+  "status": "closed",
   "openedOn": "2026-11-02",
   "plan": "docs/2026-11-02-release-plan.md",
   "implementation": "docs/releases/2026-11-02/implementation.md",
@@ -16,7 +16,7 @@
   "priorRequestAudit": "docs/releases/2026-11-02/prior-release-audit.md",
   "previousAcceptedSourceCommit": "4456aea8837171ba60f82775859d9ce7f4ec0810",
   "sourceCommit": "4bbec8cadc9c24916cc7514ead9b1b53f5a6051d",
-  "candidateSourceStatus": "Final R37 application source4bbec8c published and HTTPS verified for all three OS targets. All five intended desktop installations and web/native targets are installed and verified within the qualified limits in rollout.md. Normal Mac signatures and installed-file inventories pass; retained memberships/history entries/drafts verify. Mnemosyne, remaining iOS/web performance/composer/disconnect, secondary Windows Desktop Control and permanent tab-restoration fixes are explicitly queued for Nov3. Operator requests closeout; integration and temporary artifact retirement in progress.",
+  "candidateSourceStatus": "Closed at operator request. Final desktop source4bbec8c and separately pinned native2611.2.10 are installed across all intended targets; public files, installed integrity, signatures and qualified preservation checks verify. Remaining performance, connection, composer, Desktop Control and permanent window-restoration fixes are documented for Nov3. Historical recovery evidence and explicit active-use cleanup holds remain preserved.",
   "widerDistributionHold": {
     "active": false,
     "reason": "Operator explicitly authorizes all configured devices, web and release closeout after connection fixes."
@@ -31,5 +31,9 @@
     "linux-x64": "4bbec8cadc9c24916cc7514ead9b1b53f5a6051d",
     "win32-x64": "4bbec8cadc9c24916cc7514ead9b1b53f5a6051d"
   },
-  "replacementSourceCommit": "4bbec8cadc9c24916cc7514ead9b1b53f5a6051d"
+  "replacementSourceCommit": "4bbec8cadc9c24916cc7514ead9b1b53f5a6051d",
+  "closedAt": "2026-11-04T06:01:17.180083+00:00",
+  "closedOn": "2026-11-03",
+  "integrationCommit": "9aa0752cabb10662ee5d4558172b3a3167c2afc3",
+  "pullRequest": 29
 }
