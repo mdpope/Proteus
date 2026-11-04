@@ -253,12 +253,27 @@ is one sequential before/after run without a statistical confidence claim.
 Validation after merge: 55 focused protocol/web tests pass (including all 14 web Node
 tests), 106 PHP tests/926 assertions pass, Vite builds outside the repository, and static
 checks pass. Built-web acceptance verifies actual state.patch negotiation, authenticated
-worker reconnect, retained device pairing and no-op DOM suppression. Full Node suite:
-1,508 pass, 11 fail and four skip; the failing test names match the prior branch run.
-The earlier full-browser/find-highlight and project-harness limitations remain.
+worker reconnect, retained device pairing and no-op DOM suppression. The initial merged
+Node run had 1,508 pass, 11 fail and four skip; the environment follow-up below supersedes
+that result. The earlier full-browser/find-highlight and project-harness limitations remain.
 
 The benchmark asserts six patch deliveries, three conditional replies, all twelve visible
 run updates, and the first visible-run update preceding the first state patch. Sustained
 real-owner use, real network/TLS costs, background/sleep behavior and physical input/paint
 latency remain outside this evidence. No deployment, publication or release package is
 part of this work.
+
+## Dependency/environment validation follow-up
+
+After the coordinator supplied the dependency-layout correction, the root node_modules
+symlink was replaced with an authorized local APFS clone of the existing dependency set.
+This preserves package contents while allowing patched modules' repository-relative
+desktop imports to resolve. The web dependency symlink was left unchanged.
+
+The previous failure logs also exposed temporary-directory canonicalization mismatches
+and overlong Unix socket paths. With the local dependency clone and the short canonical
+temporary directory (`TMPDIR=/private/tmp npm test`), the complete Node suite passes:
+**1,519 passed, zero failed, four skipped, 1,523 total**. All 14 web Node tests and static
+checks pass as well. No application source fix was needed to resolve the previous eleven
+failures. This follow-up changes validation evidence only; it does not replace the earlier
+measured performance run or establish production/native Electron acceptance.
