@@ -1002,7 +1002,7 @@ function scopeParent(scope){
  return matches.find(tab=>tab.id===scope.parentId)||matches.find(tab=>visible.has(tab.id))||matches.find(tab=>!tab.parentId)||matches[0];
 }
 function sharedBrowserDescriptor(tab){
-  const info=tab.info||tab,title=tab.customTitle||tab.label||tab.title||'New tab',browserURL=tab.remotePreviewURL||info.url||tab.url||'',entry=info.history?.entries?.[info.history.index];
+  const info=tab.info||tab,title=tab.customTitle||tab.label||tab.title||'New tab',browserURL=tab.remotePreviewURL||info.sharedURL||info.url||tab.url||'',entry=info.history?.entries?.[info.history.index];
   const privateLocal=info.privateLocal||syncableTabURL(browserURL)===null;
   const url=privateLocal?(syncableTabURL(entry?.url||'')||tab.lastSharedURL||''):browserURL;
   const sharedTitle=privateLocal?(tab.customTitle||entry?.title||tab.lastSharedTitle||'New tab'):title;
@@ -1104,7 +1104,7 @@ const contentTabSync=createTabSynchronizer({navigation:true,explicitCloseOnly:tr
         for(const field of ['openedAt','lastTouchedAt','lastActivityAt'])if(descriptor[field]&&tab[field]!==descriptor[field]){tab[field]=descriptor[field];changed=true;}
         if(descriptor.type==='browser'&&!!(tab.info?.persist||tab.persist)!==!!descriptor.persist){const info=await window.desktop.browser({action:'persist',id:tab.browserId||tab.id,enabled:!!descriptor.persist,passive:true});if(tab.info)tab.info=info;else tab.persist=!!descriptor.persist;changed=true;}
         if((tab.customTitle||tab.label||tab.title)!==descriptor.title||tab.customTitle!==descriptor.customTitle){tab.customTitle=descriptor.customTitle;if(scope.scope==='team')tab.title=descriptor.title;else tab.label=descriptor.title;changed=true;}
-        if(descriptor.type==='browser'&&!preservedNavigationIds.includes(descriptor.id)&&!tab.remotePreviewURL&&(JSON.stringify(normalizeContentTabHistory(tab.info?.history||tab.history))!==JSON.stringify(normalizeContentTabHistory(descriptor.history))||(tab.info?.url||tab.url||'')!==descriptor.url||((tab.info?.loaded===false||tab.loaded===false)&&(tab.info?.title||tab.nativeTitle||tab.title)!==(descriptor.history?.entries[descriptor.history.index]?.title||descriptor.title)))){
+        if(descriptor.type==='browser'&&!preservedNavigationIds.includes(descriptor.id)&&!tab.remotePreviewURL&&(JSON.stringify(normalizeContentTabHistory(tab.info?.history||tab.history))!==JSON.stringify(normalizeContentTabHistory(descriptor.history))||(tab.info?.sharedURL||tab.sharedURL||tab.info?.url||tab.url||'')!==descriptor.url||((tab.info?.loaded===false||tab.loaded===false)&&(tab.info?.title||tab.nativeTitle||tab.title)!==(descriptor.history?.entries[descriptor.history.index]?.title||descriptor.title)))){
           const localURL=tab.info?.url||tab.url||'';
           if((tab.info?.privateLocal||tab.privateLocal||localURL&&syncableTabURL(localURL)===null)&&!discardPendingNavigation)continue;
           const info=await window.desktop.browser({action:'apply-history',id:tab.browserId||tab.id,url:descriptor.url,title:descriptor.history?.entries[descriptor.history.index]?.title||descriptor.title,history:descriptor.history,expectedURL:localURL,expectedEntryId:(tab.info?.history||tab.history)?.currentEntryId||null,discardPending:discardPendingNavigation});

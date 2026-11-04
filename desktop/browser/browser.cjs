@@ -1,7 +1,7 @@
 const {BrowserStateBatch}=require('./browser-state-batch.cjs');
 const {browserErrorDocument,errorColors}=require('./browser-error.cjs');
 const {BrowserCertificates}=require('./browser-certificates.cjs');
-const {restoreNavigation,commitNavigation,traverseNavigation,validPendingNavigation,acknowledgesNavigation}=require('./browser-navigation.cjs');
+const {mirrorHolds,restoreNavigation,commitNavigation,traverseNavigation,validPendingNavigation,acknowledgesNavigation}=require('./browser-navigation.cjs');
 const {BrowserCookieStore}=require('./browser-cookie-store.cjs');
 const {BrowserPermissions}=require('./browser-permissions.cjs');
 const {BrowserExtensions}=require('./browser-extensions.cjs');
@@ -78,8 +78,8 @@ class BrowserTabs {
     };
     const gesture=this.gestureHandler;this.gestureHandler=(event,...args)=>this.withSenderWindow(event,()=>gesture(event,...args));
     ipcMain.on('proteus:browser-gesture',this.gestureHandler);
-    this.navigationIntentHandler=event=>{const tab=[...this.tabs.values()].find(tab=>tab.view?.webContents===event.sender);if(tab&&event.senderFrame===event.sender.mainFrame){tab.navigationIntentUntil=Date.now()+1200;this.touch(tab);this.activityChanged(tab);}};
-    this.interactionHandler=event=>{const tab=[...this.tabs.values()].find(tab=>tab.view?.webContents===event.sender);if(tab&&event.senderFrame===event.sender.mainFrame){this.touch(tab);this.activityChanged(tab);}};ipcMain.on('proteus:browser-interaction',this.interactionHandler);ipcMain.on('proteus:navigation-intent',this.navigationIntentHandler);
+    this.navigationIntentHandler=event=>{const tab=[...this.tabs.values()].find(tab=>tab.view?.webContents===event.sender);if(tab&&event.senderFrame===event.sender.mainFrame){tab.mirror=null;tab.navigationIntentUntil=Date.now()+1200;this.touch(tab);this.activityChanged(tab);}};
+    this.interactionHandler=event=>{const tab=[...this.tabs.values()].find(tab=>tab.view?.webContents===event.sender);if(tab&&event.senderFrame===event.sender.mainFrame){tab.mirror=null;this.touch(tab);this.activityChanged(tab);}};ipcMain.on('proteus:browser-interaction',this.interactionHandler);ipcMain.on('proteus:navigation-intent',this.navigationIntentHandler);
     this.scrollHandler=(event,value)=>{const tab=[...this.tabs.values()].find(tab=>tab.view?.webContents===event.sender);if(!tab||event.senderFrame!==event.sender.mainFrame||JSON.stringify(value||{}).length>8192)return;const target=this.windowRegistry?.contexts.get(tab.windowId)?.window||this.window;if(!target.isDestroyed())target.webContents.send('proteus:browser-scroll',{id:tab.id,url:event.sender.getURL(),positions:value});};ipcMain.on('proteus:browser-scroll',this.scrollHandler);
     this.partition = session.fromPartition('persist:proteus-browser');
     this.actions = new BrowserActions(this);this.permissions=new BrowserPermissions(this);this.externalProtocols=new ExternalProtocols(this,{home:this.options.home});this.siteNotificationHandler=(event,value)=>this.withSenderWindow(event,()=>this.permissions.receive(event,value));ipcMain.on('proteus:site-notification',this.siteNotificationHandler);
@@ -156,11 +156,11 @@ class BrowserTabs {
     if(!tab.view?.webContents||tab.view.webContents.isDestroyed())return {...tab.snapshot,...audio,navigationPending:tab.navigationPending===true,...this.previewState(tab),...this.agentStatus(tab),associationChatId:tab.associationChatId||null,persist:tab.persist===true,openedAt:tab.openedAt?new Date(tab.openedAt).toISOString():null,profileLocked:!this.profileAvailable(tab),siteMode:this.siteMode(tab),extensionsEnabled:this.extensions?.hasEnabled(tab.profileId)===true,profileName:this.options.profiles?.list().items.find(p=>p.id===tab.profileId)?.name||'Unavailable profile',profileId:tab.profileId||'default',id:tab.id,group:tab.group||'main',parentId:tab.parentId||null,loaded:false,loading:false,findRevision:tab.findRevision||0,shared:false,owner:null,resumeOwner:tab.resumeOwner||null,agentControlling:false,lastTouchedAt:tab.lastTouchedAt?new Date(tab.lastTouchedAt).toISOString():null};
     const wc = tab.view.webContents,liveURL=wc.getURL(),privateLocal=!tab.errorPage&&!!liveURL&&liveURL!=='about:blank'&&(!safeHistoryURL(liveURL,this.appOrigin)||isAuthenticationURL(liveURL));
     const selectedEntry=tab.logicalHistory?.entries[tab.logicalHistory.index];
-    if(selectedEntry?.url===liveURL&&!wc.isLoading()&&wc.getTitle())selectedEntry.title=String(wc.getTitle()).slice(0,200);
+    if(selectedEntry?.url===liveURL&&!wc.isLoading()&&wc.getTitle()&&!mirrorHolds(tab))selectedEntry.title=String(wc.getTitle()).slice(0,200);
     const pendingLogical=tab.navigationPending&&selectedEntry&&(tab.navigationURL||tab.pageNavigationURL||wc.isLoading());
     const rememberedTitle=selectedEntry?.title||tab.retainedTitle;
     const pageTitle=pendingLogical?(selectedEntry.title||new URL(selectedEntry.url).hostname):(tab.applyingShared||wc.isLoading()||!liveURL||liveURL==='about:blank')&&rememberedTitle?rememberedTitle:wc.getTitle()||rememberedTitle;
-    return {...this.previewState(tab),...audio,...this.agentStatus(tab),associationChatId:tab.associationChatId||null,developerShared:tab.developerShared===true, persist:tab.persist===true,openedAt:tab.openedAt?new Date(tab.openedAt).toISOString():null,navigationPending:tab.navigationPending===true,privateLocal,id: tab.id,destination:tab.destination,workspaceName:tab.workspaceName,siteMode:this.siteMode(tab),extensionsEnabled:this.extensions?.hasEnabled(tab.profileId)===true,protection:this.protection(tab),profileLocked:!this.profileAvailable(tab),blockedCount:tab.blockedCount||0,profileId:tab.profileId||'default',profileName:this.options.profiles?.list().items.find(p=>p.id===tab.profileId)?.name||'Default',group:tab.group||'main',parentId:tab.parentId||null,loaded:true,findRevision:tab.findRevision||0,pid:wc.getOSProcessId(),lastTouchedAt:tab.lastTouchedAt?new Date(tab.lastTouchedAt).toISOString():null, url: pendingLogical?selectedEntry.url:safeHistoryURL(wc.getURL(),this.appOrigin)?wc.getURL():(selectedEntry?.url||wc.getURL()), title: pageTitle || (liveURL ? new URL(liveURL).hostname : 'New tab'), loading: wc.isLoading()||this.reloading.has(tab.id),
+    return {...(tab.localLanding&&mirrorHolds(tab)&&selectedEntry?{sharedURL:selectedEntry.url}:{}),...this.previewState(tab),...audio,...this.agentStatus(tab),associationChatId:tab.associationChatId||null,developerShared:tab.developerShared===true, persist:tab.persist===true,openedAt:tab.openedAt?new Date(tab.openedAt).toISOString():null,navigationPending:tab.navigationPending===true,privateLocal,id: tab.id,destination:tab.destination,workspaceName:tab.workspaceName,siteMode:this.siteMode(tab),extensionsEnabled:this.extensions?.hasEnabled(tab.profileId)===true,protection:this.protection(tab),profileLocked:!this.profileAvailable(tab),blockedCount:tab.blockedCount||0,profileId:tab.profileId||'default',profileName:this.options.profiles?.list().items.find(p=>p.id===tab.profileId)?.name||'Default',group:tab.group||'main',parentId:tab.parentId||null,loaded:true,findRevision:tab.findRevision||0,pid:wc.getOSProcessId(),lastTouchedAt:tab.lastTouchedAt?new Date(tab.lastTouchedAt).toISOString():null, url: pendingLogical?selectedEntry.url:safeHistoryURL(wc.getURL(),this.appOrigin)?wc.getURL():(selectedEntry?.url||wc.getURL()), title: pageTitle || (liveURL ? new URL(liveURL).hostname : 'New tab'), loading: wc.isLoading()||this.reloading.has(tab.id),
       canGoBack: tab.logicalHistory?tab.logicalHistory.index>0:wc.navigationHistory.canGoBack(), canGoForward: tab.logicalHistory?tab.logicalHistory.index<tab.logicalHistory.entries.length-1:wc.navigationHistory.canGoForward(), shared: tab.shared, owner: tab.owner,resumeOwner:tab.resumeOwner||null, agentControlling:!!tab.agentActions, favicon:tab.favicon||'', error: tab.error || null, ...((includeHistory||tab.logicalHistory)?{history:tab.logicalHistory||normalizeHistory({entries:wc.navigationHistory.getAllEntries(),index:wc.navigationHistory.getActiveIndex()},this.appOrigin)}:{}) };
   }
   list(includeHistory=false) { const project=()=>this.profileDisplay(()=>[...this.tabs.values()].filter(tab=>!tab.closePromise&&!tab.pendingCreation).map(tab=>this.state(tab,includeHistory)));return this.options.diagnostics?this.options.diagnostics.measureSync('browser.state.project',project):project(); }
@@ -437,7 +437,7 @@ class BrowserTabs {
   async navigate(id, url) {
     const owner=this.tabs.get(id)?.windowId;if(this.windowRegistry&&owner&&owner!==this.windowId())return this.windowRegistry.run(owner,()=>this.navigate(id,url));
     this.transition?.cancel();
-    let tab = this.get(id);this.sessionFor(tab.profileId);if(!tab.applyingShared)this.touch(tab,true);if(!tab.view){await this.reload(id,false,{background:true});tab=this.get(id);} const wc = tab.view.webContents;
+    let tab = this.get(id);this.sessionFor(tab.profileId);if(!tab.applyingShared){tab.mirror=null;this.touch(tab,true);}if(!tab.view){await this.reload(id,false,{background:true});tab=this.get(id);} const wc = tab.view.webContents;
     if(this.profile(tab.profileId).settings?.blockingEnabled!==false)await this.blocker?.ensure(url).catch(()=>this.actions.send({type:'error',message:'Ghostery filters could not update. Open Browser Preferences to retry.'}));
     if(!this.profileAvailable(tab))throw new Error('This browser profile is unavailable.');
     await this.applySiteMode(tab,this.address(url),!!wc.getURL());
@@ -780,10 +780,14 @@ class BrowserTabs {
       if(tab.navigationPending&&!value.discardPending&&!acknowledgesNavigation(tab.logicalHistory,history))return this.state(tab,true);
       const liveURL=tab.view?.webContents.getURL();
       if(liveURL&&liveURL!=='about:blank'&&(!safeHistoryURL(liveURL,this.appOrigin)||isAuthenticationURL(liveURL))){if(value.discardPending||history?.currentEntryId===tab.logicalHistory?.currentEntryId){tab.logicalHistory=history;tab.navigationPending=false;this.changed();}return this.state(tab,true);}
+      const appliedEntry=tab.logicalHistory?.currentEntryId!==history?.currentEntryId;
       tab.logicalHistory=history;tab.navigationPending=false;
+      if(history?.currentEntryId&&(appliedEntry||tab.mirror))tab.mirror={entryId:history.currentEntryId};
+      if(appliedEntry)tab.localLanding=null;
       if(!tab.view){tab.snapshot={...tab.snapshot,url:address,title:String(value.title||history?.entries[history.index]?.title||tab.snapshot.title).slice(0,200),history,canGoBack:(history?.index||0)>0,canGoForward:!!history&&history.index<history.entries.length-1};this.changed();return this.state(tab,true);}
       const wc=tab.view.webContents;
-      if(wc.getURL()!==address&&tab.navigationURL!==address){tab.applyingShared=true;try{await this.navigate(id,address);}finally{tab.applyingShared=false;}}
+      // A device-private landing is the same logical page, not a reason to reload it.
+      if(wc.getURL()!==address&&tab.navigationURL!==address&&!(tab.localLanding&&mirrorHolds(tab))){tab.applyingShared=true;try{await this.navigate(id,address);}finally{tab.applyingShared=false;}}
       this.changed();return this.state(tab,true);
     }
     if (action === 'history-menu') {
