@@ -3,6 +3,8 @@
 Nov 3 source uses a worker for established paired web transports, skips identical state
 push rendering, preserves prepared composer retry envelopes, and guards tab snapshots
 against late responses. See [web measurements and acceptance limits](releases/2026-11-03/web-performance.md).
+Transport snapshots are read-only. Local overlays use copy-on-write, and the worker bridge
+preserves unchanged subtree identities for incremental-state consumers.
 
 The authenticated `/remote` page connects the Proteus website to explicitly paired Linux PCs and Macs through
 the existing end-to-end encrypted relay protocol. Laravel serves the UI and verifies the website

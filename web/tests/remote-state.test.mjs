@@ -1,0 +1,56 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {updateWebState,applyLifecycleState,updateRunSummary,createStateProjection,mergeStateProjection,projectSyncResult} from '../resources/js/remote-state.js';
+import {acceptRemoteState} from '../resources/js/remote-updates.js';
+const freeze = value => {if(value && typeof value==='object'){Object.values(value).forEach(freeze);Object.freeze(value);}return value;};
+test('local usage, catalogs, paging, lifecycle and chat metadata overlays leave frozen transport trees intact', () => {
+    const snapshot=freeze({appearance:{showProviderUsage:true},providerStatuses:{old:{models:[]}},context:{workspaces:[]},workspaceProjects:{revision:1},runs:[{id:'chat',progress:{waitingTools:1,stalled:false,lastProgressAt:'now'}}]});
+    const current={state:snapshot,run:snapshot.runs[0],cachedRuns:snapshot.runs,archivedRuns:snapshot.runs};
+    updateWebState(current,{appearance:{...current.state.appearance,showProviderUsage:false},providerUsage:{enabled:false}});
+    updateWebState(current,{providerStatuses:{...current.state.providerStatuses,new:{models:[]}}});
+    updateWebState(current,{context:{...current.state.context,workspaces:[{id:'new'}]},workspaceProjects:{revision:2}});
+    updateWebState(current,{runs:[...current.state.runs,{id:'older'}]});
+    updateRunSummary(current,'chat',{attentionRequired:false,failureReviewedAt:'reviewed'});
+    assert.equal(snapshot.runs[0].failureReviewedAt,undefined);
+    assert.equal(current.state.runs[0].failureReviewedAt,'reviewed');
+    updateRunSummary(current,'chat',{title:'renamed'});
+    assert.equal(current.cachedRuns[0].title,'renamed');assert.equal(current.archivedRuns[0].title,'renamed');
+    assert.equal(snapshot.runs[0].title,undefined);
+    applyLifecycleState(current,{id:'chat',title:'renamed'});assert.equal(snapshot.runs[0].title,undefined);
+    current.run={...current.run,storage:{available:true}};
+    applyLifecycleState(current,{id:'chat',deleted:true});
+    assert.equal(snapshot.appearance.showProviderUsage,true);assert.equal(snapshot.providerStatuses.new,undefined);
+    assert.equal(snapshot.context.workspaces.length,0);assert.equal(snapshot.workspaceProjects.revision,1);
+    assert.equal(snapshot.runs.length,1);assert.equal(snapshot.runs[0].storage,undefined);
+    assert.deepEqual(current.state.runs,[{id:'older'}]);
+});
+test('worker sync and event projections retain nested identity across structured clone and remove stale fields', () => {
+    const project=createStateProjection();const stable=freeze({id:'stable',summary:'x'.repeat(2_000_000)});
+    const first=freeze({runs:[stable,{id:'changing',progress:{waitingTools:0}}],context:{workspaces:[]},obsolete:true});
+    const page=mergeStateProjection(undefined,structuredClone(project(first)));
+    const next=freeze({...first,runs:[stable,{id:'changing',progress:{waitingTools:1}}]});
+    const delta=project(next);assert.ok(JSON.stringify(delta).length<500);
+    const merged=mergeStateProjection(page,structuredClone(delta));
+    assert.equal(merged.context,page.context);assert.equal(merged.runs[0],page.runs[0]);assert.notEqual(merged.runs,page.runs);
+    assert.equal(merged.runs[1].progress.waitingTools,1);assert.equal(page.runs[1].progress.waitingTools,0);
+    assert.equal(mergeStateProjection(merged,structuredClone(project(next))),merged);
+    const trimmed=mergeStateProjection(merged,structuredClone(project({runs:[stable],context:first.context})));
+    assert.equal(trimmed.runs.length,1);assert.equal(trimmed.runs[0],page.runs[0]);assert.equal(Object.hasOwn(trimmed,'obsolete'),false);
+});
+test('unchanged section identity avoids serialization and changed scalars still invalidate', () => {
+    const runs=freeze([{id:'chat',progress:{waitingTools:1,stalled:false,lastProgressAt:'now'}}]);let serialized=0;
+    const context={toJSON(){serialized++;return {large:true};}};const current={};
+    assert.equal(acceptRemoteState(current,{runs,context,hostName:'before'}),true);assert.equal(serialized,1);
+    assert.equal(acceptRemoteState(current,{runs,context,hostName:'after'}),true);assert.equal(serialized,1);
+    assert.deepEqual([...current.changedStateSections],['hostName']);
+    assert.equal(acceptRemoteState(current,{runs,context,hostName:'after'}),false);assert.equal(serialized,1);
+});
+test('other commands with a state property cannot replace the worker owner-state baseline', () => {
+    const project=createStateProjection(),state={runs:[]};
+    const sync=projectSyncResult('sync',{state,cursor:'1'},project);
+    const page=mergeStateProjection(undefined,sync.stateProjection);
+    const follow={state:{tabId:'browser'}};
+    assert.equal(projectSyncResult('project-follow.get',follow,project).result,follow);
+    assert.equal(projectSyncResult('sync',{state,cursor:'2'},project).stateProjection,null);
+    assert.deepEqual(page,{runs:[]});
+});

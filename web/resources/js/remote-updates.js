@@ -1,9 +1,16 @@
 // State is replaceable; acknowledgements and lifecycle events are never coalesced.
 export function acceptRemoteState(current, state) {
-    const signature = JSON.stringify(state);
-    const changed = current.stateSignature !== signature;
-    current.stateSignature = signature;
-    return changed;
+    const previous = current.receivedState;
+    const signatures = current.stateSectionSignatures ||= new Map();
+    const changed = current.changedStateSections = new Set();
+    for (const key of new Set([...Object.keys(previous || {}), ...Object.keys(state)])) {
+        if (previous && previous[key] === state[key] && Object.hasOwn(previous,key) === Object.hasOwn(state,key)) continue;
+        const signature = JSON.stringify(state[key]);
+        if (!signatures.has(key) || signatures.get(key) !== signature || Object.hasOwn(previous || {},key) !== Object.hasOwn(state,key)) changed.add(key);
+        if (Object.hasOwn(state,key)) signatures.set(key,signature); else signatures.delete(key);
+    }
+    current.receivedState = state;
+    return changed.size > 0;
 }
 export function coalesceRender(render, schedule = requestAnimationFrame) {
     let pending = false;

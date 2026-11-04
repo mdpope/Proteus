@@ -119,3 +119,57 @@ worker behavior, hardware typing latency, real-owner full-tree rendering, physic
 feel and actual desktop URL convergence remain unverified. The owner can further reduce
 the remaining clone/transport cost by reducing full-state push volume; no protocol change
 is required for these web changes.
+
+## Incremental-state integration preparation
+
+The coordinator is implementing the wire patch/conditional-sync protocol separately.
+No `src/` transport code was edited here. Its full merged states and run pages are treated
+as read-only, including references retained in local caches. The following web writes now
+replace their owning roots/arrays/rows rather than mutating transport objects:
+
+- Provider usage: the appearance flag and providerUsage result.
+- Provider catalog refresh: providerStatuses and the selected provider entry.
+- Selected chat loading: storage metadata added after chat.get/history merging.
+- Failed-chat review: the matching run summary, including cached/archived aliases.
+- Chat rename: matching state, cached and archived summaries.
+- Chat lifecycle: selected-run metadata and deletion from state.runs.
+- Run pagination: both the conversation-list and aggregate-list paths.
+- Workspace sync, project selection/move/catalog refresh and configuration edits.
+- Workspace copy/create/delete and project mutation results.
+
+`mergeChatHistory` itself already creates new arrays/metadata when merging and can return
+its input on the initial page; the selected-chat storage assignment was therefore unsafe
+even though the history merge code needed no edit. Local drafts, host credentials and
+locally constructed child-tab descriptors are separate mutable presentation records.
+The shared shell, running-count and workspace-tree consumers were audited; they do not
+write owner snapshots. No web consumer depends on `progress.toolSignature`; the remaining
+shared conversation DOM property named toolSignature is unrelated to run-summary progress.
+
+The worker/page bridge now projects changed paths recursively, including array entries,
+and reconstructs new containers only along those paths. Merely posting the full merged
+state would otherwise destroy the coordinator's structural-sharing guarantee. Sync replies
+and state events share one ordered bridge baseline. Other commands with a `state` property,
+such as project-follow results, cannot replace it. This is an internal worker message
+format, not another owner/relay protocol.
+
+State acceptance checks section reference identity before serializing changed sections;
+unchanged large subtrees do no serialization work. Only changed run sections rewrite the
+encrypted chat index, only context/project changes invalidate workspace state, and recents
+skip DOM rebuilding when their section references and view/selection inputs are unchanged.
+Both selected and aggregate connections now use the same push handler. Provider-usage-only
+changes do not rebuild the conversation.
+
+Twelve web Node tests pass, including deeply frozen state/cached-run regressions, a worker
+projection retaining an unchanged two-million-character subtree while emitting under 500
+JSON characters for one progress change, deletion/truncation, non-sync baseline isolation,
+and a check that unchanged references do not call a section's serializer. The final source
+also passes the PHP suite (106 tests/926 assertions), Vite build and static checks. Focused
+built-web authentication/reconnect, retained-pairing and no-op DOM acceptance passes for
+this bridge against the existing full-state synthetic owner.
+
+The earlier before/after table remains evidence from the original full-state stage run.
+**No patch-cadence performance result is claimed yet.** After the coordinator declares its
+branch ready, the next comparison must retain the old roughly 2 MB/second baseline and
+measure the actual negotiated patches/conditional replies at the owner-selected cadence
+(expected progress churn no more than once per two seconds). Expected few-KB patch sizes
+are coordinator design targets, not measurements from this branch.

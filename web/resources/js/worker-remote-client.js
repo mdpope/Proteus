@@ -1,4 +1,5 @@
 import {BrowserRemoteClient as DirectClient} from '../../../src/services/remote/remote-client.js';
+import {mergeStateProjection} from './remote-state.js';
 // Pairing callbacks stay on the page. Established sessions reuse the complete shared
 // transport in a worker: no duplicate sequencing, acknowledgement or retry logic.
 export class BrowserRemoteClient extends EventTarget {
@@ -22,6 +23,11 @@ export class BrowserRemoteClient extends EventTarget {
         if (this.worker || this.status === 'closed') return Promise.reject(new Error('This connection already started.'));
         this.worker = new Worker(new URL('./remote-transport-worker.js', import.meta.url), {type:'module'});
         this.worker.onmessage = ({data}) => {
+            if (Object.hasOwn(data,'stateProjection')) {
+                this.receivedState = mergeStateProjection(this.receivedState,data.stateProjection);
+                if (data.event) data.detail = {...data.detail,data:this.receivedState};
+                else data.result = {...data.result,state:this.receivedState};
+            }
             if (data.event) {
                 this.status = data.status;
                 this.dispatchEvent(new CustomEvent(data.event,{detail:data.detail}));
@@ -44,6 +50,7 @@ export class BrowserRemoteClient extends EventTarget {
     request(...args) { return this.call('request',args); }
     dispose(message) {
         this.status = 'closed'; this.worker?.terminate(); this.worker = null;
+        this.receivedState = null;
         for (const pending of this.waiting.values()) pending.reject(new Error(message));
         this.waiting.clear();
     }

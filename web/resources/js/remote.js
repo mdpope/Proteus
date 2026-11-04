@@ -1,3 +1,4 @@
+import {updateWebState,applyLifecycleState,updateRunSummary} from './remote-state.js';
 import {acceptRemoteState,coalesceRender,draftSubmission,acknowledgeDraft} from "./remote-updates.js";
 import {bindSharedDraftText} from '../../../public/features/chats/shared-draft-text.js';
 const webWindowId=(()=>{try{const key='proteus.remote.window';let value=sessionStorage.getItem(key);if(!value){value=crypto.randomUUID();sessionStorage.setItem(key,value);}return value;}catch{return crypto.randomUUID();}})();
@@ -243,9 +244,30 @@ async function connectNow(hostId,{automatic=false}={}) {
         client.addEventListener('failure', event => { if (relevant()) notice(event.detail); });
         // Routing packets are not authenticated revocation proofs. Keep account credentials intact.
         client.addEventListener('rejected', () => { if(!relevant())return;suppressed.add(hostId);stopReconnect();preserveDrafts();current.state=null;current.run=null;notice('This computer rejected the connection. Retry or create a fresh pairing; the saved account destination was retained.'); });
-        client.addEventListener('change', event => { if(ended||suspended||current.client!==client)return; const change = event.detail;current.host.cursor=change.cursor;if(change.event==="state"&&!acceptRemoteState(current,change.data))return;void workspaces.changed(hostId,change).catch(error=>notice(error.message)); current.host.cursor = change.cursor; if(change.event==='chat.lifecycle'){applyChatLifecycle(current,hostId,change.data);if(chatIndexShowsArchived())void loadArchivedChats(true).catch(error=>notice(error.message));} if (change.event === 'state'){current.state = change.data;rememberHostName(current,change.data);current.cachedRuns=change.data.runs||[];if(!chatIndexShowsArchived())current.archivedRuns=null;current.lastSyncAt=new Date().toISOString();void saveChatIndex(root.dataset.account,current.host,current.cachedRuns).catch(()=>{});if(chatIndexShowsArchived())void loadArchivedChats(true).catch(error=>notice(error.message));} if (change.event === 'run' && change.runId === current.selected) current.run = mergeChatHistory(current.run, change.data); if(active===hostId)scheduleRemoteRender();else renderRecentChats(); });
+        client.addEventListener('change',event=>{if(!ended&&!suspended&&current.client===client)handleRemoteChange(current,hostId,event.detail);});
         await client.connect(); if (!relevant()) { client.close(); return; } await refresh();reconnectAttempt=0;void refreshUsage();
     } catch (error) { if(generation!==switching)return;if(error.sessionInvalid){await endAccount();return;}current.connecting=false;notice(error.message);render();if(![409,404].includes(error.status))reconnect(hostId); }
+}
+function handleRemoteChange(current,hostId,change) {
+    if(change.cursor)current.host.cursor=change.cursor;
+    const state=change.event==='state';
+    if(!state)recentRenderInputs=null;
+    if(state&&!acceptRemoteState(current,change.data))return;
+    const sections=current.changedStateSections;
+    if(!state||sections.has('context')||sections.has('workspaceProjects'))void workspaces.changed(hostId,change).catch(error=>notice(error.message));
+    if(change.event==='chat.lifecycle'){applyChatLifecycle(current,hostId,change.data);if(chatIndexShowsArchived())void loadArchivedChats(true).catch(error=>notice(error.message));}
+    if(state){
+        current.state=change.data;rememberHostName(current,change.data);current.lastSyncAt=new Date().toISOString();
+        if(sections.has('runs')){
+            current.cachedRuns=change.data.runs||[];
+            if(!chatIndexShowsArchived())current.archivedRuns=null;
+            void saveChatIndex(root.dataset.account,current.host,current.cachedRuns).catch(()=>{});
+            if(chatIndexShowsArchived())void loadArchivedChats(true).catch(error=>notice(error.message));
+        }
+    }
+    if(change.event==='run'&&change.runId===current.selected)current.run=mergeChatHistory(current.run,change.data);
+    if(state&&[...sections].every(key=>key==='providerUsage')){renderUsage();return;}
+    if(active===hostId)scheduleRemoteRender();else renderRecentChats();
 }
 function renderUsage() { /* Shared shell owns Default computer allowance across every feature. */ }
 async function refreshUsage(force = false) {
@@ -255,9 +277,7 @@ async function refreshUsage(force = false) {
     try {
         const value = await command('provider.usage', { force });
         if (active !== target || session() !== current) return;
-        current.state.appearance ||= {};
-        current.state.appearance.showProviderUsage = value.enabled !== false;
-        current.state.providerUsage = value;
+        updateWebState(current,{appearance:{...current.state.appearance,showProviderUsage:value.enabled !== false},providerUsage:value});
     } catch { if (active === target) current.usageError = 'Usage is unavailable. Check or update Proteus on this computer.'; }
     finally { current.usageLoading = false; if (active === target) renderUsage(); }
 }
@@ -319,12 +339,12 @@ function render() {
 function bindCatalog(formId, key) {
     const form = $(formId);
     if(!form)return;
-    for (const select of form.querySelectorAll('select[name="provider"],select[name="model"],select[data-provider-route]')) select.onchange = async () => { preserveDrafts(); const draft = session().drafts.get(key); if (select.name === 'provider' || select.hasAttribute('data-provider-route')) { const choice=select.hasAttribute('data-provider-route')?inferenceProviderChoices(session().state.providerStatuses,{ownerLabel:session().host.label,selected:select.value}).find(choice=>choice.id===select.value):null; if(choice){draft.values.providerRoute=choice.id;draft.values.provider=choice.provider;form.querySelector('[name="provider"]').value=choice.provider;} draft.values.model = ''; draft.values.reasoningEffort = ''; draft.values.contextTier = ''; draft.values.serviceTier = ''; try { const status = await command('provider.status', { provider: choice?.provider || select.value }); session().state.providerStatuses ||= {}; session().state.providerStatuses[choice?.provider || select.value] = status; } catch (error) { notice(error.message); } } else {const model=session().state.providerStatuses?.[draft.values.provider]?.models?.find(model=>model.id===select.value);if(model)Object.assign(draft.values,optionsForModelChange(model.controls,draft.values));} render(); };
+    for (const select of form.querySelectorAll('select[name="provider"],select[name="model"],select[data-provider-route]')) select.onchange = async () => { preserveDrafts(); const draft = session().drafts.get(key); if (select.name === 'provider' || select.hasAttribute('data-provider-route')) { const choice=select.hasAttribute('data-provider-route')?inferenceProviderChoices(session().state.providerStatuses,{ownerLabel:session().host.label,selected:select.value}).find(choice=>choice.id===select.value):null; if(choice){draft.values.providerRoute=choice.id;draft.values.provider=choice.provider;form.querySelector('[name="provider"]').value=choice.provider;} draft.values.model = ''; draft.values.reasoningEffort = ''; draft.values.contextTier = ''; draft.values.serviceTier = ''; try { const status = await command('provider.status', { provider: choice?.provider || select.value }); updateWebState(session(),{providerStatuses:{...session().state.providerStatuses,[choice?.provider || select.value]:status}}); } catch (error) { notice(error.message); } } else {const model=session().state.providerStatuses?.[draft.values.provider]?.models?.find(model=>model.id===select.value);if(model)Object.assign(draft.values,optionsForModelChange(model.controls,draft.values));} render(); };
 }
-async function openChat(id,hostId=active,panel=null,scope=workspaces.active) { if(scope){workspaces.restore(scope);workspaces.selectChat(id);}else workspaces.leave(); chatMode='chat'; if(hostId!==active||session()?.run?.id!==id||view!=='chats')stopMessageSpeech();preserveDrafts();if(hostId!==active||session()?.client?.status!=='online')await connect(hostId);const current=session();if(current?.client?.status!=='online')throw new Error('This chat’s computer is not connected. Use Connect to retry.');const changed=current.selected!==id;if(changed){current.earlierError=false;if(current.selected)saveChildTabs(current,current.selected);current.previewApprovals?.clear();current.activeChatPanel='conversation';}current.selected=id;setView('chats');const fresh=await command('chat.get',{id});if(scope?!workspaces.isChatCurrent(scope,id):!!workspaces.active||current.selected!==id)return;current.run=mergeChatHistory(current.run,fresh);if(current.state?.capabilities?.includes('chat.paths.v1'))current.run.storage=await command('chat.paths',{id});if(scope?!workspaces.isChatCurrent(scope,id):!!workspaces.active||current.selected!==id)return;restoreChildTabs(current,id);if(changed){const remembered=savedChildTabs[hostId+':'+id]?.active||'conversation',children=current.childOrder?.get(id)||[];current.activeChatPanel=remembered==='conversation'||remembered==='browser'&&children.some(item=>item.type==='browser')||children.some(item=>item.documentId===remembered)?remembered:'conversation';}if(panel){const children=current.childOrder?.get(id)||[];if(panel==='conversation'||panel==='browser'&&children.some(item=>item.type==='browser')||children.some(item=>item.documentId===panel)){current.activeChatPanel=panel;saveChildTabs(current,id);}}if(scope){if(current.run.workspaceId!==scope.id&&current.run.context?.workspaceId!==scope.id&&current.run.schedule?.context?.workspaceId!==scope.id)throw new Error('This chat belongs to another workspace.');await workspaces.adoptChat(current.run);setView('chats');}else{chatTabs.set(hostId+':'+id,{hostId,id,title:chatTabTitle(current.run.title||current.run.schedule?.name||chatTabs.get(hostId+':'+id)?.title)});saveChatTabs();}render();
+async function openChat(id,hostId=active,panel=null,scope=workspaces.active) { if(scope){workspaces.restore(scope);workspaces.selectChat(id);}else workspaces.leave(); chatMode='chat'; if(hostId!==active||session()?.run?.id!==id||view!=='chats')stopMessageSpeech();preserveDrafts();if(hostId!==active||session()?.client?.status!=='online')await connect(hostId);const current=session();if(current?.client?.status!=='online')throw new Error('This chat’s computer is not connected. Use Connect to retry.');const changed=current.selected!==id;if(changed){current.earlierError=false;if(current.selected)saveChildTabs(current,current.selected);current.previewApprovals?.clear();current.activeChatPanel='conversation';}current.selected=id;setView('chats');const fresh=await command('chat.get',{id});if(scope?!workspaces.isChatCurrent(scope,id):!!workspaces.active||current.selected!==id)return;current.run=mergeChatHistory(current.run,fresh);if(current.state?.capabilities?.includes('chat.paths.v1'))current.run={...current.run,storage:await command('chat.paths',{id})};if(scope?!workspaces.isChatCurrent(scope,id):!!workspaces.active||current.selected!==id)return;restoreChildTabs(current,id);if(changed){const remembered=savedChildTabs[hostId+':'+id]?.active||'conversation',children=current.childOrder?.get(id)||[];current.activeChatPanel=remembered==='conversation'||remembered==='browser'&&children.some(item=>item.type==='browser')||children.some(item=>item.documentId===remembered)?remembered:'conversation';}if(panel){const children=current.childOrder?.get(id)||[];if(panel==='conversation'||panel==='browser'&&children.some(item=>item.type==='browser')||children.some(item=>item.documentId===panel)){current.activeChatPanel=panel;saveChildTabs(current,id);}}if(scope){if(current.run.workspaceId!==scope.id&&current.run.context?.workspaceId!==scope.id&&current.run.schedule?.context?.workspaceId!==scope.id)throw new Error('This chat belongs to another workspace.');await workspaces.adoptChat(current.run);setView('chats');}else{chatTabs.set(hostId+':'+id,{hostId,id,title:chatTabTitle(current.run.title||current.run.schedule?.name||chatTabs.get(hostId+':'+id)?.title)});saveChatTabs();}render();
     // A failed chat is only acknowledged after its detail has been delivered and rendered.
     if(['failed','interrupted'].includes(current.run.status)&&current.run.attentionRequired===true){
-        try{const reviewed=await command('chat.review',{id,expectedFailureEventAt:current.run.failureEventAt});if(session()!==current)return;current.run={...current.run,...reviewed};reviewedChats.set(active+':'+id,{...current.run});const row=current.state?.runs?.find(item=>item.id===id);if(row)Object.assign(row,reviewed);render();}catch(error){notice('Could not mark this failure reviewed: '+error.message);}
+        try{const reviewed=await command('chat.review',{id,expectedFailureEventAt:current.run.failureEventAt});if(session()!==current)return;current.run={...current.run,...reviewed};reviewedChats.set(active+':'+id,{...current.run});updateRunSummary(current,id,reviewed);render();}catch(error){notice('Could not mark this failure reviewed: '+error.message);}
     }
 }
 async function openSchedule(id,hostId=active){
@@ -400,7 +420,7 @@ function renameWebsiteChat(current,run){
     if(!current?.state?.capabilities?.includes('chat.rename.v1')){notice('Update Proteus on this computer to rename chats.');return;}
     const dialog=document.createElement('dialog');dialog.className='remote-rename-dialog';
     dialog.innerHTML=`<form method="dialog"><h2>Rename chat</h2><label>Chat name<input name="title" type="text" maxlength="200" required value="${escape(run.title||'')}"></label><menu><button value="cancel">Cancel</button><button value="save" class="primary">Save</button></menu></form>`;
-    const field=dialog.querySelector('input');dialog.addEventListener('close',async()=>{const save=dialog.returnValue==='save',title=field.value.trim();dialog.remove();if(!save)return;if(!title){notice('Enter a chat name.');return;}try{const result=await commandForHost(current,'chat.rename',{id:run.id,title,expectedTitleRevision:run.titleRevision});if(current.run?.id===run.id)current.run={...current.run,...result};for(const row of current.state?.runs||[])if(row.id===run.id)Object.assign(row,result);for(const row of current.cachedRuns||[])if(row.id===run.id)Object.assign(row,result);for(const row of current.archivedRuns||[])if(row.id===run.id)Object.assign(row,result);const tab=chatTabs.get(current.host.hostId+':'+run.id);if(tab)tab.title=chatTabTitle(result.title);saveChatTabs();render();}catch(error){notice(error.message);}} ,{once:true});
+    const field=dialog.querySelector('input');dialog.addEventListener('close',async()=>{const save=dialog.returnValue==='save',title=field.value.trim();dialog.remove();if(!save)return;if(!title){notice('Enter a chat name.');return;}try{const result=await commandForHost(current,'chat.rename',{id:run.id,title,expectedTitleRevision:run.titleRevision});if(current.run?.id===run.id)current.run={...current.run,...result};updateRunSummary(current,run.id,result);const tab=chatTabs.get(current.host.hostId+':'+run.id);if(tab)tab.title=chatTabTitle(result.title);saveChatTabs();render();}catch(error){notice(error.message);}} ,{once:true});
     document.body.append(dialog);dialog.showModal();field.focus();field.select();
 }
 function composerModeStatus(current){
@@ -619,7 +639,7 @@ function renderChats(current) {
         mountMessageActions(actions,{key:actions.dataset.messageKey,text:event.text,rendered:element,notify:notice});
     }
     root.querySelectorAll('[data-run]').forEach(button => button.onclick = () => openChat(button.dataset.run,button.dataset.runHost).catch(error => notice(error.message)));
-    $('remote-more-runs')?.addEventListener('click', async () => { try { const older = await command('runs.list', { offset: (current.state.runs||[]).length }); current.state.runs.push(...older); preserveDrafts(); render(); } catch (error) { notice(error.message); } });
+    $('remote-more-runs')?.addEventListener('click', async () => { try { const older = await command('runs.list', { offset: (current.state.runs||[]).length }); updateWebState(current,{runs:[...(current.state.runs||[]),...older]}); preserveDrafts(); render(); } catch (error) { notice(error.message); } });
     function prefetchHistory(force=false){
         if(!run||!eventStart||!force&&current.historyPrefetchFailedAt===eventStart)return null;
         const key=run.id+':'+eventStart;
@@ -745,8 +765,8 @@ async function loadArchivedChats(reset=false){
 function applyChatLifecycle(current,hostId,change){
     if(!change?.id)return;
     if(current.archivedRuns)current.archivedRuns=change.deleted?current.archivedRuns.filter(row=>row.id!==change.id):current.archivedRuns.map(row=>row.id===change.id?{...row,...change}:row);
-    if(!change.deleted){if(current.run?.id===change.id)Object.assign(current.run,change);return;}
-    if(current.state?.runs)current.state.runs=current.state.runs.filter(row=>row.id!==change.id);
+    applyLifecycleState(current,change);
+    if(!change.deleted)return;
     if(current.cachedRuns)current.cachedRuns=current.cachedRuns.filter(row=>row.id!==change.id);
     chatTabs.delete(hostId+':'+change.id);saveChatTabs();delete savedChildTabs[hostId+':'+change.id];try{localStorage.setItem(childTabKey,JSON.stringify(savedChildTabs));}catch{}
     for(const item of current.documents?.values()||[])if(item.chatId===change.id)releaseDocumentAssets(item);
@@ -766,7 +786,11 @@ async function lifecycleChat(row,method,extra={}){
     current.state=result.state;current.cachedRuns=result.state.runs||[];if(!chatIndexShowsArchived())current.archivedRuns=null;current.lastSyncAt=new Date().toISOString();void saveChatIndex(root.dataset.account,current.host,current.cachedRuns).catch(()=>{});
     if(chatIndexShowsArchived())await loadArchivedChats(true);else render();
 }
+let recentRenderInputs;
 function renderRecentChats(){
+ const inputs=[view,chatMode,active,attentionOnly,attentionPanel,transcriptionOnly,selectedChatType(),workspaces.active,...[...sessions.values()].flatMap(current=>[current.state?.runs,current.state?.runningChatCount,current.cachedRuns,current.archivedRuns,current.state?.attention,current.state?.schedules,current.state?.context,current.state?.workspaceProjects,current.client?.status,current.selected,current.run,current.host.label])];
+ if(recentRenderInputs&&inputs.length===recentRenderInputs.length&&inputs.every((value,index)=>value===recentRenderInputs[index]))return;
+ recentRenderInputs=inputs;
  for(const [id,current] of sessions)observeRunningChats(id,'remote',current.state,current.client?.status==='online');
  const feature=workspaces.active?'workspaces':attentionOnly&&view==='chats'?'attention':transcriptionOnly&&view==='schedules'?'transcription':view==='chats'&&selectedChatType()==='internet'?'internet':view==='connections'?'engine-room':view;document.body.dataset.activeFeature=feature;
  document.querySelectorAll('[data-shell-nav]').forEach(link=>{const selected=link.dataset.shellNav===feature;link.classList.toggle('active',selected);if(selected)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');});
@@ -800,7 +824,7 @@ async function loadMoreChats(){
     try{await verifyWebsite();const archived=chatIndexShowsArchived();await Promise.all([...sessions.values()].filter(current=>current.client?.status==='online'&&(archived&&current.state?.capabilities?.includes('chat.lifecycle.v1')?(current.archivedRuns?.length||0)<(current.state?.runCountIncludingArchived||0):(current.state?.runs?.length||0)<(current.state?.runCount||0))).map(async current=>{
         const client=current.client,includeArchived=archived&&current.state?.capabilities?.includes('chat.lifecycle.v1'),existing=includeArchived?current.archivedRuns||[]:current.state.runs||[],older=await client.request('runs.list',{offset:existing.length,...(includeArchived?{includeArchived:true}:{})});
         if(ended||suspended||current.client!==client)return;
-        if(includeArchived)current.archivedRuns=[...new Map([...existing,...older].map(run=>[run.id,run])).values()];else{current.state.runs=[...new Map([...existing,...older].map(run=>[run.id,run])).values()];current.cachedRuns=current.state.runs;await saveChatIndex(root.dataset.account,current.host,current.cachedRuns).catch(()=>{});}
+        if(includeArchived)current.archivedRuns=[...new Map([...existing,...older].map(run=>[run.id,run])).values()];else{updateWebState(current,{runs:[...new Map([...existing,...older].map(run=>[run.id,run])).values()]});current.cachedRuns=current.state.runs;await saveChatIndex(root.dataset.account,current.host,current.cachedRuns).catch(()=>{});}
     }));render();}catch(error){notice(error.message);}
 }
 async function refreshAggregate(force=false){
@@ -809,7 +833,7 @@ async function refreshAggregate(force=false){
         const credential=metadata.source==='account'?await accountStore.credential(metadata.hostId):metadata;
         if(ended||suspended)return;
         const client=new BrowserRemoteClient(credential);current={host:credential,client,drafts:new Map(),selected:null,run:null,state:null};sessions.set(metadata.hostId,current);current.drafts=await loadChatDrafts(root.dataset.account,credential);const cached=await loadChatIndex(root.dataset.account,credential);if(cached){current.cachedRuns=cached.items;current.lastSyncAt=cached.observedAt;}bindRevocation(client,metadata.hostId,current);client.addEventListener('status',()=>{if(client.status!=='online')observeRunningChats(metadata.hostId,'remote',null,false);if(client.status==='closed'){current.state=null;renderRecentChats();if(active===metadata.hostId){render();reconnect(metadata.hostId);}}});
-        client.addEventListener('change',event=>{if(ended||suspended||current.client!==client)return;void workspaces.changed(metadata.hostId,event.detail).catch(error=>notice(error.message));if(event.detail.event==='chat.lifecycle'){applyChatLifecycle(current,metadata.hostId,event.detail.data);if(chatIndexShowsArchived())void loadArchivedChats(true).catch(error=>notice(error.message));}if(event.detail.event==='state'){current.state=event.detail.data;rememberHostName(current,event.detail.data);current.cachedRuns=event.detail.data.runs||[];if(!chatIndexShowsArchived())current.archivedRuns=null;current.lastSyncAt=new Date().toISOString();void saveChatIndex(root.dataset.account,current.host,current.cachedRuns).catch(()=>{});renderRecentChats();if(chatIndexShowsArchived())void loadArchivedChats(true).catch(error=>notice(error.message));if(active===metadata.hostId){preserveDrafts();render();}}if(event.detail.event==='run'&&event.detail.runId===current.selected){current.run=event.detail.data;if(active===metadata.hostId){preserveDrafts();render();}}});
+        client.addEventListener('change',event=>{if(!ended&&!suspended&&current.client===client)handleRemoteChange(current,metadata.hostId,event.detail);});
         try{await client.connect();await verifyWebsite();const result=await client.request('sync',{cursor:''});current.state=result.state;rememberHostName(current,result.state);current.cachedRuns=result.state.runs||[];current.lastSyncAt=new Date().toISOString();await saveChatIndex(root.dataset.account,current.host,current.cachedRuns).catch(()=>{});current.host.cursor=result.cursor;}catch{client.close();current.client=null;current.state=null;}
     }));
 }

@@ -8,7 +8,7 @@ test('identical pushes advance state without scheduling work; changed content re
     const render = coalesceRender(() => renders++, callback => frames.push(callback));
     for (const state of [{runs:[{id:'a'}]}, {runs:[{id:'a'}]}, {runs:[{id:'b'}]}]) if (acceptRemoteState(current,state)) render();
     assert.equal(frames.length,1); frames.shift()(); assert.equal(renders,1);
-    assert.equal(current.stateSignature,JSON.stringify({runs:[{id:'b'}]}));
+    assert.equal(current.receivedState.runs[0].id,'b');
     if (acceptRemoteState(current,{runs:[]})) render();
     frames.shift()(); assert.equal(renders,2);
 });
