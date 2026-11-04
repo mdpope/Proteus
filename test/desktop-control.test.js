@@ -124,3 +124,43 @@ test('discovery alone and unrelated missing-window text do not settle an uncerta
   await observe(f.broker);assert.ok(f.broker.status().uncertainTarget);
  }finally{await f.broker.close();}
 });
+const windowsTools=['check_permissions','list_windows','get_window_state','click'].map(name=>({name,inputSchema:{type:'object',properties:name==='get_window_state'?{pid:{type:'integer'},window_id:{type:'integer'},include_screenshot:{type:'boolean'}}:{}}}));
+function verifyFixture({platform='win32',reply=()=>null,located=true,connect}={}){
+ const calls=[],client={request:async(method,args)=>{calls.push({method,name:args?.name,args:args?.arguments});if(method==='tools/list')return {tools:windowsTools};const value=reply(args);if(value)return value;if(args.name==='check_permissions')return {content:[{type:'text',text:'{}'}]};if(args.name==='list_windows')return {structuredContent:{windows:[{pid:10,window_id:20,is_on_screen:true,title:'SECRET TITLE'}]}};return {structuredContent:{pid:10,window_id:20},content:[{type:'text',text:'SECRET WINDOW CONTENT'}]};},close(){}};
+ const broker=new DesktopControl({platform,locate:()=>located?'/driver':null,connect:connect||(async()=>client)});return {broker,calls};
+}
+test('the Windows driver is found at its official install location despite a stale PATH',()=>{
+ const expected='C:\\Users\\Person\\AppData\\Local\\Programs\\Cua\\cua-driver\\bin\\cua-driver.exe';
+ const options={platform:'win32',home:'C:\\Users\\Person',executable:file=>file===expected};
+ assert.equal(desktopExecutable('cua',{PATH:'C:\\Windows',LOCALAPPDATA:'C:\\Users\\Person\\AppData\\Local'},options),expected);
+ assert.equal(desktopExecutable('cua',{PATH:'C:\\Windows'},options),null);
+ assert.equal(desktopExecutable('cua',{PATH:'C:\\Elsewhere;C:\\Windows',LOCALAPPDATA:'C:\\Users\\Person\\AppData\\Local'},{...options,executable:file=>file==='C:\\Elsewhere\\cua-driver.exe'}),'C:\\Elsewhere\\cua-driver.exe','an existing PATH install keeps precedence');
+ assert.equal(desktopExecutable('peekaboo',{PATH:'',LOCALAPPDATA:'C:\\Users\\Person\\AppData\\Local'},options),null);
+});
+test('setup steps are honest for each operating system',()=>{
+ const windows=new DesktopControl({platform:'win32',locate:()=>null}).status();
+ assert.deepEqual(windows.setupSteps.map(step=>step.id),['install','start','verify']);assert.match(windows.setupSteps[0].command,/install\.ps1/);assert.match(windows.setupSteps[1].command,/autostart kick/);assert.equal(windows.setupSteps.some(step=>/System Settings/.test(step.text)),false);assert.equal(windows.verification,null);assert.equal(windows.backup,null);
+ const mac=new DesktopControl({platform:'darwin',locate:()=>null}).status();assert.equal(mac.setupSteps.find(step=>step.id==='permissions').human,true);
+});
+test('verification proves discovery, permissions, windows and one observation without input or retained content',async()=>{
+ const {broker,calls}=verifyFixture();const result=await broker.handle({action:'verify'},'operator');
+ assert.equal(result.verified,true);assert.equal(result.inputVerified,false);assert.deepEqual(result.steps.map(step=>step.id),['driver','discovery','permissions','windows','observation']);
+ assert.match(result.steps.at(-1).detail,/UI Automation/);
+ assert.doesNotMatch(JSON.stringify(result),/SECRET/,'no titles or window contents are retained');
+ assert.deepEqual(calls.filter(call=>call.method==='tools/call').map(call=>call.name),['check_permissions','list_windows','get_window_state']);
+ assert.equal(calls.find(call=>call.name==='list_windows').args.pid,process.pid,'its own window is preferred');assert.equal(calls.find(call=>call.name==='get_window_state').args.include_screenshot,false);
+ assert.equal(broker.status().verification.verified,true);
+});
+test('each verification failure stops at its stage with a next step and never claims readiness',async()=>{
+ const stage=async options=>{const {broker}=verifyFixture(options),result=await broker.handle({action:'verify'},'operator');assert.equal(result.verified,false);return result.steps.at(-1);};
+ let step=await stage({located:false});assert.equal(step.id,'driver');
+ step=await stage({connect:async()=>{throw Error('no daemon');}});assert.equal(step.id,'discovery');assert.match(step.detail,/autostart kick/);
+ step=await stage({reply:args=>args.name==='check_permissions'?{content:[{type:'text',text:'{"accessibility":false}'}]}:null});assert.equal(step.id,'permissions');
+ step=await stage({reply:args=>args.name==='list_windows'?{structuredContent:{windows:[]}}:null});assert.equal(step.id,'windows');assert.match(step.detail,/desktop session/);
+ step=await stage({reply:args=>args.name==='get_window_state'?{structuredContent:{pid:10,window_id:20,degraded_reason:'ax_window_unresolved'},content:[{type:'text',text:'empty'}]}:null});assert.equal(step.id,'observation');assert.match(step.detail,/UI Automation/);
+ step=await stage({reply:args=>args.name==='get_window_state'?{structuredContent:{pid:99,window_id:20},content:[{type:'text',text:'other'}]}:null});assert.equal(step.id,'observation');
+});
+test('verification will not interrupt a chat that owns desktop input',async()=>{
+ const {broker}=verifyFixture();await broker.handle({action:'catalog'},'chat');
+ await assert.rejects(broker.handle({action:'verify'},'operator'),/owned by another chat/);
+});

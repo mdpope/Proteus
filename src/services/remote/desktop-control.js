@@ -7,12 +7,32 @@ import {modelToolResult} from '../../shared/tool-results.js';
 
 const reads=new Set(['list_apps','list_windows','get_window_state','check_permissions','get_accessibility_tree','get_agent_cursor_state','verify_state','see','permissions']);
 const allowed=new Set([...reads,'click','double_click','right_click','type_text','press_key','hotkey','scroll','drag','set_value','set_window_frame','invoke_menu','type','press','action','app','window','launch_app']);
-export function desktopExecutable(name,env=process.env,{platform=process.platform,home=os.homedir()}={}){
+export function desktopExecutable(name,env=process.env,{platform=process.platform,home=os.homedir(),executable=file=>{try{fs.accessSync(file,fs.constants.X_OK);return true;}catch{return false;}}}={}){
  const override=env[name==='cua'?'PROTEUS_CUA_DRIVER_PATH':'PROTEUS_PEEKABOO_PATH'];
- const command=name==='cua'?'cua-driver':'peekaboo';
- const directories=[...(env.PATH||'').split(path.delimiter).filter(Boolean),path.join(home,'.local','bin'),...(platform==='darwin'?['/opt/homebrew/bin','/usr/local/bin']:platform==='linux'?['/usr/local/bin','/usr/bin']:[])];
- const candidates=override?[override]:[...new Set(directories)].map(dir=>path.join(dir,command+(platform==='win32'?'.exe':'')));
- return candidates.find(file=>{try{fs.accessSync(file,fs.constants.X_OK);return true;}catch{return false;}})||null;
+ const command=name==='cua'?'cua-driver':'peekaboo',paths=platform==='win32'?path.win32:path.posix;
+ // A running app keeps the PATH it started with, so a driver installed afterwards
+ // must also be found at the official installer's own location.
+ const windows=platform==='win32'&&name==='cua'?[env.CUA_DRIVER_RS_INSTALL_DIR,env.LOCALAPPDATA&&paths.join(env.LOCALAPPDATA,'Programs','Cua','cua-driver','bin')].filter(Boolean):[];
+ const directories=[...(env.PATH||'').split(paths.delimiter).filter(Boolean),...windows,paths.join(home,'.local','bin'),...(platform==='darwin'?['/opt/homebrew/bin','/usr/local/bin']:platform==='linux'?['/usr/local/bin','/usr/bin']:[])];
+ const candidates=override?[override]:[...new Set(directories)].map(dir=>paths.join(dir,command+(platform==='win32'?'.exe':'')));
+ return candidates.find(file=>executable(file))||null;
+}
+// Official first-run steps per OS. Every command still goes through the setup chat's
+// ordinary approval, and steps marked human are the person's own to perform.
+export function desktopSetupSteps(platform){
+ const verify={id:'verify',text:'Verify discovery, permissions, windows and a real observation.'};
+ if(platform==='win32')return [
+  {id:'install',text:'Install Cua Driver with its official installer. No administrator access is needed.',command:'irm https://cua.ai/driver/install.ps1 | iex'},
+  {id:'start',text:'Start its background service in this signed-in desktop session. Run it from a desktop terminal, not over SSH. If the sign-in task is unavailable, run cua-driver serve and leave that window open.',command:'cua-driver autostart kick'},
+  verify];
+ if(platform==='darwin')return [
+  {id:'install',text:'Install Cua Driver with its official installer.',command:'/bin/bash -c "$(curl -fsSL https://cua.ai/driver/install.sh)"'},
+  {id:'permissions',human:true,text:'Grant Accessibility and Screen Recording to the driver when macOS asks. Only you can approve these.',command:'cua-driver permissions grant'},
+  verify];
+ return [
+  {id:'install',text:'Install Cua Driver with its official installer. A minimal Debian or Ubuntu image also needs libxi6 and at-spi2-core.',command:'/bin/bash -c "$(curl -fsSL https://cua.ai/driver/install.sh)"'},
+  {id:'start',text:'Start its service in your graphical session and leave it running.',command:'cua-driver serve'},
+  verify];
 }
 // One private stdio lease per backend, started only when a catalog/action is requested.
 export class DesktopMCPClient {
@@ -70,7 +90,7 @@ export class DesktopControl {
   Object.assign(this,{platform,locate,connect,now,idleMs,active});this.clients=new Map();this.cuaSessions=new Set();this.observations=new Map();this.failure=new Map();this.serial=Promise.resolve();this.epoch=0;this.sessionNonce=randomUUID().slice(0,8);this.lastUsed=now();
   this.timer=setInterval(()=>{if(this.clients.size&&this.now()-this.lastUsed>this.idleMs)void this.stop();},10000);this.timer.unref?.();
  }
- status(){return {platform:this.platform,primary:'cua',backup:this.platform==='darwin'?'peekaboo':null,backends:['cua',...(this.platform==='darwin'?['peekaboo']:[])].map(id=>({id,installed:!!this.locate(id),running:this.clients.has(id),setup:id==='cua'?'https://cua.ai/docs/cua-driver/quickstart':'https://github.com/openclaw/Peekaboo'})),permissionIssue:this.permissionFailure||null,uncertainTarget:this.uncertain||null,lastProbe:this.lastProbe||null,lease:this.lease?{owner:this.lease.owner,backend:this.lease.backend,pid:this.lease.pid,windowId:this.lease.windowId,uncertain:!!this.lease.uncertain}:null};}
+ status(){return {setupSteps:desktopSetupSteps(this.platform),verification:this.lastVerification||null,platform:this.platform,primary:'cua',backup:this.platform==='darwin'?'peekaboo':null,backends:['cua',...(this.platform==='darwin'?['peekaboo']:[])].map(id=>({id,installed:!!this.locate(id),running:this.clients.has(id),setup:id==='cua'?'https://cua.ai/docs/cua-driver/quickstart':'https://github.com/openclaw/Peekaboo'})),permissionIssue:this.permissionFailure||null,uncertainTarget:this.uncertain||null,lastProbe:this.lastProbe||null,lease:this.lease?{owner:this.lease.owner,backend:this.lease.backend,pid:this.lease.pid,windowId:this.lease.windowId,uncertain:!!this.lease.uncertain}:null};}
  async client(backend){
   if(!['cua','peekaboo'].includes(backend)||backend==='peekaboo'&&this.platform!=='darwin')throw Error('This desktop backend is unavailable on this platform.');
   if(this.clients.has(backend))return this.clients.get(backend);
@@ -98,6 +118,7 @@ export class DesktopControl {
   if(this.lease&&this.lease.owner!==owner)throw Error('Desktop input is owned by another chat. Stop that lease or wait for it to become idle.');
   if(backend==='peekaboo'&&this.permissionFailure?.backend==='cua')throw Error('Desktop permission was denied. Review it in Desktop Control; switching backends cannot bypass it.');
   if(backend==='peekaboo'&&this.locate('cua')&&!String(value.reason||'').trim())throw Error('Use Cua Driver first. Explain the missing capability or failed observation before choosing Peekaboo.');
+  if(value.action==='verify')return this.verify(owner);
   const tools=await this.catalog(backend);this.lastUsed=this.now();
   if(value.action==='test'){
    if(this.lease&&this.lease.owner!=='operator')throw Error('A chat owns desktop control. Discovery test will not interrupt it.');
@@ -160,6 +181,49 @@ export class DesktopControl {
   }catch(error){const permission=/permission|denied|not authorized|TCC/i.test(error.message);this.failure.set(owner,{permission,uncertain:mutating});if(permission)this.permissionFailure={backend,message:error.message.slice(0,1200)};throw error;}
   finally{this.inFlight=null;}
  }
+ /**
+  * Read-only staged proof that this computer can be controlled: the driver starts,
+  * its catalog and permission report are usable, it reaches desktop windows, and a real
+  * window observation returns. It sends no input and keeps counts and fixed labels only,
+  * never window titles or contents. Input delivery stays unproven until a real task.
+  */
+ async verify(owner){
+  const steps=[],finish=()=>{const verified=steps.every(step=>step.status==='pass');this.lastVerification={verified,inputVerified:false,at:new Date(this.now()).toISOString(),steps};return this.lastVerification;};
+  const fail=(id,detail)=>{steps.push({id,status:'fail',detail});return finish();},pass=(id,detail,count)=>steps.push({id,status:'pass',detail,...(count===undefined?{}:{count})});
+  if(this.lease&&this.lease.owner!==owner&&this.lease.owner!=='operator')throw Error('A chat owns desktop control. Verification will not interrupt it.');
+  if(!this.locate('cua'))return fail('driver','Cua Driver is not installed where Proteus can find it. Follow the setup steps, then verify again.');
+  pass('driver','Cua Driver is installed.');
+  let client,tools;
+  try{client=await this.client('cua');tools=(await client.request('tools/list')).tools||[];}
+  catch{return fail('discovery',this.platform==='win32'?'Cua Driver did not answer. Start its background service with cua-driver autostart kick from this desktop session, or run cua-driver serve and leave it open.':'Cua Driver did not answer. Start its service in this desktop session, then verify again.');}
+  this.lastUsed=this.now();
+  const names=new Set(tools.map(tool=>tool.name));
+  for(const name of ['list_windows','get_window_state'])if(!names.has(name))return fail('discovery','This Cua Driver version does not offer the required window tools. Update it, then verify again.');
+  pass('discovery','The driver catalog is available.',tools.filter(tool=>allowed.has(tool.name)).length);
+  if(names.has('check_permissions')){
+   let report;try{report=await client.request('tools/call',{name:'check_permissions',arguments:{}});}catch{return fail('permissions','The permission report did not complete.');}
+   const checked=deniedPermission(report);
+   if(report.isError||checked.denied){this.permissionFailure={backend:'cua',message:checked.text.slice(0,1200)};return fail('permissions',this.platform==='darwin'?'A required permission is not granted. Only you can grant it in System Settings.':'A required desktop permission is not available.');}
+   pass('permissions','No required permission is denied.');
+  }else pass('permissions','This driver reports no separate permission check on this system.');
+  const inventory=async args=>windowInventory(await client.request('tools/call',{name:'list_windows',arguments:args}));
+  let windows;
+  // Prefer observing this app's own window; nothing else needs to be read for the proof.
+  try{windows=(await inventory({pid:process.pid}))||[];if(!windows.length)windows=(await inventory({}))||[];}
+  catch{return fail('windows','The driver could not list windows.');}
+  if(!windows.length)return fail('windows','The driver reached no windows, so it cannot see this desktop session. Run it in the signed-in desktop session, not over SSH or as a service.');
+  pass('windows','The driver can see desktop windows.',windows.length);
+  const target=windows.find(window=>window.is_on_screen!==false)||windows[0];
+  const properties=tools.find(tool=>tool.name==='get_window_state').inputSchema?.properties||{};
+  let observed;try{observed=await client.request('tools/call',{name:'get_window_state',arguments:{pid:target.pid,window_id:target.window_id,...(properties.include_screenshot?{include_screenshot:false}:{}),...(properties.max_elements?{max_elements:25}:{})}});}
+  catch{return fail('observation','The window observation did not complete.');}
+  const checked=deniedPermission(observed),receipt=observed._meta?.target_receipt||observed.structuredContent?.target_receipt||observed.structuredContent;
+  if(observed.isError||checked.denied)return fail('observation','The driver could not observe a window.');
+  if(Number(receipt?.pid)!==target.pid||Number(receipt?.window_id)!==target.window_id)return fail('observation','The driver did not confirm which window it observed.');
+  if(receipt.degraded_reason||!checked.text.trim())return fail('observation',this.platform==='win32'?'The window returned no UI Automation tree. Re-check that the driver runs in this desktop session.':'The window returned no accessibility tree.');
+  pass('observation',this.platform==='win32'?'A real window returned its UI Automation tree.':'A real window returned its accessibility tree.');
+  return finish();
+ }
  async stop(owner){
   if(owner&&this.lease&&this.lease.owner!==owner&&owner!=='operator')throw Error('This chat does not own desktop input.');
   if(this.stopping)return this.stopping;
@@ -173,4 +237,4 @@ export class DesktopControl {
  async close(){clearInterval(this.timer);return this.stop();}
 }
 
-export function desktopTools(broker,runId){return broker?[{name:'proteus_desktop',defer:'auto',description:'Host-owned native desktop control. Inspect status, discover the Cua Driver catalog on demand, then list apps/windows and observe an exact process/window. Use the returned observationId for one input within 20 seconds; observe again to verify. Cua Driver is primary; Peekaboo is a Mac-only fallback with a reason and its own fresh observation. A single chat owns input. Permission denial is never bypassed, uncertain effects are never retried automatically. Stop releases the lease and Proteus-owned MCP processes. Browser page work should use Proteus browser tools first.',parameters:{type:'object',properties:{action:{type:'string',enum:['status','catalog','call','stop']},backend:{type:'string',enum:['cua','peekaboo']},reason:{type:'string'},tool:{type:'string'},arguments:{type:'object'},observationId:{type:'string'}},required:['action'],additionalProperties:false},handler:async args=>{try{return modelToolResult(await broker.handle(args,runId));}catch(error){return {resultType:'failure',textResultForLlm:JSON.stringify({error:error.message})};}}}]:[];}
+export function desktopTools(broker,runId){return broker?[{name:'proteus_desktop',defer:'auto',description:'Host-owned native desktop control. Inspect status and its setup steps, verify (read-only, sends no input), discover the Cua Driver catalog on demand, then list apps/windows and observe an exact process/window. Use the returned observationId for one input within 20 seconds; observe again to verify. Cua Driver is primary; Peekaboo is a Mac-only fallback with a reason and its own fresh observation. A single chat owns input. Permission denial is never bypassed, uncertain effects are never retried automatically. Stop releases the lease and Proteus-owned MCP processes. Browser page work should use Proteus browser tools first.',parameters:{type:'object',properties:{action:{type:'string',enum:['status','verify','catalog','call','stop']},backend:{type:'string',enum:['cua','peekaboo']},reason:{type:'string'},tool:{type:'string'},arguments:{type:'object'},observationId:{type:'string'}},required:['action'],additionalProperties:false},handler:async args=>{try{return modelToolResult(await broker.handle(args,runId));}catch(error){return {resultType:'failure',textResultForLlm:JSON.stringify({error:error.message})};}}}]:[];}

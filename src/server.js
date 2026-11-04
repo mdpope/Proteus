@@ -220,12 +220,14 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
     return { bytes: attachments.history(run.id, sha256), name: String(reference.name || 'attachment'), mediaType: String(reference.mediaType || 'application/octet-stream'),...attachmentDates(reference) };
   }
   function desktopSetupPrompt(status,missing){
-    return `Help me set up native desktop control for Proteus on this ${status.platform==='darwin'?'Mac':status.platform} computer.\n`+
+    const name=status.platform==='darwin'?'Mac':status.platform==='win32'?'Windows':'Linux';
+    const steps=status.setupSteps.map(step=>'- '+step.text+(step.command?' Command: '+step.command:'')+(step.human?' (Only I can complete this step; explain it and wait for me.)':'')).join('\n');
+    return `Help me set up native desktop control for Proteus on this ${name} computer.\n`+
       `Current readiness: ${missing.length?'not installed: '+missing.join(', '):'drivers installed'}${status.permissionIssue?'; permission problem: '+JSON.stringify(status.permissionIssue).slice(0,300):''}.\n`+
       `1. Call proteus_desktop status to confirm the current state. Cua Driver is primary (setup guide: https://cua.ai/docs/cua-driver/quickstart)${status.platform==='darwin'?'; Peekaboo is the Mac backup (https://github.com/openclaw/Peekaboo)':''}.\n`+
-      `2. For anything missing, explain the official install step and ask me before running any installer or package manager command. Never download from an unofficial source.\n`+
-      `3. After installing, call proteus_desktop catalog, then guide me through granting Accessibility and Screen Recording in System Settings → Privacy & Security for the driver. Do not try to bypass or script around a permission prompt.\n`+
-      `4. Verify with a harmless observation (list apps or windows) and report what is ready and what still needs me.`;
+      `2. These are the official steps for this operating system:\n${steps}\n`+
+      `3. For anything missing, explain the step and ask me before running any installer or package manager command. Never download from an unofficial source. Do not try to bypass or script around a permission prompt.\n`+
+      `4. Call proteus_desktop verify after each change. It is read-only and sends no input. Report exactly which of its steps pass, what still needs me, and that input delivery is not proven until a real task.`;
   }
   async function retryWithoutAgents(value){
     const run = engine.getRun(value.runId);
