@@ -128,7 +128,9 @@ export class RemoteHost {
     this.lifecycleChanged = result => { if (result.deleted) { for (const peer of this.peers.values()) if (peer.runId === result.id) peer.runId = null; this.documents.revokeChat?.(result.id); service.contentTabs?.removeChat(result.id); this.attachmentConsents.revokeChat(result.id); void service.attachments?.revokeChat?.(result.id); } this.broadcast('chat.lifecycle', result); this.changed(); };
     service.engine.on('lifecycle', this.lifecycleChanged);
     // Also detect editor/AI changes to plain files; no filesystem secrets leave the projection.
-    this.scan = setInterval(() => { if (this.config.enabled && [...this.peers.values()].some(p => p.device)) this.publish(); }, 2000);
+    // Engine changes publish on their own. Assembling state costs about 70 ms on the main
+    // process, so this fallback also carries batched progress at a slower pace.
+    this.scan = setInterval(() => { if (this.config.enabled && [...this.peers.values()].some(p => p.device)) this.publish(); }, 5000);
   }
   save() { atomicJSON(this.file, this.config); fs.chmodSync(this.file, 0o600); }
   addresses() {
