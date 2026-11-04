@@ -1,6 +1,7 @@
 // Shared encrypted transport. Legacy browser-only pairings remain in scoped IndexedDB;
 // account-backed destination credentials are imported into session memory only.
-export { BrowserRemoteClient, parsePairing, importKey, seal, unseal } from '../../../src/services/remote/remote-client.js';
+export {BrowserRemoteClient} from './worker-remote-client.js';
+export {parsePairing, importKey, seal, unseal} from '../../../src/services/remote/remote-client.js';
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 export class PairingStore {
     constructor(account) { if (!/^[a-f0-9]{64}$/.test(account)) throw new Error('Sign in again to use remote workspaces.'); this.account = account; }

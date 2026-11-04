@@ -1,3 +1,4 @@
+import {acceptRemoteState,coalesceRender,draftSubmission,acknowledgeDraft} from "./remote-updates.js";
 import {bindSharedDraftText} from '../../../public/features/chats/shared-draft-text.js';
 const webWindowId=(()=>{try{const key='proteus.remote.window';let value=sessionStorage.getItem(key);if(!value){value=crypto.randomUUID();sessionStorage.setItem(key,value);}return value;}catch{return crypto.randomUUID();}})();
 import {enterSubmits} from '../../../public/shared/ui/enter-submit.js';
@@ -140,6 +141,7 @@ async function prepareAttachmentSend(current,run,key,retained,input,base){
     return {method:run?'chat.send':'chat.start',args:{...base,...(run?{}:{draftId:retained.draftId}),providerId,messageId,mode:steering?'steer':'queue',attachments:metadata.map(item=>item.attachmentId),consentId:authorization.consentId}};
 }
 const session = () => sessions.get(active);
+const scheduleRemoteRender=coalesceRender(()=>{preserveDrafts();render();});
 function connectionLabel(hostId) {
     const current=sessions.get(hostId);
     if(current?.client?.status==='online')return 'Connected';
@@ -178,20 +180,20 @@ async function commandForHost(current,method,args){
 }
 async function refresh() {
     const target = active, current = session(); const result = await command('sync', { cursor: current.host.cursor || '' });
-    if (target !== active) return; current.state = result.state;rememberHostName(current,result.state);current.cachedRuns=result.state.runs||[];if(!chatIndexShowsArchived())current.archivedRuns=null;current.lastSyncAt=new Date().toISOString();void saveChatIndex(root.dataset.account,current.host,current.cachedRuns).catch(()=>{}); current.host.cursor = result.cursor; if(current.host.source==='legacy')await legacyStore.save(current.host); if(chatIndexShowsArchived())await loadArchivedChats(true);else render();
+    if (target !== active) return; acceptRemoteState(current,result.state);current.state=result.state;rememberHostName(current,result.state);current.cachedRuns=result.state.runs||[];if(!chatIndexShowsArchived())current.archivedRuns=null;current.lastSyncAt=new Date().toISOString();void saveChatIndex(root.dataset.account,current.host,current.cachedRuns).catch(()=>{}); current.host.cursor = result.cursor; if(current.host.source==='legacy')await legacyStore.save(current.host); if(chatIndexShowsArchived())await loadArchivedChats(true);else render();
 }
 function preserveDrafts() {
     const current = session();if(current?.selected){current.scroll ||= new Map();const pane=root.querySelector('.remote-messages');if(pane)current.scroll.set(current.selected,pane.scrollTop);} if (!current) return;rememberActivityDisclosures(current);
-    for (const form of root.querySelectorAll('form[data-draft]')) { const old = current.drafts.get(form.dataset.draft) || {}; current.drafts.set(form.dataset.draft, { ...old, ...(form.querySelector('[data-setup-disclosure]') ? {setupOpen:form.querySelector('[data-setup-disclosure]').open} : {}), values: { ...old.values, ...Object.fromEntries(new FormData(form)) } }); }
+    for (const form of root.querySelectorAll('form[data-draft]')) { const old = current.drafts.get(form.dataset.draft) || {}; Object.assign(old, { ...(form.querySelector('[data-setup-disclosure]') ? {setupOpen:form.querySelector('[data-setup-disclosure]').open} : {}), values: { ...old.values, ...Object.fromEntries(new FormData(form)) } });current.drafts.set(form.dataset.draft,old); }
 }
 function currentDraft(key, initial) { const current = session(); if (!current.drafts.has(key)) current.drafts.set(key, { values: initial, id: crypto.randomUUID(), issuedAt: new Date().toISOString() }); return current.drafts.get(key); }
 function bindDraft(formId, key, method, args, after) {
     const form = $(formId); if (!form) return;
     form.oninput = () => { const draft = session().drafts.get(key); draft.values = { ...draft.values, ...Object.fromEntries(new FormData(form)) }; delete draft.sentAt; draft.id = crypto.randomUUID(); draft.issuedAt = new Date().toISOString(); };
     form.onsubmit = async event => {
-        event.preventDefault(); const current = session(), draft = current.drafts.get(key); const button = form.querySelector('button[type="submit"]'); button.disabled = true; notice('');
-        try { const prepared=await args(Object.fromEntries(new FormData(form)),draft);assertAttachmentDestinationForSubmit(current,formId);const result = await command(prepared?.method||method, prepared?.args||prepared, { id: draft.id, issuedAt: draft.sentAt ||= new Date().toISOString() }); if(formId==='remote-composer')clearAttachmentItems(current,key);current.drafts.delete(key);await saveChatDrafts(root.dataset.account,current.host,current.drafts); form.removeAttribute('data-draft'); await after?.(result); await refresh(); }
-        catch (error) { if(!error.cancelled)notice(error.message); } finally { if (button.isConnected) button.disabled = false; }
+        event.preventDefault(); if(form.dataset.submitting)return;form.dataset.submitting="true"; const current = session(), draft = current.drafts.get(key); const button = form.querySelector('button[type="submit"]'); button.disabled = true; notice('');
+        try { const submission=await draftSubmission(draft,Object.fromEntries(new FormData(form)),args),prepared=submission.prepared;await saveChatDrafts(root.dataset.account,current.host,current.drafts);assertAttachmentDestinationForSubmit(current,formId);const result = await command(prepared?.method||method, prepared?.args||prepared, { id: submission.id, issuedAt: submission.issuedAt }); if(acknowledgeDraft(draft,submission)){if(formId==='remote-composer')clearAttachmentItems(current,key);current.drafts.delete(key);}await saveChatDrafts(root.dataset.account,current.host,current.drafts); form.removeAttribute('data-draft'); await after?.(result); await refresh(); }
+        catch (error) { if(!error.cancelled)notice(error.message); } finally { delete form.dataset.submitting;if (button.isConnected) button.disabled = false; }
     };
 }
 function assertAttachmentDestinationForSubmit(current,formId){if(formId==='remote-composer'&&session()!==current)throw new Error('The destination changed. Review the message and files before sending.');}
@@ -241,7 +243,7 @@ async function connectNow(hostId,{automatic=false}={}) {
         client.addEventListener('failure', event => { if (relevant()) notice(event.detail); });
         // Routing packets are not authenticated revocation proofs. Keep account credentials intact.
         client.addEventListener('rejected', () => { if(!relevant())return;suppressed.add(hostId);stopReconnect();preserveDrafts();current.state=null;current.run=null;notice('This computer rejected the connection. Retry or create a fresh pairing; the saved account destination was retained.'); });
-        client.addEventListener('change', event => { if(ended||suspended||current.client!==client)return; const change = event.detail;void workspaces.changed(hostId,change).catch(error=>notice(error.message)); current.host.cursor = change.cursor; if(change.event==='chat.lifecycle'){applyChatLifecycle(current,hostId,change.data);if(chatIndexShowsArchived())void loadArchivedChats(true).catch(error=>notice(error.message));} if (change.event === 'state'){current.state = change.data;rememberHostName(current,change.data);current.cachedRuns=change.data.runs||[];if(!chatIndexShowsArchived())current.archivedRuns=null;current.lastSyncAt=new Date().toISOString();void saveChatIndex(root.dataset.account,current.host,current.cachedRuns).catch(()=>{});if(chatIndexShowsArchived())void loadArchivedChats(true).catch(error=>notice(error.message));} if (change.event === 'run' && change.runId === current.selected) current.run = mergeChatHistory(current.run, change.data); if(active===hostId){preserveDrafts();render();}else renderRecentChats(); });
+        client.addEventListener('change', event => { if(ended||suspended||current.client!==client)return; const change = event.detail;current.host.cursor=change.cursor;if(change.event==="state"&&!acceptRemoteState(current,change.data))return;void workspaces.changed(hostId,change).catch(error=>notice(error.message)); current.host.cursor = change.cursor; if(change.event==='chat.lifecycle'){applyChatLifecycle(current,hostId,change.data);if(chatIndexShowsArchived())void loadArchivedChats(true).catch(error=>notice(error.message));} if (change.event === 'state'){current.state = change.data;rememberHostName(current,change.data);current.cachedRuns=change.data.runs||[];if(!chatIndexShowsArchived())current.archivedRuns=null;current.lastSyncAt=new Date().toISOString();void saveChatIndex(root.dataset.account,current.host,current.cachedRuns).catch(()=>{});if(chatIndexShowsArchived())void loadArchivedChats(true).catch(error=>notice(error.message));} if (change.event === 'run' && change.runId === current.selected) current.run = mergeChatHistory(current.run, change.data); if(active===hostId)scheduleRemoteRender();else renderRecentChats(); });
         await client.connect(); if (!relevant()) { client.close(); return; } await refresh();reconnectAttempt=0;void refreshUsage();
     } catch (error) { if(generation!==switching)return;if(error.sessionInvalid){await endAccount();return;}current.connecting=false;notice(error.message);render();if(![409,404].includes(error.status))reconnect(hostId); }
 }

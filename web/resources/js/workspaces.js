@@ -1,3 +1,4 @@
+import {acceptWebTabs as acceptTabs} from "./workspace-tab-state.js";
 import {moveMenuMarkup} from '../../../public/shared/navigation/move-menu.js';
 import {browserLabel} from '../../../public/features/browser/browser-label.js';
 import {createWorkspaceTree} from './workspace-tree.js';
@@ -31,13 +32,11 @@ export function createWebWorkspaces(ui){
  const catalog=()=>record()?.catalog||current()?.state?.context;
  const workspace=()=>catalog()?.workspaces?.find(w=>w.id===active?.id);
  const request=(method,args)=>ui.request(current(),method,args);
- const tabStamp=tabs=>JSON.stringify([tabs?.revision,(tabs?.tabs||[]).map(tab=>[tab.id,tab.title,tab.url,tab.history?.revision,tab.history?.currentEntryId])]);
- function acceptTabs(view,tabs){if((tabs?.revision||0)<(view.tabs?.revision||0))return false;const existing=new Map((view.tabs?.tabs||[]).map(tab=>[tab.id,tab]));if((tabs.tabs||[]).some(tab=>(tab.history?.revision||0)<(existing.get(tab.id)?.history?.revision||0)))return false;const changed=tabStamp(view.tabs)!==tabStamp(tabs);view.tabs=tabs;return changed;}
  const emit=()=>{if(active){active.title=workspace()?.name||active.title;record().title=active.title;}document.dispatchEvent(new CustomEvent('proteus:workspace-open',{detail:active?{hostId:active.hostId,id:active.id,title:workspace()?.name||active.title}:null}));renderRecents();};
  async function sync(){
   if(!active)return;const target={...active},view=record(),owner=ui.sessions.get(target.hostId),scope=ownerScope();
   const [context,tabs,catalog]=await Promise.all([ui.request(owner,'context.get',{workspaceId:target.id}),ui.request(owner,'tabs.get',scope),projectEnabled()?ui.request(owner,'projects.get',{}):null]);
-  if(!view)return;view.catalog=context;view.tabs=tabs;
+  if(!view)return;view.catalog=context;acceptTabs(view,tabs);
   if(owner?.state){owner.state.context={...owner.state.context,workspaces:context.workspaces};if(catalog)owner.state.workspaceProjects=catalog;}
   view.projectTabs={};if(catalog&&!target.projectId){const groups=await Promise.all(catalog.projects.filter(p=>p.workspaceId===target.id).map(async p=>[p.id,await ui.request(owner,'tabs.get',{scope:'project',id:p.id})]));view.projectTabs=Object.fromEntries(groups);}
   persist();
@@ -55,7 +54,7 @@ export function createWebWorkspaces(ui){
   if(change.event==='tabs'&&change.data?.scope===ownerScope().scope&&change.data.id===ownerScope().id&&change.data.revision>=(view.tabs?.revision||0)){const tabs=await ui.request(ui.sessions.get(hostId),'tabs.get',ownerScope());if(acceptTabs(view,tabs)){persist();if(active===target)ui.render();}}
   if(change.event==='state'&&change.data?.context?.revision&&change.data.context.revision!==view.catalog?.revision){const context=await ui.request(ui.sessions.get(hostId),'context.get',{workspaceId:target.id});view.catalog=context;if(active===target){emit();ui.render();}}
  }
- async function mutateTabs(operations){const owner=active,view=record();if(!owner||!view)throw new Error('Open a workspace first.');view.tabs=await request('tabs.mutate',{...ownerScope(),expectedRevision:view.tabs?.revision||0,operations});persist();return view.tabs;}
+ async function mutateTabs(operations){const owner=active,view=record();if(!owner||!view)throw new Error('Open a workspace first.');const tabs=await request('tabs.mutate',{...ownerScope(),expectedRevision:view.tabs?.revision||0,operations});acceptTabs(view,tabs);persist();return view.tabs;}
  async function navigateBrowser(tab,url,entry){const owner=active,view=record(),session=ui.sessions.get(owner.hostId);const tabs=await mutateBrowserNavigation((method,args)=>ui.request(session,method,args),{...ownerScope(),tab,revision:view.tabs?.revision||0,url,entry});acceptTabs(view,tabs);persist();if(active===owner)ui.render();}
  async function openChat(id,title){const row=projectRows().find(r=>r.id===id&&r.hostId===active?.hostId);if(projectEnabled()&&row?.projectId&&active.projectId!==row.projectId)await enter({...active,projectId:row.projectId},'chats');const owner=active,view=record();const existing=record()?.tabs?.tabs?.find(t=>t.type==='chat'&&t.chatId===id);if(!existing)await mutateTabs([{action:'open',tab:{id:'chat:'+id,type:'chat',chatId:id,title:title||'Chat'}}]);if(active!==owner)return;view.selected=existing?.id||'chat:'+id;persist();await ui.openChat(id,active.hostId,'conversation',{...active});emit();}
  async function sendChat(row){await enter({hostId:row.hostId,id:row.workspaceId,projectId:row.projectId,name:row.workspaceName});await openChat(row.id,row.title);}
