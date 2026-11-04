@@ -99,6 +99,16 @@ See [iOS performance](ios-performance.md). The composer now grows to a bounded h
 
 Desktop, web, owner and relay source is frozen at `568705c`. iOS is pinned separately at `5501776`, which changes only `ios/` and iOS docs since then. Validation at those pins: 1,540 Node tests with none failing and 4 skipped, 19 web unit tests, 106 PHP tests, static checks, and 210 native unit tests each on iPhone and iPad simulators.
 
+## Linux qualification
+
+Package at `568705c`: archive `fa892881…5833`, update archive `5ccd3d02…0c19`, source companion `3291b6ed…17bf`, install hash `32029f76…778c`, fingerprint `a943f210…eb4`. Source suite 1,540 passing with 4 skipped; disposable update and rollback rehearsals pass after one retried `ECONNRESET`.
+
+Packaged tests pass for window restore, remote navigation, Desktop Control (missing-driver path), project follow, user questions, surface redraw, link routing, chat setup, extension auth, browser extensions, shared drafts, sidebar snapshot, extension creation intent and the update coordinator.
+
+**`renderer-recovery-ui` fails on Linux, and this is not a regression.** In source mode on the same machine, the unmodified baseline `cbed273` failed all three runs at the post-crash check that reads the active browser tab (line 44). This release failed two of three runs at that check. The third failed earlier (line 29, a page with no view while collecting initial state). The failure is unexplained, so it stays recorded as open: renderer crash recovery is **not** accepted on Linux by this test. It passes on the exact Mac package.
+
+`test/linux-current.mjs` was not run: it needs a separately signed-in Codex profile and spends real allowance. Real-provider execution on Linux is unverified.
+
 ## Validation limits
 
 Run the Node suite with a short canonical `TMPDIR` such as `/private/tmp/...`: the default macOS path breaks
