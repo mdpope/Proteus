@@ -1,8 +1,11 @@
-## November 3 branch audit
+# Nov 2 closeout
 
-Fresh remote inventory contains only main and the Nov 2 release branch. The retained October 31
-Fusion, October 31 deployment and update command-center source commits are ancestors of both
-remote main and Nov 2. Their detached build checkouts are not additional open release branches.
-Final Nov 2 merge and verified worktree/artifact retirement follow accepted target deployment;
-this audit does not mark the release closed.
+The operator requested completion and closure after all intended desktop, web and native deployments. Version **0.2.41** desktop application/source companion remains pinned to `4bbec8cadc9c24916cc7514ead9b1b53f5a6051d`; native build `2611.2.10` retains its separate accepted pin. Later documentation commits do not relabel packages.
 
+All five intended desktop installations are updated, owner-healthy and independently verified against their accepted file inventories. Normal host Mac strict signatures pass. Web publication and physical/native preservation evidence and qualified history, reading and migration limits are retained in [rollout.md](rollout.md). Source and exact-package qualification are recorded in [implementation.md](implementation.md); Windows bounded transition tests use simulated installer calls and the installer is Authenticode unsigned. The web ordinary isolated restore failed, while captured-state verification passed before activation. No sustained connection or full migration acceptance is claimed.
+
+General’s 12 retained tabs were restored to the visible window through the built-in Reload Window command. Their IDs, order and four hidden flags verify. The restoration defect, remaining iOS/web performance, composer and disconnect work, high pushed-state traffic, and the deferred secondary Windows Desktop Control setup are in the [Nov 3 issue list](../../2026-11-03-issues.md). The [Mnemosyne design handoff](../../2026-11-03-mnemosyne-handoff.md) is preserved for Nov 3.
+
+Public downloads retain only the final three platform releases, with all 32 files verified. Seven superseded releases were retired with immutable audit evidence. Website recovery retains one server generation and two local generations; catalog recovery retains the two newest verified dates. Local publication duplicate cleanup removed 84 verified staging/upload files while retaining the final distribution and minimal evidence. Device recoveries are managed separately through their owner guards; unresolved historical attention/partial recovery evidence on the coordinating Mac is preserved and excluded from arbitrary cleanup.
+
+PR [29](https://github.com/mdpope/Proteus/pull/29) is the integration unit. Final merge, remote-main verification and eligible release-worktree/artifact retirement are in progress. Unrelated dirty worktrees are preserved. Shared dependencies must be moved to stable versioned storage before the release worktree is retired. Exact device routing, operation and cleanup receipts remain in the private release ledger.
