@@ -1,6 +1,32 @@
 import XCTest
 
 @MainActor enum NativeReleaseJourney {
+    static func measureLaunch(_ test: XCTestCase, bundle: String) throws {
+        guard ProcessInfo.processInfo.environment["PROTEUS_RELEASE_JOURNEY"] == "1" else { throw XCTSkip("Explicit Release launch metrics only") }
+        let app = XCUIApplication(bundleIdentifier: ProcessInfo.processInfo.environment["PROTEUS_JOURNEY_BUNDLE"] ?? bundle)
+        app.terminate()
+        let options = XCTMeasureOptions(); options.iterationCount = 1
+        test.measure(metrics: [XCTApplicationLaunchMetric(waitUntilResponsive: true)], options: options) {
+            app.launch(); app.terminate()
+        }
+    }
+    static func measureScrolling(_ test: XCTestCase, bundle: String) async throws {
+        guard ProcessInfo.processInfo.environment["PROTEUS_RELEASE_JOURNEY"] == "1" else { throw XCTSkip("Explicit Release scroll metrics only") }
+        let app = XCUIApplication(bundleIdentifier: ProcessInfo.processInfo.environment["PROTEUS_JOURNEY_BUNDLE"] ?? bundle)
+        app.launch(); defer { app.terminate() }
+        let (data, _) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:4439/pair")!)
+        let fixture = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let id = try XCTUnwrap((fixture["chatIds"] as? [String])?.first)
+        let chat = app.buttons["workspace-child-tab-chat:" + id]
+        XCTAssertTrue(chat.waitForExistence(timeout: 30)); chat.tap()
+        let options = XCTMeasureOptions(); options.iterationCount = 1
+        test.measure(metrics: [XCTClockMetric(), XCTCPUMetric(application: app), XCTOSSignpostMetric.scrollingAndDecelerationMetric], options: options) {
+            let upper = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3))
+            let lower = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.7))
+            upper.press(forDuration: 0.05, thenDragTo: lower)
+            lower.press(forDuration: 0.05, thenDragTo: upper)
+        }
+    }
     static func inspectBrowser() async throws {
         guard ProcessInfo.processInfo.environment["PROTEUS_RELEASE_JOURNEY"] == "1" else { throw XCTSkip("Explicit benchmark inspection only") }
         let (data, _) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:4439/pair")!)
@@ -67,12 +93,10 @@ import XCTest
             XCTAssertTrue(app.buttons["project-pinned-tab"].waitForExistence(timeout: 30))
             app.buttons["project-pinned-tab"].tap()
         }
-        var returnPoint: CGVector?
         for index in [1,2,0] {
             step("switch-chat-\(index)") {
                 let tab = app.buttons["workspace-child-tab-chat:" + ids[index]]
                 XCTAssertTrue(tab.waitForExistence(timeout: 30))
-                if index == 0 { returnPoint = CGVector(dx: tab.frame.midX / app.frame.width, dy: tab.frame.midY / app.frame.height) }
                 tab.tap()
                 XCTAssertTrue(app.buttons["chat-mode-conversation"].waitForExistence(timeout: 30))
             }
@@ -98,17 +122,22 @@ import XCTest
         app.scrollViews["chat-conversation-scroll"].coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.1)).tap()
         step("tabs-list") {
             app.buttons["project-pinned-tab"].tap()
-            app.segmentedControls.buttons["Tabs"].tap()
+            // The global label also matches the retained catalog's hidden
+            // segment. Use the observed project-Home segment in both arms.
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.75, dy: 0.155)).tap()
             XCTAssertTrue(app.textFields["workspace-tabs-filter"].waitForExistence(timeout: 15))
         }
-        try step("browser-and-return") {
+        step("browser-and-return") {
             let tab = app.buttons["workspace-managed-title-journey-browser-0"]
             XCTAssertTrue(tab.waitForExistence(timeout: 20)); tab.tap()
             if app.buttons["Load tab"].waitForExistence(timeout: 2) { app.buttons["Load tab"].tap() }
             XCTAssertTrue(app.webViews.links["Learn more"].waitForExistence(timeout: 30))
-            // Reuse the observed strip coordinate: the old app's global AX
-            // search traverses thousands of rich rows when returning here.
-            app.coordinate(withNormalizedOffset: try XCTUnwrap(returnPoint)).tap()
+            // Selecting the browser scrolls the child strip. This observed
+            // phone sequence returns to chat 2 in both benchmark arms; inspect
+            // the attachment rather than treating it as a long-chat bookmark test.
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.19, dy: 0.095)).tap()
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.155)).tap()
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.55)).tap()
             let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "Journey return content"; screenshot.lifetime = .keepAlways
             XCTContext.runActivity(named: "Return content visual evidence") { $0.add(screenshot) }
         }

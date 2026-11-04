@@ -11,6 +11,202 @@ The later [navigation alignment](ios-navigation-alignment.md) supersedes this re
 settlement-based mirror rule and navigation-rebase proposal. Passive mirrors now remain
 local until trusted interaction, and queued successors adopt actual owner acknowledgements.
 
+## Nov 4: completed whole-app Release comparison
+
+**The whole journey now completes on both source arms with finalized Time Profiler/Hangs
+recordings.** This replaces the missing matched baseline trace in the earlier
+[Release journey record](ios-release-journey.md). It does not establish that the operator's
+physical-device problem is solved, and the component decode timings below are not offered
+as its explanation.
+
+App sources are baseline `cbed273086beff20ce6c7e4441813663bc87278c` and iOS follow-up
+`a82cf2d62817018a933d366729e5441828f372b0`. Both are Release, arm64 simulator builds,
+Xcode 27.0, on the existing iPhone 17 Pro/iOS 26.5. They use dedicated benchmark identities;
+installed Preview apps, physical devices and the running desktop installation are untouched.
+The baseline source export is unchanged. No supported CPU/slower-phone approximation was
+available; neither animation slowdown nor host scheduling was represented as device emulation.
+The requested baseline source labels itself build 2611.2.1; it is not the operator's
+installed 2611.2.10 binary.
+
+Both clients use the same real local owner/relay implementation, frozen source `568705c`,
+as included in integration `245e7d0`. `git merge claude/nov3-release` was already up to date;
+the requested first-delta metadata fix `ef6b3f1` is already included. No owner/desktop/web/relay
+source changed. The old client receives that owner's full-state compatibility stream, with
+progress-only changes batched to at most one full push per ten seconds. The new client opts
+into state patches and field-only chat deltas. This is not the former owner sending 2 MB
+every second. Across the fresh fixture connections the observed maximum encrypted packet
+was 858,097 bytes; do not describe these captures as the separate 2,027,239-byte component test.
+
+The fresh isolated owner contains 1,500 General chats, 200 browser tabs plus three chat tabs,
+and an initially 3,000-event conversation with rich Markdown and **300 explicit completed tool
+cards** (100-line outputs). One assistant event is appended each second through the actual
+encrypted owner/relay path. No provider executes. The conversation keeps growing between arms;
+the initial 3,000 rich events are retained, rather than replaced by the short stream tail.
+Prior synthetic data and pairings were preserved. First-install warming/pairing is outside
+timing. These are single observations: history sizes, cache warmth and retained draft lengths
+were not reset identically. Do not infer a causal percentage speedup from these two runs.
+
+### Journey timings
+
+The same compiled driver visits Chats, opens General, switches through chats 1/2/0, scrolls
+the long chat twice, types/verifies 210 numeric characters, opens Tabs, loads example.com,
+then returns to a chat. Both XCTest cases pass: **306.375 s baseline / 146.060 s follow-up**,
+including preparation and recorder-finalization time outside the individual steps.
+
+| Step, XCTest wall seconds | Baseline | Follow-up |
+| --- | ---: | ---: |
+| Cold process to cached shell control | 5.993 | 3.762 |
+| Open Chats catalog | 10.959 | 3.314 |
+| Open General | 14.510 | 12.260 |
+| Switch short chat 1 | 9.928 | 5.969 |
+| Switch short chat 2 | 9.763 | 6.213 |
+| Switch long chat 0 | 45.489 | 7.661 |
+| Two scroll gestures | 88.106 | 23.315 |
+| Type and verify 210 characters | 29.720 | 14.399 |
+| Open project Tabs list | 17.757 | 12.230 |
+| Browser load and return | 36.408 | 23.786 |
+
+These include accessibility lookup, event synthesis and quiescence waits. Chat-switch checks
+wait for the conversation control, not an instrumented first-card presentation timestamp.
+Typing includes locating/focusing the editor and verifying its value; it is **not keystroke
+to display latency**. True per-key latency and display-frame scroll hitches are not obtained
+from these wall times. Browser time includes external network time. The return screenshots
+were inspected: **both return to short chat 2**, rather than the long chat intended by the
+driver's original comment. They verify return to conversation content, not long-chat reading
+position restoration. The earlier long-chat scrolling/typing measurements remain as listed.
+
+A separate single-iteration SDK check, without Time Profiler attached, reports:
+
+| Supplemental metric | Baseline | Follow-up |
+| --- | ---: | ---: |
+| First frame plus main-thread responsive, cached short-chat launch | 4.673 s | 4.391 s |
+| Two long-chat drags, measured block wall time | 40.852 s | 36.366 s |
+| App CPU time during that block, all app threads | 42.071 s | 37.953 s |
+
+`XCTApplicationLaunchMetric(waitUntilResponsive: true)` provides the launch result;
+the scroll helper explicitly selects long chat 0 before measurement. Its app CPU metric
+targets the benchmark bundle, not the test runner. UIKit reported a 2.442-second scrolling/
+deceleration interval only for the new arm; it supplied no comparable baseline animation
+interval or paired hitch counts. Missing animation data is **not zero hitches**. These
+supplemental results show a much smaller difference than the primary driver wall times,
+and do not confirm a general performance win. They also do not measure per-key input latency.
+
+The final driver uses the observed conversation viewport for scrolling and the visible
+project Tabs control. A global Tabs label previously selected a retained hidden catalog.
+Other rejected attempts stalled during baseline accessibility queries or first-install
+accessibility attachment; their results are not silently counted as passing journeys.
+
+### Hangs and main-thread symbols
+
+Trace TOCs identify one attached benchmark app each. The Time Profiler template includes
+Hangs with microhangs above 250 ms. Recordings attach after the cold-start marker, so startup
+hangs are excluded. The recorder now stops gracefully at completion while its target is alive.
+
+| Recorded window | Baseline | Follow-up |
+| --- | ---: | ---: |
+| Duration, seconds | 274.791 | 110.649 |
+| Severe hangs | 16 | 0 |
+| Hangs | 103 | 63 |
+| Microhangs | 88 | 51 |
+| Total potential intervals | 207 | 114 |
+| Potential intervals per second | 0.753 | 1.030 |
+| Main-thread weighted samples | 208,836 | 88,194 |
+
+The follow-up has fewer severe intervals and completes sooner, but its overall interval
+rate is higher. **The hang count does not establish smoother physical-device interaction.**
+AX snapshot work contributes heavily: `__XCTPerformOnMainRunLoop_block_invoke` has
+73.701 / 47.834 sampled inclusive seconds; accessibility snapshot calls have
+70.337 / 45.324 seconds. These categories overlap. The summary tool's generic “most are
+the idle run loop” text is not a finding for these traces.
+
+[profile-symbols.py](../../../ios/tests/profile-symbols.py) resolves xctrace XML references
+and weights, deduplicates inclusive symbols within each sample, and counts the **leaf** for
+self time. Nominal sample weight is 1 ms. These are statistical sampled seconds, not exact
+elapsed function durations; inclusive columns overlap and must not be added together.
+Generic application entry/run-loop ancestors are omitted from the inclusive table.
+
+| Main-thread leaf/self symbol, sampled seconds | Baseline | Follow-up |
+| --- | ---: | ---: |
+| `<deduplicated_symbol>` (unresolved ownership) | 11.938 | 6.537 |
+| `_platform_memmove` | 10.866 | 5.212 |
+| `swift_retain` | 9.613 | 3.288 |
+| `swift_release` | 9.534 | 2.996 |
+| `madvise` | 6.582 | 0.610 |
+| `AG::Graph::propagate_dirty` | 5.039 | 1.108 |
+| `AG::Graph::UpdateStack::update` | 4.330 | 1.072 |
+
+| App inclusive symbol, sampled seconds | Baseline | Follow-up |
+| --- | ---: | ---: |
+| `SharedAppStore.applyContentTabs` | 35.110 | 3.859 |
+| `SharedAppStore.refreshContentTabs` | 35.106 | 3.819 |
+| `SharedAppStore.tabs(in:)` | 22.460 | 1.020 |
+| `NativeWorkspaceTree.projectGroup` | 4.439 | 0.718 |
+| `NativeWorkspaceTree.recents` | 4.163 | 0.647 |
+
+The previous completed integration/follow-up recordings also showed sidebar recents at
+3.180 sampled inclusive seconds and `tabs(in:)` at 1.767 seconds in the 95.73-second
+follow-up window. That identified the additional per-resource browser-list scan fixed here.
+These earlier captures are distinct from the final table, not substituted for its baseline.
+
+### Findings, changes and limits
+
+- **Repeated scans and projection:** the baseline spends substantial main-thread time in
+  content-tab projection/copying. Earlier Nov 3 indexing removes the quadratic ordered-tab
+  projection. This follow-up additionally builds the browser alias dictionary once per
+  project-recents calculation, instead of filtering/copying the whole browser list per row.
+- **Observation behind the open chat:** sidebar recents previously observed whole run sections
+  and the entire chat dictionary, including streamed events. `sidebarRunState` now contains only
+  the metadata it displays: identities, title/type, membership, archive flags and activity dates.
+  Progress/text changes do not publish that projection; membership, labels and activity remain
+  live. Two remaining literal context reads use section observation. Existing Home/count/title
+  projections and no-op chrome guards remain. No live view was hidden to obtain these numbers.
+- **Markdown/view creation:** long-history rendering is still relevant. Deepest-app attribution
+  includes `WKWebView.init` at 2.067 / 0.266 sampled seconds and timestamp parsing at
+  3.795 / 0.410 seconds. These are not leaf/self timings. Existing viewport admission and
+  shared Markdown storage are included in the final arm. Conversation rows use stable event
+  indices; these traces do not count every SwiftUI body or prove the absence of identity churn.
+- **Startup/Keychain/crypto:** attached traces exclude launch. Synchronous restore/durability
+  boundaries still exist; these captures cannot rule them out on a phone. A 40 ms component
+  decode does not explain the long wall-time stalls above.
+- **Timers:** refresh work is present in the call trees, not ruled out. Three-second tab
+  refreshes and five-second notification polling remain. A post-journey synthetic diagnostic
+  window contained two `notifications.list` replies totaling 898,100 wire bytes and three
+  `tabs.get` replies totaling 483,126 bytes per ten seconds, versus a few KB of state patches.
+  Those counters cover the fixture connections, not a per-device rate. No owner API was
+  changed or timer disabled to improve a benchmark. A future lightweight notification revision/
+  count response could avoid repeatedly transferring full `items`; it is not implemented or
+  required by this source acceptance.
+
+Field deltas were already integrated, not reimplemented: visible `chat.get` uses
+`watch: "delta"`, `fieldDelta: "v1"` when supported, and the visibility token. `mergeChat`
+merges changed metadata and retains removal tombstones across late older pages, matching
+the public chat-history semantics. Old-owner whole-page fallback remains. The native field
+delta/late-page regression passes in the full suite.
+
+Final native validation: **210 tests, zero failures** on both shared phone and iPad;
+the new sidebar test verifies zero observed invalidation for progress/text and live publication
+for membership/activity. This is a projection regression, not a runtime count of every SwiftUI
+body. Static checks and fixture syntax checks pass. Private raw traces, screenshots, AX logs,
+device/process identifiers and test results remain outside Git.
+
+After recording, sidebar compatibility fixes preserve the old `Chat` placeholder when an
+owner slot arrives before its run metadata and match `NativeProjectActivity`'s legacy
+`openedAt` fallback. They also exclude undisplayed legacy `updatedAt` churn. Those fallback
+paths were not exercised by the profiled fixture. The phone full suite passed 210 again
+after the placeholder fix; the final seven projection tests pass on both phone and iPad
+after the date adjustment. The simulator executable identities below refer to the measured
+`a82cf2d` production tree, not a subsequently rebuilt distribution artifact.
+
+SHA-256 of the two arm64 simulator executables (not published or physical-device artifacts):
+
+- Baseline: `1e977d0982bbaac6a8ff5139d882a727f85594f4d71c374e7be089d139e8b3b0`.
+- Follow-up: `17ee7b702004cc1a37c47704d54c46d328033659e143fc31881ed41751f4124e`.
+
+Physical-device feel, thermal/memory pressure, real relay/LTE latency and exact input-to-display
+latency remain unverified. The operator's phone is still needed for N1 acceptance. No signed
+release build, publication, physical installation or change to shared simulator definitions
+or the operator's local tool installation was made.
+
 ## Reproducible workload and measured results
 
 Run `npm run ios:test -- --device SIMULATOR --only ProteusTests/Nov3PerformanceTests`
@@ -230,9 +426,9 @@ dispatch or after an authenticated terminal rejection, under the owner's journal
 This avoids silently reinterpreting a Back/Forward operation while allowing deliberate forward
 navigation to converge despite unrelated owner activity. The coordinator owns that policy decision.
 
-## Coordinator takeover and whole-app profile
+## Earlier coordinator takeover and Debug profile
 
-The iOS agent's Codex session lost authentication partway through. Its uncommitted work (indexed tab projection, cached row timestamps, reconnect refresh ordering, the combined push-and-typing fixture) was committed unchanged as `85ddd63`, and the coordinator finished the lane: field-only chat deltas, a static release-date label and these traces. Unit counts in the section below predate that; the current suite is **203 tests, none failing** on iPhone 17.
+The iOS agent's Codex session lost authentication partway through. Its uncommitted work (indexed tab projection, cached row timestamps, reconnect refresh ordering, the combined push-and-typing fixture) was committed unchanged as `85ddd63`, and the coordinator finished the lane: field-only chat deltas, a static release-date label and these traces. At takeover the suite was **203 tests, none failing** on iPhone 17; the later 210-test validation above supersedes that count.
 
 Time Profiler traces of the whole app on the iPhone 17 simulator, iOS 26.5, Debug:
 

@@ -25,9 +25,9 @@ enum NativeRunAttentionProjection {
 enum NativeSidebarRunProjection {
     static func value(state: JSON, allRuns: [JSON], chats: [String: JSON]) -> JSON {
         func row(_ run: JSON) -> JSON {
-            var fields = Dictionary(uniqueKeysWithValues: ["id", "title", "chatType", "lastActivityAt", "archived", "archivedAt", "workspaceId", "projectId", "createdAt"].map { ($0, run[$0]) })
-            if run["lastActivityAt"].string.isEmpty { fields["updatedAt"] = run["updatedAt"] }
-            return .object(fields)
+            // Match NativeProjectActivity's date inputs, including the legacy
+            // openedAt fallback. updatedAt/progress are not displayed here.
+            .object(Dictionary(uniqueKeysWithValues: ["id", "title", "chatType", "lastActivityAt", "archived", "archivedAt", "workspaceId", "projectId", "createdAt", "openedAt"].map { ($0, run[$0]) }))
         }
         let runs = (allRuns + state["runs"].array).map(row)
         var index = Dictionary(runs.map { ($0["id"].string, $0) }, uniquingKeysWith: { _, last in last })

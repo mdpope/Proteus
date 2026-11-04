@@ -43,7 +43,8 @@ if len(matches) != 1:
     raise SystemExit('The exact benchmark process is unavailable or ambiguous.')
 recorder = subprocess.Popen(['xcrun', 'xctrace', 'record', '--template', 'Time Profiler', '--device', args.device, '--attach', matches[0], '--time-limit', str(args.seconds) + 's', '--output', str(output)], env=env)
 while recorder.poll() is None:
-    if 'JOURNEY arm=' + args.bundle + ' finished' in pathlib.Path(args.log).read_text():
+    progress = pathlib.Path(args.log).read_text()
+    if 'JOURNEY arm=' + args.bundle + ' finished' in progress or '** TEST EXECUTE FAILED **' in progress:
         recorder.send_signal(signal.SIGINT)
         break
     time.sleep(.2)

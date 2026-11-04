@@ -24,6 +24,14 @@ final class NativeProjectionTests: XCTestCase {
         XCTAssertFalse(textInvalidation.changed)
         run["lastActivityAt"] = .string("2026-11-03T01:01:00Z"); remote.chats["a"] = .object(run)
         XCTAssertTrue(textInvalidation.changed)
+        let legacy: JSON = .object(["id": .string("old"), "openedAt": .string("2026-11-03T00:00:00Z")])
+        remote.updateState(.object(["runs": .array([legacy])]))
+        XCTAssertEqual(NativeProjectActivity.date(remote.sidebarRunState["index"]["old"]), NativeProjectActivity.date(legacy))
+        let legacyInvalidation = ProjectionInvalidation()
+        withObservationTracking { _ = remote.sidebarRunState } onChange: { legacyInvalidation.mark() }
+        var legacyProgress = legacy.object; legacyProgress["updatedAt"] = .string("2026-11-03T01:00:00Z")
+        remote.updateState(.object(["runs": .array([.object(legacyProgress)])]))
+        XCTAssertFalse(legacyInvalidation.changed, "An undisplayed legacy update timestamp is not sidebar activity")
     }
     @MainActor func testChromePublishesTransitionsWithoutPublishingNoopAssignments() {
         let chrome = NativePhoneChrome(), publications = NSMutableArray()

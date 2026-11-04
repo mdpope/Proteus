@@ -263,7 +263,9 @@ struct NativeWorkspaceTree: View {
         var items = rows.filter { !$0["hidden"].bool }.map { tab in
             var row = tab.object
             if tab["type"].string == "chat" {
-                let run = runState["index"][tab["chatId"].string]
+                // An owner slot can precede its run page during restore. Keep
+                // the prior visible placeholder until that metadata arrives.
+                let run = runState["index"].object[tab["chatId"].string] ?? .object(["id": tab["chatId"], "title": .string("Chat")])
                 if tab["title"].string.isEmpty { row["title"] = run["title"] }
                 row["lastActivityAt"] = run["lastActivityAt"]; row["chatType"] = run["chatType"]; row["navigationID"] = .string("chat:" + tab["chatId"].string)
             } else {
