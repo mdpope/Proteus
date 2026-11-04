@@ -93,7 +93,11 @@ Windows window observation remain unverified, as does input delivery on any plat
 
 ## N1 and N2 — iOS
 
-See [iOS performance](ios-performance.md). The composer now grows to a bounded height and scrolls internally on phone and tablet. Native state uses patches and field deltas, cache writes are debounced, tab projection is indexed and rich renderers are admitted by viewport. **The simulator traces do not reproduce the reported slowness, and physical-device feel is unverified.**
+See [iOS performance](ios-performance.md). The composer now grows to a bounded height and scrolls internally on phone and tablet. Native state uses patches and field deltas, cache writes are debounced, tab projection is indexed and rich renderers are admitted by viewport. A Release-configuration journey through a real owner, comparing `cbed273` with the follow-up, took 306 s and then 146 s of XCTest wall time; a long-chat switch took 45 s and then 8 s, two scrolls 88 s and then 23 s. These are single simulator observations with automation time included. Responsive launch barely moved (4.67 → 4.39 s), and although potential hangs fell from 207 to 114, the recording also got shorter and the hang rate rose. See [the journey](ios-release-journey.md). **Physical-device feel is unverified.**
+
+## Source pins
+
+Desktop, web, owner and relay source is frozen at `568705c`. iOS is pinned separately at `5501776`, which changes only `ios/` and iOS docs since then. Validation at those pins: 1,540 Node tests with none failing and 4 skipped, 19 web unit tests, 106 PHP tests, static checks, and 210 native unit tests each on iPhone and iPad simulators.
 
 ## Validation limits
 
