@@ -704,7 +704,7 @@ final class RemoteUITests: XCTestCase {
     @MainActor func testTypingDoesNotTraverseLongChatHistory() throws {
         for (fixture, title, eventCount) in [("--synthetic-long-chat", "Long fixture", 1), ("--synthetic-many-chat", "Many fixture", 100), ("--synthetic-heavy-chat", "Heavy fixture", 1000)] {
             let app = nativeFixtureApplication()
-            app.launchArguments = ["--reset-pairing", "--synthetic-destinations", fixture, "--typing-diagnostics"]
+            app.launchArguments = ["--reset-pairing", "--synthetic-clean-navigation", "--synthetic-destinations", fixture, "--typing-diagnostics"]
             app.launch()
             showChats(app)
             let row = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", title)).firstMatch
@@ -731,7 +731,7 @@ final class RemoteUITests: XCTestCase {
             XCTAssertLessThan(passes, 20, "Layout/focus can update history; text edits must not cause a history pass per character")
             XCTAssertEqual(inspected, passes * eventCount)
             let report = XCTAttachment(string: "Synthetic \(eventCount)-event chat; \(text.count) characters in \(elapsed)s via XCTest; history passes: \(passes); inspected events: \(inspected). XCTest time includes keyboard automation overhead.")
-            print("PERFORMANCE events=\(eventCount) characters=\(text.count) elapsed=\(elapsed) historyPasses=\(passes) inspected=\(inspected)")
+            print("PERFORMANCE events=\(eventCount) characters=\(text.count) elapsed=\(elapsed) historyPasses=\(passes) inspected=\(inspected) native=\(diagnostics.value as? String ?? String())")
             report.name = "Typing work for \(title)"; report.lifetime = .keepAlways; add(report)
             if app.scrollViews["chat-conversation-scroll"].exists { app.scrollViews["chat-conversation-scroll"].coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.15)).tap() }
             if let navigation = app.buttons.matching(identifier: "phone-app-navigation").allElementsBoundByIndex.first(where: { $0.isHittable }) { navigation.tap(); app.buttons["phone-nav-Home"].tap() }

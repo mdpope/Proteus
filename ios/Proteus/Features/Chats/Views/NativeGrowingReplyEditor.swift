@@ -58,6 +58,10 @@ final class NativeReplyTextView: UITextView {
         insertText(value)
     }
     override func insertText(_ text: String) {
+        #if DEBUG
+        let measuredStart = ProcessInfo.processInfo.systemUptime
+        defer { NativeTypingInputMeasurements.inputTook(measuredStart) }
+        #endif
         super.insertText(text)
         // UIKit command-driven insertions do not consistently deliver the delegate edit callback.
         delegate?.textViewDidChange?(self)
@@ -96,6 +100,9 @@ struct NativeGrowingReplyEditor: UIViewRepresentable {
     var attachLargeText: ((String) -> Bool)? = nil
     func makeCoordinator() -> Coordinator { Coordinator(self) }
     func makeUIView(context: Context) -> NativeReplyTextView {
+        #if DEBUG
+        NativeTypingInputMeasurements.start()
+        #endif
         let view = NativeReplyTextView()
         view.delegate = context.coordinator; view.backgroundColor = .clear
         view.font = .preferredFont(forTextStyle: .body); view.adjustsFontForContentSizeCategory = true
@@ -130,6 +137,10 @@ struct NativeGrowingReplyEditor: UIViewRepresentable {
         view.setNeedsLayout()
     }
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: NativeReplyTextView, context: Context) -> CGSize? {
+        #if DEBUG
+        let measuredStart = ProcessInfo.processInfo.systemUptime
+        defer { NativeTypingInputMeasurements.layoutTook(measuredStart) }
+        #endif
         let width = max(1, proposal.width ?? 320)
         // Measure actual TextKit wrapping at the proposed width, including Dynamic Type.
         let content = uiView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))

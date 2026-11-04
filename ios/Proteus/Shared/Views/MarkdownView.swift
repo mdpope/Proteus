@@ -67,6 +67,10 @@ struct MarkdownView: UIViewRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
     func makeUIView(context: Context) -> WKWebView {
+        #if DEBUG
+        let measuredStart = ProcessInfo.processInfo.systemUptime
+        defer { NativeTypingInputMeasurements.richCreated(measuredStart) }
+        #endif
         let configuration = Self.rendererConfiguration()
         configuration.userContentController.add(context.coordinator, name: "markdown")
         let web = WKWebView(frame: .zero, configuration: configuration)
