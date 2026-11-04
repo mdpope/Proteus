@@ -1573,6 +1573,25 @@ final class RemoteTests: XCTestCase {
         raced.mergeChat(page("2026-11-03T08:00:00Z"))
         XCTAssertEqual(raced.chats["streamed"]?["events"].array.map { $0["text"].string }, ["first", "raced update"])
     }
+    @MainActor func testFieldDeltaKeepsOmittedMetadataAndRemovalsAcrossLatePages() {
+        let store = RemoteStore(); store.forget()
+        store.mergeChat(.object(["id": .string("delta"), "observedAt": .string("2026-11-03T08:00:00Z"), "eventStart": .number(0), "eventCount": .number(1), "events": .array([.object(["text": .string("one")])]), "schedule": .object(["prompt": .string("kept")]), "note": .string("removed later")]))
+        // Only changed fields arrive: what this chat already holds must survive.
+        store.mergeChat(.object(["id": .string("delta"), "observedAt": .string("2026-11-03T08:00:02Z"), "eventStart": .number(0), "eventCount": .number(2), "events": .array([]), "eventPatches": .array([.object(["index": .number(1), "event": .object(["text": .string("two")])])]), "fieldDelta": .bool(true), "removedFields": .array([.string("note")])]))
+        var chat = store.chats["delta"]!
+        XCTAssertEqual(chat["schedule"]["prompt"].string, "kept")
+        XCTAssertEqual(chat["note"], .null, "a removed field stays removed")
+        XCTAssertEqual(chat["events"].array.map { $0["text"].string }, ["one", "two"])
+        // An older page finishing late adds history without restoring old metadata.
+        store.mergeChat(.object(["id": .string("delta"), "observedAt": .string("2026-11-03T08:00:01Z"), "eventStart": .number(0), "eventCount": .number(1), "events": .array([.object(["text": .string("one")])]), "schedule": .object(["prompt": .string("stale")]), "note": .string("removed later")]))
+        chat = store.chats["delta"]!
+        XCTAssertEqual(chat["schedule"]["prompt"].string, "kept")
+        XCTAssertEqual(chat["note"], .null)
+        XCTAssertEqual(chat["eventCount"].int, 2)
+        // A newer whole value brings a removed field back.
+        store.mergeChat(.object(["id": .string("delta"), "observedAt": .string("2026-11-03T08:00:03Z"), "eventStart": .number(0), "eventCount": .number(2), "events": .array([]), "eventPatches": .array([]), "fieldDelta": .bool(true), "note": .string("restored")]))
+        XCTAssertEqual(store.chats["delta"]?["note"].string, "restored")
+    }
     @MainActor func testHistoryReadsKeepVisibleIncrementalWatchAndDoNotRestoreItAfterLeaving() async throws {
         let (data, _) = try await URLSession.shared.data(from: URL(string: nativeFixtureHTTPOrigin + "/pair?projects=1")!)
         let fixture = try JSONDecoder().decode(JSON.self, from: data)

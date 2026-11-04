@@ -584,6 +584,8 @@ struct RemoteHostInfo: Equatable {
         let delta = state["capabilities"].array.contains(.string("chat.delta.v1"))
         let watch = watching ? (delta ? "delta" : "full") : "none"
         var arguments: [String: JSON] = ["id": .string(id), "watch": .string(watch)]
+        // An owner without field deltas ignores this and keeps sending whole pages.
+        if watching, delta { arguments["fieldDelta"] = .string("v1") }
         if watching, let visibleChat, state["capabilities"].array.contains(.string("chat.watch.v1")) { arguments["watchToken"] = .string(visibleChat.token.uuidString) }
         do { mergeChat(try await request("chat.get", arguments)); saveCache(); return true } catch { self.error = error.localizedDescription; return false }
     }
@@ -654,6 +656,17 @@ struct RemoteHostInfo: Equatable {
         }
         let latest = pages.popLast() ?? (start: 0, events: [])
         var merged = (incomingIsCurrent ? value : old).object
+        // A field delta carries only changed metadata; the rest stays what this chat
+        // already holds. Removals survive a late older page until a newer value returns.
+        if value["fieldDelta"] == .bool(true) || old["fieldDelta"] == .bool(true) {
+            let current = incomingIsCurrent ? value : old, older = incomingIsCurrent ? old : value
+            merged = older.object.merging(current.object) { _, newer in newer }
+            var removed = Set(older["removedFields"].array.map(\.string))
+            removed.subtract(current.object.keys)
+            removed.formUnion(current["removedFields"].array.map(\.string))
+            for key in removed { merged.removeValue(forKey: key) }
+            merged["removedFields"] = .array(removed.sorted().map { .string($0) })
+        }
         merged.removeValue(forKey: "eventPatches")
         merged["events"] = .array(latest.events)
         merged["eventStart"] = .number(Double(latest.start)); merged["earlier"] = merged["eventStart"]
