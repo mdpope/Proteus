@@ -25,8 +25,11 @@ export class BrowserRemoteClient extends EventTarget {
         this.worker.onmessage = ({data}) => {
             if (Object.hasOwn(data,'stateProjection')) {
                 this.receivedState = mergeStateProjection(this.receivedState,data.stateProjection);
-                if (data.event) data.detail = {...data.detail,data:this.receivedState};
-                else data.result = {...data.result,state:this.receivedState};
+                // Match the shared client's consumer-owned root/runs containers;
+                // nested run objects and other subtrees retain their identity.
+                const state={...this.receivedState,...(Array.isArray(this.receivedState?.runs)?{runs:[...this.receivedState.runs]}:{})};
+                if (data.event) data.detail = {...data.detail,data:state};
+                else data.result = {...data.result,state};
             }
             if (data.event) {
                 this.status = data.status;

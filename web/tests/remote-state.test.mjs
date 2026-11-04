@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {updateWebState,applyLifecycleState,updateRunSummary,createStateProjection,mergeStateProjection,projectSyncResult} from '../resources/js/remote-state.js';
+import {updateWebState,applyLifecycleState,updateRunSummary,createStateProjection,mergeStateProjection,projectSyncResult,onlyChatIndexChanges} from '../resources/js/remote-state.js';
 import {acceptRemoteState} from '../resources/js/remote-updates.js';
 const freeze = value => {if(value && typeof value==='object'){Object.values(value).forEach(freeze);Object.freeze(value);}return value;};
 test('local usage, catalogs, paging, lifecycle and chat metadata overlays leave frozen transport trees intact', () => {
@@ -44,6 +44,9 @@ test('unchanged section identity avoids serialization and changed scalars still 
     assert.equal(acceptRemoteState(current,{runs,context,hostName:'after'}),true);assert.equal(serialized,1);
     assert.deepEqual([...current.changedStateSections],['hostName']);
     assert.equal(acceptRemoteState(current,{runs,context,hostName:'after'}),false);assert.equal(serialized,1);
+    assert.equal(acceptRemoteState(current,{runs:[...runs],context,hostName:'after'}),false);
+    assert.equal(acceptRemoteState(current,{runs:[{...runs[0],progress:{waitingTools:2}}],context,hostName:'after'}),true);
+    assert.deepEqual([...current.changedStateSections],['runs']);
 });
 test('other commands with a state property cannot replace the worker owner-state baseline', () => {
     const project=createStateProjection(),state={runs:[]};
@@ -53,4 +56,8 @@ test('other commands with a state property cannot replace the worker owner-state
     assert.equal(projectSyncResult('project-follow.get',follow,project).result,follow);
     assert.equal(projectSyncResult('sync',{state,cursor:'2'},project).stateProjection,null);
     assert.deepEqual(page,{runs:[]});
+});
+test('index-only state churn leaves the open conversation to its immediate run watch', () => {
+    assert.equal(onlyChatIndexChanges(new Set(['runs','runningChatCount'])),true);
+    for (const key of ['context','providerStatuses','workspaceProjects','attention','appearance']) assert.equal(onlyChatIndexChanges(new Set(['runs',key])),false);
 });

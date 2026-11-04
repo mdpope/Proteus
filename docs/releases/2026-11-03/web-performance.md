@@ -167,9 +167,98 @@ also passes the PHP suite (106 tests/926 assertions), Vite build and static chec
 built-web authentication/reconnect, retained-pairing and no-op DOM acceptance passes for
 this bridge against the existing full-state synthetic owner.
 
-The earlier before/after table remains evidence from the original full-state stage run.
-**No patch-cadence performance result is claimed yet.** After the coordinator declares its
-branch ready, the next comparison must retain the old roughly 2 MB/second baseline and
-measure the actual negotiated patches/conditional replies at the owner-selected cadence
-(expected progress churn no more than once per two seconds). Expected few-KB patch sizes
-are coordinator design targets, not measurements from this branch.
+The earlier table remains evidence from the original full-state stage run. Patch-cadence
+measurement was pending at this preparation checkpoint; the completed measurement follows.
+
+## Negotiated protocol acceptance after coordinator merge
+
+Coordinator source `79ab7e4b431110998d19045cb8dc54e38088c159` is merged into the web branch.
+The web lane made no direct edits to the coordinator's `src/` implementation. The original
+copy-on-write policy remains, with the refined contract documented: each delivered root
+and runs array is consumer-owned, while individual run objects and other nested subtrees
+are shared and read-only. The worker bridge now reproduces that same contract. Section
+checks compare individual run references instead of the runs array reference. Index-only
+state churn updates recents/counts/tab titles without rebuilding an open conversation;
+the visible run watch still renders independently and immediately.
+
+Run `NODE_OPTIONS=--preserve-symlinks node test/web-state-patch-performance.mjs` from the
+checkout. This serves an isolated synthetic WebSocket owner with the actual coordinator
+`RemoteStateStream`, AES-GCM wire encoder, BrowserRemoteClient and production web worker
+bridge. No relay, TLS endpoint, account or real owner is contacted. The synthetic owner
+performs the challenge/authentication exchange with a disposable test key.
+
+Both arms use a 2,073,121-byte initial state with 500 chat summaries and 200 tab descriptors,
+an owner history of 1,000 events and a 24-event visible page. Every second for twelve
+seconds, one run's progress/updatedAt changes and its visible run watch delivers a growing
+reply. Both arms perform three sync reads, immediately after seconds 4, 8 and 12. Initial
+authentication, snapshot and rendering are warm-up and excluded from steady-state totals.
+
+The before arm simulates an older full-state owner (ignoring patch opt-in) and decodes on
+the page thread, rendering on each state/run/sync. The after arm uses the actual merged
+negotiation, default two-second volatile cadence, conditional sync and production worker.
+This compares the old workload with the merged path; it is not an assertion that the
+entire historical application binary was benchmarked. The earlier frozen stage evidence
+is retained above. The run-watch traffic is deliberately the same full visible page in
+both arms; incremental chat-history transport is not credited to this state change.
+
+The page uses the production chat DOM reconciler with synthetic navigation/sidebar and
+transcript markup, rather than the entire Laravel workspace and Markdown/tool-card tree.
+Typing uses Playwright's real keyboard API against a focused textarea throughout the run.
+Its round-trip timing includes controller/browser scheduling, not hardware-to-paint latency.
+A separate 20 ms page timer samples event-loop delay. A five-parse full-state calibration
+runs before measurement in each arm; it is not extra parse load during patch reception.
+Receive/decode timing includes async WebCrypto waiting and dispatch preparation, so it
+must not be interpreted as isolated AES CPU time.
+
+The final isolated run produced these steady-state observations:
+
+| Metric (12-second workload) | Full-state/page-thread before | Negotiated worker after |
+| --- | ---: | ---: |
+| Full state pushes | 12 | 0 |
+| State patches | 0 | 6 |
+| Encrypted state routing-frame bytes | 33,172,160 | 2,556 |
+| Maximum encrypted patch frame | — | 429 bytes |
+| Three sync-reply routing-frame bytes | 8,293,207 | 782 |
+| Conditional sync replies | 0 | 3 |
+| Visible run updates | 12 | 12 |
+| Visible run routing-frame bytes | 1,865,924 | 1,865,923 |
+| Conversation renders | 27 | 12 |
+| Observed node additions/removals | 798 | 348 |
+| Main-thread long tasks | 16 | 0 |
+| Total main-thread long-task time | 1,611 ms | 0 ms |
+| Mean decode before event dispatch, main thread | 48.28 ms | off-thread |
+| Mean decode before event dispatch, worker | — | 4.02 ms |
+| Maximum decode before event dispatch | 93.9 ms (main) | 7.5 ms (worker) |
+| Mean render time | 1.31 ms | 1.37 ms |
+| Mean keyboard API round trip | 3.00 ms | 1.90 ms |
+| p95 keyboard API round trip | 6.22 ms | 4.29 ms |
+| Maximum keyboard API round trip | 139.22 ms | 23.77 ms |
+| Maximum 20 ms input-timer delay | 122.9 ms | 14.7 ms |
+| Mean 20 ms input-timer delay | 3.80 ms | 0.87 ms |
+| Initial full-state JSON.parse calibration, mean | 0.42 ms | 0.36 ms |
+
+Frame bytes include the actual AES-GCM/base64 routing JSON, excluding WebSocket/TLS/IP
+headers. Initial snapshots are excluded, not eliminated. Tiny patches here reflect one
+synthetic run's three changed fields and must not be generalized to every owner change.
+The decode averages mix the state and visible-run event sizes in each arm. Parse calibration
+is still a full-snapshot parse and occurs only during warm-up; steady-state patch decoding
+occurs in the worker. Slight render-time variation does not support a per-render speedup
+claim. The improvement is less decode/dispatch work on the page and fewer renders.
+
+The after arm received its first visible-run update at 1,014.9 ms and its first state
+patch at 2,015.7 ms, demonstrating that the visible update did not wait for the state
+cadence. All six state applications retained the unchanged tab-section identity. This
+is one sequential before/after run without a statistical confidence claim.
+
+Validation after merge: 55 focused protocol/web tests pass (including all 14 web Node
+tests), 106 PHP tests/926 assertions pass, Vite builds outside the repository, and static
+checks pass. Built-web acceptance verifies actual state.patch negotiation, authenticated
+worker reconnect, retained device pairing and no-op DOM suppression. Full Node suite:
+1,508 pass, 11 fail and four skip; the failing test names match the prior branch run.
+The earlier full-browser/find-highlight and project-harness limitations remain.
+
+The benchmark asserts six patch deliveries, three conditional replies, all twelve visible
+run updates, and the first visible-run update preceding the first state patch. Sustained
+real-owner use, real network/TLS costs, background/sleep behavior and physical input/paint
+latency remain outside this evidence. No deployment, publication or release package is
+part of this work.

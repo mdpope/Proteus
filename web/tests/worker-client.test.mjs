@@ -23,3 +23,19 @@ test('worker bridge preserves explicit retry envelopes and error codes, and clos
         assert.equal(worker.messages.length,3);assert.equal(client.waiting.size,0);
     } finally {globalThis.Worker=original;}
 });
+test('worker state presentation owns its root and runs array while preserving individual run references', async () => {
+    const original=globalThis.Worker;let worker;
+    globalThis.Worker=class {constructor(){worker=this;}postMessage(){}terminate(){}respond(data){this.onmessage({data});}};
+    try {
+        const client=new BrowserRemoteClient({key:'synthetic'}),connected=client.connect();
+        worker.respond({event:'status',status:'online',detail:'online'});worker.respond({id:1,result:true});await connected;
+        const pending=client.request('sync',{}),run={id:'original'},context={workspaces:[]};
+        worker.respond({id:2,result:{},stateProjection:{value:{runs:[run],context}}});
+        const first=(await pending).state;first.local=true;first.runs.push({id:'local-page'});
+        let next;client.addEventListener('change',event=>next=event.detail.data);
+        worker.respond({event:'change',status:'online',detail:{event:'state'},stateProjection:null});
+        assert.notEqual(first,next);assert.notEqual(first.runs,next.runs);
+        assert.equal(next.local,undefined);assert.equal(next.runs.length,1);
+        assert.equal(next.runs[0],run);assert.equal(next.context,context);client.close();
+    } finally {globalThis.Worker=original;}
+});

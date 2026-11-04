@@ -1,4 +1,4 @@
-import {updateWebState,applyLifecycleState,updateRunSummary} from './remote-state.js';
+import {updateWebState,applyLifecycleState,updateRunSummary,onlyChatIndexChanges} from './remote-state.js';
 import {acceptRemoteState,coalesceRender,draftSubmission,acknowledgeDraft} from "./remote-updates.js";
 import {bindSharedDraftText} from '../../../public/features/chats/shared-draft-text.js';
 const webWindowId=(()=>{try{const key='proteus.remote.window';let value=sessionStorage.getItem(key);if(!value){value=crypto.randomUUID();sessionStorage.setItem(key,value);}return value;}catch{return crypto.randomUUID();}})();
@@ -267,6 +267,7 @@ function handleRemoteChange(current,hostId,change) {
     }
     if(change.event==='run'&&change.runId===current.selected)current.run=mergeChatHistory(current.run,change.data);
     if(state&&[...sections].every(key=>key==='providerUsage')){renderUsage();return;}
+    if(state&&view==='chats'&&chatMode==='chat'&&session()?.run&&onlyChatIndexChanges(sections)){renderChatTabs();renderRecentChats();return;}
     if(active===hostId)scheduleRemoteRender();else renderRecentChats();
 }
 function renderUsage() { /* Shared shell owns Default computer allowance across every feature. */ }
@@ -788,7 +789,7 @@ async function lifecycleChat(row,method,extra={}){
 }
 let recentRenderInputs;
 function renderRecentChats(){
- const inputs=[view,chatMode,active,attentionOnly,attentionPanel,transcriptionOnly,selectedChatType(),workspaces.active,...[...sessions.values()].flatMap(current=>[current.state?.runs,current.state?.runningChatCount,current.cachedRuns,current.archivedRuns,current.state?.attention,current.state?.schedules,current.state?.context,current.state?.workspaceProjects,current.client?.status,current.selected,current.run,current.host.label])];
+ const inputs=[view,chatMode,active,attentionOnly,attentionPanel,transcriptionOnly,selectedChatType(),workspaces.active,...[...sessions.values()].flatMap(current=>[current.state?.runs?.length,...(current.state?.runs||[]),current.state?.runningChatCount,current.cachedRuns,current.archivedRuns,current.state?.attention,current.state?.schedules,current.state?.context,current.state?.workspaceProjects,current.client?.status,current.selected,current.run,current.host.label])];
  if(recentRenderInputs&&inputs.length===recentRenderInputs.length&&inputs.every((value,index)=>value===recentRenderInputs[index]))return;
  recentRenderInputs=inputs;
  for(const [id,current] of sessions)observeRunningChats(id,'remote',current.state,current.client?.status==='online');

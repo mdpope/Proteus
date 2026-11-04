@@ -3,6 +3,12 @@
 export function updateWebState(current, changes) {
     current.state = {...current.state, ...changes};
 }
+export function sameRunReferences(before, after) {
+    return before === after || Array.isArray(before) && Array.isArray(after) && before.length === after.length && before.every((run,index) => run === after[index]);
+}
+export function onlyChatIndexChanges(sections) {
+    return [...sections].every(key => ['runs','runningChatCount','runCount','runCountIncludingArchived','attentionCount'].includes(key));
+}
 export function applyLifecycleState(current, change) {
     if (current.run?.id === change.id && !change.deleted) current.run = {...current.run, ...change};
     if (change.deleted && current.state?.runs) updateWebState(current,{runs:current.state.runs.filter(row => row.id !== change.id)});
