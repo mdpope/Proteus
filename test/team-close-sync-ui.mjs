@@ -16,7 +16,7 @@ try{
  const page=await app.firstWindow();page.setDefaultTimeout(20000);
  await page.route('**/api/team/lists',route=>route.fulfill({json:{identity:{accountId:'synthetic-team'},teamLists:[{id:'synthetic-list',name:'Synthetic standup',revision:1,timezone:'UTC',members:[],links}]}}));
  await page.route('**/api/state?*',async route=>{const response=await route.fetch(),data=await response.json();data.life={...data.life,identity:{accountId:'synthetic-team'}};await route.fulfill({response,json:data});});
- await page.route('**/app.js',async route=>{const response=await route.fetch(),body=(await response.text()).replace('refresh().then(restoreWorkspace)','window.teamCloseReady=refresh().then(restoreWorkspace)');await route.fulfill({response,body:body+'\nwindow.teamCloseFixture={api,navigate,selectTeamBrowser,teamState,contentTabSync,closeTeamTabById};clearInterval(refreshInterval);\n'});});
+ await page.route('**/app.js',async route=>{const response=await route.fetch(),body=(await response.text()).replace('windowRestore.start().then(','window.teamCloseReady=windowRestore.start().then(');await route.fulfill({response,body:body+'\nwindow.teamCloseFixture={api,navigate,selectTeamBrowser,teamState,contentTabSync,closeTeamTabById};clearInterval(refreshInterval);\n'});});
  await page.reload();await page.evaluate(()=>window.teamCloseReady);
  await page.evaluate(async origin=>{
   const f=window.teamCloseFixture;

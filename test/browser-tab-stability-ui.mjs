@@ -14,7 +14,7 @@ let app;
 try{
  app=await electron.launch({...(process.env.PROTEUS_TEST_EXECUTABLE?{executablePath:process.env.PROTEUS_TEST_EXECUTABLE}:{}),args:[...(process.env.PROTEUS_TEST_EXECUTABLE?[]:['.']),'--use-mock-keychain','--user-data-dir='+path.join(home,'electron')],env:{...process.env,PROTEUS_HOME:home,PORT:'0'},timeout:60000});
  const page=await app.firstWindow();page.setDefaultTimeout(15000);const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.locator('#home-screen').waitFor();
- await page.route('**/app.js',async route=>{const response=await route.fetch();await route.fulfill({response,body:(await response.text()).replace('refresh().then(restoreWorkspace)','window.stabilityReady=refresh().then(restoreWorkspace)')+'\nwindow.stabilityFixture={contentTabSync,state,refresh,renderTabs,reorderVisibleTabs};\n'});});
+ await page.route('**/app.js',async route=>{const response=await route.fetch();await route.fulfill({response,body:(await response.text()).replace('windowRestore.start().then(','window.stabilityReady=windowRestore.start().then(')+'\nwindow.stabilityFixture={contentTabSync,state,refresh,renderTabs,reorderVisibleTabs};\n'});});
  await page.reload();await page.evaluate(()=>window.stabilityReady);
  await app.evaluate(({app})=>{const b=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser();b.blocker.ensure=async()=>{};});
  const restored=await page.evaluate(canonicalIds=>canonicalIds.map(contentTabId=>{const tab=window.stabilityFixture.state.tabs.find(tab=>tab.contentTabId===contentTabId);return tab?{id:tab.id,contentTabId:tab.contentTabId,loaded:tab.info?.loaded}:null;}),canonicalIds);

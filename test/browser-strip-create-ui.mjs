@@ -15,7 +15,7 @@ try{
  const page=await app.firstWindow();page.setDefaultTimeout(15000);
  const errors=[];page.on('pageerror',error=>errors.push(error.message));
  await page.locator('body.window-design-preview').waitFor();
- await app.context().route('**/app.js',async route=>{const response=await route.fetch();await route.fulfill({response,body:(await response.text()).replace('refresh().then(restoreWorkspace)','window.stripReady=refresh().then(restoreWorkspace)')+'\nwindow.stripFixture={state,contentTabSync,refresh};\n'});});
+ await app.context().route('**/app.js',async route=>{const response=await route.fetch();await route.fulfill({response,body:(await response.text()).replace('windowRestore.start().then(','window.stripReady=windowRestore.start().then(')+'\nwindow.stripFixture={state,contentTabSync,refresh};\n'});});
  await page.reload();await page.evaluate(()=>window.stripReady);
  await app.evaluate(({app})=>{const browser=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser();browser.blocker.ensure=async()=>{};browser.window.setBounds({x:80,y:70,width:1400,height:900});});
  const command=value=>page.evaluate(value=>window.desktop.browser(value),value);

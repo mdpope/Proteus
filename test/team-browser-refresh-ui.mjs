@@ -11,7 +11,7 @@ try{
  const page=await app.firstWindow();page.setDefaultTimeout(15000);
  await page.route('**/api/team/lists',route=>route.fulfill({json:{identity:{accountId:account},teamLists:[]}}));
  await page.route('**/api/state?*',async route=>{const response=await route.fetch();const data=await response.json();data.hostName='Synthetic host '+revision;data.life={...data.life,identity:{accountId:account}};await route.fulfill({response,json:data});});
- await page.route('**/app.js',async route=>{const response=await route.fetch();const body=(await response.text()).replace('refresh().then(restoreWorkspace)','window.teamRefreshReady=refresh().then(restoreWorkspace)');await route.fulfill({response,body:body+'\nwindow.teamRefreshFixture={refresh,navigate,selectTeamBrowser,contentTabSync,pageFind,teamState}; clearInterval(refreshInterval);\n'});});
+ await page.route('**/app.js',async route=>{const response=await route.fetch();const body=(await response.text()).replace('windowRestore.start().then(','window.teamRefreshReady=windowRestore.start().then(');await route.fulfill({response,body:body+'\nwindow.teamRefreshFixture={refresh,navigate,selectTeamBrowser,contentTabSync,pageFind,teamState}; clearInterval(refreshInterval);\n'});});
  await page.reload();await page.locator('#home-screen').waitFor();await page.evaluate(()=>window.teamRefreshReady);
  const origin='http://127.0.0.1:'+server.address().port;
  await page.evaluate(async url=>{const info=await window.desktop.browser({action:'create',group:'team',url});window.teamRefreshFixture.selectTeamBrowser(info);window.teamRefreshFixture.navigate('team');},origin+'/');
