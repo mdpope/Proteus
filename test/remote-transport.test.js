@@ -54,3 +54,28 @@ test('the minimal Docker relay file layout imports without an application source
  fs.copyFileSync(new URL('../relay/server.js',import.meta.url),path.join(root,'server.mjs'));fs.copyFileSync(new URL('../relay/transport.mjs',import.meta.url),path.join(root,'transport.mjs'));fs.symlinkSync(fileURLToPath(new URL('../node_modules',import.meta.url)),path.join(root,'node_modules'));
  assert.equal(execFileSync(process.execPath,['--input-type=module','-e',`const module=await import(${JSON.stringify(pathToFileURL(path.join(root,'server.mjs')).href)});process.stdout.write(typeof module.startRelay);`],{encoding:'utf8'}),'function');
 });
+
+test('a relay keeps a busy connection whose pong is queued, and removes one that stopped',async t=>{
+ const {connectionVerdict}=await import('../relay/transport.mjs');
+ const socket={bytesWritten:0},ws={alive:true,bufferedAmount:0,_socket:socket};
+ assert.equal(connectionVerdict(ws),'ping');
+ // The pong has not returned, but buffered data keeps draining to this peer.
+ ws.bufferedAmount=4_000_000;socket.bytesWritten=5_000_000;assert.equal(connectionVerdict(ws),'draining');
+ socket.bytesWritten=7_000_000;ws.bufferedAmount=3_000_000;assert.equal(connectionVerdict(ws),'draining');
+ // No more bytes leave: this peer is gone, whatever remains buffered.
+ assert.equal(connectionVerdict(ws),'terminate');
+ assert.equal(connectionVerdict({alive:false,bufferedAmount:0,_socket:{bytesWritten:9}}),'terminate','an idle peer without a pong is removed as before');
+ ws.alive=true;assert.equal(connectionVerdict(ws),'ping','a pong restores the normal cycle');
+});
+test('a peer that keeps sending stays connected through missed pongs and a silent one is closed',async t=>{
+ const {startRelay}=await import('../relay/server.js'),{WebSocket}=await import('ws');
+ const token='a'.repeat(64),hostId='11111111-1111-4111-8111-111111111111',relay=await startRelay({port:0,token,heartbeatMs:60});t.after(()=>relay.close());
+ const open=url=>new Promise((resolve,reject)=>{const ws=new WebSocket(url,{headers:{Authorization:'Bearer '+token},autoPong:false});ws.once('open',()=>resolve(ws));ws.once('error',reject);});
+ const host=await open(`ws://127.0.0.1:${relay.port}/socket?role=host&host=${hostId}`);host.on('error',()=>{});
+ let closed=false;host.on('close',()=>{closed=true;});
+ const keep=setInterval(()=>host.send(JSON.stringify({type:'noop'})),20);t.after(()=>clearInterval(keep));
+ await new Promise(resolve=>setTimeout(resolve,500));assert.equal(closed,false,'received frames prove this peer is alive without a pong');
+ clearInterval(keep);
+ for(let i=0;i<40&&!closed;i++)await new Promise(resolve=>setTimeout(resolve,50));
+ assert.equal(closed,true,'once silent, it is removed');
+});
