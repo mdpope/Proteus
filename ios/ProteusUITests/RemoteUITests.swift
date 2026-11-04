@@ -81,7 +81,12 @@ private let nativeFixtureRelayOrigin = ProcessInfo.processInfo.environment["PROT
 
 final class RemoteUITests: XCTestCase {
     @MainActor func testReleaseBrowserProbe() async throws { try await NativeReleaseJourney.inspectBrowser() }
-    @MainActor func testReleaseBaselineJourney() async throws { try await NativeReleaseJourney.run(bundle: "org.proteusapp.proteus.journey-baseline") }
+    @MainActor func testReleaseBaselineJourney() async throws {
+        // A failed old-build assertion is a benchmark outcome. Finish cleanup
+        // so Instruments can close its recording and retain that evidence.
+        continueAfterFailure = true
+        try await NativeReleaseJourney.run(bundle: "org.proteusapp.proteus.journey-baseline")
+    }
     @MainActor func testReleaseCurrentJourney() async throws { try await NativeReleaseJourney.run(bundle: "org.proteusapp.proteus.journey-current") }
     @MainActor func testReleaseAfterJourney() async throws { try await NativeReleaseJourney.run(bundle: "org.proteusapp.proteus.journey-after") }
     @MainActor func testLiveSimulatorSavedOwnerReconnect() throws {

@@ -1,7 +1,11 @@
 # Nov 3 iOS performance and synchronization
 
-Source lane: `claude/nov3-ios`, baseline `cbed273`, version 0.2.42. Simulator Debug
-acceptance only; no signed release artifact, physical installation or publication.
+Source lane: `claude/nov3-ios`, baseline `cbed273`, version 0.2.42. The component
+measurements below use Simulator Debug. The later [source-pinned Release journey](ios-release-journey.md)
+records `cbed273`, integration `245e7d0` and iOS follow-up `4cb903c`, including
+the baseline accessibility failure, completed integration/follow-up journeys,
+hang-count scope and executable hashes. No distribution artifact, physical
+installation or publication was produced; the operator's phone remains unverified.
 
 ## Reproducible workload and measured results
 
@@ -233,7 +237,7 @@ Time Profiler traces of the whole app on the iPhone 17 simulator, iOS 26.5, Debu
 
 **These traces do not reproduce the operator's report.** The simulator has far more CPU than a phone, and a Debug fixture is not the operator's data over a real relay. The largest measured load on the installed build is the owner traffic recorded live (about 2 MB per push, about 3 MB/s). The patch path removes that load from this client's receive and render work (88.89 → 8.85 ms mean encrypted receive per push in the combined run), which makes it the leading explanation but **not a proven cause**. Whether the app now feels acceptable needs a physical device, with a new client and a new owner together. A remaining migration target is the raw-state consumers behind an open chat.
 
-## Acceptance limits
+## Earlier acceptance limits
 
 The initial product implementation is `db526f8a05851d5251dea3d8e7e138d2326e67ac`;
 `cce1557` corrects test interaction, `ed3afb8` fixes ownerless adoption, `549a821` merges
@@ -267,10 +271,11 @@ it targets the removed phone tab bar; that failure is retained, not called a bro
 regression or a pass. The current project-browser history/edge-swipe workflow passes.
 
 The CPU benchmark, body probe and existing thousand-event scrolling test are separate workloads.
-A combined large General project with long rich streaming chat and one-second full-state pushes
-remains outstanding; the captured Instruments workload covers actual rich-chat opening,
-typing and navigation separately from transport stress. Do not call N1 fully accepted from
-these component workloads. Startup cache reads/decryption and lifecycle durability flushes
+The later Release journey adds an actual streaming local owner and large-project navigation;
+its production owner uses paged summaries and negotiated/batched delivery, so it does not
+recreate the old installed owner's one-second 2 MB full-state traffic. The earlier encrypted
+push-and-typing rehearsal stresses that larger receive path separately. Do not call N1 fully
+accepted on the operator's phone from these simulator workloads. Startup cache reads/decryption and lifecycle durability flushes
 remain synchronous main-actor boundaries; ordinary snapshot encryption/I/O already runs on the
 serial background writer. Their physical-device cost remains to be profiled before changing
 lifecycle durability. Existing unchanged-text Markdown memoization is retained; the measured

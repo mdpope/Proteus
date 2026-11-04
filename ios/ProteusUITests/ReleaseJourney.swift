@@ -24,7 +24,9 @@ import XCTest
         let fixture = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         let ids = try XCTUnwrap(fixture["chatIds"] as? [String])
         let project = try XCTUnwrap(fixture["projectId"] as? String)
-        let app = XCUIApplication(bundleIdentifier: bundle); app.launch()
+        let app = XCUIApplication(bundleIdentifier: bundle)
+        defer { app.terminate() }
+        app.launch()
         func drawer() throws {
             let button = app.buttons.matching(identifier: "phone-app-navigation").allElementsBoundByIndex.first(where: \.isHittable)
             try XCTUnwrap(button).tap()
@@ -91,6 +93,5 @@ import XCTest
             app.buttons["workspace-child-tab-chat:" + ids[0]].tap()
             XCTAssertTrue(app.buttons["chat-mode-conversation"].waitForExistence(timeout: 20))
         }
-        app.terminate()
     }
 }
