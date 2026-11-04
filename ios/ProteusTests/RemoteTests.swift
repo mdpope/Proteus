@@ -3211,6 +3211,22 @@ final class Nov3PerformanceTests: XCTestCase {
 }
 
 extension RemoteTests {
+    @MainActor func testSettledMirrorAllowsDelayedPageNavigationWithoutTrustedInput() throws {
+        let shared = SharedAppStore()
+        let entries = [BrowserHistoryEntry(id: "one", url: "https://example.test/one", title: "One")]
+        shared.browserTabs = [BrowserDescriptor(id: "settled", title: "One", url: entries[0].url, scope: "main", history: BrowserTabHistory(entries: entries, index: 0, currentEntryId: "one", revision: 4))]
+        _ = shared.webView(shared.browserTabs[0], allowLocalNavigation: true)
+        defer { shared.unloadBrowsers(); shared.close("settled") }
+        let login = URL(string: "https://example.test/login")!
+        shared.completeBrowserNavigation(login, title: "Device login", in: "settled")
+        XCTAssertEqual(shared.browserTabs[0].url, entries[0].url)
+        shared.settleMirroredBrowserLoad("settled", url: login)
+        shared.completeBrowserNavigation(login, title: "Duplicate KVO", in: "settled", sameDocumentObservation: true)
+        XCTAssertEqual(shared.browserTabs[0].url, entries[0].url)
+        shared.completeBrowserNavigation(URL(string: "https://example.test/delayed-route")!, title: "Delayed SPA route", in: "settled", sameDocumentObservation: true)
+        XCTAssertEqual(shared.browserTabs[0].url, "https://example.test/delayed-route")
+        XCTAssertEqual(shared.browserTabs[0].history?.revision, 4, "Local-only navigation must not advance an owner revision")
+    }
     @MainActor func testPreOwnerNavigationAdoptsFinalURLAndHistoryInsteadOfBlankTab() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString), key = RemoteCrypto.random()
         defer { try? FileManager.default.removeItem(at: root) }

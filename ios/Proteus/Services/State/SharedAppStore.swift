@@ -224,6 +224,7 @@ let nativeFixtureRelayOrigin = ""
     func isTwoFingerNavigation(_ id: String) -> Bool { (twoFingerDeadlines[id] ?? .distantPast) > Date() }
     private var explicitBrowserNavigations = Set<String>()
     private var mirroredBrowserLoads = Set<String>()
+    private var settledMirrorURLs: [String: String] = [:]
     private var browserOperations: [String: JSON] = [:]
     @Published private(set) var browserFavicons: [String: UIImage] = [:]
     private var faviconAttempts: [String: Date] = [:]
@@ -369,7 +370,7 @@ let nativeFixtureRelayOrigin = ""
         let privateLocal = existingBrowsers.filter { $0.url != nil && Self.safeURL($0.url ?? "") == nil }
         for old in existingBrowsers where !privateLocal.contains(old) && !ids.contains(old.contentTabId ?? old.id) { unload(old.id, force: true); unloadedBrowsers.remove(old.id) }
         for tab in incoming where tab["type"].string == "browser" && tab["setup"] == .null {
-            if let existing = existingBrowsers.first(where: { ($0.contentTabId ?? $0.id) == tab["id"].string }), !privateLocal.contains(existing), !explicitBrowserNavigations.contains(existing.id), browserViews[existing.id]?.url.map({ Self.safeURL($0.absoluteString) == nil }) != true, existing.url ?? "" != tab["url"].string, let url = Self.safeURL(tab["url"].string) { if profileAvailable(existing.profileId) && (tab["profileId"].string.isEmpty ? "default" : tab["profileId"].string) == existing.profileId, let view = browserViews[existing.id] { mirroredBrowserLoads.insert(existing.id); pendingBrowserLoads[existing.id] = url.absoluteString; view.load(URLRequest(url: url)) } }
+            if let existing = existingBrowsers.first(where: { ($0.contentTabId ?? $0.id) == tab["id"].string }), !privateLocal.contains(existing), !explicitBrowserNavigations.contains(existing.id), browserViews[existing.id]?.url.map({ Self.safeURL($0.absoluteString) == nil }) != true, existing.url ?? "" != tab["url"].string, let url = Self.safeURL(tab["url"].string) { if profileAvailable(existing.profileId) && (tab["profileId"].string.isEmpty ? "default" : tab["profileId"].string) == existing.profileId, let view = browserViews[existing.id] { mirroredBrowserLoads.insert(existing.id); settledMirrorURLs[existing.id] = nil; pendingBrowserLoads[existing.id] = url.absoluteString; view.load(URLRequest(url: url)) } }
         }
         let localIDs = Set(existingBrowsers.map(\.id))
         var nextBrowsers = browserTabs.filter { !localIDs.contains($0.id) || (privateLocal.contains($0) && !ids.contains($0.contentTabId ?? $0.id)) }
@@ -1564,8 +1565,7 @@ let nativeFixtureRelayOrigin = ""
         guard history.entries.indices.contains(target), target != history.index, history.entries[target].url == item.url.absoluteString else { return }
         mirroredBrowserLoads.remove(id)
         let item = BrowserHistoryItem(index: target, url: item.url, title: item.title, entryId: history.entries[target].id)
-        queueBrowserOperation(browserTabs[index], action: "browser-traverse", entry: history.entries[item.index])
-        browserTabs[index].history?.revision += 1
+        if queueBrowserOperation(browserTabs[index], action: "browser-traverse", entry: history.entries[item.index]) { browserTabs[index].history?.revision += 1 }
         browserTabs[index].history?.currentEntryId = history.entries[item.index].id
         browserTabs[index].history?.index = item.index
         serverRedirectedBrowsers.remove(id); originalBrowserLoads[id] = item.url.absoluteString
@@ -1629,8 +1629,8 @@ let nativeFixtureRelayOrigin = ""
         serverRedirectedBrowsers.insert(id)
         if let url { completeBrowserNavigation(url, title: "", in: id) }
     }
-    private func queueBrowserOperation(_ tab: BrowserDescriptor, action: String, entry: BrowserHistoryEntry?) {
-        guard !applyingContent, let entry, Self.historyURL(entry.url) != nil else { return }
+    @discardableResult private func queueBrowserOperation(_ tab: BrowserDescriptor, action: String, entry: BrowserHistoryEntry?) -> Bool {
+        guard !applyingContent, let entry, Self.historyURL(entry.url) != nil else { return false }
         let scope = syncScope(tab)
         let operationID = UUID().uuidString
         var fields: [String: JSON] = ["visitedAt": .string(ISO8601DateFormatter().string(from: Date())), "eventId": .string(operationID), "profileId": .string(tab.profileId), "sourceHostId": .string(contentHosts[scope] ?? tab.ownerHostId ?? ""), "action": .string(action), "tabId": .string(tab.contentTabId ?? tab.id), "operationId": .string(operationID), "baseRevision": .number(Double(tab.history?.revision ?? 0)), "entryId": .string(entry.id), "url": .string(entry.url), "title": .string(entry.title)]
@@ -1639,11 +1639,13 @@ let nativeFixtureRelayOrigin = ""
         browserOperations[tab.id] = operation
         // The transport binding is transient (absent after restart/background).
         // Persist ordered navigation intent before a binding is available again.
-        if tab.scope != "main", contentSync[scope] != nil || contentHosts[scope] != nil || tab.ownerHostId != nil {
+        let queued = tab.scope != "main" && (contentSync[scope] != nil || contentHosts[scope] != nil || tab.ownerHostId != nil)
+        if queued {
             contentPending[scope, default: []].append(operation); saveDocumentTabs()
             Task { await flushContentTabs(scope) }
         }
         if action != "browser-redirect" { queueHistoryVisit(tab, operation: operation) }
+        return queued
     }
     func failBrowserNavigation(_ id: String, currentURL: URL?) {
         serverRedirectedBrowsers.remove(id); originalBrowserLoads.removeValue(forKey: id)
@@ -1653,7 +1655,22 @@ let nativeFixtureRelayOrigin = ""
         // A failed mirrored load remains local until the user deliberately navigates.
         if explicitBrowserNavigations.remove(id) != nil, let index = browserTabs.firstIndex(where: { $0.id == id }), let history = browserTabs[index].history, history.entries.indices.contains(history.index) { let priorApplying = applyingContent; applyingContent = true; browserTabs[index].url = history.entries[history.index].url; applyingContent = priorApplying }
     }
+    /// The first mirrored load may pass through device-specific login redirects.
+    /// Once it settles, a later URL change is new page navigation, even without a tap.
+    func settleMirroredBrowserLoad(_ id: String, url: URL) {
+        if mirroredBrowserLoads.contains(id) { settledMirrorURLs[id] = url.absoluteString }
+    }
     func completeBrowserNavigation(_ url: URL, title: String, in id: String, nativePosition: Int? = nil, sameDocumentObservation: Bool = false) {
+        if applyingContent {
+            // WebKit KVO can fire synchronously during an owner-driven load.
+            // Re-observe the current page after adoption instead of appending an
+            // entry whose owner operation is forbidden inside that transaction.
+            Task { @MainActor [weak self] in
+                guard let self, let view = self.browserViews[id], view.url == url else { return }
+                self.completeBrowserNavigation(url, title: view.title ?? title, in: id, nativePosition: view.backForwardList.backList.count, sameDocumentObservation: sameDocumentObservation)
+            }
+            return
+        }
         guard let index = browserTabs.firstIndex(where: { $0.id == id }) else { return }
         if Self.historyURL(url.absoluteString) == nil {
             if let requested = originalBrowserLoads[id], let original = Self.historyURL(requested) {
@@ -1671,6 +1688,9 @@ let nativeFixtureRelayOrigin = ""
         // link/form navigation callback. A short trusted-input intent releases
         // the mirror guard; passive redirects and repeated observations do not.
         if explicit || prior.url != url.absoluteString && (browserViews[id] as? NativeLinkWebView)?.hasRecentNavigationIntent == true { mirroredBrowserLoads.remove(id) }
+        if let settled = settledMirrorURLs[id], settled != url.absoluteString {
+            mirroredBrowserLoads.remove(id); settledMirrorURLs[id] = nil
+        }
         let mirrored = mirroredBrowserLoads.contains(id) && !explicit
         if mirrored, let history = prior.history {
             if let nativePosition { nativeHistoryPosition[id] = nativePosition }
@@ -1698,8 +1718,7 @@ let nativeFixtureRelayOrigin = ""
         tab.history = Self.safeBrowserHistory(history)
         if !mirrored && (explicit || prior.url != url.absoluteString || prior.history?.index != tab.history?.index) {
             let traversed = prior.history?.entries.contains(where: { $0.id == tab.history?.currentEntryId }) == true && prior.history?.currentEntryId != tab.history?.currentEntryId
-            queueBrowserOperation(prior, action: traversed ? "browser-traverse" : "browser-navigate", entry: tab.history?.entries[tab.history?.index ?? 0])
-            tab.history?.revision += 1
+            if queueBrowserOperation(prior, action: traversed ? "browser-traverse" : "browser-navigate", entry: tab.history?.entries[tab.history?.index ?? 0]) { tab.history?.revision += 1 }
         }
         if tab != browserTabs[index] { browserTabs[index] = tab }
         var state = browserNavigation[id] ?? BrowserNavigationState()
@@ -1731,6 +1750,7 @@ let nativeFixtureRelayOrigin = ""
         guard force || browserTabs.first(where: { $0.id == id })?.persist != true else { error = "Turn off Persist before unloading this tab."; return }
         historyNavigation.removeValue(forKey: id)
         mirroredBrowserLoads.remove(id)
+        settledMirrorURLs.removeValue(forKey: id)
         pendingBrowserLoads.removeValue(forKey: id); nativeHistoryPosition.removeValue(forKey: id)
         browserObservations.removeValue(forKey: id)?.forEach { $0.invalidate() }
         browserNavigation.removeValue(forKey: id)
@@ -1777,7 +1797,7 @@ let nativeFixtureRelayOrigin = ""
         view.allowsBackForwardNavigationGestures = false; view.isFindInteractionEnabled = true
         browserViews[tab.id] = view
         browserObservations[tab.id] = [observeBrowser(view, id: tab.id, keyPath: \.canGoBack), observeBrowser(view, id: tab.id, keyPath: \.canGoForward), observeBrowser(view, id: tab.id, keyPath: \.isLoading), observeBrowser(view, id: tab.id, keyPath: \.url), observeBrowser(view, id: tab.id, keyPath: \.title)]
-        if let text = tab.url, let url = URL(string: text) { mirroredBrowserLoads.insert(tab.id); pendingBrowserLoads[tab.id] = url.absoluteString; applyPageScale(tab.id, url: url); view.load(URLRequest(url: url)) }
+        if let text = tab.url, let url = URL(string: text) { mirroredBrowserLoads.insert(tab.id); settledMirrorURLs[tab.id] = nil; pendingBrowserLoads[tab.id] = url.absoluteString; applyPageScale(tab.id, url: url); view.load(URLRequest(url: url)) }
         return view
     }
     private func observeBrowser<Value>(_ view: WKWebView, id: String, keyPath: KeyPath<WKWebView, Value>) -> NSKeyValueObservation {
