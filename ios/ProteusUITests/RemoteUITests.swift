@@ -703,6 +703,7 @@ final class RemoteUITests: XCTestCase {
     }
     @MainActor func testTypingDoesNotTraverseLongChatHistory() throws {
         for (fixture, title, eventCount) in [("--synthetic-long-chat", "Long fixture", 1), ("--synthetic-many-chat", "Many fixture", 100), ("--synthetic-heavy-chat", "Heavy fixture", 1000)] {
+            if let requested = ProcessInfo.processInfo.environment["PROTEUS_TYPING_EVENTS"], requested != String(eventCount) { continue }
             let app = nativeFixtureApplication()
             app.launchArguments = ["--reset-pairing", "--synthetic-clean-navigation", "--synthetic-destinations", fixture, "--typing-diagnostics"]
             app.launch()
@@ -727,6 +728,11 @@ final class RemoteUITests: XCTestCase {
             XCTAssertEqual(field.value as? String, text, "Long-history input must retain every character")
             let elapsed = Date().timeIntervalSince(start)
             let after = try sample(); XCTAssertEqual(after.count, 2)
+            if (diagnostics.value as? String ?? "").contains("richCreatedCount=0,") {
+                let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "Typing viewport without rich rendering"; screenshot.lifetime = .keepAlways; add(screenshot)
+                print("RENDER_VISIBILITY " + (diagnostics.value as? String ?? ""))
+                XCTFail("The typing comparison must retain real rich rendering")
+            }
             let passes = after[0] - before[0], inspected = after[1] - before[1]
             XCTAssertLessThan(passes, 20, "Layout/focus can update history; text edits must not cause a history pass per character")
             XCTAssertEqual(inspected, passes * eventCount)
@@ -1249,6 +1255,7 @@ final class RemoteUITests: XCTestCase {
         let renderers = app.buttons["history-renderers"]
         renderers.tap()
         let count = try XCTUnwrap(Int(renderers.value as? String ?? ""))
+        XCTAssertGreaterThan(count, 0, "The bounded-renderer check must exercise actual rich rendering")
         XCTAssertLessThanOrEqual(count, 16, "A thousand-event history must keep native rich renderers bounded")
         let report = XCTAttachment(string: "1,000 synthetic events with varied rich content; active Markdown renderers after gestures: \(count). XCTest scrolling/CPU/memory metrics retained; simulator metrics do not establish physical-device frame rate.")
         report.name = "Native chat scrolling workload"; report.lifetime = .keepAlways; add(report)

@@ -475,32 +475,6 @@ private struct ChatDocumentTab: Identifiable {
 
 // Bound initial rich rendering independently of the host's 100-event transport page.
 // Byte headroom handles verbose tool output; one oversized event remains readable in full.
-enum NativeHistoryWindow {
-    static let pageCount = 12
-    static let pageBytes = 48 * 1024
-    static let olderPageCount = 24
-    static let olderPageBytes = 96 * 1024
-    static func start(events: [JSON], before: Int? = nil, preparingOlder: Bool = false) -> Int {
-        let end = min(events.count, max(0, before ?? events.count))
-        let rowBudget = preparingOlder ? olderPageCount : pageCount
-        let byteBudget = preparingOlder ? olderPageBytes : pageBytes
-        var start = end, bytes = 0, rows = 0, lastActivity = false
-        while start > 0 && end - start < 100 {
-            let event = events[start - 1]
-            let activity = NativeActivity.contains(event)
-            let cost = activity && lastActivity ? 0 : 1
-            let size = activity ? 0 : event["text"].string.utf8.count
-            if start < end && (bytes + size > byteBudget || rows + cost > rowBudget) { break }
-            bytes += size; rows += cost; lastActivity = activity; start -= 1
-        }
-        return start
-    }
-    static func shouldPrefetch(offset: CGFloat, viewport: CGFloat, content: CGFloat, reading: Bool, ready: Bool) -> Bool {
-        guard ready, viewport > 0, content > 0 else { return false }
-        // Fill short screens automatically, but never drain history from an initial top snapshot.
-        return content < viewport + 80 || reading && offset < max(480, viewport * 2.5)
-    }
-}
 
 // Only this child subscribes to text edits. ChatView retains the draft reference without
 // observing it, so a keystroke does not rebuild browser tabs or traverse conversation history.
@@ -575,7 +549,6 @@ struct ChatView: View {
     private var conversationOffset: CGFloat { get { scrollMeasurements.offset } nonmutating set { scrollMeasurements.offset = newValue } }
     private var conversationContentHeight: CGFloat { get { scrollMeasurements.contentHeight } nonmutating set { scrollMeasurements.contentHeight = newValue } }
     @State private var conversationViewportWidth: CGFloat = 0
-    @State private var conversationViewportTop: CGFloat = 0
     private var visibleAnchor: NativeChatScrollLocation? { get { scrollMeasurements.visibleAnchor } nonmutating set { scrollMeasurements.visibleAnchor = newValue } }
     @State private var restoringConversation = false
     @State private var pendingAnchorRestore: NativeChatScrollLocation?
@@ -650,7 +623,7 @@ struct ChatView: View {
     private func routineActivity(_ event: JSON) -> Bool { NativeActivity.contains(event, provider: run["schedule"]["provider"].string) }
     private var renderedEventStart: Int {
         let events = run["events"].array, start = run["eventStart"].int
-        return max(start, min(oldestVisibleEvent ?? (start + NativeHistoryWindow.start(events: events)), start + events.count))
+        return NativeHistoryWindow.presentedStart(events: events, loadedStart: start, requestedStart: oldestVisibleEvent)
     }
     private var hasEarlierMessages: Bool { renderedEventStart > 0 }
     private var visibleEventIndices: [Int] {
@@ -733,7 +706,7 @@ struct ChatView: View {
             }
             if NativeTypingDiagnostics.enabled {
                 Button("Read typing diagnostics") {
-                    typingDiagnostics = "\(NativeTypingDiagnostics.historyPasses),\(NativeTypingDiagnostics.inspectedEvents)," + NativeTypingInputMeasurements.snapshotAndReset()
+                    typingDiagnostics = "\(NativeTypingDiagnostics.historyPasses),\(NativeTypingDiagnostics.inspectedEvents)," + NativeTypingInputMeasurements.snapshotAndReset() + "," + scrollMeasurements.renderViewport.diagnosticSummary()
                 }.accessibilityIdentifier("typing-diagnostics").accessibilityValue(typingDiagnostics)
             }
             if ProcessInfo.processInfo.arguments.contains("--synthetic-desktop-browser-tabs") {
@@ -945,7 +918,7 @@ struct ChatView: View {
                             ChatActivityGroupView(events: activityGroup(startingAt: index), hostName: store.stateValue("hostName").string, runID: id, runStatus: run["status"].string, search: pageSearch, eventStart: absoluteIndex)
                         } else if event["role"].string != "assistant" || !event["text"].string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                             if !event["data"]["delivery"]["state"].string.isEmpty { Text(event["data"]["delivery"]["state"].string.capitalized).font(.caption2).foregroundStyle(.teal) }
-                            MessageView(role: event["role"].string == "assistant" ? assistantName(event) : event["role"].string, text: NativeUserQuestion.presentationText(event["text"].string, questions: eventQuestions), runID: id, timestamp: event["timestamp"].string.isEmpty ? event["at"].string : event["timestamp"].string, turn: firstAssistant[event["data"]["turnId"].string] == index ? turns[event["data"]["turnId"].string] ?? .null : .null, actionID: MessageActions.eligible(event) ? "\(store.connection?.hostId ?? "local"):\(id):\(absoluteIndex):\(event["at"].string)" : nil, sentAttachments: event["data"]["attachments"].array, onDocumentLink: event["role"].string == "assistant" ? { source in openDocument(source) } : nil, search: pageSearch, searchKey: absoluteIndex, viewport: CGRect(x: 0, y: conversationViewportTop, width: conversationViewportWidth, height: max(1, composerAvailableHeight)), questionContent: eventQuestions.isEmpty ? nil : AnyView(VStack(alignment: .leading, spacing: 0) {
+                            MessageView(role: event["role"].string == "assistant" ? assistantName(event) : event["role"].string, text: NativeUserQuestion.presentationText(event["text"].string, questions: eventQuestions), runID: id, timestamp: event["timestamp"].string.isEmpty ? event["at"].string : event["timestamp"].string, turn: firstAssistant[event["data"]["turnId"].string] == index ? turns[event["data"]["turnId"].string] ?? .null : .null, actionID: MessageActions.eligible(event) ? "\(store.connection?.hostId ?? "local"):\(id):\(absoluteIndex):\(event["at"].string)" : nil, sentAttachments: event["data"]["attachments"].array, onDocumentLink: event["role"].string == "assistant" ? { source in openDocument(source) } : nil, search: pageSearch, searchKey: absoluteIndex, renderViewport: scrollMeasurements.renderViewport, questionContent: eventQuestions.isEmpty ? nil : AnyView(VStack(alignment: .leading, spacing: 0) {
                             ForEach(eventQuestions) { question in
                                 NativeUserQuestionCard(question: question, showHeading: !question.promptVisible(in: event["text"].string, among: eventQuestions.count), chatID: id) { value, messageID, delivery in
                                     var args = delivery; args["id"] = .string(id); args["answer"] = .string(value); args["messageId"] = .string(messageID); args[question.blocking ? "requestId" : "questionId"] = .string(question.id)
@@ -1054,10 +1027,10 @@ struct ChatView: View {
                 let previousOffset = conversationOffset
                 let previousHeight = conversationContentHeight
                 scrollMeasurements.latest = snapshot
+                scrollMeasurements.renderViewport.update(snapshot)
                 if abs(conversationOffset - snapshot.offset) > 0.5 { conversationOffset = max(0, snapshot.offset) }
                 if abs(conversationContentHeight - snapshot.contentHeight) > 0.5 { conversationContentHeight = snapshot.contentHeight }
                 if abs(conversationViewportWidth - snapshot.viewportWidth) > 0.5 { conversationViewportWidth = snapshot.viewportWidth }
-                if abs(conversationViewportTop - snapshot.viewportTop) > 0.5 { conversationViewportTop = snapshot.viewportTop }
                 if let initial = pendingInitialRestore, snapshot.viewportWidth > 0 {
                     pendingInitialRestore = nil
                     restoreConversation(initial)
@@ -1949,7 +1922,7 @@ struct MessageView: View {
     @Environment(RemoteStore.self) var store
     @Environment(\.timeZone) private var timeZone
     @State private var height: CGFloat = 0
-    @State private var richVisible = true
+    @State private var renderVisibility = NativeMessageRenderVisibility()
     let role: String
     let text: String
     let runID: String
@@ -1963,14 +1936,14 @@ struct MessageView: View {
     var onResize: () -> Void = {}
     var search: NativePageSearch? = nil
     var searchKey = 0
-    var viewport: CGRect? = nil
+    var renderViewport: NativeMessageRenderViewport? = nil
     var questionContent: AnyView? = nil
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack { Text(role.uppercased()).font(.caption2.weight(.bold)); Spacer(); if role != "user" && turn != .null { RuntimeTimerView(turns:[turn]) }; if let date = ProviderAllowance.date(timestamp) { Text(nativeTimestamp(date, timezone: timeZone.identifier)).font(.caption2).accessibilityIdentifier("message-timestamp") } }.foregroundStyle(.secondary)
             ZStack(alignment: .topLeading) {
                 if height == 0 { Text(text).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }
-                if richVisible || height == 0 {
+                if renderVisibility.isVisible {
                     MarkdownView(text: text, runID: runID, store: store, height: $height, onDocumentLink: onDocumentLink, onResize: onResize, search: search, searchKey: searchKey).frame(height: max(height, 1)).opacity(height > 0 ? 1 : 0)
                 } else { Color.clear.frame(height: height) }
             }.frame(maxWidth: .infinity, alignment: .leading)
@@ -1985,10 +1958,12 @@ struct MessageView: View {
             }
             if let questionContent { questionContent }
             if let actionID { MessageActionBar(messageID: actionID, markdown: text) }
-        }.onGeometryChange(for: Bool.self) { geometry in
-            guard let viewport, viewport.width > 0 else { return true }
-            return geometry.frame(in: .global).intersects(viewport.insetBy(dx: 0, dy: -max(600, viewport.height * 1.5)))
-        } action: { visible in richVisible = visible }.sheet(isPresented: Binding(get: { attachmentPreviewIndex != nil }, set: { if !$0 { attachmentPreviewIndex = nil } })) { if let index = attachmentPreviewIndex { NativeStoredAttachmentViewer(chatID: runID, items: sentAttachments, index: index).environment(store) } }
+        }.onGeometryChange(for: CGRect.self) { geometry in
+            renderViewport == nil ? geometry.frame(in: .global) : geometry.frame(in: .named("conversation-content"))
+        } action: { frame in renderVisibility.updateFrame(frame) }
+        .onAppear { renderVisibility.bind(renderViewport) }
+        .onDisappear { renderVisibility.detach() }
+        .sheet(isPresented: Binding(get: { attachmentPreviewIndex != nil }, set: { if !$0 { attachmentPreviewIndex = nil } })) { if let index = attachmentPreviewIndex { NativeStoredAttachmentViewer(chatID: runID, items: sentAttachments, index: index).environment(store) } }
         .padding().background(role == "user" ? NativePalette.shared.color("user") : role == "system" ? NativeTheme.background : NativePalette.shared.color("assistant"), in: RoundedRectangle(cornerRadius: 16)).overlay(alignment: .leading) { Rectangle().fill(NativePalette.shared.color(role == "user" ? "userEdge" : "assistantEdge")).frame(width: 3) }.clipShape(RoundedRectangle(cornerRadius: 16)).padding(.leading, role == "user" ? 20 : 0).padding(.trailing, actionID != nil || role.contains("streaming") ? 20 : 0)
     }
 }

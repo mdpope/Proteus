@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		B3F241001122334455660010 = {isa = PBXBuildFile; fileRef = B3F241001122334455660011; };
+		B3F24100112233445566000E = {isa = PBXBuildFile; fileRef = B3F24100112233445566000F; };
 		B3F24100112233445566000C = {isa = PBXBuildFile; fileRef = B3F24100112233445566000D; };
 		B3F24100112233445566000A = {isa = PBXBuildFile; fileRef = B3F24100112233445566000B; };
 		B3F241001122334455660007 = {isa = PBXBuildFile; fileRef = B3F241001122334455660008; };
@@ -80,6 +82,8 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		B3F241001122334455660011 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NativeHistoryWindow.swift; path = Proteus/Features/Chats/Models/NativeHistoryWindow.swift; sourceTree = SOURCE_ROOT; };
+		B3F24100112233445566000F = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NativeMessageRenderVisibility.swift; path = Proteus/State/NativeMessageRenderVisibility.swift; sourceTree = SOURCE_ROOT; };
 		B3F24100112233445566000D = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NativeTypingInputMeasurements.swift; path = Proteus/State/NativeTypingInputMeasurements.swift; sourceTree = SOURCE_ROOT; };
 		B3F24100112233445566000B = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = StateStreamTests.swift; path = ProteusTests/StateStreamTests.swift; sourceTree = SOURCE_ROOT; };
 		B3F241001122334455660008 = {isa = PBXFileReference; lastKnownFileType = text.json; name = state-patch-vectors.json; path = ../test/fixtures/state-patch-vectors.json; sourceTree = SOURCE_ROOT; };
@@ -246,7 +250,7 @@
 		};
 		D041375426F54E73AAE56905 /* Models */ = {
 			isa = PBXGroup;
-			children = (D041375426F54E73AAE56902 /* NativeUserQuestion.swift */,);
+			children = (D041375426F54E73AAE56902 /* NativeUserQuestion.swift */, B3F241001122334455660011 /* NativeHistoryWindow.swift */,);
 			path = Models;
 			sourceTree = "<group>";
 		};
@@ -447,6 +451,7 @@
 			isa = PBXGroup;
 			children = (
 				07A3786A67A7D7F69111D816 /* NativeChatScrollMeasurements.swift */,
+				B3F24100112233445566000F,
 				B3F24100112233445566000D,
 			);
 			path = State;
@@ -615,6 +620,8 @@
 				35F51F9D47A18DF741E5E436 /* NativeDescriptorCache.swift in Sources */,
 				D0A6A874D71541FD86BC5E31 /* NativeSharedCache.swift in Sources */,
 				D1240567439FF2681FD55806 /* NativeChatScrollMeasurements.swift in Sources */,
+				B3F24100112233445566000E,
+				B3F241001122334455660010,
 				B3F24100112233445566000C,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

@@ -1,6 +1,7 @@
 ## Nov 3 — 0.2.42 source validation
 
 - Faster heterogeneous state decoding and section-level chat observation.
+- Admit message WebKit renderers from the native visible range and keep stale history-window bookmarks from hiding a nonempty conversation.
 - Negotiate versioned incremental owner state with a separate wire baseline, full recovery after gaps and debounced cache writes.
 - Soft-wrapped message drafts grow within the existing composer height budget.
 - Ignore packets decoded across connection generations; retain offline browser navigation and resume pending intent after history hydration.

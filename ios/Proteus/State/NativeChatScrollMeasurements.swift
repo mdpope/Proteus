@@ -4,6 +4,7 @@ import UIKit
 /// not invalidate the whole conversation view. Layout/selection keep their own state.
 @MainActor final class NativeChatScrollMeasurements {
     let viewport = NativeScrollViewport()
+    let renderViewport = NativeMessageRenderViewport()
     var offset: CGFloat = 0
     var contentHeight: CGFloat = 0
     var visibleAnchor: NativeChatScrollLocation?

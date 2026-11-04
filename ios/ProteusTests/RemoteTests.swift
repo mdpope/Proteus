@@ -3211,6 +3211,34 @@ final class Nov3PerformanceTests: XCTestCase {
 }
 
 extension RemoteTests {
+    func testStalePresentationBoundaryCannotHideANonemptyShorterHistory() {
+        let events: [JSON] = (0..<100).map { .object(["role": .string("assistant"), "text": .string("Message \($0)")]) }
+        XCTAssertEqual(NativeHistoryWindow.presentedStart(events: events, loadedStart: 0, requestedStart: 980), 88)
+        XCTAssertEqual(NativeHistoryWindow.presentedStart(events: events, loadedStart: 0, requestedStart: 90), 90)
+        XCTAssertEqual(NativeHistoryWindow.presentedStart(events: events, loadedStart: 100, requestedStart: 90), 100)
+        XCTAssertEqual(NativeHistoryWindow.presentedStart(events: [], loadedStart: 100, requestedStart: 980), 100)
+    }
+    @MainActor func testRendererVisibilityReevaluatesWhenOnlyViewportBecomesKnown() {
+        let visibility = NativeMessageRenderVisibility()
+        visibility.frame = CGRect(x: 0, y: 100, width: 300, height: 200)
+        XCTAssertFalse(visibility.visible(in: CGRect(x: 0, y: 80, width: 0, height: 600)))
+        XCTAssertTrue(visibility.visible(in: CGRect(x: 0, y: 80, width: 300, height: 600)))
+        visibility.frame = CGRect(x: 500, y: 100, width: 300, height: 200)
+        XCTAssertTrue(visibility.visible(in: CGRect(x: 0, y: 80, width: 300, height: 600)), "An iPad sidebar offset must not hide a vertically visible message")
+        visibility.frame = CGRect(x: 0, y: 5000, width: 300, height: 200)
+        XCTAssertFalse(visibility.visible(in: CGRect(x: 0, y: 80, width: 300, height: 600)))
+        XCTAssertTrue(visibility.visible(in: nil))
+        let owner = NativeMessageRenderViewport()
+        visibility.frame = CGRect(x: 0, y: 2000, width: 300, height: 200)
+        visibility.bind(owner)
+        owner.update(NativeScrollSnapshot(offset: 0, contentHeight: 10000, viewportHeight: 600, viewportWidth: 300, viewportTop: 80))
+        XCTAssertFalse(visibility.isVisible)
+        owner.update(NativeScrollSnapshot(offset: 1900, contentHeight: 10000, viewportHeight: 600, viewportWidth: 300, viewportTop: 80))
+        XCTAssertTrue(visibility.isVisible, "UIKit offset changes must admit a row without a SwiftUI frame change")
+        owner.update(NativeScrollSnapshot(offset: 4000, contentHeight: 10000, viewportHeight: 600, viewportWidth: 300, viewportTop: 80))
+        XCTAssertFalse(visibility.isVisible)
+        visibility.detach()
+    }
     @MainActor func testSettledMirrorAllowsDelayedPageNavigationWithoutTrustedInput() throws {
         let shared = SharedAppStore()
         let entries = [BrowserHistoryEntry(id: "one", url: "https://example.test/one", title: "One")]

@@ -141,12 +141,14 @@ struct ProteusRoot: View {
                                      "text": .string(heavy ? "Message \(index): " + String(repeating: "Rich **history** content. ", count: varied ? 240 : 24) : "Synthetic message \(index): a short bounded-history fixture."),
                                      "at": .string("2026-10-05T21:00:00Z")])
                         }
-                        let run: JSON = .object(["id": .string("many-chat"), "title": .string(heavy ? "Heavy fixture" : "Many fixture"),
+                        // Workloads have distinct durable bookmark/draft scopes.
+                        let fixtureID = heavy ? "history-workload-1000" : "history-workload-100"
+                        let run: JSON = .object(["id": .string(fixtureID), "title": .string(heavy ? "Heavy fixture" : "Many fixture"),
                             "status": .string("completed"), "eventStart": .number(0), "events": .array(events),
                             "usage": .object(["observed": .bool(true), "inputTokens": .number(123456), "outputTokens": .number(6789)]),
                             "schedule": .object(["provider": .string("rehearsal")])])
                         remote.state = .object(["runs": .array([run]), "runCount": .number(1), "attentionCount": .number(0), "schedules": .array([])])
-                        remote.chats["many-chat"] = run
+                        remote.chats[fixtureID] = run
                         remote.flushCache()
                         return
                     }
