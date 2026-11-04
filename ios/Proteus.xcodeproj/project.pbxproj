@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		B3F241001122334455660003 = {isa = PBXBuildFile; fileRef = B3F241001122334455660004; };
+		B3F241001122334455660001 = {isa = PBXBuildFile; fileRef = B3F241001122334455660002; };
 		B2F241001122334455660021 = {isa = PBXBuildFile; fileRef = B2F241001122334455660022; };
 		B2F241001122334455660019 /* NativeSharedDraftText.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2F241001122334455660020; };
 		B2F241001122334455660015 = {isa = PBXBuildFile; fileRef = B2F241001122334455660016; };
@@ -74,6 +76,8 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		B3F241001122334455660004 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NativeRemoteStateField.swift; path = Proteus/Services/State/NativeRemoteStateField.swift; sourceTree = SOURCE_ROOT; };
+		B3F241001122334455660002 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NativeGrowingReplyEditor.swift; path = Proteus/Features/Chats/Views/NativeGrowingReplyEditor.swift; sourceTree = SOURCE_ROOT; };
 		B2F241001122334455660022 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NativeAddressCompletion.swift; path = Proteus/Features/Browser/Views/NativeAddressCompletion.swift; sourceTree = SOURCE_ROOT; };
 		B2F241001122334455660020 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NativeSharedDraftText.swift; path = Proteus/Services/State/NativeSharedDraftText.swift; sourceTree = SOURCE_ROOT; };
 		B2F241001122334455660016 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NativeStoredAttachmentViewer.swift; path = Proteus/Features/Chats/Views/NativeStoredAttachmentViewer.swift; sourceTree = SOURCE_ROOT; };
@@ -240,6 +244,7 @@
 			isa = PBXGroup;
 			children = (
 				9A814582040CD2B969E3FED0 /* ChatViews.swift */,
+				B3F241001122334455660002 /* NativeGrowingReplyEditor.swift */,
 				D041375426F54E73AAE56904 /* NativeUserQuestionsView.swift */,
 				F2C219FBBECD427ED9810FAF /* ToolActivityView.swift */,
 			);
@@ -377,6 +382,7 @@
 			isa = PBXGroup;
 			children = (
 				754660009D54CA67C3B12C53 /* SharedAppStore.swift */,
+				B3F241001122334455660004 /* NativeRemoteStateField.swift */,
 			);
 			path = State;
 			sourceTree = "<group>";
@@ -553,6 +559,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B3F241001122334455660003,
+				B3F241001122334455660001,
 				5F7A96C7CCAC62FF1B3C0FE2 /* ChatViews.swift in Sources */,
 				D041375426F54E73AAE56901 /* NativeUserQuestion.swift in Sources */,
 				D041375426F54E73AAE56903 /* NativeUserQuestionsView.swift in Sources */,

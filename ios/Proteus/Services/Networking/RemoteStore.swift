@@ -45,7 +45,17 @@ struct RemoteHostInfo: Equatable {
 /// Per-property observation: a view redraws only when the host values it reads change.
 /// Streaming one chat no longer invalidates every view that holds this store.
 @MainActor @Observable final class RemoteStore {
-    var state: JSON = .null { didSet { catalogCache = nil } }
+    var state: JSON = .null { didSet {
+        for (key, field) in stateFields where field.value != state[key] { field.value = state[key] }
+        if oldValue["workspaceProjects"] != state["workspaceProjects"] { catalogCache = nil }
+    } }
+    @ObservationIgnored private var stateFields: [String: NativeRemoteStateField] = [:]
+    /// Presentation reads subscribe to a single top-level section. Raw state remains
+    /// available for serialization and legacy consumers during incremental migration.
+    func stateValue(_ key: String) -> JSON {
+        if let field = stateFields[key] { return field.value }
+        let field = NativeRemoteStateField(_state[key]); stateFields[key] = field; return field.value
+    }
     /// Rebuilt only when host state changes; sidebar rows and chat filters read it per item.
     @ObservationIgnored private var catalogCache: NativeProjectCatalog?
     var chats: [String: JSON] = [:]
@@ -76,7 +86,7 @@ struct RemoteHostInfo: Equatable {
     private let legacyCredentials: Bool
     private(set) var connection: DeviceConnection?
     private var invite: JSON?
-    var hostInfo: RemoteHostInfo { RemoteHostInfo(state: state) }
+    var hostInfo: RemoteHostInfo { RemoteHostInfo(state: .object(["hostName": stateValue("hostName"), "hostPlatform": stateValue("hostPlatform"), "hostArchitecture": stateValue("hostArchitecture")])) }
     var displayName: String { hostInfo.displayName }
     var pairingLabel: String { invite?["label"].string ?? "" }
     private var challenge = ""
@@ -114,10 +124,10 @@ struct RemoteHostInfo: Equatable {
         }
     }
     var projectCatalog: NativeProjectCatalog {
-        if let catalogCache { _ = state; return catalogCache } // Reading state keeps observation intact.
-        let catalog = NativeProjectCatalog(raw: state["workspaceProjects"]); catalogCache = catalog; return catalog
+        if let catalogCache { _ = stateValue("workspaceProjects"); return catalogCache } // Track only catalog changes.
+        let catalog = NativeProjectCatalog(raw: stateValue("workspaceProjects")); catalogCache = catalog; return catalog
     }
-    var supportsProjects: Bool { state["capabilities"].array.contains(.string("projects.v1")) && projectCatalog.isValid }
+    var supportsProjects: Bool { stateValue("capabilities").array.contains(.string("projects.v1")) && projectCatalog.isValid }
     private func acceptProjectCatalog(_ value: JSON) throws {
         guard NativeProjectCatalog(raw: value).isValid else { throw RemoteError(message: "The computer returned an invalid project catalog. Saved projects have been retained.") }
         var snapshot = state.object; snapshot["workspaceProjects"] = value; state = .object(snapshot); saveCache()
@@ -236,7 +246,9 @@ struct RemoteHostInfo: Equatable {
                     let data: Data
                     switch message { case .data(let value): data = value; case .string(let value): data = Data(value.utf8); @unknown default: continue }
                     // Decode off the main actor; the loop still processes one message at a time.
-                    try await receive(Self.decoded(data))
+                    let packet = try await Self.decoded(data)
+                    guard generation == current, self.socket === task else { return }
+                    try await receive(packet)
                 }
             } catch {
                 if generation == current && self.socket === task {
@@ -267,7 +279,7 @@ struct RemoteHostInfo: Equatable {
     }
     /// Large owner payloads (state, chat history) are decrypted and decoded on a
     /// background executor so scrolling and typing are not blocked while chats stream.
-    nonisolated static func decoded(_ data: Data) async throws -> JSON { try await Task.detached(priority: .userInitiated) { try JSONDecoder().decode(JSON.self, from: data) }.value }
+    nonisolated static func decoded(_ data: Data) async throws -> JSON { try await Task.detached(priority: .userInitiated) { try JSON.decode(data) }.value }
     nonisolated static func opened(_ box: String, key: String, aad: String) async throws -> JSON { try await Task.detached(priority: .userInitiated) { try RemoteCrypto.open(box, key: key, aad: aad) }.value }
     func receive(_ packet: JSON) async throws {
         switch packet["type"].string {
@@ -300,8 +312,9 @@ struct RemoteHostInfo: Equatable {
             Task { await refresh(); if let selectedChat { await openChat(selectedChat) }; await retryPending(retainedCommands) }
         case "data":
             guard let connection, packet["seq"].int == incoming + 1 else { throw RemoteError(message: "Invalid message sequence.") }
-            let seq = packet["seq"].int
+            let seq = packet["seq"].int, receivedGeneration = generation
             let value = try await Self.opened(packet["box"].string, key: connection.key, aad: "\(prefix):host:\(seq)")
+            guard receivedGeneration == generation else { return }
             guard packet["seq"].int == incoming + 1, self.connection?.hostId == connection.hostId else { throw RemoteError(message: "Invalid message sequence.") }
             incoming = seq
             if value["type"].string == "revoked" {
@@ -397,7 +410,7 @@ struct RemoteHostInfo: Equatable {
         do { let value = try await request("sync", ["cursor": .string(cursor)]); cursor = value["cursor"].string; updateState(value["state"]); saveCache() }
         catch { self.error = error.localizedDescription }
     }
-    private func updateState(_ value: JSON) {
+    func updateState(_ value: JSON) {
         // Keep already fetched older run summaries when receiving the newest page.
         var object = value.object; let ids = Set(value["runs"].array.map { $0["id"].string })
         object["runs"] = .array(value["runs"].array + state["runs"].array.filter { !ids.contains($0["id"].string) })

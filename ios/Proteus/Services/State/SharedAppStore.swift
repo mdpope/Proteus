@@ -831,6 +831,11 @@ let nativeFixtureRelayOrigin = ""
             if remaining.isEmpty {
                 let complete = try await completeNavigationLists(response, remote: config.remote, kind: config.kind, scopeID: config.id)
                 if contentPending[scope] == nil { applyContentTabs(complete, scope: scope) }
+                else {
+                    // New intent can arrive while optional history hydration awaits.
+                    // Its first flush sees contentBusy; hand it back after this one exits.
+                    Task { await self.flushContentTabs(scope) }
+                }
             } else {
                 if response["revision"].int >= (contentSnapshots[scope]?["revision"].int ?? -1) { contentSnapshots[scope] = response }
                 if Self.isOrganizationalScope(scope) { workspaceContentDescriptors[scope] = Self.projectContentOperations(remaining, onto: response["tabs"].array) }
@@ -1626,7 +1631,9 @@ let nativeFixtureRelayOrigin = ""
         if let requested = entry.requestedURL, Self.historyURL(requested) != nil { fields["requestedURL"] = .string(requested) }
         let operation: JSON = .object(fields)
         browserOperations[tab.id] = operation
-        if contentSync[scope] != nil {
+        // The transport binding is transient (absent after restart/background).
+        // Persist ordered navigation intent before a binding is available again.
+        if tab.scope != "main", contentSync[scope] != nil || contentHosts[scope] != nil || tab.ownerHostId != nil {
             contentPending[scope, default: []].append(operation); saveDocumentTabs()
             Task { await flushContentTabs(scope) }
         }
