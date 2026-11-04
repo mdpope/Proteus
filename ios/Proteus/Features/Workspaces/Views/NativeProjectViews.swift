@@ -28,7 +28,7 @@ struct NativeWorkspaceView: View {
             }
         }.onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame = $0 }
         .onAppear { reconcile() }
-        .onChange(of: store.state["workspaceProjects"]) { _, _ in reconcile() }
+        .onChange(of: store.stateValue("workspaceProjects")) { _, _ in reconcile() }
     }
     private func reconcile() {
         guard store.supportsProjects else { return }
@@ -38,7 +38,7 @@ struct NativeWorkspaceView: View {
         let legacy = store.draft("workspace-navigation:" + workspaceID)
         var migrated = Set<String>()
         for chatID in legacy["chats"].array.map(\.string) {
-            let run = store.chats[chatID] ?? store.state["runs"].array.first { $0["id"].string == chatID } ?? .null
+            let run = store.chats[chatID] ?? store.stateValue("runs").array.first { $0["id"].string == chatID } ?? .null
             let member = store.projectCatalog.membership(for: run)
             guard member["workspaceId"].string == workspaceID, let project = store.projectCatalog.project(id: member["projectId"].string, workspaceID: workspaceID) else { continue }
             let key = "project-navigation:" + project["id"].string
@@ -122,7 +122,7 @@ struct NativeProjectsView: View {
     private func reorder(_ index: Int, _ delta: Int) { guard rows.indices.contains(index + delta) else { return }; mutate(["action": .string("reorder"), "projectId": rows[index]["id"], "targetId": rows[index + delta]["id"], "after": .bool(delta > 0)]) }
     private func mutate(_ values: [String: JSON], dismissEditor: Bool = false) {
         busy = true; failure = ""
-        Task { defer { busy = false }; do { var args = values; args["workspaceId"] = .string(workspaceID); if args["expectedRevision"] == nil { args["expectedRevision"] = store.state["workspaceProjects"]["revision"] }; _ = try await store.updateProjects(args); if dismissEditor { showEditor = false } } catch { failure = error.localizedDescription } }
+        Task { defer { busy = false }; do { var args = values; args["workspaceId"] = .string(workspaceID); if args["expectedRevision"] == nil { args["expectedRevision"] = store.stateValue("workspaceProjects")["revision"] }; _ = try await store.updateProjects(args); if dismissEditor { showEditor = false } } catch { failure = error.localizedDescription } }
     }
 }
 
@@ -131,14 +131,14 @@ struct NativeSourceLibraryView: View {
     @State private var path = ""
     @State private var failure = ""
     @State private var busy = false
-    private var sources: [JSON] { store.state["workspaceProjects"]["sourceLibrary"].array.filter { $0["removedAt"].string.isEmpty } }
+    private var sources: [JSON] { store.stateValue("workspaceProjects")["sourceLibrary"].array.filter { $0["removedAt"].string.isEmpty } }
     var body: some View {
         NativeList {
             Section("Source library · " + store.displayName) {
                 Text("Register folders on this computer, then choose how their sources load in each workspace’s Configuration. Registration grants no folder access.").font(.caption).foregroundStyle(.secondary)
                 if !store.connected { Text("Offline · cached sources").foregroundStyle(.orange) }
                 if !failure.isEmpty { Text(failure).foregroundStyle(.orange) }
-                if store.state["capabilities"].array.contains(.string("source-library.v1")) {
+                if store.stateValue("capabilities").array.contains(.string("source-library.v1")) {
                     TextField("Folder path on " + store.displayName, text: $path).textInputAutocapitalization(.never).autocorrectionDisabled()
                     Button("Register source folder") { mutate(["action": .string("add"), "path": .string(path)]) }.disabled(path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !store.connected || busy)
                 } else { Text("Update this computer to manage its global source library. Existing sources remain in workspace Configuration.").font(.caption) }
@@ -154,7 +154,7 @@ struct NativeSourceLibraryView: View {
             }
         }
     }
-    private func mutate(_ values: [String: JSON]) { busy = true; failure = ""; Task { defer { busy = false }; do { var args = values; args["expectedRevision"] = store.state["workspaceProjects"]["revision"]; _ = try await store.updateSources(args); path = "" } catch { failure = error.localizedDescription } } }
+    private func mutate(_ values: [String: JSON]) { busy = true; failure = ""; Task { defer { busy = false }; do { var args = values; args["expectedRevision"] = store.stateValue("workspaceProjects")["revision"]; _ = try await store.updateSources(args); path = "" } catch { failure = error.localizedDescription } } }
 }
 
 // Project recents are history shortcuts; open-tab navigation stays in the strip/overview.
@@ -268,7 +268,7 @@ struct NativeWorkspaceTree: View {
             return JSON.object(row)
         }
         var chats = Set(items.filter { $0["type"].string == "chat" }.map { $0["chatId"].string })
-        for run in remote.allRuns + remote.state["runs"].array {
+        for run in remote.allRuns + remote.stateValue("runs").array {
             let member = remote.projectCatalog.membership(for: run)
             guard !run["archived"].bool, run["archivedAt"].string.isEmpty,
                   member["workspaceId"].string == workspace.workspaceID, member["projectId"].string == project["id"].string,
