@@ -205,7 +205,7 @@ async function renderRemoteWorkspace(tab){
   catch(error){if(area.isConnected)area.innerHTML='<p class="banner">'+esc(error.message)+'</p>';return true;}
   if(ui.state.tab!==target||!area.isConnected)return true;
   const rows=()=>ui.state.tabs.filter(child=>child.parentId===tab.id).map(child=>({...child,title:child.label,url:child.info?.url||child.remotePreviewURL||'',openedAt:child.info?.openedAt||child.openedAt,lastActivityAt:child.info?.lastActivityAt||child.lastActivityAt}));
-  mountWorkspaceTabs(area,{tabs:rows(),allTabs:rows,selectionKey:tab.id,bulk:ui.manageWorkspaceTabs,toolbar:document.querySelector(".workspace-page-switch"),act:(action,child)=>ui.manageWorkspaceTab(action,child.id),refresh:rows,notify:ui.toast,preview:true,allowReorder:false});
+  mountWorkspaceTabs(area,{notice:ui.windowRestoreNotice,tabs:rows(),allTabs:rows,selectionKey:tab.id,bulk:ui.manageWorkspaceTabs,toolbar:document.querySelector(".workspace-page-switch"),act:(action,child)=>ui.manageWorkspaceTab(action,child.id),refresh:rows,notify:ui.toast,preview:true,allowReorder:false});
  }else ui.renderChats(false,true,{container:area,workspaceId:workspace.id,workspaceName:workspace.name,projectId:project?.id,projectName:project?.name,hostId:owner.hostId,onOpen:row=>openWorkspaceChat(tab,row)});
  return true;
 }
