@@ -116,6 +116,7 @@ struct RemoteHostInfo: Equatable {
     @ObservationIgnored private(set) var appliedStatePatchCount = 0
     @ObservationIgnored private var stateSyncInFlight = false
     @ObservationIgnored private var stateSyncGeneration: UUID?
+    @ObservationIgnored private var stateSyncWaiters: [CheckedContinuation<Void, Never>] = []
     @ObservationIgnored private var stateResyncRequested = false
     @ObservationIgnored private var cacheDirtySince: Date?
     private var cacheTimer: Task<Void, Never>?
@@ -318,7 +319,14 @@ struct RemoteHostInfo: Equatable {
             onConnected?()
             // Separate task: the receive loop must remain free to deliver these responses.
             let retainedCommands = pendingCommands
-            Task { await refresh(); if let selectedChat { await openChat(selectedChat) }; await retryPending(retainedCommands) }
+            Task {
+                // A retained sync may itself need retransmission before refresh
+                // can finish. Retry exact envelopes concurrently with that read.
+                async let retries: Void = retryPending(retainedCommands)
+                await refresh()
+                if let selectedChat { await openChat(selectedChat) }
+                await retries
+            }
         case "data":
             guard let connection, packet["seq"].int == incoming + 1 else { throw RemoteError(message: "Invalid message sequence.") }
             let seq = packet["seq"].int, receivedGeneration = generation
@@ -432,11 +440,17 @@ struct RemoteHostInfo: Equatable {
         }
     }
     func refresh(forceState: Bool = false) async {
-        if stateSyncInFlight { if forceState || stateSyncGeneration != generation { stateResyncRequested = true }; return }
+        if stateSyncInFlight {
+            if forceState || stateSyncGeneration != generation { stateResyncRequested = true }
+            await withCheckedContinuation { stateSyncWaiters.append($0) }
+            return
+        }
         stateSyncInFlight = true
         stateSyncGeneration = generation
         defer {
             stateSyncInFlight = false
+            let waiters = stateSyncWaiters; stateSyncWaiters.removeAll()
+            for waiter in waiters { waiter.resume() }
             if stateResyncRequested { stateResyncRequested = false; Task { await self.refresh(forceState: true) } }
         }
         let current = generation, stream = wireState

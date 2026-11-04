@@ -710,8 +710,8 @@ final class RemoteUITests: XCTestCase {
             let row = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", title)).firstMatch
             XCTAssertTrue(row.waitForExistence(timeout: 12)); row.tap()
             // A prior browser test may have persisted this chat's selected child tab.
-            XCTAssertTrue(app.buttons["chat-conversation-tab"].waitForExistence(timeout: 15))
-            app.buttons["chat-conversation-tab"].tap()
+            XCTAssertTrue(app.buttons["chat-mode-conversation"].waitForExistence(timeout: 15))
+            app.buttons["chat-mode-conversation"].tap()
             if UIDevice.current.userInterfaceIdiom == .phone { XCTAssertTrue(app.buttons["composer-preview"].waitForExistence(timeout: 30)); app.buttons["composer-preview"].tap() }
             let field = app.descendants(matching: .any).matching(identifier: "reply-text").firstMatch
             XCTAssertTrue(field.waitForExistence(timeout: 15)); field.tap()
@@ -736,7 +736,7 @@ final class RemoteUITests: XCTestCase {
             if app.scrollViews["chat-conversation-scroll"].exists { app.scrollViews["chat-conversation-scroll"].coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.15)).tap() }
             if let navigation = app.buttons.matching(identifier: "phone-app-navigation").allElementsBoundByIndex.first(where: { $0.isHittable }) { navigation.tap(); app.buttons["phone-nav-Home"].tap() }
             showChats(app)
-            if !app.buttons["chat-conversation-tab"].isHittable {
+            if !app.buttons["chat-mode-conversation"].isHittable {
                 let visibleRow = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", title)).allElementsBoundByIndex.first(where: { $0.isHittable })
                 try XCTUnwrap(visibleRow).tap()
             }
