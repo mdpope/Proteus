@@ -8,7 +8,8 @@
 - Soft-wrapped message drafts grow within the existing composer height budget.
 - Ignore packets decoded across connection generations; retain offline browser navigation and resume pending intent after history hydration.
 - Await replacement-connection state before releasing coalesced refresh callers.
-- Preserve owner revisions when navigation cannot queue; release mirrored-load protection for later page-driven navigation after the initial load settles.
+- Adopt acknowledged browser revisions, including owner rebases across other clients' title updates; retain ordered successor intent without predicting revisions.
+- Keep owner-mirrored redirects and titles local indefinitely until trusted page interaction or explicit navigation. Delayed SPA routes after a touch publish normally; the address bar retains the real landed URL.
 - Simulator evidence and remaining acceptance: `docs/releases/2026-11-03/ios-performance.md`.
 
 # Native follow-up, October 29, 2026 — main-thread smoothness

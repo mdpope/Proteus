@@ -7,6 +7,10 @@ the baseline accessibility failure, completed integration/follow-up journeys,
 hang-count scope and executable hashes. No distribution artifact, physical
 installation or publication was produced; the operator's phone remains unverified.
 
+The later [navigation alignment](ios-navigation-alignment.md) supersedes this record's
+settlement-based mirror rule and navigation-rebase proposal. Passive mirrors now remain
+local until trusted interaction, and queued successors adopt actual owner acknowledgements.
+
 ## Reproducible workload and measured results
 
 Run `npm run ios:test -- --device SIMULATOR --only ProteusTests/Nov3PerformanceTests`

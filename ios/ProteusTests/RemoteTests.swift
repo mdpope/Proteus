@@ -780,6 +780,9 @@ final class RemoteTests: XCTestCase {
         let shared = SharedAppStore(), id = "duplicate-navigation"
         let base = "\(nativeFixtureHTTPOrigin)/browser/spa"
         shared.browserTabs = [BrowserDescriptor(id: id, title: "SPA", url: base + "?step=1")]
+        // This test owns the initial navigation. A restored owner descriptor is
+        // now deliberately passive until trusted interaction, even without history.
+        XCTAssertTrue(shared.navigate(URL(string: base + "?step=1")!, in: id))
         let view = shared.webView(shared.browserTabs[0], allowLocalNavigation: true)
         defer { shared.unloadBrowsers() }
         XCTAssertFalse(view.allowsBackForwardNavigationGestures, "Proteus's interactive edge swipe is the single browser swipe handler")
@@ -3262,7 +3265,7 @@ extension RemoteTests {
         XCTAssertFalse(visibility.isVisible)
         visibility.detach()
     }
-    @MainActor func testSettledMirrorAllowsDelayedPageNavigationWithoutTrustedInput() throws {
+    @MainActor func testSettledMirrorKeepsDelayedPassivePageNavigationLocal() throws {
         let shared = SharedAppStore()
         let entries = [BrowserHistoryEntry(id: "one", url: "https://example.test/one", title: "One")]
         shared.browserTabs = [BrowserDescriptor(id: "settled", title: "One", url: entries[0].url, scope: "main", history: BrowserTabHistory(entries: entries, index: 0, currentEntryId: "one", revision: 4))]
@@ -3271,11 +3274,10 @@ extension RemoteTests {
         let login = URL(string: "https://example.test/login")!
         shared.completeBrowserNavigation(login, title: "Device login", in: "settled")
         XCTAssertEqual(shared.browserTabs[0].url, entries[0].url)
-        shared.settleMirroredBrowserLoad("settled", url: login)
         shared.completeBrowserNavigation(login, title: "Duplicate KVO", in: "settled", sameDocumentObservation: true)
         XCTAssertEqual(shared.browserTabs[0].url, entries[0].url)
         shared.completeBrowserNavigation(URL(string: "https://example.test/delayed-route")!, title: "Delayed SPA route", in: "settled", sameDocumentObservation: true)
-        XCTAssertEqual(shared.browserTabs[0].url, "https://example.test/delayed-route")
+        XCTAssertEqual(shared.browserTabs[0].url, entries[0].url, "Settling and delayed passive routing cannot release the mirror")
         XCTAssertEqual(shared.browserTabs[0].history?.revision, 4, "Local-only navigation must not advance an owner revision")
     }
     @MainActor func testPreOwnerNavigationAdoptsFinalURLAndHistoryInsteadOfBlankTab() throws {

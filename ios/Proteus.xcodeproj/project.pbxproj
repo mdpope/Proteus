@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		B4F241001122334455660004 = {isa = PBXBuildFile; fileRef = B4F241001122334455660003; };
+		B4F241001122334455660002 = {isa = PBXBuildFile; fileRef = B4F241001122334455660001; };
 		C017B0001122334455660002 = {isa = PBXBuildFile; fileRef = C017B0001122334455660001; };
 		B3F24100112233445566001A = {isa = PBXBuildFile; fileRef = B3F241001122334455660019; };
 		B3F241001122334455660016 = {isa = PBXBuildFile; fileRef = B3F241001122334455660015; };
@@ -87,6 +89,8 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		B4F241001122334455660003 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NativeBrowserNavigationTests.swift; path = ProteusTests/NativeBrowserNavigationTests.swift; sourceTree = SOURCE_ROOT; };
+		B4F241001122334455660001 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NativeBrowserNavigationAcknowledgement.swift; path = Proteus/Services/State/NativeBrowserNavigationAcknowledgement.swift; sourceTree = SOURCE_ROOT; };
 		C017B0001122334455660001 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReleaseJourney.swift; sourceTree = "<group>"; };
 		B3F241001122334455660019 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeProjectionTests.swift; sourceTree = "<group>"; };
 		B3F241001122334455660015 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeContentTabProjection.swift; sourceTree = "<group>"; };
@@ -178,6 +182,7 @@
 			children = (
 				BCFA7F851DB57CA3BDECDDF2 /* MarkdownTests.swift */,
 				FD304CE5E2D4AA434F2B24CC /* RemoteTests.swift */,
+				B4F241001122334455660003 /* NativeBrowserNavigationTests.swift */,
 				B3F24100112233445566000B /* StateStreamTests.swift */,
 				B3F241001122334455660019 /* NativeProjectionTests.swift */,
 				B3F241001122334455660008 /* state-patch-vectors.json */,
@@ -412,6 +417,7 @@
 			children = (
 				754660009D54CA67C3B12C53 /* SharedAppStore.swift */,
 				B3F241001122334455660004 /* NativeRemoteStateField.swift */,
+				B4F241001122334455660001 /* NativeBrowserNavigationAcknowledgement.swift */,
 				B3F241001122334455660006,
 			);
 			path = State;
@@ -627,6 +633,7 @@
 				4FB84798FFDA898F674E687B /* LifeForms.swift in Sources */,
 				891380DFDF602E8C8B8B7A29 /* LifeFixtures.swift in Sources */,
 				B3F241001122334455660016 /* NativeContentTabProjection.swift in Sources */,
+				B4F241001122334455660002 /* NativeBrowserNavigationAcknowledgement.swift in Sources */,
 				B3F241001122334455660018 /* NativeChatTimestamp.swift in Sources */,
 				B3F241001122334455660014 /* NativePushTypingFixture.swift in Sources */,
 				5740FAB8AE1ED396820BEC60 /* ToolActivityView.swift in Sources */,
@@ -650,6 +657,7 @@
 			files = (
 				A4B6B84AF204B4F3F0EC0971 /* MarkdownTests.swift in Sources */,
 				54B2034637BB14023E216F1B /* RemoteTests.swift in Sources */,
+				B4F241001122334455660004 /* NativeBrowserNavigationTests.swift in Sources */,
 				B3F24100112233445566001A /* NativeProjectionTests.swift in Sources */,
 				B3F24100112233445566000A,
 			);
