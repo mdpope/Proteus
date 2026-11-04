@@ -11,6 +11,10 @@ The final web build is unchanged after qualification. Its first capture stopped 
 
 Both physical iOS devices and shared Preview simulators retain build `2611.2.10`; they have not been reinstalled. General membership matched the owner in the completed comparison. The actual iPhone test message arrived, but the operator reports poor performance, missing composer growth and one residual disconnect. Those issues and the Mnemosyne redesign are explicitly deferred to Nov 3; see the linked issue and design handoff records. No sustained-stability claim is made.
 
+Public retention now contains only the final Mac, Linux and Windows release directories. Seven signed superseded releases were retired after digest-bound inventory review and verification of every current file; approximately 2.76 GB was reclaimed. Minimal audit envelopes and receipts remain. Catalog recovery retains the two newest verified dates. Device recovery inventories are separate and were not altered by public cleanup.
+
+A transitional 381-second sample measured approximately 2.94 MB/s outbound, 583 B/s inbound, no congestion events and no recorded closes. Some consumers still ran the prior build during that sample; it is not steady-state traffic acceptance or proof that sustained stability is fixed.
+
 The historical sections below retain earlier evidence; they do not supersede this final status. Nov 2 remains open until rollout and closeout verify.
 
 ## Historical R37 qualification checkpoint
