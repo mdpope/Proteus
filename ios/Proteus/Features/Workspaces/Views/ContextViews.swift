@@ -485,7 +485,7 @@ struct NativeWorkspaceIdentity: Identifiable, Hashable {
         return ""
     }
     @MainActor static func all(_ destinations: DestinationStore) -> [Self] {
-        destinations.destinations.flatMap { host in (destinations.remote(for: host.id)?.state["context"]["workspaces"].array ?? []).map { Self(hostID: host.id, hostName: host.label, profile: $0) } }.sorted { $0.profile["name"].string.localizedStandardCompare($1.profile["name"].string) == .orderedAscending }
+        destinations.destinations.flatMap { host in (destinations.remote(for: host.id)?.stateValue("context")["workspaces"].array ?? []).map { Self(hostID: host.id, hostName: host.label, profile: $0) } }.sorted { $0.profile["name"].string.localizedStandardCompare($1.profile["name"].string) == .orderedAscending }
     }
     @MainActor static func recent(_ destinations: DestinationStore) -> [Self] {
         Array(all(destinations).sorted { (destinations.remote(for: $0.hostID)?.draft("workspace-last-opened:" + $0.workspaceID).string ?? "") > (destinations.remote(for: $1.hostID)?.draft("workspace-last-opened:" + $1.workspaceID).string ?? "") }.prefix(7))

@@ -1,7 +1,49 @@
 import XCTest
+import Observation
+import Combine
 @testable import Proteus
 
 final class NativeProjectionTests: XCTestCase {
+    @MainActor func testChromePublishesTransitionsWithoutPublishingNoopAssignments() {
+        let chrome = NativePhoneChrome(), publications = NSMutableArray()
+        let token = chrome.objectWillChange.sink { publications.add(1) }
+        chrome.drawer = false; chrome.controlsHidden = false
+        XCTAssertEqual(publications.count, 0)
+        chrome.drawer = true; chrome.drawer = true
+        chrome.controlsHidden = true; chrome.controlsHidden = true
+        XCTAssertEqual(publications.count, 2)
+        withExtendedLifetime(token) {}
+    }
+    @MainActor func testAttentionTitleIndexIgnoresStreamingTextAndKeepsLiveRenames() {
+        let remote = RemoteStore(connection: nil, legacyCredentials: false)
+        remote.chats["a"] = .object(["title": .string("Original"), "events": .array([])])
+        let invalidated = ProjectionInvalidation()
+        withObservationTracking { XCTAssertEqual(remote.chatTitleIndex["a"], .string("Original")) } onChange: { invalidated.mark() }
+        remote.chats["a"] = .object(["title": .string("Original"), "events": .array([.object(["text": .string("Streaming")])])])
+        XCTAssertFalse(invalidated.changed)
+        remote.chats["a"] = .object(["title": .string("Renamed"), "events": .array([])])
+        XCTAssertTrue(invalidated.changed)
+        XCTAssertEqual(remote.chatTitleIndex["a"], .string("Renamed"))
+    }
+    @MainActor func testHomeAttentionAndExactBadgesIgnoreUnrelatedRunProgress() {
+        let remote = RemoteStore(connection: nil, legacyCredentials: false)
+        var value: [String: JSON] = ["runningChatCount": .number(1), "attentionCount": .number(0), "runCount": .number(1), "schedules": .array([]), "runs": .array([.object(["id": .string("stream"), "status": .string("running")])])]
+        remote.updateState(.object(value))
+        let invalidated = ProjectionInvalidation()
+        withObservationTracking {
+            XCTAssertTrue(remote.attentionRunSummaries.isEmpty)
+            XCTAssertEqual(remote.navigationCountState["runningChatCount"], .number(1))
+        } onChange: { invalidated.mark() }
+        value["runs"] = .array([.object(["id": .string("stream"), "status": .string("running"), "progress": .object(["tick": .number(1)]), "updatedAt": .string("2026-11-03T01:00:00Z")])])
+        remote.updateState(.object(value))
+        XCTAssertFalse(invalidated.changed)
+        value["attentionCount"] = .number(1)
+        value["runs"] = .array([.object(["id": .string("stream"), "status": .string("awaiting_input"), "title": .string("Live question"), "updatedAt": .string("2026-11-03T01:01:00Z")])])
+        remote.updateState(.object(value))
+        XCTAssertTrue(invalidated.changed)
+        XCTAssertEqual(remote.attentionRunSummaries.first?["title"], .string("Live question"))
+        XCTAssertEqual(remote.attentionRunSummaries.first?["updatedAt"], .string("2026-11-03T01:01:00Z"))
+    }
     func testOrderingKeepsOwnerIdentityDocumentAliasesAndUnknownDescriptors() {
         let browser: JSON = .object(["id": .string("owner-browser"), "type": .string("browser"), "extension": .null])
         let document: JSON = .object(["id": .string("document:note"), "documentId": .string("note"), "type": .string("document")])
@@ -42,4 +84,11 @@ final class NativeProjectionTests: XCTestCase {
             }
         }
     }
+}
+
+private final class ProjectionInvalidation: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = false
+    var changed: Bool { lock.lock(); defer { lock.unlock() }; return value }
+    func mark() { lock.lock(); value = true; lock.unlock() }
 }

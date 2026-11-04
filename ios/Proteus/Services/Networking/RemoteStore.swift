@@ -46,10 +46,37 @@ struct RemoteHostInfo: Equatable {
 /// Streaming one chat no longer invalidates every view that holds this store.
 @MainActor @Observable final class RemoteStore {
     var state: JSON = .null { didSet {
+        updateTitleProjection()
+        if let attentionRunField, oldValue["runs"] != state["runs"] {
+            let next = NativeRunAttentionProjection.value(state["runs"])
+            if attentionRunField.value != next { attentionRunField.value = next }
+        }
         for (key, field) in stateFields where field.value != state[key] { field.value = state[key] }
         if oldValue["workspaceProjects"] != state["workspaceProjects"] { catalogCache = nil }
     } }
     @ObservationIgnored private var stateFields: [String: NativeRemoteStateField] = [:]
+    @ObservationIgnored private var attentionRunField: NativeRemoteStateField?
+    @ObservationIgnored private var titleField: NativeRemoteStateField?
+    var chatTitleIndex: [String: JSON] {
+        if titleField == nil { titleField = NativeRemoteStateField(NativeRunAttentionProjection.titles(state: _state, allRuns: _allRuns, chats: _chats)) }
+        return titleField!.value.object
+    }
+    private func updateTitleProjection() {
+        guard let titleField else { return }
+        let next = NativeRunAttentionProjection.titles(state: _state, allRuns: _allRuns, chats: _chats)
+        if titleField.value != next { titleField.value = next }
+    }
+    var attentionRunSummaries: [JSON] {
+        if attentionRunField == nil { attentionRunField = NativeRemoteStateField(NativeRunAttentionProjection.value(_state["runs"])) }
+        return attentionRunField!.value.array
+    }
+    /// Badges subscribe to their count fields, preserving old-owner fallback
+    /// without observing every run/progress push on owners with exact counts.
+    var navigationCountState: JSON {
+        var fields = Dictionary(uniqueKeysWithValues: ["runningChatCount", "attentionCount", "runCount", "schedules"].map { ($0, stateValue($0)) })
+        if fields["runningChatCount"] == .null || fields["attentionCount"] == .null { fields["runs"] = stateValue("runs") }
+        return .object(fields)
+    }
     /// Presentation reads subscribe to a single top-level section. Raw state remains
     /// available for serialization and legacy consumers during incremental migration.
     func stateValue(_ key: String) -> JSON {
@@ -60,8 +87,8 @@ struct RemoteHostInfo: Equatable {
     }
     /// Rebuilt only when host state changes; sidebar rows and chat filters read it per item.
     @ObservationIgnored private var catalogCache: NativeProjectCatalog?
-    var chats: [String: JSON] = [:]
-    var allRuns: [JSON] = []
+    var chats: [String: JSON] = [:] { didSet { updateTitleProjection() } }
+    var allRuns: [JSON] = [] { didSet { updateTitleProjection() } }
     private var allRunOffset = 0
     var providerStatuses: [String: JSON] = [:]
     var models: [JSON] = []

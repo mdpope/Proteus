@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		C017B0001122334455660002 = {isa = PBXBuildFile; fileRef = C017B0001122334455660001; };
 		B3F24100112233445566001A = {isa = PBXBuildFile; fileRef = B3F241001122334455660019; };
 		B3F241001122334455660016 = {isa = PBXBuildFile; fileRef = B3F241001122334455660015; };
 		B3F241001122334455660018 = {isa = PBXBuildFile; fileRef = B3F241001122334455660017; };
@@ -86,6 +87,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		C017B0001122334455660001 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReleaseJourney.swift; sourceTree = "<group>"; };
 		B3F241001122334455660019 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeProjectionTests.swift; sourceTree = "<group>"; };
 		B3F241001122334455660015 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeContentTabProjection.swift; sourceTree = "<group>"; };
 		B3F241001122334455660017 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeChatTimestamp.swift; sourceTree = "<group>"; };
@@ -156,6 +158,7 @@
 			isa = PBXGroup;
 			children = (
 				B5F927DCF4BF815F06256F2A /* RemoteUITests.swift */,
+				C017B0001122334455660001 /* ReleaseJourney.swift */,
 			);
 			path = ProteusUITests;
 			sourceTree = "<group>";
@@ -657,6 +660,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				6BF7A7A42FCA9E2E7B40DD85 /* RemoteUITests.swift in Sources */,
+				C017B0001122334455660002 /* ReleaseJourney.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

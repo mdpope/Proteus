@@ -52,7 +52,7 @@ private let nativeFixtureRelayOrigin = ProcessInfo.processInfo.environment["PROT
 
 /// Pairs through the visible Connections form. Visited phone areas stay mounted and a
 /// restored area can hide the form, so reveal Connections first when needed.
-@MainActor private func submitPairing(_ app: XCUIApplication, code: String) {
+@MainActor func submitPairing(_ app: XCUIApplication, code: String) {
     func visible() -> XCUIElement? { app.descendants(matching: .any).matching(identifier: "pairing-link").allElementsBoundByIndex.first { $0.isHittable } }
     _ = app.descendants(matching: .any).matching(identifier: "pairing-link").firstMatch.waitForExistence(timeout: 15)
     if visible() == nil, let navigation = app.buttons.matching(identifier: "phone-app-navigation").allElementsBoundByIndex.first(where: { $0.isHittable }) {
@@ -80,6 +80,9 @@ private let nativeFixtureRelayOrigin = ProcessInfo.processInfo.environment["PROT
 }
 
 final class RemoteUITests: XCTestCase {
+    @MainActor func testReleaseBaselineJourney() async throws { try await NativeReleaseJourney.run(bundle: "org.proteusapp.proteus.journey-baseline") }
+    @MainActor func testReleaseCurrentJourney() async throws { try await NativeReleaseJourney.run(bundle: "org.proteusapp.proteus.journey-current") }
+    @MainActor func testReleaseAfterJourney() async throws { try await NativeReleaseJourney.run(bundle: "org.proteusapp.proteus.journey-after") }
     @MainActor func testLiveSimulatorSavedOwnerReconnect() throws {
         guard let bridge = ProcessInfo.processInfo.environment["PROTEUS_LIVE_SIMULATOR_BRIDGE"],
               URL(string: bridge)?.host == "127.0.0.1" else {

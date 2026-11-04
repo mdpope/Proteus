@@ -175,9 +175,17 @@ struct NativePhoneTab: Identifiable {
 }
 
 @MainActor final class NativePhoneChrome: ObservableObject {
-    @Published var controlsHidden = false
+    @Published private var storedControlsHidden = false
+    var controlsHidden: Bool {
+        get { storedControlsHidden }
+        set { if storedControlsHidden != newValue { storedControlsHidden = newValue } }
+    }
     @Published var browserSurfaceScope: String?
-    @Published var drawer = false
+    @Published private var storedDrawer = false
+    var drawer: Bool {
+        get { storedDrawer }
+        set { if storedDrawer != newValue { storedDrawer = newValue } }
+    }
     @Published var overview = false
     @Published var overviewProgress: CGFloat = 0
     @Published var currentID = ""

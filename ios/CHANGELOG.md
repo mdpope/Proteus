@@ -1,6 +1,7 @@
 ## Nov 3 — 0.2.42 source validation
 
 - Faster heterogeneous state decoding and section-level chat observation.
+- Keep shell badges, workspace identities, attention rows and attention titles subscribed to the values they display; skip redundant drawer/chrome publications while preserving live updates.
 - Index large tab projections and reuse bounded chat timestamp formatting instead of repeating list scans and formatter creation.
 - Admit message WebKit renderers from the native visible range and keep stale history-window bookmarks from hiding a nonempty conversation.
 - Negotiate versioned incremental owner state with a separate wire baseline, full recovery after gaps and debounced cache writes.
