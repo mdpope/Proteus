@@ -16,7 +16,7 @@
   "priorRequestAudit": "docs/releases/2026-11-02/prior-release-audit.md",
   "previousAcceptedSourceCommit": "4456aea8837171ba60f82775859d9ce7f4ec0810",
   "sourceCommit": "4bbec8cadc9c24916cc7514ead9b1b53f5a6051d",
-  "candidateSourceStatus": "Final R37 source4bbec8c qualified and all three OS downloads published/HTTPS verified. Build Mac and Linux installed with independently matching package hashes and owner health; full Linux history and changed reading records retain explicit limits. Secondary Mac idle and two Windows installations/acceptance remain open. Native2611.2.10 retained; Mnemosyne and residual iOS/web issues deferred to Nov3.",
+  "candidateSourceStatus": "Final R37 source4bbec8c qualified; all three OS downloads published and HTTPS verified. Build Mac, Linux and both Windows targets installed with owner health. Build Mac/Linux/primary Windows independent package identities match; Linux and primary Windows history comparisons pass. Primary Windows audit-created SQLite sidecars invalidate one recovery pending proof and repair; secondary Windows detailed preservation remains in progress. Secondary Mac waits for unrelated browser work. Native2611.2.10 retained; Mnemosyne and residual iOS/web issues deferred to Nov3. Release remains open.",
   "widerDistributionHold": {
     "active": false,
     "reason": "Operator explicitly authorizes all configured devices, web and release closeout after connection fixes."
