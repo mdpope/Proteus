@@ -111,6 +111,13 @@ struct RemoteHostInfo: Equatable {
     var onContentTabsChanged: ((JSON) -> Void)?
     private(set) var authenticationGeneration = 0
     var pendingCommandCount: Int { pendingCommands.count }
+    @ObservationIgnored private var wireState = NativeRemoteStateStream()
+    @ObservationIgnored private var appliedWireRevision: UInt64 = 0
+    @ObservationIgnored private(set) var appliedStatePatchCount = 0
+    @ObservationIgnored private var stateSyncInFlight = false
+    @ObservationIgnored private var stateSyncGeneration: UUID?
+    @ObservationIgnored private var stateResyncRequested = false
+    @ObservationIgnored private var cacheDirtySince: Date?
     private var cacheTimer: Task<Void, Never>?
     private let cacheWriter = DispatchQueue(label: "com.proteus.remote-cache", qos: .utility)
     var cacheURL: URL {
@@ -199,7 +206,7 @@ struct RemoteHostInfo: Equatable {
         let formatter = ISO8601DateFormatter(); formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         guard let expiry = formatter.date(from: value["expiresAt"].string), expiry > Date() else { throw RemoteError(message: "Pairing code expired. Create a new one on the computer.") }
         let relay = try Self.validatedRelay(value["relay"].string)
-        suspend(); if legacyCredentials { DeviceKeychain.clear() }; connection = nil; paired = false; state = .null; chats = [:]; cursor = ""; removeCache()
+        suspend(); if legacyCredentials { DeviceKeychain.clear() }; connection = nil; paired = false; wireState = NativeRemoteStateStream(); appliedWireRevision = 0; state = .null; chats = [:]; cursor = ""; removeCache()
         var normalized = value.object; normalized["relay"] = .string(relay)
         invite = .object(normalized); active = true; connect()
     }
@@ -333,7 +340,14 @@ struct RemoteHostInfo: Equatable {
                 }
             } else if value["type"].string == "event" {
                 cursor = value["cursor"].string
-                if value["event"].string == "state" { updateState(value["data"]) }
+                if value["event"].string == "state" || value["event"].string == "state.patch" {
+                    let stream = wireState, current = generation
+                    let result = value["event"].string == "state" ? await stream.full(value["data"], version: value.object["stateVersion"]?.string) : await stream.patch(value["data"])
+                    guard generation == current, wireState === stream else { return }
+                    if value["event"].string == "state.patch", case .update = result { appliedStatePatchCount &+= 1 }
+                    acceptWireState(result)
+                    return
+                }
                 if value["event"].string == "tabs" { onContentTabsChanged?(value["data"]) }
                 if value["event"].string == "run" { mergeChat(value["data"]) }
                 if value["event"].string == "chat.lifecycle" { applyLifecycle(value["data"]); Task { await refresh() } }
@@ -408,9 +422,34 @@ struct RemoteHostInfo: Equatable {
             try? await transmit(command)
         }
     }
-    func refresh() async {
-        do { let value = try await request("sync", ["cursor": .string(cursor)]); cursor = value["cursor"].string; updateState(value["state"]); saveCache() }
-        catch { self.error = error.localizedDescription }
+    private func acceptWireState(_ result: NativeRemoteStateStream.Result) {
+        switch result {
+        case .update(let value, let revision):
+            guard revision > appliedWireRevision else { return }
+            appliedWireRevision = revision; updateState(value); saveCache()
+        case .ignored: break
+        case .resync: Task { await self.refresh(forceState: true) }
+        }
+    }
+    func refresh(forceState: Bool = false) async {
+        if stateSyncInFlight { if forceState || stateSyncGeneration != generation { stateResyncRequested = true }; return }
+        stateSyncInFlight = true
+        stateSyncGeneration = generation
+        defer {
+            stateSyncInFlight = false
+            if stateResyncRequested { stateResyncRequested = false; Task { await self.refresh(forceState: true) } }
+        }
+        let current = generation, stream = wireState
+        do {
+            let args = await stream.arguments(cursor: cursor, force: forceState)
+            guard current == generation, stream === wireState else { return }
+            let reply = try await request("sync", args)
+            guard current == generation, stream === wireState else { return }
+            let result = await stream.sync(reply)
+            guard current == generation, stream === wireState else { return }
+            cursor = reply["cursor"].string
+            acceptWireState(result)
+        } catch { if current == generation { self.error = error.localizedDescription } }
     }
     func updateState(_ value: JSON) {
         // Keep already fetched older run summaries when receiving the newest page.
@@ -624,7 +663,7 @@ struct RemoteHostInfo: Equatable {
         if active && (paired || invite != nil) { retryTask?.cancel(); retryTask = Task { try? await Task.sleep(for: .seconds(3)); if !Task.isCancelled { connect() } } }
     }
     func disconnect() { sentRequests = []; capacityWaiter?.resume(); capacityWaiter = nil; generation = UUID(); readTask?.cancel(); retryTask?.cancel(); socket?.cancel(with: .goingAway, reason: nil); socket = nil; connected = false; status = paired ? "Offline · cached history" : "Not paired" }
-    func forget() { active = false; suspend(); if legacyCredentials { DeviceKeychain.clear() }; connection = nil; invite = nil; paired = false; state = .null; chats = [:]; allRuns = []; allRunOffset = 0; drafts = [:]; draftRevision &+= 1; selectedChat = nil; visibleChat = nil; chatVisibilityManaged = false; cursor = ""; cacheTimer?.cancel(); removeCache(); for c in waiting.values { c.resume(throwing: RemoteError(message: "Device forgotten.")) }; waiting.removeAll(); pendingCommands.removeAll(); timeouts.values.forEach { $0.cancel() }; timeouts.removeAll() }
+    func forget() { active = false; suspend(); if legacyCredentials { DeviceKeychain.clear() }; connection = nil; invite = nil; paired = false; wireState = NativeRemoteStateStream(); appliedWireRevision = 0; state = .null; chats = [:]; allRuns = []; allRunOffset = 0; drafts = [:]; draftRevision &+= 1; selectedChat = nil; visibleChat = nil; chatVisibilityManaged = false; cursor = ""; cacheTimer?.cancel(); removeCache(); for c in waiting.values { c.resume(throwing: RemoteError(message: "Device forgotten.")) }; waiting.removeAll(); pendingCommands.removeAll(); timeouts.values.forEach { $0.cancel() }; timeouts.removeAll() }
     // A host switch never leaves a retry behind. Commands already accepted by the host continue there.
     func suspend(reason: String = "Computer selection changed. An unconfirmed action may have reached that computer; refresh its history before retrying.") {
         flushCache(); active = false; disconnect(); sendTask?.cancel(); sendTask = nil
@@ -632,7 +671,7 @@ struct RemoteHostInfo: Equatable {
         waiting.removeAll(); pendingCommands.removeAll(); timeouts.values.forEach { $0.cancel() }; timeouts.removeAll()
     }
     func flushCache() {
-        cacheTimer?.cancel(); guard let connection else { return }
+        cacheTimer?.cancel(); cacheDirtySince = nil; guard let connection else { return }
         let payload = cachePayload(), url = cacheURL, key = connection.key
         // Lifecycle flushes wait behind queued snapshots so an older write cannot win.
         cacheWriter.sync { Self.writeCache(payload, key: key, url: url) }
@@ -662,9 +701,12 @@ struct RemoteHostInfo: Equatable {
     }
     private func saveCache() {
         cacheTimer?.cancel()
+        if cacheDirtySince == nil { cacheDirtySince = Date() }
+        let delay = min(3.0, max(0, 15 - Date().timeIntervalSince(cacheDirtySince!)))
         cacheTimer = Task {
-            try? await Task.sleep(for: .seconds(1))
+            try? await Task.sleep(for: .seconds(delay))
             guard !Task.isCancelled, let connection else { return }
+            cacheDirtySince = nil
             let payload = cachePayload(), key = connection.key, url = cacheURL
             // Encoding, encryption and disk I/O must not block the keyboard's main actor.
             cacheWriter.async { Self.writeCache(payload, key: key, url: url) }

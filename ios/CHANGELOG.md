@@ -1,8 +1,10 @@
 ## Nov 3 — 0.2.42 source validation
 
 - Faster heterogeneous state decoding and section-level chat observation.
+- Negotiate versioned incremental owner state with a separate wire baseline, full recovery after gaps and debounced cache writes.
 - Soft-wrapped message drafts grow within the existing composer height budget.
 - Ignore packets decoded across connection generations; retain offline browser navigation and resume pending intent after history hydration.
+- Preserve owner revisions when navigation cannot queue; release mirrored-load protection for later page-driven navigation after the initial load settles.
 - Simulator evidence and remaining acceptance: `docs/releases/2026-11-03/ios-performance.md`.
 
 # Native follow-up, October 29, 2026 — main-thread smoothness

@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		B3F24100112233445566000A = {isa = PBXBuildFile; fileRef = B3F24100112233445566000B; };
+		B3F241001122334455660007 = {isa = PBXBuildFile; fileRef = B3F241001122334455660008; };
+		B3F241001122334455660005 = {isa = PBXBuildFile; fileRef = B3F241001122334455660006; };
 		B3F241001122334455660003 = {isa = PBXBuildFile; fileRef = B3F241001122334455660004; };
 		B3F241001122334455660001 = {isa = PBXBuildFile; fileRef = B3F241001122334455660002; };
 		B2F241001122334455660021 = {isa = PBXBuildFile; fileRef = B2F241001122334455660022; };
@@ -76,6 +79,9 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		B3F24100112233445566000B = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = StateStreamTests.swift; path = ProteusTests/StateStreamTests.swift; sourceTree = SOURCE_ROOT; };
+		B3F241001122334455660008 = {isa = PBXFileReference; lastKnownFileType = text.json; name = state-patch-vectors.json; path = ../test/fixtures/state-patch-vectors.json; sourceTree = SOURCE_ROOT; };
+		B3F241001122334455660006 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NativeRemoteStateStream.swift; path = Proteus/Services/State/NativeRemoteStateStream.swift; sourceTree = SOURCE_ROOT; };
 		B3F241001122334455660004 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NativeRemoteStateField.swift; path = Proteus/Services/State/NativeRemoteStateField.swift; sourceTree = SOURCE_ROOT; };
 		B3F241001122334455660002 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NativeGrowingReplyEditor.swift; path = Proteus/Features/Chats/Views/NativeGrowingReplyEditor.swift; sourceTree = SOURCE_ROOT; };
 		B2F241001122334455660022 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NativeAddressCompletion.swift; path = Proteus/Features/Browser/Views/NativeAddressCompletion.swift; sourceTree = SOURCE_ROOT; };
@@ -155,6 +161,8 @@
 			children = (
 				BCFA7F851DB57CA3BDECDDF2 /* MarkdownTests.swift */,
 				FD304CE5E2D4AA434F2B24CC /* RemoteTests.swift */,
+				B3F24100112233445566000B /* StateStreamTests.swift */,
+				B3F241001122334455660008 /* state-patch-vectors.json */,
 			);
 			path = ProteusTests;
 			sourceTree = "<group>";
@@ -383,6 +391,7 @@
 			children = (
 				754660009D54CA67C3B12C53 /* SharedAppStore.swift */,
 				B3F241001122334455660004 /* NativeRemoteStateField.swift */,
+				B3F241001122334455660006,
 			);
 			path = State;
 			sourceTree = "<group>";
@@ -484,6 +493,7 @@
 			buildConfigurationList = AF36C146C3EDC52B85C0474E /* Build configuration list for PBXNativeTarget "ProteusTests" */;
 			buildPhases = (
 				89C5022FD516CED6086ACAD5 /* Sources */,
+				B3F241001122334455660009,
 			);
 			buildRules = (
 			);
@@ -540,6 +550,7 @@
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		B3F241001122334455660009 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (B3F241001122334455660007,); runOnlyForDeploymentPostprocessing = 0; };
 		4B1EC731AA31F4D14C98CC6E /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -560,6 +571,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				B3F241001122334455660003,
+				B3F241001122334455660005,
 				B3F241001122334455660001,
 				5F7A96C7CCAC62FF1B3C0FE2 /* ChatViews.swift in Sources */,
 				D041375426F54E73AAE56901 /* NativeUserQuestion.swift in Sources */,
@@ -609,6 +621,7 @@
 			files = (
 				A4B6B84AF204B4F3F0EC0971 /* MarkdownTests.swift in Sources */,
 				54B2034637BB14023E216F1B /* RemoteTests.swift in Sources */,
+				B3F24100112233445566000A,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
