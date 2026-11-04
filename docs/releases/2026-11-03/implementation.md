@@ -21,6 +21,7 @@ including run progress, resent all of it to every client.
   a brief disconnect could evict the lifecycle events a reconnect must replay.
 - Streaming chat deltas omit unchanged page metadata (about 70 KB per update on real chats) for
   clients that merge by field (`fieldDelta:'v1'`).
+- Activity timestamps publish at minute granularity. Each scroll tick previously wrote to the owner and made every client read the tab list again. `test/project-follow-ui.mjs` now passes four of four runs with no writes during scrolling; it failed about half its runs on the unmodified baseline.
 - The plain-file scan moved from 2 s to 5 s: assembling state costs about 70 ms on the main process.
 
 Regression: 113 simulated seconds of progress churn on a 1.4 MB state costs a subscriber under 100 KB

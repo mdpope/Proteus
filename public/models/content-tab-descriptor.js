@@ -87,13 +87,16 @@ export function acknowledgesBrowserNavigation(local,remote){
 }
 
 // Observing a mirrored view is not a new interaction. Older cached timestamps and
-// absent icon fields must not undo metadata received from another client.
+// absent icon fields must not undo metadata received from another client. Recency is
+// shown at minute granularity: publishing every scroll tick wrote to the owner and made
+// every client read the tab list again while a person was only reading a page.
+const activityPublishMs=60_000;
 export function mergeContentTabMetadata(previous,incoming){
  if(!previous)return incoming;
  const tab={...incoming};
  if(previous.openedAt)tab.openedAt=previous.openedAt;
- if(previous.lastTouchedAt&&!(Date.parse(incoming.lastTouchedAt)>Date.parse(previous.lastTouchedAt)))tab.lastTouchedAt=previous.lastTouchedAt;
- if(previous.lastActivityAt&&!(Date.parse(incoming.lastActivityAt)>Date.parse(previous.lastActivityAt)))tab.lastActivityAt=previous.lastActivityAt;
+ if(previous.lastTouchedAt&&!(Date.parse(incoming.lastTouchedAt)>=Date.parse(previous.lastTouchedAt)+activityPublishMs))tab.lastTouchedAt=previous.lastTouchedAt;
+ if(previous.lastActivityAt&&!(Date.parse(incoming.lastActivityAt)>=Date.parse(previous.lastActivityAt)+activityPublishMs))tab.lastActivityAt=previous.lastActivityAt;
  if(previous.favicon&&!incoming.favicon)tab.favicon=previous.favicon;
  return tab;
 }
