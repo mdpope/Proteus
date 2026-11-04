@@ -102,6 +102,8 @@ test('a streaming delta omits unchanged page metadata for a client that merges b
  const {fusionNote,...withoutNote}=next,changed={...withoutNote,eventCount:4,schedule:{prompt:'changed'},events:[...next.events,{text:'four'}]},third=chatDelta(run,changed,second.historyCursor,{omitUnchanged:true});
  assert.deepEqual(third.schedule,{prompt:'changed'});assert.deepEqual(third.removedFields,['fusionNote']);
  client=mergeChatHistory(client,third);assert.deepEqual(client.schedule,{prompt:'changed'});assert.equal(Object.hasOwn(client,'fusionNote'),false);assert.deepEqual(client.context,context);
+ // The first push after an ordinary chat.get page is already small.
+ const page=chatDelta(run,view),push=chatDelta(run,{...view,observedAt:'c'},page.historyCursor,{omitUnchanged:true});assert.equal(page.context,context);assert.equal(push.context,undefined);
  // A client that has not opted in keeps complete pages.
  const legacy=chatDelta(run,view,chatDelta(run,view).historyCursor);assert.equal(legacy.context,context);assert.equal(legacy.fieldDelta,undefined);
  // An older page arriving after a field delta cannot drop metadata.
