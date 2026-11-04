@@ -120,7 +120,7 @@ export class PerformanceDiagnostics {
       window[prefix+'Bytes']+=size;window[prefix+'Packets']++;
       if(direction==='send'){
         const reply=typeof kind==='string'&&kind.startsWith('reply:')?(measuredReplies.has(kind.slice(6))?kind.slice(6):'other'):null;
-        const category=reply?'reply':['state','run','run.changed','tabs','reply'].includes(kind)?kind:'other';
+        const category=reply?'reply':['state','state.patch','run','run.changed','tabs','reply'].includes(kind)?kind:'other';
         for(const target of [value,window]){target.sentKinds??={};const row=target.sentKinds[category]??={packets:0,bytes:0};row.packets++;row.bytes+=size;
           if(reply){target.sentReplies??={};const method=target.sentReplies[reply]??={packets:0,bytes:0};method.packets++;method.bytes+=size;}
         }
