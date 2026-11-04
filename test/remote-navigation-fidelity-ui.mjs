@@ -60,6 +60,12 @@ try{
  row=await assertShared(spa,spaEntry,origin+'/spa-1','same-document change');assert.equal(row.nativeURL,origin+'/spa-1/route');assert.equal(row.ownerEntries,2);assert.equal(hits('/spa-1'),1,'no reload loop');
  // The title reported by this device did not move the shared revision.
  const revision=(await observe(spa)).ownerRevision;await settle(2500);assert.equal((await observe(spa)).ownerRevision,revision,'mirror publishes nothing');
+ // Unloading and activating a tab loads its saved page again. That is not a new visit.
+ const restored=await nativeFull(redirected),beforeReload=await observe(redirected);
+ await page.evaluate(id=>window.desktop.browser({action:'unload',id}),restored.id);
+ await page.evaluate(id=>window.desktop.browser({action:'activate',id}),restored.id);
+ await until(async()=>(await nativeFull(redirected))?.loaded===true,'reloaded tab');await settle(2500);
+ row=await assertShared(redirected,serverEntry,origin+'/server-redirect-1','reloaded saved page');assert.equal(row.ownerEntries,beforeReload.ownerEntries,'reloading a saved page adds no history');assert.equal(row.ownerRevision,beforeReload.ownerRevision);
  // Trusted input ends the mirror: what the human then does here is shared.
  await select(redirected);
  const area=await page.evaluate(()=>{const rect=document.querySelector('#browser-area').getBoundingClientRect();return {x:rect.x+40,y:rect.y+40};});
