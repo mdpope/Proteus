@@ -1,3 +1,10 @@
+## Nov 3 — 0.2.42 candidate
+
+- Send owner state as versioned patches to clients that opt in, skip the snapshot on a conditional sync and batch progress churn. Older clients keep whole snapshots at a slower progress cadence. State no longer enters the replay journal, where it evicted lifecycle events.
+- Streaming chat deltas omit unchanged page metadata for clients that merge by field.
+- Restore windows with fault isolation: children start unloaded, one failed child stays in the saved session, startup retries with bounds, and an explicit notice offers Try again and Reload Window.
+- A device-private redirect on a mirrored tab stays local instead of moving every client's shared URL, and a title settling on another client no longer rejects the next navigation.
+
 ## Nov 2 R37 — actionable update waiting status
 
 - Show every blocking chat by title, full ID, status and reason, including capacity retries and background execution; distinguish the update coordinator's own active turn. Show precise application/build blockers and safe next steps.

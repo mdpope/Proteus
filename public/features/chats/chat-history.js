@@ -12,7 +12,10 @@ export function mergeChatHistory(previous, incoming) {
     page.events.push(events.get(key));
   }
   const latest = pages.pop() || {eventStart:0,events:[]};
-  const metadata = (incoming.eventCount || 0) >= (previous.eventCount || 0) ? incoming : previous;
+  // A field delta carries only changed metadata, and an older page may still arrive after one.
+  const incomingIsCurrent=(incoming.eventCount || 0) >= (previous.eventCount || 0);
+  const metadata = !incoming.fieldDelta&&!previous.fieldDelta ? (incomingIsCurrent ? incoming : previous) : incomingIsCurrent ? {...previous,...incoming} : {...incoming,...previous};
+  if(incomingIsCurrent)for(const key of incoming.removedFields||[])delete metadata[key];
   // Fusion attribution arrives per history window; keep turns for every retained page.
   // Newer projections of the same turn replace older ones; the set stays bounded.
   const turns = new Map();
