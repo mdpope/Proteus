@@ -1,0 +1,21 @@
+{
+ "description": "Shared state.patch v1 vectors. Every client must turn before into after by applying patch. The JavaScript owner must also produce exactly this patch.",
+ "vectors": [
+  {"name":"scalar change","before":{"a":1,"b":"x"},"after":{"a":2,"b":"x"},"patch":{"o":{"a":{"v":2}}}},
+  {"name":"added and removed keys","before":{"a":1,"b":2},"after":{"a":1,"c":3},"patch":{"o":{"c":{"v":3}},"d":["b"]}},
+  {"name":"null is a value, not a removal","before":{"a":1,"b":2},"after":{"a":null,"b":2},"patch":{"o":{"a":{"v":null}}}},
+  {"name":"removal differs from null","before":{"a":null,"b":2},"after":{"b":2},"patch":{"d":["a"]}},
+  {"name":"nested object merge","before":{"s":{"t":{"u":1,"v":2},"w":3}},"after":{"s":{"t":{"u":9,"v":2},"w":3}},"patch":{"o":{"s":{"o":{"t":{"o":{"u":{"v":9}}}}}}}},
+  {"name":"plain array replaced whole","before":{"a":[1,2,3]},"after":{"a":[1,2,4]},"patch":{"o":{"a":{"v":[1,2,4]}}}},
+  {"name":"array with non-unique ids replaced whole","before":{"a":[{"id":"x","n":1},{"id":"x","n":2}]},"after":{"a":[{"id":"x","n":3},{"id":"x","n":2}]},"patch":{"o":{"a":{"v":[{"id":"x","n":3},{"id":"x","n":2}]}}}},
+  {"name":"id array item patched in place, order unchanged","before":{"runs":[{"id":"r1","s":"running","p":{"t":1}},{"id":"r2","s":"done"}]},"after":{"runs":[{"id":"r1","s":"running","p":{"t":2}},{"id":"r2","s":"done"}]},"patch":{"o":{"runs":{"a":{"u":{"r1":{"o":{"p":{"o":{"t":{"v":2}}}}}}}}}}},
+  {"name":"id array reorder only","before":{"runs":[{"id":"r1"},{"id":"r2"}]},"after":{"runs":[{"id":"r2"},{"id":"r1"}]},"patch":{"o":{"runs":{"a":{"ids":["r2","r1"]}}}}},
+  {"name":"id array add, remove and patch","before":{"runs":[{"id":"r1","s":1},{"id":"r2","s":2},{"id":"r3","s":3}]},"after":{"runs":[{"id":"r4","s":4},{"id":"r1","s":9},{"id":"r3","s":3}]},"patch":{"o":{"runs":{"a":{"ids":["r4","r1","r3"],"n":{"r4":{"id":"r4","s":4}},"u":{"r1":{"o":{"s":{"v":9}}}}}}}}},
+  {"name":"id array emptied","before":{"runs":[{"id":"r1"}]},"after":{"runs":[]},"patch":{"o":{"runs":{"v":[]}}}},
+  {"name":"id array from empty","before":{"runs":[]},"after":{"runs":[{"id":"r1"}]},"patch":{"o":{"runs":{"v":[{"id":"r1"}]}}}},
+  {"name":"type change replaced whole","before":{"a":{"b":1}},"after":{"a":[1]},"patch":{"o":{"a":{"v":[1]}}}},
+  {"name":"object value becomes null","before":{"providerStatus":{"a":1}},"after":{"providerStatus":null},"patch":{"o":{"providerStatus":{"v":null}}}},
+  {"name":"unicode keys and values survive","before":{"é":"ñ"},"after":{"é":"日本語"},"patch":{"o":{"é":{"v":"日本語"}}}},
+  {"name":"unchanged state has no patch","before":{"a":[1,{"b":2}]},"after":{"a":[1,{"b":2}]},"patch":null}
+ ]
+}

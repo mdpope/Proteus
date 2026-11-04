@@ -23,3 +23,42 @@ test('host revocation closes every browser using the account device and rejects 
  assert.equal([...app.remote.peers.values()].filter(peer=>peer.device?.id===saved.deviceId).length,0);
  await assert.rejects(connect({...saved}),/not authorized|verification failed|connection was rejected|rejected authentication/);
 });
+
+test('incremental state crosses the encrypted wire and consumers still receive whole state',async t=>{
+ const {app,connect}=await fixture(t),client=await connect();
+ const changes=[];client.addEventListener('change',event=>{if(event.detail.event==='state')changes.push(event.detail.data);});
+ const wire=[],raw=app.remote.send.bind(app.remote);app.remote.send=(peer,value,method)=>{wire.push(value);return raw(peer,value,method);};
+ const first=await client.request('sync',{});assert.ok(first.state.context);assert.ok(first.stateVersion);
+ // A local merge of older pages cannot corrupt the baseline the next patch applies to.
+ first.state.runs.push({id:'older-page-synthetic'});
+ app.remote.config.label='Renamed synthetic host';await new Promise(resolve=>setTimeout(resolve,2100));app.remote.publish();
+ await until(()=>changes.at(-1)?.hostName==='Renamed synthetic host');
+ assert.ok(wire.some(value=>value.event==='state.patch'));assert.equal(wire.some(value=>value.event==='state'),false);
+ assert.ok(wire.filter(value=>value.event==='state.patch').every(value=>JSON.stringify(value).length<4096),'patches are not snapshots');
+ assert.equal(changes.at(-1).runs.some(run=>run.id==='older-page-synthetic'),false);
+ // The snapshot is skipped on the wire while the caller still receives state.
+ wire.length=0;const again=await client.request('sync',{});
+ assert.equal(again.unchanged,true);assert.equal(again.state.hostName,'Renamed synthetic host');
+ const independent=await connect({...client.host});
+ assert.deepEqual((await independent.request('sync',{})).state,again.state,'patched state is identical to a fresh snapshot');
+});
+test('a missed state patch resynchronizes instead of presenting stale state',async t=>{
+ const {app,connect}=await fixture(t),client=await connect();await client.request('sync',{});
+ const changes=[];client.addEventListener('change',event=>{if(event.detail.event==='state')changes.push(event.detail.data);});
+ const peer=[...app.remote.peers.values()].find(peer=>peer.device),wire=[],raw=app.remote.send.bind(app.remote);
+ app.remote.send=(target,value,method)=>{wire.push(value.event||value.type);return raw(target,value,method);};
+ raw(peer,{type:'event',event:'state.patch',cursor:'',data:{base:'stale:1',version:'stale:2',patch:{o:{hostName:{v:'Must not apply'}}}}});
+ await until(()=>changes.length===1);
+ assert.notEqual(changes[0].hostName,'Must not apply');assert.ok(changes[0].context);
+ assert.equal(client.status,'online','a gap never drops the connection');
+});
+test('an owner without state patches keeps working through the same client',async t=>{
+ const {app,connect}=await fixture(t),client=await connect();
+ const stream=app.remote.stateStream;stream.sync=(_peer,_args,state)=>({state});
+ const peer=[...app.remote.peers.values()].find(peer=>peer.device);
+ const result=await client.request('sync',{});assert.ok(result.state.context);assert.equal(client.stateVersion,null);
+ const changes=[];client.addEventListener('change',event=>{if(event.detail.event==='state')changes.push(event.detail.data);});
+ app.remote.send(peer,{type:'event',event:'state',data:{hostName:'Older owner push'},cursor:''});
+ await until(()=>changes.length===1);assert.equal(changes[0].hostName,'Older owner push');
+ assert.ok((await client.request('sync',{})).state.context,'still sends no conditional version');
+});
