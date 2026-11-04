@@ -81,164 +81,6 @@ struct ChatReturnKey: ViewModifier {
     }
 }
 
-enum NativeReplyEditorLayout {
-    static func height(text: String, lineHeight: CGFloat, screenHeight: CGFloat, chromeHeight: CGFloat) -> CGFloat {
-        let lines = text.reduce(1) { $0 + ($1.isNewline ? 1 : 0) }
-        // Soft wrapping scrolls within the editor; only explicit line breaks grow it.
-        return min(max(44, CGFloat(lines) * lineHeight + 16), max(0, screenHeight * 0.5 - chromeHeight))
-    }
-}
-
-/// A plain-text editor with native selection/scrolling and explicit Return ownership.
-final class NativeReplyTextView: UITextView {
-    var submitOnReturn = false
-    private var heldShift = false
-    var submit: () -> Void = {}
-    var windowHeightChanged: (CGFloat) -> Void = { _ in }
-    private var lastWindowHeight: CGFloat = 0
-    private(set) var insertingLiteralText = false
-    let placeholder = UILabel()
-    private lazy var returnCommands: [UIKeyCommand] = {
-        let send = UIKeyCommand(input: "\r", modifierFlags: [], action: #selector(handleSendReturn(_:)))
-        let newline = UIKeyCommand(input: "\r", modifierFlags: .shift, action: #selector(handleNewlineReturn(_:)))
-        send.wantsPriorityOverSystemBehavior = true; newline.wantsPriorityOverSystemBehavior = true
-        return [send, newline]
-    }()
-    override var keyCommands: [UIKeyCommand]? {
-        guard submitOnReturn else { return super.keyCommands }
-        return returnCommands + (super.keyCommands ?? [])
-    }
-    override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
-        if submitOnReturn && (action == #selector(handleSendReturn(_:)) || action == #selector(handleNewlineReturn(_:))) { return true }
-        return super.canPerformAction(action, withSender: sender)
-    }
-    override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
-        for key in presses.compactMap(\.key) {
-            if key.keyCode == .keyboardLeftShift || key.keyCode == .keyboardRightShift { heldShift = true }
-        }
-        if submitOnReturn, let key = presses.compactMap(\.key).first(where: { $0.keyCode == .keyboardReturnOrEnter || $0.keyCode == .keypadEnter || $0.charactersIgnoringModifiers == "\r" || $0.charactersIgnoringModifiers == "\n" }) {
-            if heldShift || key.modifierFlags.contains(.shift) || event?.modifierFlags.contains(.shift) == true { insertLiteral("\n") }
-            else if markedTextRange != nil { insertLiteral("\n") }
-            else { submit() }
-            return
-        }
-        super.pressesBegan(presses, with: event)
-    }
-    override func pressesEnded(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
-        if presses.compactMap(\.key).contains(where: { $0.keyCode == .keyboardLeftShift || $0.keyCode == .keyboardRightShift }) { heldShift = false }
-        super.pressesEnded(presses, with: event)
-    }
-    override func pressesCancelled(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
-        heldShift = false; super.pressesCancelled(presses, with: event)
-    }
-    @objc private func handleSendReturn(_ command: UIKeyCommand) {
-        if markedTextRange != nil { insertLiteral("\n") } else { submit() }
-    }
-    @objc private func handleNewlineReturn(_ command: UIKeyCommand) { insertLiteral("\n") }
-    private func insertLiteral(_ value: String) {
-        insertingLiteralText = true; defer { insertingLiteralText = false }
-        insertText(value)
-    }
-    override func insertText(_ text: String) {
-        super.insertText(text)
-        // UIKit command-driven insertions do not consistently deliver the delegate edit callback.
-        delegate?.textViewDidChange?(self)
-    }
-    override func deleteBackward() {
-        super.deleteBackward(); delegate?.textViewDidChange?(self)
-    }
-    override func paste(_ sender: Any?) {
-        if let value = UIPasteboard.general.string { insertLiteral(value) } else { super.paste(sender) }
-    }
-    override func layoutSubviews() {
-        super.layoutSubviews()
-        placeholder.frame = CGRect(x: textContainerInset.left, y: textContainerInset.top,
-            width: max(0, bounds.width - textContainerInset.left - textContainerInset.right), height: font?.lineHeight ?? 22)
-        if let height = window?.bounds.height, height != lastWindowHeight {
-            lastWindowHeight = height
-            DispatchQueue.main.async { [weak self] in self?.windowHeightChanged(height) }
-        }
-    }
-}
-
-func nativeTextAttachmentRequired(_ value: String) -> Bool {
-    if value.utf8.count > 256 * 1024 { return true }
-    return value.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n").components(separatedBy: "\n").count > 200
-}
-private struct NativeGrowingReplyEditor: UIViewRepresentable {
-    @Binding var text: String
-    let placeholder: String
-    let isFocused: Bool
-    let screenHeight: CGFloat
-    let chromeHeight: CGFloat
-    let submitOnReturn: Bool
-    let focusChanged: (Bool) -> Void
-    let windowHeightChanged: (CGFloat) -> Void
-    let submit: () -> Void
-    var attachLargeText: ((String) -> Bool)? = nil
-    func makeCoordinator() -> Coordinator { Coordinator(self) }
-    func makeUIView(context: Context) -> NativeReplyTextView {
-        let view = NativeReplyTextView()
-        view.delegate = context.coordinator; view.backgroundColor = .clear
-        view.font = .preferredFont(forTextStyle: .body); view.adjustsFontForContentSizeCategory = true
-        view.textColor = .label; view.tintColor = UIColor(NativeTheme.accent)
-        view.textContainerInset = UIEdgeInsets(top: 8, left: 10, bottom: 8, right: 10)
-        view.textContainer.lineFragmentPadding = 0
-        view.isScrollEnabled = true; view.alwaysBounceVertical = false
-        view.placeholder.textColor = .placeholderText; view.placeholder.isAccessibilityElement = false
-        view.addSubview(view.placeholder); view.accessibilityIdentifier = "reply-text"
-        view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        return view
-    }
-    func updateUIView(_ view: NativeReplyTextView, context: Context) {
-        context.coordinator.parent = self
-        if view.text != text { view.text = text }
-        view.placeholder.text = placeholder; view.placeholder.font = view.font; view.placeholder.isHidden = !text.isEmpty
-        view.accessibilityLabel = placeholder
-        view.submitOnReturn = submitOnReturn
-        let returnKey: UIReturnKeyType = submitOnReturn ? .send : .default
-        if view.returnKeyType != returnKey { view.returnKeyType = returnKey }
-        view.submit = submit; view.windowHeightChanged = windowHeightChanged
-        if isFocused && !view.isFirstResponder {
-            DispatchQueue.main.async { [weak view, weak coordinator = context.coordinator] in
-                if coordinator?.parent.isFocused == true, view?.window != nil { view?.becomeFirstResponder() }
-            }
-        } else if !isFocused && view.isFirstResponder {
-            // Keyboard dismissal changes SwiftUI safe areas. Do it after this layout update.
-            DispatchQueue.main.async { [weak view, weak coordinator = context.coordinator] in
-                if coordinator?.parent.isFocused == false, view?.isFirstResponder == true { view?.resignFirstResponder() }
-            }
-        }
-        view.setNeedsLayout()
-    }
-    func sizeThatFits(_ proposal: ProposedViewSize, uiView: NativeReplyTextView, context: Context) -> CGSize? {
-        CGSize(width: proposal.width ?? 320, height: NativeReplyEditorLayout.height(text: text,
-            lineHeight: uiView.font?.lineHeight ?? 22, screenHeight: screenHeight, chromeHeight: chromeHeight))
-    }
-    final class Coordinator: NSObject, UITextViewDelegate {
-        var parent: NativeGrowingReplyEditor
-        init(_ parent: NativeGrowingReplyEditor) { self.parent = parent }
-        func textViewDidChange(_ view: UITextView) {
-            if parent.text != view.text { parent.text = view.text }
-            (view as? NativeReplyTextView)?.placeholder.isHidden = !view.text.isEmpty
-        }
-        func textViewDidBeginEditing(_ textView: UITextView) { if !parent.isFocused { parent.focusChanged(true) } }
-        func textViewDidEndEditing(_ textView: UITextView) { if parent.isFocused { parent.focusChanged(false) } }
-        func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
-            if textView.markedTextRange == nil, nativeTextAttachmentRequired(text), parent.attachLargeText?(text) == true {
-                textView.text = (textView.text as NSString).replacingCharacters(in: range, with: "[Attached: Pasted text.txt]")
-                parent.text = textView.text
-                return false
-            }
-            if text == "\n", parent.submitOnReturn, textView.markedTextRange == nil,
-               (textView as? NativeReplyTextView)?.insertingLiteralText != true {
-                parent.submit(); return false
-            }
-            return true
-        }
-    }
-}
-
 enum NativeAttachmentBudget {
     static let maxFiles = 256
     static let maxFileBytes = 8 * 1024 * 1024
@@ -276,11 +118,11 @@ struct ChatsView: View {
     var body: some View {
         NavigationStack(path: $path) {
             NativeList {
-                if store.state["runs"].array.isEmpty { ContentUnavailableView("Ready for your next idea", systemImage: "bubble.left.and.bubble.right", description: Text("Start a chat using \(store.displayName)’s workspace and tools.")) }
-                ForEach(store.state["runs"].array.filter { query.isEmpty || $0["title"].string.localizedCaseInsensitiveContains(query) }, id: \.self) { run in
+                if store.stateValue("runs").array.isEmpty { ContentUnavailableView("Ready for your next idea", systemImage: "bubble.left.and.bubble.right", description: Text("Start a chat using \(store.displayName)’s workspace and tools.")) }
+                ForEach(store.stateValue("runs").array.filter { query.isEmpty || $0["title"].string.localizedCaseInsensitiveContains(query) }, id: \.self) { run in
                     NavigationLink(value: run["id"].string) { VStack(alignment: .leading, spacing: 6) { Text(run["title"].string).font(.headline); Text(statusLabel(run["status"].string)).font(.caption).foregroundStyle(run["status"].string == "awaiting_input" ? Color.orange : Color.secondary) } }.padding(.vertical, 5)
                 }
-                if store.state["runs"].array.count < store.state["runCount"].int { Button("Load older chats") { Task { await store.loadMoreRuns() } }.disabled(!store.connected) }
+                if store.stateValue("runs").array.count < store.stateValue("runCount").int { Button("Load older chats") { Task { await store.loadMoreRuns() } }.disabled(!store.connected) }
             }.background(NativeTheme.background).navigationTitle("Chats").searchable(text: $query)
                 .safeAreaInset(edge: .bottom) { ConnectionStatus().accessibilityIdentifier("chat-composer-connection-status").padding().background(NativeTheme.surface) }
                 .refreshable { await store.refresh() }
@@ -326,8 +168,8 @@ struct NewChatView: View {
     private var missingAttachments: [JSON] { missingAttachmentRecords(store: store, draftKey: draftKey + "-attachments", items: attachments) }
     private var attachmentMessageID: String { shared.draftMessageIDs[attachmentScope] ?? "" }
     private var attachmentDraftID: String { shared.draftSessionIDs[attachmentScope] ?? "" }
-    private var supportedAttachmentTypes: [String] { internet ? Array(Set(store.state["attachmentMediaTypes"].object.values.flatMap { $0.array.map(\.string) })) : store.state["attachmentMediaTypes"][provider].array.map(\.string) }
-    private var attachmentsEnabled: Bool { store.state["capabilities"].array.contains(.string("chat.attachments.v1")) && !supportedAttachmentTypes.isEmpty }
+    private var supportedAttachmentTypes: [String] { internet ? Array(Set(store.stateValue("attachmentMediaTypes").object.values.flatMap { $0.array.map(\.string) })) : store.stateValue("attachmentMediaTypes")[provider].array.map(\.string) }
+    private var attachmentsEnabled: Bool { store.stateValue("capabilities").array.contains(.string("chat.attachments.v1")) && !supportedAttachmentTypes.isEmpty }
     private var hasUnsupportedAttachment: Bool { !attachments.isEmpty && supportedAttachmentTypes.isEmpty }
     private var providerChoices: [NativeInferenceProviderChoice] { nativeInferenceProviderChoices(store.providerStatuses, ownerName: store.displayName, ownerID: store.connection?.hostId ?? "", selected: provider, savedRoute: providerRoute) }
     private var providerChoice: NativeInferenceProviderChoice? {
@@ -358,7 +200,7 @@ struct NewChatView: View {
                     promptField
                 }
                 Section("Run on " + store.displayName) {
-                    Picker("Workspace", selection: $workspace) { ForEach(store.state["context"]["workspaces"].array, id: \.self) { Text($0["name"].string).tag($0["id"].string) } }.disabled(lockedWorkspaceID != nil)
+                    Picker("Workspace", selection: $workspace) { ForEach(store.stateValue("context")["workspaces"].array, id: \.self) { Text($0["name"].string).tag($0["id"].string) } }.disabled(lockedWorkspaceID != nil)
                     if store.supportsProjects {
                         Picker("Project", selection: $project) { ForEach(store.projectCatalog.projects(in: workspace), id: \.self) { Text($0["name"].string).tag($0["id"].string) } }.disabled(lockedProjectID != nil).accessibilityIdentifier("new-chat-project")
                     }
@@ -391,12 +233,12 @@ struct NewChatView: View {
                     }
                 }
                 if !internet && lockedWorkspaceID == nil { ContextSelection(selected: $selected, agent: $agent, includeDefaults: $includeDefaults, workspaceID: workspace) }
-                if internet { Section { HStack { Spacer(); ForEach(store.state["providerStatuses"].object.keys.sorted().filter { !["local-process", "rehearsal"].contains($0) }, id: \.self) { id in Button("Search with " + id.capitalized) { provider = id; if store.state["defaults"]["internetSearches"][id]["model"].string.isEmpty { store.error = "Configure Internet Search defaults in Engine Room on \(store.displayName) first." } else if attachments.isEmpty { start() } else { confirmAttachmentStart = true } }.disabled((prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && attachments.isEmpty) || sending || !store.connected) } } } }
+                if internet { Section { HStack { Spacer(); ForEach(store.stateValue("providerStatuses").object.keys.sorted().filter { !["local-process", "rehearsal"].contains($0) }, id: \.self) { id in Button("Search with " + id.capitalized) { provider = id; if store.stateValue("defaults")["internetSearches"][id]["model"].string.isEmpty { store.error = "Configure Internet Search defaults in Engine Room on \(store.displayName) first." } else if attachments.isEmpty { start() } else { confirmAttachmentStart = true } }.disabled((prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && attachments.isEmpty) || sending || !store.connected) } } } }
                 if startIntent != .null { Section { Text("Start awaiting confirmation. Retry uses the same request and saved choices.").font(.caption) } }; if let error = store.error { Section { Text(error).foregroundStyle(.orange) } }
             }.scrollDismissesKeyboard(.interactively).disabled(loading || sending || startIntent != .null).accessibilityIdentifier("new-chat-form").navigationTitle(internet ? "Internet Search" : "New chat").toolbar {
                 ToolbarItem(placement: .cancellationAction) { HStack { if NativePhonePreview.enabled && onCancel != nil && lockedWorkspaceID == nil { NativeSidebarButton() }; Button("Cancel") { if let onCancel { onCancel() } else { dismiss() } } } }
                 ToolbarItem(placement: .confirmationAction) { if !internet || startIntent != .null { Button { if startIntent != .null || attachments.isEmpty { start() } else { confirmAttachmentStart = true } } label: { if sending { ProgressView() } else { Image(systemName: "arrow.up").font(.system(size: 19, weight: .semibold)).frame(width: 36, height: 36).background(NativeTheme.accent).foregroundStyle(NativeTheme.background).clipShape(Circle()) } }.disabled(loading || sending || !store.connected || (startIntent == .null && ((prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && attachments.isEmpty) || workspace.isEmpty || (provider != "rehearsal" && model.isEmpty) || providerChoice?.available == false || !missingAttachments.isEmpty || (!attachments.isEmpty && (!attachmentsEnabled || hasUnsupportedAttachment))))).accessibilityLabel("Start chat").accessibilityIdentifier("start-chat") } }
-            }.onChange(of: workspace) { _, _ in if !loading { applyWorkspaceDefaults(); project = lockedProjectID ?? store.projectCatalog.defaultProject(in: workspace)?["id"].string ?? "" } }.onChange(of: draftValue) { _, value in if !loading { store.setDraft(draftKey, value) } }.onChange(of: prompt) { _, value in if !loading && !sending && value != sharedText.receivedText && nativeTextAttachmentRequired(value) { if addAttachment(Data(value.utf8), name: "Pasted text.txt", mediaType: "text/plain") { prompt = "[Attached: Pasted text.txt]" } } } .onChange(of: provider) { old, value in if !loading && old != value { model = ""; effort = ""; contextTier = "default"; serviceTier = "" }; if value != "rehearsal" { Task { await store.loadModels(provider: value) } } }.task { await store.refresh(); guard !Task.isCancelled else { return }; workspace = store.state["context"]["defaultWorkspaceId"].string; provider = store.state["defaults"]["provider"].string; model = store.state["defaults"]["model"].string; effort = store.state["defaults"]["reasoningEffort"].string; serviceTier = store.state["defaults"]["serviceTier"].string; contextTier = store.state["defaults"]["contextTier"].string.isEmpty ? "default" : store.state["defaults"]["contextTier"].string; applyWorkspaceDefaults(); if let saved = store.drafts[draftKey] { restore(saved) }; if let lockedWorkspaceID { workspace = lockedWorkspaceID; selected = []; agent = ""; includeDefaults = true }; project = lockedProjectID ?? (project.isEmpty ? store.projectCatalog.defaultProject(in: workspace)?["id"].string ?? "" : project); if provider != "rehearsal" { await store.loadModels(provider: provider) }; guard !Task.isCancelled else { return }; loading = false }
+            }.onChange(of: workspace) { _, _ in if !loading { applyWorkspaceDefaults(); project = lockedProjectID ?? store.projectCatalog.defaultProject(in: workspace)?["id"].string ?? "" } }.onChange(of: draftValue) { _, value in if !loading { store.setDraft(draftKey, value) } }.onChange(of: prompt) { _, value in if !loading && !sending && value != sharedText.receivedText && nativeTextAttachmentRequired(value) { if addAttachment(Data(value.utf8), name: "Pasted text.txt", mediaType: "text/plain") { prompt = "[Attached: Pasted text.txt]" } } } .onChange(of: provider) { old, value in if !loading && old != value { model = ""; effort = ""; contextTier = "default"; serviceTier = "" }; if value != "rehearsal" { Task { await store.loadModels(provider: value) } } }.task { await store.refresh(); guard !Task.isCancelled else { return }; workspace = store.stateValue("context")["defaultWorkspaceId"].string; provider = store.stateValue("defaults")["provider"].string; model = store.stateValue("defaults")["model"].string; effort = store.stateValue("defaults")["reasoningEffort"].string; serviceTier = store.stateValue("defaults")["serviceTier"].string; contextTier = store.stateValue("defaults")["contextTier"].string.isEmpty ? "default" : store.stateValue("defaults")["contextTier"].string; applyWorkspaceDefaults(); if let saved = store.drafts[draftKey] { restore(saved) }; if let lockedWorkspaceID { workspace = lockedWorkspaceID; selected = []; agent = ""; includeDefaults = true }; project = lockedProjectID ?? (project.isEmpty ? store.projectCatalog.defaultProject(in: workspace)?["id"].string ?? "" : project); if provider != "rehearsal" { await store.loadModels(provider: provider) }; guard !Task.isCancelled else { return }; loading = false }
             .onChange(of: prompt) { _, value in sharedText.changed(value) }
             .task(id: loading) {
                 guard !loading, lockedWorkspaceID != nil, draftKey.hasPrefix("chat-setup:") else { return }
@@ -411,7 +253,7 @@ struct NewChatView: View {
         }
     }
     private func applyWorkspaceDefaults() {
-        let defaults = store.state["context"]["workspaces"].array.first { $0["id"].string == workspace }?["defaults"] ?? .null
+        let defaults = store.stateValue("context")["workspaces"].array.first { $0["id"].string == workspace }?["defaults"] ?? .null
         selected = Set(defaults["selectedIds"].array.map(\.string)); agent = defaults["agentId"].string; includeDefaults = defaults["includeDefaults"] != .bool(false)
     }
     private var syncedPrompt: Binding<String> { Binding(get: { prompt }, set: { value in sharedText.changed(value); prompt = value }) }
@@ -419,7 +261,7 @@ struct NewChatView: View {
     private func restore(_ value: JSON) { providerRoute = value["providerRoute"].string; startIntent = value["startIntent"]; project = value["project"].string; name = value["name"].string; prompt = value["prompt"].string; provider = value["provider"].string; model = value["model"].string; effort = value["effort"].string; contextTier = value["contextTier"].string; serviceTier = value["serviceTier"].string; workspace = value["workspace"].string; selected = Set(value["selected"].array.map(\.string)); agent = value["agent"].string; includeDefaults = value["includeDefaults"] != .bool(false) }
     private func start() {
         if startIntent == .null && sharedText.conflict != .null { store.error = "Choose which draft to use before sending. Both versions are retained."; return }
-        if startIntent == .null && internet && store.state["defaults"]["internetSearches"][provider]["model"].string.isEmpty { store.error = "Configure Internet Search defaults for " + provider + " first."; return }
+        if startIntent == .null && internet && store.stateValue("defaults")["internetSearches"][provider]["model"].string.isEmpty { store.error = "Configure Internet Search defaults for " + provider + " first."; return }
         guard startIntent != .null || missingAttachments.isEmpty else { store.error = "Remove or reattach the missing files before starting this chat."; return }
         sending = true
         Task { defer { sending = false }
@@ -529,12 +371,12 @@ struct NativeChatTabActions<Extra: View>: ViewModifier {
     @State private var rename = false
     @State private var move = false
     @State private var confirmDelete = false
-    private var run: JSON { store.chats[chatID] ?? store.state["runs"].array.first { $0["id"].string == chatID } ?? .null }
-    private var lifecycle: Bool { store.connected && store.state["capabilities"].array.contains(.string("chat.lifecycle.v1")) && run != .null }
+    private var run: JSON { store.chats[chatID] ?? store.stateValue("runs").array.first { $0["id"].string == chatID } ?? .null }
+    private var lifecycle: Bool { store.connected && store.stateValue("capabilities").array.contains(.string("chat.lifecycle.v1")) && run != .null }
     func body(content: Content) -> some View {
         content.contextMenu {
             Button("Copy chat link", systemImage: "link") { UIPasteboard.general.url = NativeChatLink.url(host: store.connection?.hostId ?? "", id: chatID) }
-            if store.state["capabilities"].array.contains(.string("chat.rename.v1")) { Button("Rename", systemImage: "pencil") { rename = true } }
+            if store.stateValue("capabilities").array.contains(.string("chat.rename.v1")) { Button("Rename", systemImage: "pencil") { rename = true } }
             extra()
             if lifecycle {
                 if run["chatType"].string == "internet" { Button("Promote to User Chat", systemImage: "person.bubble") { Task { do { _ = try await store.request("chat.promote", ["id": .string(chatID), "expectedUpdatedAt": run["updatedAt"]]); await store.openChat(chatID) } catch { store.error = error.localizedDescription } } } }
@@ -633,32 +475,6 @@ private struct ChatDocumentTab: Identifiable {
 
 // Bound initial rich rendering independently of the host's 100-event transport page.
 // Byte headroom handles verbose tool output; one oversized event remains readable in full.
-enum NativeHistoryWindow {
-    static let pageCount = 12
-    static let pageBytes = 48 * 1024
-    static let olderPageCount = 24
-    static let olderPageBytes = 96 * 1024
-    static func start(events: [JSON], before: Int? = nil, preparingOlder: Bool = false) -> Int {
-        let end = min(events.count, max(0, before ?? events.count))
-        let rowBudget = preparingOlder ? olderPageCount : pageCount
-        let byteBudget = preparingOlder ? olderPageBytes : pageBytes
-        var start = end, bytes = 0, rows = 0, lastActivity = false
-        while start > 0 && end - start < 100 {
-            let event = events[start - 1]
-            let activity = NativeActivity.contains(event)
-            let cost = activity && lastActivity ? 0 : 1
-            let size = activity ? 0 : event["text"].string.utf8.count
-            if start < end && (bytes + size > byteBudget || rows + cost > rowBudget) { break }
-            bytes += size; rows += cost; lastActivity = activity; start -= 1
-        }
-        return start
-    }
-    static func shouldPrefetch(offset: CGFloat, viewport: CGFloat, content: CGFloat, reading: Bool, ready: Bool) -> Bool {
-        guard ready, viewport > 0, content > 0 else { return false }
-        // Fill short screens automatically, but never drain history from an initial top snapshot.
-        return content < viewport + 80 || reading && offset < max(480, viewport * 2.5)
-    }
-}
 
 // Only this child subscribes to text edits. ChatView retains the draft reference without
 // observing it, so a keystroke does not rebuild browser tabs or traverse conversation history.
@@ -733,7 +549,6 @@ struct ChatView: View {
     private var conversationOffset: CGFloat { get { scrollMeasurements.offset } nonmutating set { scrollMeasurements.offset = newValue } }
     private var conversationContentHeight: CGFloat { get { scrollMeasurements.contentHeight } nonmutating set { scrollMeasurements.contentHeight = newValue } }
     @State private var conversationViewportWidth: CGFloat = 0
-    @State private var conversationViewportTop: CGFloat = 0
     private var visibleAnchor: NativeChatScrollLocation? { get { scrollMeasurements.visibleAnchor } nonmutating set { scrollMeasurements.visibleAnchor = newValue } }
     @State private var restoringConversation = false
     @State private var pendingAnchorRestore: NativeChatScrollLocation?
@@ -791,13 +606,13 @@ struct ChatView: View {
     }
     private var mcpControlsAvailable: Bool {
         let provider = run["schedule"]["provider"].string
-        let advertised = store.state["mcpStatusProviders"]
+        let advertised = store.stateValue("mcpStatusProviders")
         if advertised != .null { return advertised.array.contains(.string(provider)) }
         return provider == "copilot" // Older hosts exposed only Copilot MCP controls.
     }
     private var mcpLoginAvailable: Bool {
         let provider = run["schedule"]["provider"].string
-        let advertised = store.state["mcpLoginProviders"]
+        let advertised = store.stateValue("mcpLoginProviders")
         if advertised != .null { return advertised.array.contains(.string(provider)) }
         return provider == "copilot"
     }
@@ -808,7 +623,7 @@ struct ChatView: View {
     private func routineActivity(_ event: JSON) -> Bool { NativeActivity.contains(event, provider: run["schedule"]["provider"].string) }
     private var renderedEventStart: Int {
         let events = run["events"].array, start = run["eventStart"].int
-        return max(start, min(oldestVisibleEvent ?? (start + NativeHistoryWindow.start(events: events)), start + events.count))
+        return NativeHistoryWindow.presentedStart(events: events, loadedStart: start, requestedStart: oldestVisibleEvent)
     }
     private var hasEarlierMessages: Bool { renderedEventStart > 0 }
     private var visibleEventIndices: [Int] {
@@ -855,7 +670,7 @@ struct ChatView: View {
     private var attachmentDraftKey: String { pending["type"].string == "question" && !inlinePendingQuestion ? "question-attachments:" + id + ":" + pending["id"].string : "reply-attachments:" + id }
     private var attachmentScope: String { pending["type"].string == "question" && !inlinePendingQuestion ? chatBrowserScope + ":" + pending["id"].string : chatBrowserScope }
     private var supportedAttachmentTypes: [String] { store.state[pending["type"].string == "question" && !inlinePendingQuestion ? "questionAttachmentMediaTypes" : "attachmentMediaTypes"][run["schedule"]["provider"].string].array.map(\.string) }
-    private var attachmentsEnabled: Bool { store.state["capabilities"].array.contains(.string("chat.attachments.v1")) && !supportedAttachmentTypes.isEmpty }
+    private var attachmentsEnabled: Bool { store.stateValue("capabilities").array.contains(.string("chat.attachments.v1")) && !supportedAttachmentTypes.isEmpty }
     private var attachments: [NativeDraftAttachment] { shared.draftAttachments[attachmentScope] ?? [] }
     private var canSteerAttachments: Bool { let types = run["chatControls"]["steeringMediaTypes"].array.map(\.string); return attachments.allSatisfy { types.contains($0.mediaType) } }
     private var missingAttachments: [JSON] { missingAttachmentRecords(store: store, draftKey: attachmentDraftKey, items: attachments) }
@@ -891,7 +706,7 @@ struct ChatView: View {
             }
             if NativeTypingDiagnostics.enabled {
                 Button("Read typing diagnostics") {
-                    typingDiagnostics = "\(NativeTypingDiagnostics.historyPasses),\(NativeTypingDiagnostics.inspectedEvents)"
+                    typingDiagnostics = "\(NativeTypingDiagnostics.historyPasses),\(NativeTypingDiagnostics.inspectedEvents)," + NativeTypingInputMeasurements.snapshotAndReset() + "," + scrollMeasurements.renderViewport.diagnosticSummary() + NativePushTypingFixture.sample()
                 }.accessibilityIdentifier("typing-diagnostics").accessibilityValue(typingDiagnostics)
             }
             if ProcessInfo.processInfo.arguments.contains("--synthetic-desktop-browser-tabs") {
@@ -1032,7 +847,7 @@ struct ChatView: View {
         HStack(spacing: 0) {
             HStack(spacing: 8) {
                 modeLink("Chat", mode: "chat", identifier: "chat-mode-conversation")
-                if store.state["capabilities"].array.contains(.string("browser.live.v1")) {
+                if store.stateValue("capabilities").array.contains(.string("browser.live.v1")) {
                     Text("|").foregroundStyle(.secondary)
                     modeLink("Live browser", mode: "live", identifier: "chat-live-browser")
                 }
@@ -1057,7 +872,7 @@ struct ChatView: View {
                     Button(selectedAgent == nil ? "Agents (\(run["subagents"].array.count))" : "Parent conversation", systemImage: "person.2") { selectedAgent = selectedAgent == nil ? run["subagents"].array.first?["id"].string : nil }.accessibilityIdentifier("chat-agents")
                 }
                 Button("Copy chat link", systemImage: "link") { UIPasteboard.general.url = NativeChatLink.url(host: store.connection?.hostId ?? "", id: id) }
-                if store.state["capabilities"].array.contains(.string("chat.rename.v1")) { Button("Rename", systemImage: "pencil") { showRename = true } }
+                if store.stateValue("capabilities").array.contains(.string("chat.rename.v1")) { Button("Rename", systemImage: "pencil") { showRename = true } }
                 if lifecycleEnabled {
                     if run["chatType"].string == "internet" { Button("Promote to User Chat") { Task { do { _ = try await store.request("chat.promote", ["id": .string(id), "expectedUpdatedAt": run["updatedAt"]]); await store.openChat(id) } catch { store.error = error.localizedDescription } } } }; Button("Move", systemImage: "arrow.right.square") { showMoveWorkspace = true }; Button(run["archived"].bool ? "Unarchive chat" : "Archive chat", systemImage: "archivebox") { Task { await archiveChat() } }.disabled(chatHasPendingWork(run))
                     Button("Delete chat", systemImage: "trash", role: .destructive) { confirmDelete = true }.disabled(chatHasPendingWork(run))
@@ -1100,10 +915,10 @@ struct ChatView: View {
                     let eventQuestions = questionsByEvent[absoluteIndex] ?? []
                     VStack(alignment: .leading, spacing: 0) {
                         if routineActivity(event) {
-                            ChatActivityGroupView(events: activityGroup(startingAt: index), hostName: store.state["hostName"].string, runID: id, runStatus: run["status"].string, search: pageSearch, eventStart: absoluteIndex)
+                            ChatActivityGroupView(events: activityGroup(startingAt: index), hostName: store.stateValue("hostName").string, runID: id, runStatus: run["status"].string, search: pageSearch, eventStart: absoluteIndex)
                         } else if event["role"].string != "assistant" || !event["text"].string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                             if !event["data"]["delivery"]["state"].string.isEmpty { Text(event["data"]["delivery"]["state"].string.capitalized).font(.caption2).foregroundStyle(.teal) }
-                            MessageView(role: event["role"].string == "assistant" ? assistantName(event) : event["role"].string, text: NativeUserQuestion.presentationText(event["text"].string, questions: eventQuestions), runID: id, timestamp: event["timestamp"].string.isEmpty ? event["at"].string : event["timestamp"].string, turn: firstAssistant[event["data"]["turnId"].string] == index ? turns[event["data"]["turnId"].string] ?? .null : .null, actionID: MessageActions.eligible(event) ? "\(store.connection?.hostId ?? "local"):\(id):\(absoluteIndex):\(event["at"].string)" : nil, sentAttachments: event["data"]["attachments"].array, onDocumentLink: event["role"].string == "assistant" ? { source in openDocument(source) } : nil, search: pageSearch, searchKey: absoluteIndex, viewport: CGRect(x: 0, y: conversationViewportTop, width: conversationViewportWidth, height: max(1, composerAvailableHeight)), questionContent: eventQuestions.isEmpty ? nil : AnyView(VStack(alignment: .leading, spacing: 0) {
+                            MessageView(role: event["role"].string == "assistant" ? assistantName(event) : event["role"].string, text: NativeUserQuestion.presentationText(event["text"].string, questions: eventQuestions), runID: id, timestamp: event["timestamp"].string.isEmpty ? event["at"].string : event["timestamp"].string, turn: firstAssistant[event["data"]["turnId"].string] == index ? turns[event["data"]["turnId"].string] ?? .null : .null, actionID: MessageActions.eligible(event) ? "\(store.connection?.hostId ?? "local"):\(id):\(absoluteIndex):\(event["at"].string)" : nil, sentAttachments: event["data"]["attachments"].array, onDocumentLink: event["role"].string == "assistant" ? { source in openDocument(source) } : nil, search: pageSearch, searchKey: absoluteIndex, renderViewport: scrollMeasurements.renderViewport, questionContent: eventQuestions.isEmpty ? nil : AnyView(VStack(alignment: .leading, spacing: 0) {
                             ForEach(eventQuestions) { question in
                                 NativeUserQuestionCard(question: question, showHeading: !question.promptVisible(in: event["text"].string, among: eventQuestions.count), chatID: id) { value, messageID, delivery in
                                     var args = delivery; args["id"] = .string(id); args["answer"] = .string(value); args["messageId"] = .string(messageID); args[question.blocking ? "requestId" : "questionId"] = .string(question.id)
@@ -1212,10 +1027,10 @@ struct ChatView: View {
                 let previousOffset = conversationOffset
                 let previousHeight = conversationContentHeight
                 scrollMeasurements.latest = snapshot
+                scrollMeasurements.renderViewport.update(snapshot)
                 if abs(conversationOffset - snapshot.offset) > 0.5 { conversationOffset = max(0, snapshot.offset) }
                 if abs(conversationContentHeight - snapshot.contentHeight) > 0.5 { conversationContentHeight = snapshot.contentHeight }
                 if abs(conversationViewportWidth - snapshot.viewportWidth) > 0.5 { conversationViewportWidth = snapshot.viewportWidth }
-                if abs(conversationViewportTop - snapshot.viewportTop) > 0.5 { conversationViewportTop = snapshot.viewportTop }
                 if let initial = pendingInitialRestore, snapshot.viewportWidth > 0 {
                     pendingInitialRestore = nil
                     restoreConversation(initial)
@@ -1420,7 +1235,7 @@ struct ChatView: View {
         #endif
     }
     private var lifecycleEnabled: Bool {
-        store.connected && store.state["capabilities"].array.contains(.string("chat.lifecycle.v1")) && run != .null
+        store.connected && store.stateValue("capabilities").array.contains(.string("chat.lifecycle.v1")) && run != .null
     }
     private func archiveChat() async {
         do { try await store.archiveChat(id, archived: !run["archived"].bool) }
@@ -1495,7 +1310,7 @@ struct ChatView: View {
             HStack(spacing: 8) {
                 ConnectionStatus().accessibilityIdentifier("chat-composer-connection-status")
                 NativeDraftSyncBadge(sync: replyDraft.sharedText)
-                if !NativePhonePreview.enabled && store.state["capabilities"].array.contains(.string("browser.live.v1")) {
+                if !NativePhonePreview.enabled && store.stateValue("capabilities").array.contains(.string("browser.live.v1")) {
                     modeLink("Chat", mode: "chat", identifier: "chat-mode-conversation")
                     Text("|").foregroundStyle(.secondary)
                     modeLink("Live browser", mode: "live", identifier: "chat-live-browser")
@@ -1506,7 +1321,7 @@ struct ChatView: View {
         VStack(spacing: 8) {
             composerStatus
             ForEach(run["queuedMessages"].array, id: \.self) { message in
-                HStack { Text(message["prompt"].string).lineLimit(1).font(.caption); Spacer(); if run["status"].string == "running" && run["chatControls"]["steering"].bool && (!message["hasAttachments"].bool || message["canSteer"].bool) { Button("Steer now") { act("chat.steer-queued", ["messageId":message["id"]]) }.font(.caption) }; if store.state["capabilities"].array.contains(.string("chat.queue-edit.v1")) { Button("Edit") { queuedEdit = message; showQueuedEdit = true }.font(.caption) }; Button("Remove") { act("chat.remove-queued", ["messageId":message["id"]]) }.font(.caption) }
+                HStack { Text(message["prompt"].string).lineLimit(1).font(.caption); Spacer(); if run["status"].string == "running" && run["chatControls"]["steering"].bool && (!message["hasAttachments"].bool || message["canSteer"].bool) { Button("Steer now") { act("chat.steer-queued", ["messageId":message["id"]]) }.font(.caption) }; if store.stateValue("capabilities").array.contains(.string("chat.queue-edit.v1")) { Button("Edit") { queuedEdit = message; showQueuedEdit = true }.font(.caption) }; Button("Remove") { act("chat.remove-queued", ["messageId":message["id"]]) }.font(.caption) }
             }
             VStack(alignment: .leading, spacing: 8) {
                 if showsComposerActions && hasDraftAttachments { composerAttachmentSection }
@@ -1795,7 +1610,7 @@ struct ChatView: View {
     private func requestDocument(source: String? = nil, documentID: String? = nil, fromRequestID: String? = nil, relativePath: String? = nil, parentID: String? = nil) {
         guard documentNotice == nil else { return }
         guard store.connected else { store.error = "Connect to \(store.displayName) to request the document. Already opened documents remain available for this session."; return }
-        guard store.state["capabilities"].array.contains(.string("chat.documents.v1")) else { store.error = "\(store.displayName) does not support approved document viewing yet."; return }
+        guard store.stateValue("capabilities").array.contains(.string("chat.documents.v1")) else { store.error = "\(store.displayName) does not support approved document viewing yet."; return }
         documentNotice = "Waiting for \(store.displayName) to approve document access…"
         documentTask = Task {
             do {
@@ -1872,7 +1687,7 @@ private struct ChatDocumentReader: View {
                 if !document.version.isEmpty { Text("Version \(document.version) · Last read \(document.readAt.isEmpty ? "this session" : document.readAt)").font(.caption).foregroundStyle(.secondary) }
                 if let content = document.content {
                     if !store.connected { Text("Offline · showing the version read earlier in this session.").font(.caption).foregroundStyle(.orange) }
-                    if document.mediaType == "text/html" { SafeArtifactPreview(content: content, title: document.title, version: document.version, hostName: store.state["hostName"].string, assetDataURLs: document.assetDataURLs).frame(minHeight: 420) }
+                    if document.mediaType == "text/html" { SafeArtifactPreview(content: content, title: document.title, version: document.version, hostName: store.stateValue("hostName").string, assetDataURLs: document.assetDataURLs).frame(minHeight: 420) }
                     else { MarkdownView(text: content, runID: runID, store: store, height: $height, onDocumentLink: openRelativeDocument, documentAssetURLs: document.assetDataURLs, search: pageSearch).frame(height: max(height, 1)) }
                     if !document.links.isEmpty {
                         VStack(alignment: .leading, spacing: 6) {
@@ -2107,7 +1922,7 @@ struct MessageView: View {
     @Environment(RemoteStore.self) var store
     @Environment(\.timeZone) private var timeZone
     @State private var height: CGFloat = 0
-    @State private var richVisible = true
+    @State private var renderVisibility = NativeMessageRenderVisibility()
     let role: String
     let text: String
     let runID: String
@@ -2121,19 +1936,19 @@ struct MessageView: View {
     var onResize: () -> Void = {}
     var search: NativePageSearch? = nil
     var searchKey = 0
-    var viewport: CGRect? = nil
+    var renderViewport: NativeMessageRenderViewport? = nil
     var questionContent: AnyView? = nil
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack { Text(role.uppercased()).font(.caption2.weight(.bold)); Spacer(); if role != "user" && turn != .null { RuntimeTimerView(turns:[turn]) }; if let date = ProviderAllowance.date(timestamp) { Text(nativeTimestamp(date, timezone: timeZone.identifier)).font(.caption2).accessibilityIdentifier("message-timestamp") } }.foregroundStyle(.secondary)
             ZStack(alignment: .topLeading) {
                 if height == 0 { Text(text).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }
-                if richVisible || height == 0 {
+                if renderVisibility.isVisible {
                     MarkdownView(text: text, runID: runID, store: store, height: $height, onDocumentLink: onDocumentLink, onResize: onResize, search: search, searchKey: searchKey).frame(height: max(height, 1)).opacity(height > 0 ? 1 : 0)
                 } else { Color.clear.frame(height: height) }
             }.frame(maxWidth: .infinity, alignment: .leading)
             ForEach(sentAttachments, id: \.self) { item in
-                let viewable = item["sha256"].string.range(of: "^[a-f0-9]{64}$", options: .regularExpression) != nil && store.state["capabilities"].array.contains(.string("chat.attachments.view.v1"))
+                let viewable = item["sha256"].string.range(of: "^[a-f0-9]{64}$", options: .regularExpression) != nil && store.stateValue("capabilities").array.contains(.string("chat.attachments.view.v1"))
                 Button { openAttachment(item) } label: {
                     HStack(spacing: 6) {
                         Label(item["name"].string + " · " + ByteCountFormatter.string(fromByteCount: Int64(item["size"].int), countStyle: .file), systemImage: item["mediaType"].string.hasPrefix("image/") ? "photo" : "doc")
@@ -2143,10 +1958,12 @@ struct MessageView: View {
             }
             if let questionContent { questionContent }
             if let actionID { MessageActionBar(messageID: actionID, markdown: text) }
-        }.onGeometryChange(for: Bool.self) { geometry in
-            guard let viewport, viewport.width > 0 else { return true }
-            return geometry.frame(in: .global).intersects(viewport.insetBy(dx: 0, dy: -max(600, viewport.height * 1.5)))
-        } action: { visible in richVisible = visible }.sheet(isPresented: Binding(get: { attachmentPreviewIndex != nil }, set: { if !$0 { attachmentPreviewIndex = nil } })) { if let index = attachmentPreviewIndex { NativeStoredAttachmentViewer(chatID: runID, items: sentAttachments, index: index).environment(store) } }
+        }.onGeometryChange(for: CGRect.self) { geometry in
+            renderViewport == nil ? geometry.frame(in: .global) : geometry.frame(in: .named("conversation-content"))
+        } action: { frame in renderVisibility.updateFrame(frame) }
+        .onAppear { renderVisibility.bind(renderViewport) }
+        .onDisappear { renderVisibility.detach() }
+        .sheet(isPresented: Binding(get: { attachmentPreviewIndex != nil }, set: { if !$0 { attachmentPreviewIndex = nil } })) { if let index = attachmentPreviewIndex { NativeStoredAttachmentViewer(chatID: runID, items: sentAttachments, index: index).environment(store) } }
         .padding().background(role == "user" ? NativePalette.shared.color("user") : role == "system" ? NativeTheme.background : NativePalette.shared.color("assistant"), in: RoundedRectangle(cornerRadius: 16)).overlay(alignment: .leading) { Rectangle().fill(NativePalette.shared.color(role == "user" ? "userEdge" : "assistantEdge")).frame(width: 3) }.clipShape(RoundedRectangle(cornerRadius: 16)).padding(.leading, role == "user" ? 20 : 0).padding(.trailing, actionID != nil || role.contains("streaming") ? 20 : 0)
     }
 }

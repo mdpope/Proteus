@@ -36,7 +36,10 @@ targets:
   ProteusTests:
     type: bundle.unit-test
     platform: iOS
-    sources: [ProteusTests]
+    sources:
+      - ProteusTests
+      - path: ../test/fixtures/state-patch-vectors.json
+        buildPhase: resources
     dependencies:
       - target: ProteusMobile
     settings:

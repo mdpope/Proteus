@@ -701,17 +701,51 @@ final class RemoteUITests: XCTestCase {
         app.terminate(); app.launchArguments = []; app.launch(); showChats(app); XCTAssertTrue(row.waitForExistence(timeout: 20)); row.tap(); XCTAssertTrue(tab.waitForExistence(timeout: 25)); tab.tap()
         XCTAssertTrue(app.webViews.staticTexts["Version 2"].waitForExistence(timeout: 20)); XCTAssertTrue(app.buttons["Enable interactive preview"].exists)
     }
+    @MainActor func testTypingDuringLargeGeneralStatePushes() throws {
+        for incremental in [false, true] {
+            let app = nativeFixtureApplication()
+            app.launchArguments = ["--reset-pairing", "--synthetic-clean-navigation", "--synthetic-destinations", "--synthetic-heavy-chat", "--typing-diagnostics", "--synthetic-push-typing"]
+            if incremental { app.launchArguments.append("--synthetic-patch-typing") }
+            app.launch(); showChats(app)
+            let row = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Heavy fixture")).firstMatch
+            XCTAssertTrue(row.waitForExistence(timeout: 30)); row.tap()
+            XCTAssertTrue(app.buttons["chat-mode-conversation"].waitForExistence(timeout: 20)); app.buttons["chat-mode-conversation"].tap()
+            if UIDevice.current.userInterfaceIdiom == .phone { XCTAssertTrue(app.buttons["composer-preview"].waitForExistence(timeout: 30)); app.buttons["composer-preview"].tap() }
+            let field = app.descendants(matching: .any).matching(identifier: "reply-text").firstMatch
+            XCTAssertTrue(field.waitForExistence(timeout: 15)); field.tap()
+            let diagnostics = app.buttons["typing-diagnostics"]
+            diagnostics.tap()
+            // Digits keep keyboard word correction out of exact-keystroke acceptance.
+            let text = String(repeating: "1234567890 ", count: 80)
+            field.tap(); let start = Date(); field.typeText(text)
+            let actual = field.value as? String
+            diagnostics.tap()
+            let sample = try XCTUnwrap(diagnostics.value as? String)
+            print("COMBINED_TYPING mode=\(incremental ? "patch" : "full") characters=\(text.count) elapsed=\(Date().timeIntervalSince(start)) diagnostics=\(sample)")
+            XCTAssertEqual(actual, text)
+            func number(_ key: String) -> Double? { sample.split(separator: ",").first { $0.hasPrefix(key + "=") }.flatMap { Double($0.dropFirst(key.count + 1)) } }
+            XCTAssertGreaterThanOrEqual(try XCTUnwrap(number("pushCount")), 8)
+            XCTAssertGreaterThan(try XCTUnwrap(number("fullBytes")), 1_900_000)
+            XCTAssertFalse(sample.contains("pushFailed=true"))
+            XCTAssertGreaterThan(try XCTUnwrap(number("richCreatedCount")), 0)
+            let historyPasses = try XCTUnwrap(sample.split(separator: ",").first.flatMap { Int($0) })
+            XCTAssertLessThanOrEqual(historyPasses, Int(try XCTUnwrap(number("pushCount"))) * 4 + 10, "Streaming can update history; each typed character must not traverse it")
+            let report = XCTAttachment(string: sample); report.name = "Combined General pushes and typing: \(incremental ? "patch" : "full")"; report.lifetime = .keepAlways; add(report)
+            app.terminate()
+        }
+    }
     @MainActor func testTypingDoesNotTraverseLongChatHistory() throws {
         for (fixture, title, eventCount) in [("--synthetic-long-chat", "Long fixture", 1), ("--synthetic-many-chat", "Many fixture", 100), ("--synthetic-heavy-chat", "Heavy fixture", 1000)] {
+            if let requested = ProcessInfo.processInfo.environment["PROTEUS_TYPING_EVENTS"], requested != String(eventCount) { continue }
             let app = nativeFixtureApplication()
-            app.launchArguments = ["--reset-pairing", "--synthetic-destinations", fixture, "--typing-diagnostics"]
+            app.launchArguments = ["--reset-pairing", "--synthetic-clean-navigation", "--synthetic-destinations", fixture, "--typing-diagnostics"]
             app.launch()
             showChats(app)
             let row = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", title)).firstMatch
             XCTAssertTrue(row.waitForExistence(timeout: 12)); row.tap()
             // A prior browser test may have persisted this chat's selected child tab.
-            XCTAssertTrue(app.buttons["chat-conversation-tab"].waitForExistence(timeout: 15))
-            app.buttons["chat-conversation-tab"].tap()
+            XCTAssertTrue(app.buttons["chat-mode-conversation"].waitForExistence(timeout: 15))
+            app.buttons["chat-mode-conversation"].tap()
             if UIDevice.current.userInterfaceIdiom == .phone { XCTAssertTrue(app.buttons["composer-preview"].waitForExistence(timeout: 30)); app.buttons["composer-preview"].tap() }
             let field = app.descendants(matching: .any).matching(identifier: "reply-text").firstMatch
             XCTAssertTrue(field.waitForExistence(timeout: 15)); field.tap()
@@ -727,16 +761,21 @@ final class RemoteUITests: XCTestCase {
             XCTAssertEqual(field.value as? String, text, "Long-history input must retain every character")
             let elapsed = Date().timeIntervalSince(start)
             let after = try sample(); XCTAssertEqual(after.count, 2)
+            if (diagnostics.value as? String ?? "").contains("richCreatedCount=0,") {
+                let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "Typing viewport without rich rendering"; screenshot.lifetime = .keepAlways; add(screenshot)
+                print("RENDER_VISIBILITY " + (diagnostics.value as? String ?? ""))
+                XCTFail("The typing comparison must retain real rich rendering")
+            }
             let passes = after[0] - before[0], inspected = after[1] - before[1]
             XCTAssertLessThan(passes, 20, "Layout/focus can update history; text edits must not cause a history pass per character")
             XCTAssertEqual(inspected, passes * eventCount)
             let report = XCTAttachment(string: "Synthetic \(eventCount)-event chat; \(text.count) characters in \(elapsed)s via XCTest; history passes: \(passes); inspected events: \(inspected). XCTest time includes keyboard automation overhead.")
-            print("PERFORMANCE events=\(eventCount) characters=\(text.count) elapsed=\(elapsed) historyPasses=\(passes) inspected=\(inspected)")
+            print("PERFORMANCE events=\(eventCount) characters=\(text.count) elapsed=\(elapsed) historyPasses=\(passes) inspected=\(inspected) native=\(diagnostics.value as? String ?? String())")
             report.name = "Typing work for \(title)"; report.lifetime = .keepAlways; add(report)
             if app.scrollViews["chat-conversation-scroll"].exists { app.scrollViews["chat-conversation-scroll"].coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.15)).tap() }
             if let navigation = app.buttons.matching(identifier: "phone-app-navigation").allElementsBoundByIndex.first(where: { $0.isHittable }) { navigation.tap(); app.buttons["phone-nav-Home"].tap() }
             showChats(app)
-            if !app.buttons["chat-conversation-tab"].isHittable {
+            if !app.buttons["chat-mode-conversation"].isHittable {
                 let visibleRow = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", title)).allElementsBoundByIndex.first(where: { $0.isHittable })
                 try XCTUnwrap(visibleRow).tap()
             }
@@ -1249,6 +1288,7 @@ final class RemoteUITests: XCTestCase {
         let renderers = app.buttons["history-renderers"]
         renderers.tap()
         let count = try XCTUnwrap(Int(renderers.value as? String ?? ""))
+        XCTAssertGreaterThan(count, 0, "The bounded-renderer check must exercise actual rich rendering")
         XCTAssertLessThanOrEqual(count, 16, "A thousand-event history must keep native rich renderers bounded")
         let report = XCTAttachment(string: "1,000 synthetic events with varied rich content; active Markdown renderers after gestures: \(count). XCTest scrolling/CPU/memory metrics retained; simulator metrics do not establish physical-device frame rate.")
         report.name = "Native chat scrolling workload"; report.lifetime = .keepAlways; add(report)
@@ -2804,7 +2844,7 @@ final class PhoneComposerPreviewUITests: XCTestCase {
         editor.tap()
         let singleLine = "Unsent preview draft that is long enough to wrap across several visual lines in this editor."
         editor.typeText(singleLine)
-        XCTAssertEqual(editor.frame.height, initialHeight, accuracy: 1, "Soft wrapping must scroll without growing the box")
+        XCTAssertGreaterThan(editor.frame.height, initialHeight, "Soft wrapping grows the editor before its cap")
         editor.typeText("\nSecond line")
         let draft = singleLine + "\nSecond line"
         XCTAssertEqual(editor.value as? String, draft, "iPhone Return adds a newline without sending")
@@ -2884,7 +2924,8 @@ final class NativeReleaseParityUITests: XCTestCase {
         !editor.exists || (editor.value as? String ?? "").isEmpty
     }, object: editor)
     XCTAssertEqual(XCTWaiter.wait(for: [cleared], timeout: 15), .completed)
-    app.scrollViews["chat-conversation-scroll"].coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.25)).tap()
+    // Successful submission already dismisses the keyboard. A second content tap
+    // can activate Clear on a question after the growing editor changes layout.
     let notice = app.buttons["Dismiss notification"]; if notice.exists { notice.tap() }
     let queue = app.buttons["chat-question-queue-toggle"]
     XCTAssertTrue(queue.waitForExistence(timeout: 10)); if queue.value as? String != "Expanded" { queue.tap() }
@@ -2908,11 +2949,11 @@ final class TabletComposerPreviewUITests: XCTestCase {
         let initialHeight = editor.frame.height
         XCTAssertLessThanOrEqual(initialHeight, 44)
         XCTAssertTrue(app.buttons["composer-model"].exists || app.buttons["composer-options"].exists)
-        editor.tap(); editor.typeText("Unsent tablet preview draft")
-        let draft = "Unsent tablet preview draft"
+        editor.tap(); editor.typeText(String(repeating: "Unsent tablet preview draft ", count: 30))
+        let draft = String(repeating: "Unsent tablet preview draft ", count: 30)
         XCTAssertEqual(editor.value as? String, draft)
-        XCTAssertEqual(editor.frame.height, initialHeight, accuracy: 1)
-        app.scrollViews["chat-conversation-scroll"].coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.25)).tap()
+        XCTAssertGreaterThan(editor.frame.height, initialHeight)
+        app.scrollViews["chat-conversation-scroll"].swipeDown()
         XCTAssertTrue(editor.exists); XCTAssertEqual(editor.value as? String, draft)
         XCTAssertTrue(app.buttons["send-message"].exists); XCTAssertFalse(app.buttons["composer-preview"].exists)
         let card = app.descendants(matching: .any).matching(identifier: "reply-composer-card").firstMatch

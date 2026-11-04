@@ -1387,12 +1387,8 @@ private struct BundledChangelogView: View {
     }
 }
 struct AggregateChat: Identifiable { let hostID: String; let hostName: String; let run: JSON; var id: String { hostID + ":" + run["id"].string } }
-private func chatRowTimestamp(_ run: JSON, timeZone: TimeZone) -> String {
-    let value = run["updatedAt"].string.isEmpty ? run["createdAt"].string : run["updatedAt"].string
-    let fractional = ISO8601DateFormatter(); fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    guard let date = fractional.date(from: value) ?? ISO8601DateFormatter().date(from: value) else { return "" }
-    let formatter = DateFormatter(); formatter.dateStyle = .short; formatter.timeStyle = .short; formatter.timeZone = timeZone
-    return formatter.string(from: date)
+@MainActor private func chatRowTimestamp(_ run: JSON, timeZone: TimeZone) -> String {
+    NativeChatTimestamp.text(run, timeZone: timeZone)
 }
 func nativeChatType(_ run: JSON) -> String {
     if run["chatType"].string == "internet" { return "internet" }

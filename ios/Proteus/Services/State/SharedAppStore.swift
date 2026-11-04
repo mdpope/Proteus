@@ -224,6 +224,7 @@ let nativeFixtureRelayOrigin = ""
     func isTwoFingerNavigation(_ id: String) -> Bool { (twoFingerDeadlines[id] ?? .distantPast) > Date() }
     private var explicitBrowserNavigations = Set<String>()
     private var mirroredBrowserLoads = Set<String>()
+    private var settledMirrorURLs: [String: String] = [:]
     private var browserOperations: [String: JSON] = [:]
     @Published private(set) var browserFavicons: [String: UIImage] = [:]
     private var faviconAttempts: [String: Date] = [:]
@@ -306,27 +307,30 @@ let nativeFixtureRelayOrigin = ""
         Task { await self.flushContentTabs(scope) }
     }
     func localContentTabs(_ scope: String) -> [JSON] {
-        let browsers = tabs(in: scope).compactMap { tab -> JSON? in
+        let scopedBrowsers = tabs(in: scope)
+        var priorByID: [String: JSON] = [:]
+        for prior in contentSnapshots[scope]?["tabs"].array ?? [] where priorByID[prior["id"].string] == nil { priorByID[prior["id"].string] = prior }
+        let instant = ISO8601DateFormatter(); instant.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let browsers = scopedBrowsers.compactMap { tab -> JSON? in
             guard tab.url == nil || Self.historyURL(tab.url ?? "") != nil else { return nil }
             let sharedTitle = tab.history.flatMap { $0.entries.indices.contains($0.index) ? $0.entries[$0.index].title : nil }
             var value: [String: JSON] = ["id": .string(tab.contentTabId ?? tab.id), "type": .string("browser"), "title": .string(tab.customTitle ?? sharedTitle ?? tab.title), "url": .string(tab.url ?? "")]
             if tab.profileId != "default" { value["profileId"] = .string(tab.profileId) }
-            let instant = ISO8601DateFormatter(); instant.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            let prior = contentSnapshots[scope]?["tabs"].array.first { $0["id"].string == (tab.contentTabId ?? tab.id) }
+            let prior = priorByID[tab.contentTabId ?? tab.id]
             for (key, field) in prior?.object ?? [:] where value[key] == nil && !["profileId", "customTitle", "hidden", "persist", "openedAt", "lastTouchedAt", "history"].contains(key) { value[key] = field }
             if let activity = tab.lastActivityAt { value["lastActivityAt"] = .string(activity) }
             value["hidden"] = .bool(tab.hidden); value["persist"] = .bool(tab.persist)
-            if !(contentSnapshots[scope]?["tabs"].array.contains(where: { $0["id"].string == (tab.contentTabId ?? tab.id) }) ?? false), explicitBrowserNavigations.contains(tab.id) || browserOperations[tab.id] != nil { value["url"] = .string("") }
+            if prior == nil, explicitBrowserNavigations.contains(tab.id) || browserOperations[tab.id] != nil { value["url"] = .string("") }
             if tab.hidden { value["hidden"] = .bool(true) }; if tab.persist { value["persist"] = .bool(true) }; if let date = tab.openedAt.flatMap(ProviderAllowance.date) { value["openedAt"] = .string(instant.string(from: date)) }; if let date = tab.lastTouchedAt.flatMap(ProviderAllowance.date) { value["lastTouchedAt"] = .string(instant.string(from: date)) }
             if let customTitle = tab.customTitle { value["customTitle"] = .string(customTitle) }; if value["url"]?.string.isEmpty == false, let history = Self.safeBrowserHistory(tab.history), let data = try? JSONEncoder().encode(history), let json = try? JSONDecoder().decode(JSON.self, from: data) { value["history"] = json }; return .object(value)
         }
-        let docs = documents(in: scope).filter { $0.previewSource == nil }.map { tab -> JSON in var value: [String: JSON] = ["id": .string("document:" + tab.id), "type": .string("document"), "documentId": .string(tab.id), "title": .string(tab.title), "mediaType": .string(tab.mediaType)]; if let chatID = tab.sourceChatID { value["chatId"] = .string(chatID) }; if let customTitle = tab.customTitle { value["customTitle"] = .string(customTitle) }; if let prior = contentSnapshots[scope]?["tabs"].array.first(where: { $0["id"].string == "document:" + tab.id }) { for (key, field) in prior.object where value[key] == nil && key != "customTitle" { value[key] = field } }; return .object(value) }
+        let docs = documents(in: scope).filter { $0.previewSource == nil }.map { tab -> JSON in var value: [String: JSON] = ["id": .string("document:" + tab.id), "type": .string("document"), "documentId": .string(tab.id), "title": .string(tab.title), "mediaType": .string(tab.mediaType)]; if let chatID = tab.sourceChatID { value["chatId"] = .string(chatID) }; if let customTitle = tab.customTitle { value["customTitle"] = .string(customTitle) }; if let prior = priorByID["document:" + tab.id] { for (key, field) in prior.object where value[key] == nil && key != "customTitle" { value[key] = field } }; return .object(value) }
         // Keep owner descriptors that this view cannot render. Omitting them would
         // synthesize Close operations and incomplete browser-only reorder payloads.
         let known = Self.isOrganizationalScope(scope) ? (workspaceContentDescriptors[scope] ?? []) : (contentSnapshots[scope]?["tabs"].array ?? [])
         let retained = known.filter { $0["setup"] != .null || !["browser", "document"].contains($0["type"].string) }
         let all = browsers + docs + retained, order = chatChildOrder[scope] ?? []
-        return order.compactMap { id in all.first { tab in tab["id"].string == id || tab["documentId"].string == id || tabs(in: scope).contains(where: { $0.id == id && ($0.contentTabId ?? $0.id) == tab["id"].string }) } } + all.filter { tab in !order.contains(tab["id"].string) && !order.contains(tab["documentId"].string) && !tabs(in: scope).contains(where: { browser in order.contains(browser.id) && (browser.contentTabId ?? browser.id) == tab["id"].string }) }
+        return NativeContentTabProjection.ordered(all, order: order, browserAliases: Dictionary(scopedBrowsers.map { ($0.id, $0.contentTabId ?? $0.id) }, uniquingKeysWith: { first, _ in first }))
     }
     private func contentTabsChanged() {
         guard !applyingContent, !restoring else { return }
@@ -369,7 +373,7 @@ let nativeFixtureRelayOrigin = ""
         let privateLocal = existingBrowsers.filter { $0.url != nil && Self.safeURL($0.url ?? "") == nil }
         for old in existingBrowsers where !privateLocal.contains(old) && !ids.contains(old.contentTabId ?? old.id) { unload(old.id, force: true); unloadedBrowsers.remove(old.id) }
         for tab in incoming where tab["type"].string == "browser" && tab["setup"] == .null {
-            if let existing = existingBrowsers.first(where: { ($0.contentTabId ?? $0.id) == tab["id"].string }), !privateLocal.contains(existing), !explicitBrowserNavigations.contains(existing.id), browserViews[existing.id]?.url.map({ Self.safeURL($0.absoluteString) == nil }) != true, existing.url ?? "" != tab["url"].string, let url = Self.safeURL(tab["url"].string) { if profileAvailable(existing.profileId) && (tab["profileId"].string.isEmpty ? "default" : tab["profileId"].string) == existing.profileId, let view = browserViews[existing.id] { mirroredBrowserLoads.insert(existing.id); pendingBrowserLoads[existing.id] = url.absoluteString; view.load(URLRequest(url: url)) } }
+            if let existing = existingBrowsers.first(where: { ($0.contentTabId ?? $0.id) == tab["id"].string }), !privateLocal.contains(existing), !explicitBrowserNavigations.contains(existing.id), browserViews[existing.id]?.url.map({ Self.safeURL($0.absoluteString) == nil }) != true, existing.url ?? "" != tab["url"].string, let url = Self.safeURL(tab["url"].string) { if profileAvailable(existing.profileId) && (tab["profileId"].string.isEmpty ? "default" : tab["profileId"].string) == existing.profileId, let view = browserViews[existing.id] { mirroredBrowserLoads.insert(existing.id); settledMirrorURLs[existing.id] = nil; pendingBrowserLoads[existing.id] = url.absoluteString; view.load(URLRequest(url: url)) } }
         }
         let localIDs = Set(existingBrowsers.map(\.id))
         var nextBrowsers = browserTabs.filter { !localIDs.contains($0.id) || (privateLocal.contains($0) && !ids.contains($0.contentTabId ?? $0.id)) }
@@ -831,6 +835,11 @@ let nativeFixtureRelayOrigin = ""
             if remaining.isEmpty {
                 let complete = try await completeNavigationLists(response, remote: config.remote, kind: config.kind, scopeID: config.id)
                 if contentPending[scope] == nil { applyContentTabs(complete, scope: scope) }
+                else {
+                    // New intent can arrive while optional history hydration awaits.
+                    // Its first flush sees contentBusy; hand it back after this one exits.
+                    Task { await self.flushContentTabs(scope) }
+                }
             } else {
                 if response["revision"].int >= (contentSnapshots[scope]?["revision"].int ?? -1) { contentSnapshots[scope] = response }
                 if Self.isOrganizationalScope(scope) { workspaceContentDescriptors[scope] = Self.projectContentOperations(remaining, onto: response["tabs"].array) }
@@ -1420,6 +1429,12 @@ let nativeFixtureRelayOrigin = ""
     func assignBrowserOwner(_ id: String, host: String?) {
         guard let host, let index = browserTabs.firstIndex(where: { $0.id == id }), browserTabs[index].ownerHostId == nil else { return }
         browserTabs[index].ownerHostId = browserTabs[index].scope == "team" ? currentTeamOwner ?? host : contentHosts[browserTabs[index].scope] ?? host
+        if let operation = browserOperations[id], operation["sourceHostId"].string.isEmpty {
+            // No owner ever received this local navigation. Adopt its complete
+            // final descriptor, rather than opening a blank tab while retaining
+            // an in-memory navigation that can never be delivered to that scope.
+            browserOperations[id] = nil
+        }
         recordContentOpen(browserTabs[index])
     }
     private func queueHistoryVisit(_ tab: BrowserDescriptor, operation: JSON) {
@@ -1553,8 +1568,7 @@ let nativeFixtureRelayOrigin = ""
         guard history.entries.indices.contains(target), target != history.index, history.entries[target].url == item.url.absoluteString else { return }
         mirroredBrowserLoads.remove(id)
         let item = BrowserHistoryItem(index: target, url: item.url, title: item.title, entryId: history.entries[target].id)
-        queueBrowserOperation(browserTabs[index], action: "browser-traverse", entry: history.entries[item.index])
-        browserTabs[index].history?.revision += 1
+        if queueBrowserOperation(browserTabs[index], action: "browser-traverse", entry: history.entries[item.index]) { browserTabs[index].history?.revision += 1 }
         browserTabs[index].history?.currentEntryId = history.entries[item.index].id
         browserTabs[index].history?.index = item.index
         serverRedirectedBrowsers.remove(id); originalBrowserLoads[id] = item.url.absoluteString
@@ -1618,19 +1632,23 @@ let nativeFixtureRelayOrigin = ""
         serverRedirectedBrowsers.insert(id)
         if let url { completeBrowserNavigation(url, title: "", in: id) }
     }
-    private func queueBrowserOperation(_ tab: BrowserDescriptor, action: String, entry: BrowserHistoryEntry?) {
-        guard !applyingContent, let entry, Self.historyURL(entry.url) != nil else { return }
+    @discardableResult private func queueBrowserOperation(_ tab: BrowserDescriptor, action: String, entry: BrowserHistoryEntry?) -> Bool {
+        guard !applyingContent, let entry, Self.historyURL(entry.url) != nil else { return false }
         let scope = syncScope(tab)
         let operationID = UUID().uuidString
         var fields: [String: JSON] = ["visitedAt": .string(ISO8601DateFormatter().string(from: Date())), "eventId": .string(operationID), "profileId": .string(tab.profileId), "sourceHostId": .string(contentHosts[scope] ?? tab.ownerHostId ?? ""), "action": .string(action), "tabId": .string(tab.contentTabId ?? tab.id), "operationId": .string(operationID), "baseRevision": .number(Double(tab.history?.revision ?? 0)), "entryId": .string(entry.id), "url": .string(entry.url), "title": .string(entry.title)]
         if let requested = entry.requestedURL, Self.historyURL(requested) != nil { fields["requestedURL"] = .string(requested) }
         let operation: JSON = .object(fields)
         browserOperations[tab.id] = operation
-        if contentSync[scope] != nil {
+        // The transport binding is transient (absent after restart/background).
+        // Persist ordered navigation intent before a binding is available again.
+        let queued = tab.scope != "main" && (contentSync[scope] != nil || contentHosts[scope] != nil || tab.ownerHostId != nil)
+        if queued {
             contentPending[scope, default: []].append(operation); saveDocumentTabs()
             Task { await flushContentTabs(scope) }
         }
         if action != "browser-redirect" { queueHistoryVisit(tab, operation: operation) }
+        return queued
     }
     func failBrowserNavigation(_ id: String, currentURL: URL?) {
         serverRedirectedBrowsers.remove(id); originalBrowserLoads.removeValue(forKey: id)
@@ -1640,7 +1658,22 @@ let nativeFixtureRelayOrigin = ""
         // A failed mirrored load remains local until the user deliberately navigates.
         if explicitBrowserNavigations.remove(id) != nil, let index = browserTabs.firstIndex(where: { $0.id == id }), let history = browserTabs[index].history, history.entries.indices.contains(history.index) { let priorApplying = applyingContent; applyingContent = true; browserTabs[index].url = history.entries[history.index].url; applyingContent = priorApplying }
     }
+    /// The first mirrored load may pass through device-specific login redirects.
+    /// Once it settles, a later URL change is new page navigation, even without a tap.
+    func settleMirroredBrowserLoad(_ id: String, url: URL) {
+        if mirroredBrowserLoads.contains(id) { settledMirrorURLs[id] = url.absoluteString }
+    }
     func completeBrowserNavigation(_ url: URL, title: String, in id: String, nativePosition: Int? = nil, sameDocumentObservation: Bool = false) {
+        if applyingContent {
+            // WebKit KVO can fire synchronously during an owner-driven load.
+            // Re-observe the current page after adoption instead of appending an
+            // entry whose owner operation is forbidden inside that transaction.
+            Task { @MainActor [weak self] in
+                guard let self, let view = self.browserViews[id], view.url == url else { return }
+                self.completeBrowserNavigation(url, title: view.title ?? title, in: id, nativePosition: view.backForwardList.backList.count, sameDocumentObservation: sameDocumentObservation)
+            }
+            return
+        }
         guard let index = browserTabs.firstIndex(where: { $0.id == id }) else { return }
         if Self.historyURL(url.absoluteString) == nil {
             if let requested = originalBrowserLoads[id], let original = Self.historyURL(requested) {
@@ -1658,6 +1691,9 @@ let nativeFixtureRelayOrigin = ""
         // link/form navigation callback. A short trusted-input intent releases
         // the mirror guard; passive redirects and repeated observations do not.
         if explicit || prior.url != url.absoluteString && (browserViews[id] as? NativeLinkWebView)?.hasRecentNavigationIntent == true { mirroredBrowserLoads.remove(id) }
+        if let settled = settledMirrorURLs[id], settled != url.absoluteString {
+            mirroredBrowserLoads.remove(id); settledMirrorURLs[id] = nil
+        }
         let mirrored = mirroredBrowserLoads.contains(id) && !explicit
         if mirrored, let history = prior.history {
             if let nativePosition { nativeHistoryPosition[id] = nativePosition }
@@ -1685,8 +1721,7 @@ let nativeFixtureRelayOrigin = ""
         tab.history = Self.safeBrowserHistory(history)
         if !mirrored && (explicit || prior.url != url.absoluteString || prior.history?.index != tab.history?.index) {
             let traversed = prior.history?.entries.contains(where: { $0.id == tab.history?.currentEntryId }) == true && prior.history?.currentEntryId != tab.history?.currentEntryId
-            queueBrowserOperation(prior, action: traversed ? "browser-traverse" : "browser-navigate", entry: tab.history?.entries[tab.history?.index ?? 0])
-            tab.history?.revision += 1
+            if queueBrowserOperation(prior, action: traversed ? "browser-traverse" : "browser-navigate", entry: tab.history?.entries[tab.history?.index ?? 0]) { tab.history?.revision += 1 }
         }
         if tab != browserTabs[index] { browserTabs[index] = tab }
         var state = browserNavigation[id] ?? BrowserNavigationState()
@@ -1718,6 +1753,7 @@ let nativeFixtureRelayOrigin = ""
         guard force || browserTabs.first(where: { $0.id == id })?.persist != true else { error = "Turn off Persist before unloading this tab."; return }
         historyNavigation.removeValue(forKey: id)
         mirroredBrowserLoads.remove(id)
+        settledMirrorURLs.removeValue(forKey: id)
         pendingBrowserLoads.removeValue(forKey: id); nativeHistoryPosition.removeValue(forKey: id)
         browserObservations.removeValue(forKey: id)?.forEach { $0.invalidate() }
         browserNavigation.removeValue(forKey: id)
@@ -1764,7 +1800,7 @@ let nativeFixtureRelayOrigin = ""
         view.allowsBackForwardNavigationGestures = false; view.isFindInteractionEnabled = true
         browserViews[tab.id] = view
         browserObservations[tab.id] = [observeBrowser(view, id: tab.id, keyPath: \.canGoBack), observeBrowser(view, id: tab.id, keyPath: \.canGoForward), observeBrowser(view, id: tab.id, keyPath: \.isLoading), observeBrowser(view, id: tab.id, keyPath: \.url), observeBrowser(view, id: tab.id, keyPath: \.title)]
-        if let text = tab.url, let url = URL(string: text) { mirroredBrowserLoads.insert(tab.id); pendingBrowserLoads[tab.id] = url.absoluteString; applyPageScale(tab.id, url: url); view.load(URLRequest(url: url)) }
+        if let text = tab.url, let url = URL(string: text) { mirroredBrowserLoads.insert(tab.id); settledMirrorURLs[tab.id] = nil; pendingBrowserLoads[tab.id] = url.absoluteString; applyPageScale(tab.id, url: url); view.load(URLRequest(url: url)) }
         return view
     }
     private func observeBrowser<Value>(_ view: WKWebView, id: String, keyPath: KeyPath<WKWebView, Value>) -> NSKeyValueObservation {
