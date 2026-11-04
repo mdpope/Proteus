@@ -1425,6 +1425,12 @@ let nativeFixtureRelayOrigin = ""
     func assignBrowserOwner(_ id: String, host: String?) {
         guard let host, let index = browserTabs.firstIndex(where: { $0.id == id }), browserTabs[index].ownerHostId == nil else { return }
         browserTabs[index].ownerHostId = browserTabs[index].scope == "team" ? currentTeamOwner ?? host : contentHosts[browserTabs[index].scope] ?? host
+        if let operation = browserOperations[id], operation["sourceHostId"].string.isEmpty {
+            // No owner ever received this local navigation. Adopt its complete
+            // final descriptor, rather than opening a blank tab while retaining
+            // an in-memory navigation that can never be delivered to that scope.
+            browserOperations[id] = nil
+        }
         recordContentOpen(browserTabs[index])
     }
     private func queueHistoryVisit(_ tab: BrowserDescriptor, operation: JSON) {

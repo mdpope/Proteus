@@ -3211,6 +3211,20 @@ final class Nov3PerformanceTests: XCTestCase {
 }
 
 extension RemoteTests {
+    @MainActor func testPreOwnerNavigationAdoptsFinalURLAndHistoryInsteadOfBlankTab() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString), key = RemoteCrypto.random()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let shared = SharedAppStore(cacheWriter: NativeSharedCacheWriter(), cacheRoot: root, cacheKey: { key })
+        let id = try XCTUnwrap(shared.open(nil, scope: "team"))
+        shared.completeBrowserNavigation(URL(string: "https://example.test/one")!, title: "One", in: id)
+        shared.completeBrowserNavigation(URL(string: "https://example.test/final")!, title: "Final", in: id, sameDocumentObservation: true)
+        let host = "10000000-0000-4000-8000-000000000001"
+        shared.assignBrowserOwner(id, host: host)
+        let descriptor = try XCTUnwrap(shared.contentPending["team:" + host]?.last?["tab"])
+        XCTAssertEqual(descriptor["url"].string, "https://example.test/final")
+        XCTAssertEqual(descriptor["history"]["entries"].array.map { $0["url"].string }, ["https://example.test/one", "https://example.test/final"])
+        shared.flushCachedState()
+    }
     @MainActor func testDeviceMainNavigationDoesNotCreateAnUndeliverableOwnerMutation() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString), key = RemoteCrypto.random()
         defer { try? FileManager.default.removeItem(at: root) }
