@@ -706,7 +706,7 @@ struct ChatView: View {
             }
             if NativeTypingDiagnostics.enabled {
                 Button("Read typing diagnostics") {
-                    typingDiagnostics = "\(NativeTypingDiagnostics.historyPasses),\(NativeTypingDiagnostics.inspectedEvents)," + NativeTypingInputMeasurements.snapshotAndReset() + "," + scrollMeasurements.renderViewport.diagnosticSummary()
+                    typingDiagnostics = "\(NativeTypingDiagnostics.historyPasses),\(NativeTypingDiagnostics.inspectedEvents)," + NativeTypingInputMeasurements.snapshotAndReset() + "," + scrollMeasurements.renderViewport.diagnosticSummary() + NativePushTypingFixture.sample()
                 }.accessibilityIdentifier("typing-diagnostics").accessibilityValue(typingDiagnostics)
             }
             if ProcessInfo.processInfo.arguments.contains("--synthetic-desktop-browser-tabs") {

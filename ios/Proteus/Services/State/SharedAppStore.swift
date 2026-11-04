@@ -307,27 +307,30 @@ let nativeFixtureRelayOrigin = ""
         Task { await self.flushContentTabs(scope) }
     }
     func localContentTabs(_ scope: String) -> [JSON] {
-        let browsers = tabs(in: scope).compactMap { tab -> JSON? in
+        let scopedBrowsers = tabs(in: scope)
+        var priorByID: [String: JSON] = [:]
+        for prior in contentSnapshots[scope]?["tabs"].array ?? [] where priorByID[prior["id"].string] == nil { priorByID[prior["id"].string] = prior }
+        let instant = ISO8601DateFormatter(); instant.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let browsers = scopedBrowsers.compactMap { tab -> JSON? in
             guard tab.url == nil || Self.historyURL(tab.url ?? "") != nil else { return nil }
             let sharedTitle = tab.history.flatMap { $0.entries.indices.contains($0.index) ? $0.entries[$0.index].title : nil }
             var value: [String: JSON] = ["id": .string(tab.contentTabId ?? tab.id), "type": .string("browser"), "title": .string(tab.customTitle ?? sharedTitle ?? tab.title), "url": .string(tab.url ?? "")]
             if tab.profileId != "default" { value["profileId"] = .string(tab.profileId) }
-            let instant = ISO8601DateFormatter(); instant.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            let prior = contentSnapshots[scope]?["tabs"].array.first { $0["id"].string == (tab.contentTabId ?? tab.id) }
+            let prior = priorByID[tab.contentTabId ?? tab.id]
             for (key, field) in prior?.object ?? [:] where value[key] == nil && !["profileId", "customTitle", "hidden", "persist", "openedAt", "lastTouchedAt", "history"].contains(key) { value[key] = field }
             if let activity = tab.lastActivityAt { value["lastActivityAt"] = .string(activity) }
             value["hidden"] = .bool(tab.hidden); value["persist"] = .bool(tab.persist)
-            if !(contentSnapshots[scope]?["tabs"].array.contains(where: { $0["id"].string == (tab.contentTabId ?? tab.id) }) ?? false), explicitBrowserNavigations.contains(tab.id) || browserOperations[tab.id] != nil { value["url"] = .string("") }
+            if prior == nil, explicitBrowserNavigations.contains(tab.id) || browserOperations[tab.id] != nil { value["url"] = .string("") }
             if tab.hidden { value["hidden"] = .bool(true) }; if tab.persist { value["persist"] = .bool(true) }; if let date = tab.openedAt.flatMap(ProviderAllowance.date) { value["openedAt"] = .string(instant.string(from: date)) }; if let date = tab.lastTouchedAt.flatMap(ProviderAllowance.date) { value["lastTouchedAt"] = .string(instant.string(from: date)) }
             if let customTitle = tab.customTitle { value["customTitle"] = .string(customTitle) }; if value["url"]?.string.isEmpty == false, let history = Self.safeBrowserHistory(tab.history), let data = try? JSONEncoder().encode(history), let json = try? JSONDecoder().decode(JSON.self, from: data) { value["history"] = json }; return .object(value)
         }
-        let docs = documents(in: scope).filter { $0.previewSource == nil }.map { tab -> JSON in var value: [String: JSON] = ["id": .string("document:" + tab.id), "type": .string("document"), "documentId": .string(tab.id), "title": .string(tab.title), "mediaType": .string(tab.mediaType)]; if let chatID = tab.sourceChatID { value["chatId"] = .string(chatID) }; if let customTitle = tab.customTitle { value["customTitle"] = .string(customTitle) }; if let prior = contentSnapshots[scope]?["tabs"].array.first(where: { $0["id"].string == "document:" + tab.id }) { for (key, field) in prior.object where value[key] == nil && key != "customTitle" { value[key] = field } }; return .object(value) }
+        let docs = documents(in: scope).filter { $0.previewSource == nil }.map { tab -> JSON in var value: [String: JSON] = ["id": .string("document:" + tab.id), "type": .string("document"), "documentId": .string(tab.id), "title": .string(tab.title), "mediaType": .string(tab.mediaType)]; if let chatID = tab.sourceChatID { value["chatId"] = .string(chatID) }; if let customTitle = tab.customTitle { value["customTitle"] = .string(customTitle) }; if let prior = priorByID["document:" + tab.id] { for (key, field) in prior.object where value[key] == nil && key != "customTitle" { value[key] = field } }; return .object(value) }
         // Keep owner descriptors that this view cannot render. Omitting them would
         // synthesize Close operations and incomplete browser-only reorder payloads.
         let known = Self.isOrganizationalScope(scope) ? (workspaceContentDescriptors[scope] ?? []) : (contentSnapshots[scope]?["tabs"].array ?? [])
         let retained = known.filter { $0["setup"] != .null || !["browser", "document"].contains($0["type"].string) }
         let all = browsers + docs + retained, order = chatChildOrder[scope] ?? []
-        return order.compactMap { id in all.first { tab in tab["id"].string == id || tab["documentId"].string == id || tabs(in: scope).contains(where: { $0.id == id && ($0.contentTabId ?? $0.id) == tab["id"].string }) } } + all.filter { tab in !order.contains(tab["id"].string) && !order.contains(tab["documentId"].string) && !tabs(in: scope).contains(where: { browser in order.contains(browser.id) && (browser.contentTabId ?? browser.id) == tab["id"].string }) }
+        return NativeContentTabProjection.ordered(all, order: order, browserAliases: Dictionary(scopedBrowsers.map { ($0.id, $0.contentTabId ?? $0.id) }, uniquingKeysWith: { first, _ in first }))
     }
     private func contentTabsChanged() {
         guard !applyingContent, !restoring else { return }

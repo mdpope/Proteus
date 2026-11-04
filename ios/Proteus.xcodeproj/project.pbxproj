@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		B3F24100112233445566001A = {isa = PBXBuildFile; fileRef = B3F241001122334455660019; };
+		B3F241001122334455660016 = {isa = PBXBuildFile; fileRef = B3F241001122334455660015; };
+		B3F241001122334455660018 = {isa = PBXBuildFile; fileRef = B3F241001122334455660017; };
+		B3F241001122334455660014 = {isa = PBXBuildFile; fileRef = B3F241001122334455660013; };
 		B3F241001122334455660010 = {isa = PBXBuildFile; fileRef = B3F241001122334455660011; };
 		B3F24100112233445566000E = {isa = PBXBuildFile; fileRef = B3F24100112233445566000F; };
 		B3F24100112233445566000C = {isa = PBXBuildFile; fileRef = B3F24100112233445566000D; };
@@ -82,6 +86,10 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		B3F241001122334455660019 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeProjectionTests.swift; sourceTree = "<group>"; };
+		B3F241001122334455660015 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeContentTabProjection.swift; sourceTree = "<group>"; };
+		B3F241001122334455660017 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeChatTimestamp.swift; sourceTree = "<group>"; };
+		B3F241001122334455660013 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativePushTypingFixture.swift; sourceTree = "<group>"; };
 		B3F241001122334455660011 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NativeHistoryWindow.swift; path = Proteus/Features/Chats/Models/NativeHistoryWindow.swift; sourceTree = SOURCE_ROOT; };
 		B3F24100112233445566000F = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NativeMessageRenderVisibility.swift; path = Proteus/State/NativeMessageRenderVisibility.swift; sourceTree = SOURCE_ROOT; };
 		B3F24100112233445566000D = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NativeTypingInputMeasurements.swift; path = Proteus/State/NativeTypingInputMeasurements.swift; sourceTree = SOURCE_ROOT; };
@@ -168,6 +176,7 @@
 				BCFA7F851DB57CA3BDECDDF2 /* MarkdownTests.swift */,
 				FD304CE5E2D4AA434F2B24CC /* RemoteTests.swift */,
 				B3F24100112233445566000B /* StateStreamTests.swift */,
+				B3F241001122334455660019 /* NativeProjectionTests.swift */,
 				B3F241001122334455660008 /* state-patch-vectors.json */,
 			);
 			path = ProteusTests;
@@ -341,6 +350,8 @@
 				B2F241001122334455660002 /* ChatSetup.swift */,
 				8EE5D84DB0FFFCF87E643DDA /* JSON.swift */,
 				85CC555919516B6821F4F60E /* NativeProjects.swift */,
+				B3F241001122334455660015 /* NativeContentTabProjection.swift */,
+				B3F241001122334455660017 /* NativeChatTimestamp.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -348,6 +359,7 @@
 		7E90BCC61DF7B32548EB9619 /* Preview */ = {
 			isa = PBXGroup;
 			children = (
+				B3F241001122334455660013 /* NativePushTypingFixture.swift */,
 				54D0EA83FA3341E9AD922ED5 /* LifeFixtures.swift */,
 			);
 			path = Preview;
@@ -611,6 +623,9 @@
 				EFB5B876A5E8C0845798EFDB /* LifeViews.swift in Sources */,
 				4FB84798FFDA898F674E687B /* LifeForms.swift in Sources */,
 				891380DFDF602E8C8B8B7A29 /* LifeFixtures.swift in Sources */,
+				B3F241001122334455660016 /* NativeContentTabProjection.swift in Sources */,
+				B3F241001122334455660018 /* NativeChatTimestamp.swift in Sources */,
+				B3F241001122334455660014 /* NativePushTypingFixture.swift in Sources */,
 				5740FAB8AE1ED396820BEC60 /* ToolActivityView.swift in Sources */,
 				7D2D46EE0FD987BA432874CD /* BrowserModels.swift in Sources */,
 				5EF60626047C8C2416E2255F /* ChatScrollModels.swift in Sources */,
@@ -632,6 +647,7 @@
 			files = (
 				A4B6B84AF204B4F3F0EC0971 /* MarkdownTests.swift in Sources */,
 				54B2034637BB14023E216F1B /* RemoteTests.swift in Sources */,
+				B3F24100112233445566001A /* NativeProjectionTests.swift in Sources */,
 				B3F24100112233445566000A,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

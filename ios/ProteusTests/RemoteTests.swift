@@ -1882,14 +1882,18 @@ extension DestinationTests {
         try await destinationWait { destinations.selected?.connected == true }
         let remote = try XCTUnwrap(destinations.selected), original = try XCTUnwrap(remote.connection)
         remote.setDraft("new-chat", .string("Keep live draft"))
-        // Same fixture relay, different valid address: requires replacing the WebSocket transport.
-        try destinations.editRelay(original.hostId, address: nativeFixtureRelayOrigin.replacingOccurrences(of: "127.0.0.1", with: "localhost"))
-        XCTAssertFalse(remote.connected); XCTAssertEqual(remote.status, "Connecting…")
-        try await destinationWait { remote.connected }
-        await remote.refresh()
-        XCTAssertTrue(destinations.selected === remote); XCTAssertEqual(remote.connection?.relay, nativeFixtureRelayOrigin.replacingOccurrences(of: "127.0.0.1", with: "localhost"))
-        XCTAssertEqual(remote.connection?.key, original.key); XCTAssertEqual(remote.connection?.deviceId, original.deviceId); XCTAssertEqual(remote.connection?.hostId, original.hostId)
-        XCTAssertEqual(remote.state["hostName"].string, "Build Mac"); XCTAssertEqual(remote.draft("new-chat").string, "Keep live draft")
+        // Replace the transport while its initial automatic sync can still be
+        // pending. A coalesced refresh must await the replacement's state too.
+        let alternate = nativeFixtureRelayOrigin.replacingOccurrences(of: "127.0.0.1", with: "localhost")
+        for address in [alternate, nativeFixtureRelayOrigin, alternate] {
+            try destinations.editRelay(original.hostId, address: address)
+            XCTAssertFalse(remote.connected); XCTAssertEqual(remote.status, "Connecting…")
+            try await destinationWait { remote.connected }
+            await remote.refresh()
+            XCTAssertTrue(destinations.selected === remote); XCTAssertEqual(remote.connection?.relay, address)
+            XCTAssertEqual(remote.connection?.key, original.key); XCTAssertEqual(remote.connection?.deviceId, original.deviceId); XCTAssertEqual(remote.connection?.hostId, original.hostId)
+            XCTAssertEqual(remote.state["hostName"].string, "Build Mac"); XCTAssertEqual(remote.draft("new-chat").string, "Keep live draft")
+        }
     }
 }
 

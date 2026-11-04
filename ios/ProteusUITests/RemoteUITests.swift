@@ -701,6 +701,39 @@ final class RemoteUITests: XCTestCase {
         app.terminate(); app.launchArguments = []; app.launch(); showChats(app); XCTAssertTrue(row.waitForExistence(timeout: 20)); row.tap(); XCTAssertTrue(tab.waitForExistence(timeout: 25)); tab.tap()
         XCTAssertTrue(app.webViews.staticTexts["Version 2"].waitForExistence(timeout: 20)); XCTAssertTrue(app.buttons["Enable interactive preview"].exists)
     }
+    @MainActor func testTypingDuringLargeGeneralStatePushes() throws {
+        for incremental in [false, true] {
+            let app = nativeFixtureApplication()
+            app.launchArguments = ["--reset-pairing", "--synthetic-clean-navigation", "--synthetic-destinations", "--synthetic-heavy-chat", "--typing-diagnostics", "--synthetic-push-typing"]
+            if incremental { app.launchArguments.append("--synthetic-patch-typing") }
+            app.launch(); showChats(app)
+            let row = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Heavy fixture")).firstMatch
+            XCTAssertTrue(row.waitForExistence(timeout: 30)); row.tap()
+            XCTAssertTrue(app.buttons["chat-mode-conversation"].waitForExistence(timeout: 20)); app.buttons["chat-mode-conversation"].tap()
+            if UIDevice.current.userInterfaceIdiom == .phone { XCTAssertTrue(app.buttons["composer-preview"].waitForExistence(timeout: 30)); app.buttons["composer-preview"].tap() }
+            let field = app.descendants(matching: .any).matching(identifier: "reply-text").firstMatch
+            XCTAssertTrue(field.waitForExistence(timeout: 15)); field.tap()
+            let diagnostics = app.buttons["typing-diagnostics"]
+            diagnostics.tap()
+            // Digits keep keyboard word correction out of exact-keystroke acceptance.
+            let text = String(repeating: "1234567890 ", count: 80)
+            field.tap(); let start = Date(); field.typeText(text)
+            let actual = field.value as? String
+            diagnostics.tap()
+            let sample = try XCTUnwrap(diagnostics.value as? String)
+            print("COMBINED_TYPING mode=\(incremental ? "patch" : "full") characters=\(text.count) elapsed=\(Date().timeIntervalSince(start)) diagnostics=\(sample)")
+            XCTAssertEqual(actual, text)
+            func number(_ key: String) -> Double? { sample.split(separator: ",").first { $0.hasPrefix(key + "=") }.flatMap { Double($0.dropFirst(key.count + 1)) } }
+            XCTAssertGreaterThanOrEqual(try XCTUnwrap(number("pushCount")), 8)
+            XCTAssertGreaterThan(try XCTUnwrap(number("fullBytes")), 1_900_000)
+            XCTAssertFalse(sample.contains("pushFailed=true"))
+            XCTAssertGreaterThan(try XCTUnwrap(number("richCreatedCount")), 0)
+            let historyPasses = try XCTUnwrap(sample.split(separator: ",").first.flatMap { Int($0) })
+            XCTAssertLessThanOrEqual(historyPasses, Int(try XCTUnwrap(number("pushCount"))) * 4 + 10, "Streaming can update history; each typed character must not traverse it")
+            let report = XCTAttachment(string: sample); report.name = "Combined General pushes and typing: \(incremental ? "patch" : "full")"; report.lifetime = .keepAlways; add(report)
+            app.terminate()
+        }
+    }
     @MainActor func testTypingDoesNotTraverseLongChatHistory() throws {
         for (fixture, title, eventCount) in [("--synthetic-long-chat", "Long fixture", 1), ("--synthetic-many-chat", "Many fixture", 100), ("--synthetic-heavy-chat", "Heavy fixture", 1000)] {
             if let requested = ProcessInfo.processInfo.environment["PROTEUS_TYPING_EVENTS"], requested != String(eventCount) { continue }

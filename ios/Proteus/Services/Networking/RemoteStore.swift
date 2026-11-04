@@ -446,13 +446,23 @@ struct RemoteHostInfo: Equatable {
             return
         }
         stateSyncInFlight = true
-        stateSyncGeneration = generation
         defer {
             stateSyncInFlight = false
             let waiters = stateSyncWaiters; stateSyncWaiters.removeAll()
             for waiter in waiters { waiter.resume() }
-            if stateResyncRequested { stateResyncRequested = false; Task { await self.refresh(forceState: true) } }
         }
+        var force = forceState
+        repeat {
+            // A reconnect can invalidate an awaited read. Keep its callers
+            // waiting until the requested replacement read has also finished.
+            // Resuming them before scheduling that read exposed empty state.
+            stateResyncRequested = false
+            stateSyncGeneration = generation
+            await refreshStateOnce(forceState: force)
+            force = true
+        } while stateResyncRequested
+    }
+    private func refreshStateOnce(forceState: Bool) async {
         let current = generation, stream = wireState
         do {
             let args = await stream.arguments(cursor: cursor, force: forceState)
@@ -466,6 +476,10 @@ struct RemoteHostInfo: Equatable {
         } catch { if current == generation { self.error = error.localizedDescription } }
     }
     func updateState(_ value: JSON) {
+        #if DEBUG
+        let measuredStart = ProcessInfo.processInfo.systemUptime
+        defer { NativeTypingInputMeasurements.stateApplied(measuredStart) }
+        #endif
         // Keep already fetched older run summaries when receiving the newest page.
         var object = value.object; let ids = Set(value["runs"].array.map { $0["id"].string })
         object["runs"] = .array(value["runs"].array + state["runs"].array.filter { !ids.contains($0["id"].string) })
@@ -605,6 +619,10 @@ struct RemoteHostInfo: Equatable {
         } catch { self.error = error.localizedDescription }
     }
     func mergeChat(_ value: JSON) {
+        #if DEBUG
+        let measuredStart = ProcessInfo.processInfo.systemUptime
+        defer { NativeTypingInputMeasurements.chatMerged(measuredStart) }
+        #endif
         if let observed = ProviderAllowance.date(value["observedAt"].string) { runtimeClockOffset = observed.timeIntervalSinceNow }
         let id = value["id"].string
         guard !id.isEmpty else { return }
@@ -721,7 +739,13 @@ struct RemoteHostInfo: Equatable {
             try? await Task.sleep(for: .seconds(delay))
             guard !Task.isCancelled, let connection else { return }
             cacheDirtySince = nil
+            #if DEBUG
+            let measuredStart = ProcessInfo.processInfo.systemUptime
+            #endif
             let payload = cachePayload(), key = connection.key, url = cacheURL
+            #if DEBUG
+            NativeTypingInputMeasurements.cacheSnapshotted(measuredStart)
+            #endif
             // Encoding, encryption and disk I/O must not block the keyboard's main actor.
             cacheWriter.async { Self.writeCache(payload, key: key, url: url) }
         }

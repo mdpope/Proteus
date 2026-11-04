@@ -1,10 +1,12 @@
 ## Nov 3 — 0.2.42 source validation
 
 - Faster heterogeneous state decoding and section-level chat observation.
+- Index large tab projections and reuse bounded chat timestamp formatting instead of repeating list scans and formatter creation.
 - Admit message WebKit renderers from the native visible range and keep stale history-window bookmarks from hiding a nonempty conversation.
 - Negotiate versioned incremental owner state with a separate wire baseline, full recovery after gaps and debounced cache writes.
 - Soft-wrapped message drafts grow within the existing composer height budget.
 - Ignore packets decoded across connection generations; retain offline browser navigation and resume pending intent after history hydration.
+- Await replacement-connection state before releasing coalesced refresh callers.
 - Preserve owner revisions when navigation cannot queue; release mirrored-load protection for later page-driven navigation after the initial load settles.
 - Simulator evidence and remaining acceptance: `docs/releases/2026-11-03/ios-performance.md`.
 

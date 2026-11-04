@@ -9,6 +9,9 @@ import Foundation
     private static var layout: [Double] = []
     private static var queue: [Double] = []
     private static var richCreation: [Double] = []
+    private static var stateApply: [Double] = []
+    private static var chatMerge: [Double] = []
+    private static var cacheSnapshot: [Double] = []
     private static var pulse: Task<Void, Never>?
     static func start() {
         guard enabled, pulse == nil else { return }
@@ -32,6 +35,18 @@ import Foundation
         guard enabled else { return }
         append((ProcessInfo.processInfo.systemUptime - start) * 1000, to: &richCreation)
     }
+    static func stateApplied(_ start: Double) {
+        guard enabled else { return }
+        append((ProcessInfo.processInfo.systemUptime - start) * 1000, to: &stateApply)
+    }
+    static func chatMerged(_ start: Double) {
+        guard enabled else { return }
+        append((ProcessInfo.processInfo.systemUptime - start) * 1000, to: &chatMerge)
+    }
+    static func cacheSnapshotted(_ start: Double) {
+        guard enabled else { return }
+        append((ProcessInfo.processInfo.systemUptime - start) * 1000, to: &cacheSnapshot)
+    }
     private static func append(_ value: Double, to values: inout [Double]) {
         if values.count < 6000 { values.append(value) }
     }
@@ -41,8 +56,9 @@ import Foundation
             let p95 = sorted.isEmpty ? 0 : sorted[min(sorted.count - 1, Int(Double(sorted.count) * 0.95))]
             return "\(label)Count=\(values.count),\(label)P95Ms=\(String(format: "%.3f", p95)),\(label)MaxMs=\(String(format: "%.3f", sorted.last ?? 0))"
         }
-        let result = [stats("input", input), stats("layout", layout), stats("queue", queue), stats("richCreated", richCreation), "richInitTotalMs=\(String(format: "%.3f", richCreation.reduce(0,+)))", "queueOver250=\(queue.filter { $0 > 250 }.count)"].joined(separator: ",")
+        let result = [stats("input", input), stats("layout", layout), stats("queue", queue), stats("richCreated", richCreation), stats("stateApply", stateApply), stats("chatMerge", chatMerge), stats("cacheSnapshot", cacheSnapshot), "richInitTotalMs=\(String(format: "%.3f", richCreation.reduce(0,+)))", "queueOver250=\(queue.filter { $0 > 250 }.count)"].joined(separator: ",")
         input.removeAll(keepingCapacity: true); layout.removeAll(keepingCapacity: true); queue.removeAll(keepingCapacity: true)
+        stateApply.removeAll(keepingCapacity: true); chatMerge.removeAll(keepingCapacity: true); cacheSnapshot.removeAll(keepingCapacity: true)
         return result
     }
 }

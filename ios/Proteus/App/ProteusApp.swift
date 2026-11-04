@@ -149,6 +149,7 @@ struct ProteusRoot: View {
                             "schedule": .object(["provider": .string("rehearsal")])])
                         remote.state = .object(["runs": .array([run]), "runCount": .number(1), "attentionCount": .number(0), "schedules": .array([])])
                         remote.chats[fixtureID] = run
+                        NativePushTypingFixture.configure(remote: remote, shared: shared, chat: run)
                         remote.flushCache()
                         return
                     }
