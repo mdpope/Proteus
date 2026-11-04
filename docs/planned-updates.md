@@ -4,7 +4,7 @@ The earlier R25 usability request is implemented after local R36 preservation an
 
 ## Nov 3 queue — iOS performance, composer and residual disconnect
 
-The actual iPhone test message arrived, but the operator reports very poor app performance, a message editor that does not grow with its text, and one subsequent disconnect. These follow-ups are explicitly moved to [the Nov 3 issues list](2026-11-03-issues.md). Continue Nov 2 rollout and closeout independently; do not call one delivered message sustained connection acceptance.
+The actual iPhone test message arrived, but the operator reports very poor app performance, a message editor that does not grow with its text, and one subsequent disconnect. These follow-ups are explicitly moved to [the Nov 3 issues list](2026-11-03-issues.md). Continue Nov 2 rollout and closeout independently; do not call one delivered message sustained connection acceptance. The secondary Windows laptop’s missing Cua Driver and Desktop Control setup are also explicitly deferred to the Nov 3 issues list; its Nov 2 installation and preservation checks passed.
 
 ## Nov 3 queue — Mnemosyne redesign
 
