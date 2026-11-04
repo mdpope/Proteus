@@ -43,6 +43,7 @@ test('500 permission displays match owner semantics without owner filesystem res
     let result;
     try { result = JSON.parse(await client.serialize(input)); } finally { fs.realpathSync = original; }
     assert.equal(ownerResolutions, 0);
+    assert.equal(client.diagnostics().lastBodyBytes, Buffer.byteLength(JSON.stringify(result)), 'Payload size is counted by the worker, without a second owner serialization');
     assert.deepEqual(result.runs.map(run => run.permissionContext), JSON.parse(JSON.stringify(expected)));
     assert.deepEqual(result.permissionWorkspaces, JSON.parse(JSON.stringify(expectedWorkspaces)));
     assert.equal(JSON.stringify(input), before);

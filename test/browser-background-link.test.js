@@ -111,8 +111,10 @@ test('background browser registration orders the new tab without changing curren
   sandbox.add({id:'new',title:'Loaded',group:'main',profileId:'profile-a',loaded:true},'source');
   assert.deepEqual(state.tabs.map(tab=>tab.id),['project','source','new','selected-later']);assert.equal(state.tab,'selected-later');assert.equal(state.selected,'selected-later');assert.equal(state.page,'context');
   assert.deepEqual(calls,['save','tabs','children']);assert.equal(state.tabs[2].info.profileId,'profile-a');
+  assert.equal(state.tabs[2].pendingOpen,undefined);sandbox.add({id:'fresh-blank',group:'main'},null,{created:true});assert.equal(state.tabs.find(tab=>tab.id==='fresh-blank').pendingOpen,true);
+  sandbox.add({id:'fresh-blank',group:'main'});assert.equal(state.tabs.find(tab=>tab.id==='fresh-blank').pendingOpen,true,'selection refresh retains unsettled creation');
   sandbox.add({id:'team-new',group:'team'},'team-source');
-  assert.deepEqual(copy(calls.at(-1)),[{id:'team-new',group:'team'},'team-source',{select:false}]);
+  assert.deepEqual(copy(calls.at(-1)),[{id:'team-new',group:'team'},'team-source',{select:false,created:false}]);
 });
 
 test('Team background registration preserves its selected tab and existing default foreground behavior',()=>{
@@ -124,4 +126,13 @@ test('Team background registration preserves its selected tab and existing defau
   assert.equal(state.active,'selected');assert.deepEqual(state.tabs.map(tab=>tab.browserId),['source-native','background','selected-native']);assert.deepEqual(calls,['save','paint']);
   sandbox.select({id:'foreground',title:'Foreground',loaded:true},'source-native');
   assert.equal(state.tabs.find(tab=>tab.id===state.active).browserId,'foreground');assert.deepEqual(calls,['save','paint','save']);
+});
+
+test('only explicit native creation marks a selected browser pending; delayed ordinary selection does not clear it',()=>{
+ const source=fs.readFileSync(new URL('../public/app.js',import.meta.url),'utf8'),start=source.indexOf('function selectBrowserTab('),end=source.indexOf('\nwindow.desktop?.onNewTab',start),state={tabs:[]},calls=[];
+ const sandbox={state,ensureBrowserParent:()=>({id:'project',type:'workspace'}),openTab:value=>{calls.push(value);let prior=state.tabs.find(tab=>tab.id===value.id);if(prior)Object.assign(prior,value);else state.tabs.push(value);},previewEnabled:()=>true};
+ vm.createContext(sandbox);vm.runInContext(source.slice(start,end)+'\nglobalThis.select=selectBrowserTab;',sandbox);
+ sandbox.select({id:'fresh',loaded:true,group:'main'},null,{created:true});assert.equal(state.tabs[0].pendingOpen,true);
+ sandbox.select({id:'fresh',loaded:true,group:'main'});assert.equal(Object.hasOwn(calls.at(-1),'pendingOpen'),false);assert.equal(state.tabs[0].pendingOpen,true);
+ sandbox.select({id:'restored',loaded:true,group:'main'});assert.equal(state.tabs[1].pendingOpen,undefined,'an unknown selected or restored ID is not creation intent');
 });

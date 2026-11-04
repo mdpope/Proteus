@@ -78,7 +78,7 @@ test('update handoff waits for terminal startup, then the attached child, before
 });
 
 test('completed updater card clears an old idle blocker while preserving real failure evidence',async t=>{
- const f=fixture(t);await prepare(f);writeJob(f.controller.file,{phase:'waiting-for-idle',blocker:'A model turn is active.'});assert.match(f.controller.status().job.blocker,/active/);
+ const f=fixture(t);await prepare(f);writeJob(f.controller.file,{phase:'waiting-for-idle',blocker:'A model turn is active.'});assert.match(f.controller.status().job.blocker,/final idle check/);
  writeJob(f.controller.file,{phase:'complete',outcome:'updated',error:'Retained diagnostic',blocker:'A model turn is active.'});const status=f.controller.status();assert.equal(status.job.blocker,null);assert.equal(status.job.error,'Retained diagnostic');assert.equal(status.job.outcome,'updated');
  writeJob(f.controller.file,{phase:'attention',blocker:'Inspect uncertain continuation before retrying.'});assert.match(f.controller.status().job.blocker,/uncertain continuation/);
 });
@@ -125,6 +125,29 @@ test('new input before handoff cancels the checkpoint; durable recovery input st
  const f=fixture(t);await handoff(f,await prepare(f));f.controller.newInput();assert.equal(f.controller.status().job.phase,'prepared');assert.equal(f.engine.updateBarrier,false);
  const job=f.controller.status().job;await handoff(f,job);await f.controller.advance();writeJob(f.controller.file,{phase:'verifying'});
  await f.engine.send(f.run.id,'User message arriving during verified restart','queue','synthetic-user');assert.equal(f.run.status,'queued');assert.equal(f.engine.running.size,0);assert.equal(f.run.events.at(-1).text,'User message arriving during verified restart');
+});
+test('preservation records the completed renderer checkpoint before helper handoff',async t=>{
+ const f=fixture(t);let descriptor={id:'document:'+('d'.repeat(64)),type:'document',documentId:'d'.repeat(64),chatId:'chat-a'};
+ f.service.context={config:()=>({workspaces:[]})};f.service.workspaceProjects={read:()=>({projects:[]})};
+ f.service.contentTabs={read:()=>({scopes:{'chat:chat-a':{tabs:[descriptor]}}})};
+ let checkpointed=false;
+ f.service.prepareUpdateCheckpoint=async()=>{await Promise.resolve();descriptor={...descriptor,hidden:true};checkpointed=true;};
+ const launch=f.controller.launchHelper;f.controller.launchHelper=job=>{assert.equal(checkpointed,true);return launch(job);};
+ await handoff(f,await prepare(f));await f.controller.advance();
+ assert.equal(readJob(f.controller.file).phase,'stopping');
+ assert.equal(f.controller.verifyPreservation(readJob(f.controller.file)).navigation.tabs,1);
+ descriptor={...descriptor,chatId:'other-chat'};
+ assert.throws(()=>f.controller.verifyPreservation(readJob(f.controller.file)),/Saved tab membership/,'a real association change must still fail preservation');
+});
+test('a failed final renderer checkpoint leaves the app open and releases the barrier',async t=>{
+ const f=fixture(t);f.service.prepareUpdateCheckpoint=async()=>{throw Error('Synthetic renderer did not save');};
+ await handoff(f,await prepare(f));await assert.rejects(f.controller.advance(),/Synthetic renderer/);
+ assert.equal(f.controller.status().job.phase,'prepared');assert.equal(f.engine.updateBarrier,false);assert.deepEqual(f.calls,[]);
+});
+test('new input during the renderer checkpoint prevents helper launch and Quit',async t=>{
+ const f=fixture(t);f.service.prepareUpdateCheckpoint=async()=>{f.controller.newInput();};
+ await handoff(f,await prepare(f));await f.controller.advance();
+ assert.equal(f.controller.status().job.phase,'prepared');assert.equal(f.engine.updateBarrier,false);assert.deepEqual(f.calls,[]);
 });
 test('task feedback in another chat preserves handoff but its queued work still blocks restart',async t=>{
  const f=fixture(t);f.engine.drain=async()=>{};
@@ -259,4 +282,14 @@ test('package workers are bounded and shutdown waits for queued work without sta
  const pending=Array.from({length:4},()=>f.controller.packageWork('inventoryStorage',f.controller.root,{home:f.home,installation:f.installation}).catch(error=>error.message));
  await assert.rejects(f.controller.packageWork('inventoryStorage',f.controller.root),/busy/);
  await f.controller.close();assert.deepEqual(await Promise.all(pending),Array(4).fill('The updater is closing.'));assert.equal(f.controller.packagePending,0);
+});
+
+test('live idle diagnostics follow statuses and lane-owned work without losing checkpoint reset semantics',async t=>{
+ const f=fixture(t);const job=await prepare(f);f.run.status='running';f.engine.persist(f.run);await handoff(f,job);
+ let live=f.controller.status().job;assert.equal(live.idle.blockers[0].chatId,f.run.id);assert.equal(live.idle.blockers[0].coordinator,true);
+ f.run.status='completed';f.engine.persist(f.run);f.engine.backgroundRuns.set('synthetic-lane',{id:f.run.id});
+ live=f.controller.status().job;assert.equal(live.idle.blockers[0].reasons[0].code,'background');await f.controller.advance();assert.equal(f.calls.length,0);
+ f.engine.backgroundRuns.clear();f.run.capacityRetry={nextAttemptAt:'2026-11-04T00:00:00Z'};live=f.controller.status().job;assert.equal(live.idle.blockers[0].reasons[0].code,'capacity-retry');
+ delete f.run.capacityRetry;f.controller.newInput();live=f.controller.status().job;assert.equal(live.phase,'prepared');assert.equal(live.idle.checkpointReviewRequired,true);assert.match(live.idle.nextStep,/Ending a turn alone/);assert.equal(f.calls.length,0);
+ await handoff(f,live);live=f.controller.status().job;assert.equal(live.idle.checkpointReviewRequired,false);assert.deepEqual(live.idle.blockers,[]);await f.controller.advance();assert.ok(f.calls.includes('quit'));
 });

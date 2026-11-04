@@ -1,3 +1,115 @@
+## Nov 2 extension tab creation
+
+Extension-created active and background browser tabs carry explicit creation intent into their shared owner registry. The marker survives an older in-flight read and settles after owner acceptance. Existing-tab selection/restoration does not acquire that intent, and confirmed owner closes or moves still remove stale views. Inactive extension creation uses the background focus guard and retains the selected tab. Its adapter reflects the current native selection, or an unchanged blank-page selection; a newer renderer selection prevents restoring an older one. Replacement native package acceptance remains separate from the source correction.
+
+## Nov 2 scrolling performance
+
+Browser projection and profile reconciliation share a freshly loaded identity within one synchronous
+operation. No identity cache survives it. Scroll activity sends only affected timestamp rows to its
+owning windows, retaining deferred session persistence; structural changes still carry full history.
+Bounded diagnostics split projection/IPC and encrypted transport timing. See the
+[controlled before/after and remaining live acceptance](releases/2026-11-02/scroll-performance.md).
+
+## Nov 2 address completion and site icons
+
+Browser and New tab URL fields now offer history-ranked origin ghost text. Enter opens it; Tab
+accepts a canonical URL ending in `/` and keeps focus for a path. Saved site icons appear left of
+history rows, using profile-scoped cache only and a globe fallback. Lookups are debounced, run in
+the history worker and stop outside address editing. Native retains multiline URL editing and
+supports owner history with a cached fallback. Details and verification are in the
+[Nov 2 implementation](releases/2026-11-02/implementation.md).
+
+The separate [scrolling investigation](releases/2026-11-02/scroll-performance.md) records recurring
+main-loop stalls and proposes narrower state updates; it does not claim an identified deadlock or
+live fix. Simulator review and the release hold remain in force.
+
+## R13 — shared setup slots and composer text
+
+The operator confirmed syncing both setup text and ordinary unsent replies. Shared project and
+workspace setup forms use one canonical blank browser descriptor with only a safe setup-kind marker.
+Converting a blank page preserves its logical ID and order; native conversion retires the old local
+browser view without publishing Close. Workspace-root setup creation resolves the default project.
+The owner consumes a setup once on explicit Send; simultaneous attempts cannot create two chats.
+
+Composer text uses a separate human-only owner API, never tab inventory or chat history projections.
+Desktop, web and native clients periodically synchronize idle text with revision checks and durable
+operation IDs. Concurrent edits require an explicit choice and keep recovery copies. Accepted replies
+clear only the exact sent text. Attachment selection, provider/model/source choices and permissions
+stay on the sending device. Window-local app setup tabs stay local. Canonical project-associated
+local previews are discoverable without recreating a chat child strip; denied profiles stay denied.
+
+Validation and review status: [Nov 2 implementation](releases/2026-11-02/implementation.md).
+
+## R14 — website notifications and tab audio
+
+Audit confirmed that permitted page `Notification` events already enter the shared Proteus
+notification history and optional system presenter, preserving site silent intent and exact click
+routing. Page audio remains ordinary Chromium audio. System sounds require system notifications to
+be enabled; operating-system sound settings still apply. This audit does not establish Slack's live
+site permission, workspace sound preference, push delivery or service-worker notification ingestion.
+The existing bridge intercepts the page constructor; background worker delivery needs separate
+acceptance and must not be advertised as verified Proteus inbox integration.
+
+Browser tab menus now offer Mute tab / Unmute tab in app, project/chat and Team Tools strips. Actual
+Chromium audibility drives a speaker immediately before the close button; muted tabs retain a muted
+indicator. Muting silences page audio and that tab's bridged notification sound while retaining visual
+history. State survives unload/reload and saved window sessions; muting an unloaded tab does not
+load it. It remains window-local and is excluded from shared project descriptors. A real Electron
+WebAudio/page-notification rehearsal verifies menu actions, indicator position, sound intent,
+unload behavior and saved state. It does not claim audible output was heard or live Slack tested.
+
+## Nov 2 — clarified mobile navigation review
+
+Window app tabs stay local. iPhone lists them in its sidebar with an app-tab overview;
+iPad/desktop use their top app strip and overview. Sidebar trees show workspace/project destinations,
+never project resource tabs. Projects have one owner-shared ordered content set, preserving stable
+IDs, order, hidden state and history. Chats have no nested resource strip. Phone shows the project
+row, then Chat | Live browser with overview/actions only; the project plus creates tabs. Browser
+links, documents and previews use parent project descriptors and retain their authorization origin.
+Selection and scroll stay local. R13 supersedes the earlier private-draft assumption: shared-project
+New chat/Internet Search slots synchronize empty setup markers, setup text and unsent reply text.
+Attachments and provider/model/source/permission choices remain local to the sending device.
+
+Unloaded pages retain top navigation without loading to switch tabs. Browser/composer spacing uses
+the actual safe area. Native sync applies membership despite history paging failure, handles
+authenticated tab notices and reconnect, and waits for overlapping reads before fetching newer
+owner state. Empty legacy outboxes no longer suppress reads; orphan receipts and private legacy
+resources remain retained without manufacturing project membership. Unchanged offscreen scopes use
+a one-minute fallback; sidebar resource polling is removed. Broader N2 profiling remains separate.
+
+Address entry shares a renderer/desktop parser with matching native behavior for HTTP(S) intranet
+hosts, ports, IPv6, IDN and full fragments; bare words search. Native autoplay reuses the portable
+desktop trusted-gesture/player policy, including existing main/subframes and preference changes.
+Historical activation does not permanently authorize playback.
+
+Human submissions capture authenticated device and bounded window/view origin. Browser tools
+resolve origin before queuing; another window's tab resolves to the same-profile origin mirror.
+Closed/remote origins use a constrained owner fallback with a note or fail when none exists.
+Explicit authorized window overrides remain. Placement never grants page access or approvals.
+
+Review hold: both shared simulator Preview apps must be reviewed before any new physical-device
+build/installation, desktop release package, publication or rollout. Old accepted packages retain
+their historical identity and cannot be promoted as R12. Related superseded Windows/Linux builder
+turns are verified cancelled; queued old-source requests remain retained and require reconciliation
+before reuse. No unrelated work was cancelled.
+
+## Nov 2 — redraw geometry, extension contexts and incoming links
+
+Browser redraws restore the browser layout class independently of toolbar reuse. Native bounds
+therefore use the full content surface while address edits, history and reading position survive.
+
+Chrome runtime context discovery includes host-created extension action popups and extension
+windows, scoped to the requesting extension and browser session. Context identity rotates on
+document navigation; native document IDs are never fabricated. Vendor API argument/result
+logging is disabled. Synthetic authentication-to-ready/autofill verifies this path, while real
+Bitwarden unlock remains a separate live acceptance gate.
+
+Incoming external links keep their project selector when focus changes unless an untouched,
+configured default explicitly supplies the destination. Focus loss without a default cannot
+open an unplaced tab in an arbitrary window. Source-app icons use declared bundle resources,
+avoiding the native file-icon worker crash observed in the disposable Mac test. Internal links
+retain their originating project. Source tests do not establish workstation.example.test installation.
+
 ## Nov 1 — extension window and authentication lifecycle
 
 Extension adapter records hold concrete native windows, never the window-selection proxy. Action

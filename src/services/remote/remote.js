@@ -1,3 +1,9 @@
+import {publishChatStreams,setChatWatch,clearChatWatch} from './chat-streams.js';
+import {RemoteOutbound} from './remote-outbound.js';
+import {validateAgentSendModelOptions} from '../chats/send-model-options.js';
+import {clearQuestionFromQueue} from '../chats/user-questions.js';
+import {inputOrigin} from '../chats/input-origin.js';
+import {attachmentDates} from '../chats/attachment-dates.js';
 import {portableWebsiteNotification} from '../telemetry/website-notification.js';
 import {activeTimeProviders} from '../../../public/features/chats/chat-recovery-state.js';
 import {subagentSummaries,subagentPage} from '../chats/subagents.js';
@@ -15,7 +21,6 @@ import os from 'node:os';
 import path from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
 import { WebSocket } from 'ws';
-import { remoteTransportLimits } from './remote-transport.js';
 import QRCode from 'qrcode';
 import { atomicJSON, readJSON } from '../../shared/files.js';
 import { revision } from '../scheduling/schedules.js';
@@ -25,7 +30,7 @@ import { ChatDocumentApprovals } from '../chats/chat-documents.js';
 import { ChatAttachmentConsents } from '../chats/chat-attachment-consent.js';
 import { chatAttachmentLimits } from '../chats/chat-attachments.js';
 import { RemoteCommandJournal } from './remote-command-journal.js';
-import { browserHistorySettings } from '../browser/browser-history.js';
+import { browserHistorySettings,historyWithSavedIcons } from '../browser/browser-history.js';
 import { hostPlatformMetadata } from '../../shared/host-platform.js';
 
 const timedSync = (diagnostics, name, fn) => diagnostics ? diagnostics.measureSync(name, fn) : fn();
@@ -41,8 +46,10 @@ export const runSummary = r => ({lastActivityAt:chatActivityAt(r),...pick(r,['id
 const entryKeys = ['id', 'name', 'description', 'kind', 'path', 'sources', 'roots', 'mode', 'scope', 'warnings', 'unsupportedAgentFields', 'error', 'missing', 'characters', 'transport', 'integrationStatus'];
 const remoteEntry = entry => ({ ...pick(entry, entryKeys), ...(entry.agent ? { userInvocable: entry.agent.userInvocable } : {}) });
 const remoteProjects = service => { const value=service.workspaceProjects.get(service.engine);return {...value,sourceEntries:value.sourceEntries.map(remoteEntry)}; };
-const mutationMethods = new Set(['inference.start','inference.cancel','computer.access.update','chat.retry-without-agents','projects.update','sources.update','browser.live.instruct','browser.history.record','browser.history.delete','browser.history.settings','tabs.mutate','tabs.manage','workspace.delete','chat.start', 'chat.answer-question', 'chat.reply', 'chat.resume', 'chat.recover', 'chat.cancel', 'chat.send', 'chat.steer-queued','chat.edit-queued','chat.remove-queued', 'chat.review', 'chat.archive', 'chat.move', 'chat.delete', 'chat.rename', 'chat.promote', 'chat.documents.request', 'chat.attachments.begin', 'chat.attachments.chunk', 'chat.attachments.finish', 'chat.attachments.authorize', 'schedule.run', 'schedule.save', 'context.update', 'context.refresh', 'context.mode', 'context.favorite', 'context.addFolders', 'chat.context', 'chat.permissions', 'mcp.login','integrations.check','integrations.recover', 'notifications.read','notifications.open', 'attention.clear', 'resources.action', 'connection.revoke']);
+const mutationMethods = new Set(["draft.text.save",'inference.start','inference.cancel','computer.access.update','chat.retry-without-agents','projects.update','sources.update','browser.live.instruct','browser.history.record','browser.history.delete','browser.history.settings','tabs.mutate','tabs.manage','workspace.delete','chat.start', 'chat.clear-question', 'chat.answer-question', 'chat.reply', 'chat.resume', 'chat.recover', 'chat.cancel', 'chat.send', 'chat.steer-queued','chat.edit-queued','chat.remove-queued', 'chat.review', 'chat.archive', 'chat.move', 'chat.delete', 'chat.rename', 'chat.promote', 'chat.documents.request', 'chat.attachments.begin', 'chat.attachments.chunk', 'chat.attachments.finish', 'chat.attachments.authorize', 'schedule.run', 'schedule.save', 'context.update', 'context.refresh', 'context.mode', 'context.favorite', 'context.addFolders', 'chat.context', 'chat.permissions', 'mcp.login','integrations.check','integrations.recover', 'notifications.read','notifications.open', 'attention.clear', 'resources.action', 'connection.revoke']);
 const canonical = value => Array.isArray(value) ? value.map(canonical) : value && typeof value === 'object' ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value;
+const measuredReplies=new Set(['sync','tabs.get','tabs.history','projects.get','context.get','chat.get','provider.status','notifications.list']);
+const replyKind=method=>'reply:'+(measuredReplies.has(method)?method:'other');
 export const ownerChatControls = (run,engine) => ({steering:typeof engine.providers[run.schedule.provider]?.steer==='function',recovery:!!engine.recovery,...(engine.recovery?{scheduledRecovery:true,activeTimeContinuationProviders:activeTimeProviders}:{}),...(engine.allowance?{allowanceContinuation:true}:{}),steeringMediaTypes:engine.providers[run.schedule.provider]?.acceptedSteeringMediaTypes||[]});
 // Fusion attribution for the visible history window plus the latest turn. Each
 // turn is bounded metadata (no draft/critic content); older pages bring their own.
@@ -54,7 +61,7 @@ export function remoteRun(run, offset = 0, permissions, beforeEvent, chatControl
   const events=run.events;
   const end = Number.isSafeInteger(beforeEvent) && beforeEvent >= 0 ? Math.min(events.length, beforeEvent) : Math.max(0, events.length - offset); const start = Math.max(0, end - 100);
   const capturedContext=runContext(run), permissionSnapshot=permissions?.snapshot?.();
-  return { fusion:run.fusion,fusionTurns:fusionTurnsFor(run,events.slice(start,end)),fusionSelection:run.fusionSelection,fusionAvailability:run.fusionAvailability,attentionRequired:needsAttention(run),subagents:[...subagentSummaries(run),...(permissions?.delegationSummaries?.(run.id)||[])],...runWorkspace(run),lastActivityAt:chatActivityAt(run),observedAt:new Date().toISOString(), ...(chatControls?{chatControls}:{}), ...(permissions ? { permissionContext: permissions.describeRun?.(run,permissionSnapshot) || permissions.describe(run.schedule,permissionSnapshot), permissionRevision: (permissionSnapshot?.value || permissions.get()).revision } : {}), agentName: agentName(run), ...pick(run, ['userQuestions','progress','appCapabilities','turns','timingPartial','id', 'title', 'titleKind', 'titleRevision', 'trigger', 'chatType', 'status', 'queueReason', 'createdAt', 'updatedAt', 'failureReviewedAt', 'pending', 'usage', 'contextUsage', 'providerSessionId', 'nativeSessionPath', 'automaticApprovals', 'modelCapabilities', 'nextModelOptions', 'modelHistory','capacityRetry','allowanceContinuation','allowanceStatus','activeTimeContinuation']),archivedAt:run.archivedAt||null,archived:!!run.archivedAt,queuedMessages:(run.queuedMessages||[]).map(message=>({...pick(message,['id','prompt','at','modelOptions','editedAt']),hasAttachments:!!message.attachmentDispatch,canSteer:!!chatControls?.steering&&(!message.attachmentDispatch||!!events.find(e=>e.data?.delivery?.id===message.id)?.data?.attachments?.length&&events.find(e=>e.data?.delivery?.id===message.id).data.attachments.every(file=>chatControls.steeringMediaTypes?.includes(file.mediaType)))})),failureEventAt:['failed','interrupted'].includes(run.status)?run.failureEventAt||run.updatedAt:null,unansweredQuestionCount:(run.userQuestions||[]).filter(q=>q.status==='pending').length,attentionRequired:(run.userQuestions||[]).some(q=>q.status==='pending')||run.status==='awaiting_input'||(!run.archivedAt&&['failed','interrupted'].includes(run.status)&&!run.failureReviewedAt),
+  return { fusion:run.fusion,fusionTurns:fusionTurnsFor(run,events.slice(start,end)),fusionSelection:run.fusionSelection,fusionAvailability:run.fusionAvailability,attentionRequired:needsAttention(run),subagents:[...subagentSummaries(run),...(permissions?.delegationSummaries?.(run.id)||[])],...runWorkspace(run),lastActivityAt:chatActivityAt(run),observedAt:new Date().toISOString(), ...(chatControls?{chatControls}:{}), ...(permissions ? { permissionContext: permissions.describeRun?.(run,permissionSnapshot) || permissions.describe(run.schedule,permissionSnapshot), permissionRevision: (permissionSnapshot?.value || permissions.get()).revision } : {}), agentName: agentName(run), scheduleId:run.schedule.id,...(run.scheduleTest?{scheduleTest:pick(run.scheduleTest,['receiptId','operationId','scheduleRevision','futureScheduleRevision','settingsScope','retryOf'])}:{}), ...pick(run, ['questionQueueCleared','userQuestions','progress','appCapabilities','turns','timingPartial','id', 'title', 'titleKind', 'titleRevision', 'trigger', 'chatType', 'status', 'queueReason', 'createdAt', 'updatedAt', 'failureReviewedAt', 'pending', 'usage', 'contextUsage', 'providerSessionId', 'nativeSessionPath', 'automaticApprovals', 'modelCapabilities', 'nextModelOptions', 'modelHistory','capacityRetry','allowanceContinuation','allowanceStatus','activeTimeContinuation']),archivedAt:run.archivedAt||null,archived:!!run.archivedAt,queuedMessages:(run.queuedMessages||[]).map(message=>({...pick(message,['id','prompt','at','modelOptions','editedAt']),hasAttachments:!!message.attachmentDispatch,canSteer:!!chatControls?.steering&&(!message.attachmentDispatch||!!events.find(e=>e.data?.delivery?.id===message.id)?.data?.attachments?.length&&events.find(e=>e.data?.delivery?.id===message.id).data.attachments.every(file=>chatControls.steeringMediaTypes?.includes(file.mediaType)))})),failureEventAt:['failed','interrupted'].includes(run.status)?run.failureEventAt||run.updatedAt:null,unansweredQuestionCount:(run.userQuestions||[]).filter(q=>q.status==='pending').length,attentionRequired:(run.userQuestions||[]).some(q=>q.status==='pending')||run.status==='awaiting_input'||(!run.archivedAt&&['failed','interrupted'].includes(run.status)&&!run.failureReviewedAt),
     events: events.slice(start, end).map(e=>e.data?.tool ? {...e,data:{...e.data,tool:{...e.data.tool,presentation:toolPresentation(e.data.tool)}}}:e), eventStart: start, eventCount: events.length, earlier: start, schedule: pick(run.schedule, scheduleKeys),
     context: { ...pick(capturedContext, ['workspaceId', 'workspaceName', 'selectedIds', 'agentId', 'includeDefaults', 'baseWorkspace', 'sourceWorkspaces', 'capturedAt']), entries: (capturedContext.entries || []).map(remoteEntry) }, liveMessages: structuredClone(run.liveMessages || {}) };
 }
@@ -77,7 +84,7 @@ export function remoteState(service) {
   const visibleRuns = runs.filter(run=>!run.archivedAt);
   const workspaceProjects=service.workspaceProjects?remoteProjects(service):null;
   const schedules = timedSync(service.performanceDiagnostics,'remote.state.schedules',()=>service.engine.schedules.list().map(s => pick(s, scheduleKeys)));
-  return { attention:timedSync(service.performanceDiagnostics,'remote.state.attention',()=>service.attention?.()||[]),hostName: service.remote?.config.label || os.hostname(), ...hostPlatformMetadata(),
+  const state = { attention:timedSync(service.performanceDiagnostics,'remote.state.attention',()=>service.attention?.()||[]),hostName: service.remote?.config.label || os.hostname(), ...hostPlatformMetadata(),
     appearance: {showProviderUsage:defaults.appearance?.showProviderUsage!==false,providerUsageCollapsed:defaults.appearance?.providerUsageCollapsed===true},
     ...(defaults.appearance?.showProviderUsage!==false?{providerUsage:remoteUsage({providers:service.usage?.providers})}:{}), schedules,
     ...(workspaceProjects?{workspaceProjects}:{}),
@@ -85,7 +92,8 @@ export function remoteState(service) {
     runningChatCount: countRunningChats(visibleRuns),
     attentionCount: visibleRuns.filter(needsAttention).length,
     context: { ...pick(context, ['revision', 'refreshedAt', 'rootStatus', 'defaultWorkspaceId', 'workspaces', 'universalFolders', 'libraryFolders', 'documents','modes','favorites', 'errors']), entries: context.entries.map(remoteEntry) },
-    defaults: pick(defaults, ['provider', 'model', 'reasoningMode', 'reasoningEffort', 'contextTier', 'serviceTier', 'timezone', 'internetSearches']), providerStatus: service.catalog?.value || null, providerStatuses: Object.fromEntries(Object.entries(service.catalogs || {}).map(([id, catalog]) => [id, catalog.value])),questionAttachmentMediaTypes:Object.fromEntries(Object.keys(service.engine.providers).map(id=>[id,questionAttachmentMediaTypes.filter(type=>service.engine.providers[id]?.acceptedMediaTypes?.includes(type))])),attachmentMediaTypes:Object.fromEntries(Object.keys(service.engine.providers).map(id=>[id,service.engine.providers[id]?.acceptedMediaTypes||[]])),mcpStatusProviders:Object.keys(service.engine.providers).filter(id=>typeof service.engine.providers[id]?.mcpStatus==='function'),mcpLoginProviders:Object.keys(service.engine.providers).filter(id=>typeof service.engine.providers[id]?.mcpLogin==='function'),capabilities:[...(service.sharedInference?['inference.shared.v1']:[]),...(service.computerAccess?['computer.access.v1']:[]),...(service.projectFollow?['tabs.follow.v1']:[]),'chat.subagents.v1','chat.agent-control.v1','chat.build-coordinator.v1','chat.update-coordinator.v1','chat.update-release.v1','attention.ack.v1','chat.pages.v1','host.platform.v1',...(service.workspaceProjects?['projects.v1','projects.move.v1','source-library.v1']:[]),'chat.paths.v1','chat.export.v1','chat.previews.v1','content-tabs.v1','chat.index.v1','chat.queue-edit.v1','integrations.health.v1','chat.review.v1','chat.lifecycle.v1','chat.rename.v1','chat.retry-without-agents.v1','chat.attachments.view.v1','chat.internet.v1','workspaces.v1',...(service.engine.permissions?.preserveInheritedDefaults?['chat.permissions.shared.v1']:[]),'chat.permissions.folders.v1','chat.permissions.chat.v1','chat.permissions.pending.v1','chat.documents.v1','chat.attachments.v1','chat.question-attachments.v1','notifications.v1',...(service.openWebsiteNotification?['website.notifications.v1']:[]),'authenticated-revocation.v1','connection-self-revoke.v1',...(service.browserHistory?['browser.history.v1','browser.navigation.v1']:[]),...(service.liveBrowser?['browser.live.v1']:[]),...(service.resources?['resources.v1']:[])],protocol: 1 };
+    defaults: pick(defaults, ['provider', 'model', 'reasoningMode', 'reasoningEffort', 'contextTier', 'serviceTier', 'timezone', 'internetSearches']), providerStatus: service.catalog?.value || null, providerStatuses: Object.fromEntries(Object.entries(service.catalogs || {}).map(([id, catalog]) => [id, catalog.value])),questionAttachmentMediaTypes:Object.fromEntries(Object.keys(service.engine.providers).map(id=>[id,questionAttachmentMediaTypes.filter(type=>service.engine.providers[id]?.acceptedMediaTypes?.includes(type))])),attachmentMediaTypes:Object.fromEntries(Object.keys(service.engine.providers).map(id=>[id,service.engine.providers[id]?.acceptedMediaTypes||[]])),mcpStatusProviders:Object.keys(service.engine.providers).filter(id=>typeof service.engine.providers[id]?.mcpStatus==='function'),mcpLoginProviders:Object.keys(service.engine.providers).filter(id=>typeof service.engine.providers[id]?.mcpLogin==='function'),capabilities:[...(service.sharedInference?['inference.shared.v1']:[]),...(service.computerAccess?['computer.access.v1']:[]),...(service.projectFollow?['tabs.follow.v1']:[]),'chat.subagents.v1','chat.agent-control.v1','chat.send-model-options.v1','chat.build-coordinator.v1','chat.update-coordinator.v1','chat.update-release.v1','attention.ack.v1','chat.pages.v1','chat.watch.v1','chat.delta.v1','draft.text.v1','host.platform.v1',...(service.workspaceProjects?['projects.v1','projects.move.v1','source-library.v1']:[]),'chat.paths.v1','chat.export.v1','chat.previews.v1','content-tabs.v1','chat.index.v1','chat.queue-edit.v1','integrations.health.v1','chat.review.v1','chat.lifecycle.v1','chat.rename.v1','chat.retry-without-agents.v1','chat.attachments.view.v1','chat.internet.v1','workspaces.v1',...(service.engine.permissions?.preserveInheritedDefaults?['chat.permissions.shared.v1']:[]),'chat.permissions.folders.v1','chat.permissions.chat.v1','chat.permissions.pending.v1','chat.documents.v1','chat.attachments.v1','chat.question-attachments.v1','chat.questions.clear.v1','notifications.v1',...(service.openWebsiteNotification?['website.notifications.v1']:[]),'authenticated-revocation.v1','connection-self-revoke.v1',...(service.browserHistory?['browser.history.v1','browser.navigation.v1']:[]),...(service.liveBrowser?['browser.live.v1']:[]),...(service.resources?['resources.v1']:[])],protocol: 1 };
+  service.performanceDiagnostics?.stateShape?.(state);return state;
   });
 }
 function validateRelayURL(value) {
@@ -150,34 +158,47 @@ export class RemoteHost {
   connect() {
     if (!this.config.enabled || this.closed) return;
     this.status = 'connecting';
+    this.outbound?.stop();this.relayClientDisconnect=false;
     const base = this.config.mode === 'local' ? `ws://127.0.0.1:${this.config.port}` : this.config.relayURL;
     const ws = this.socket = new WebSocket(`${base}/socket?role=host&host=${this.config.hostId}`, { headers: { Authorization: `Bearer ${this.config.relayToken}` }, maxPayload: 8_000_000, handshakeTimeout: 8000 });
     ws.on('open', () => { if (this.socket !== ws) return;this.status='online';this.error=null;clearTimeout(this.stableConnectionTimer);this.stableConnectionTimer=setTimeout(()=>{this.reconnectAttempt=0;},30000);this.stableConnectionTimer.unref?.();const since=this.config.offlineSince;if(since){const elapsed=Math.max(0,Math.floor((Date.now()-Date.parse(since))/1000));this.service.activity?.add('device.reconnected',{hostId:this.config.hostId,offlineSeconds:elapsed});delete this.config.offlineSince;this.save();}this.service.activity?.log('info','transport.online','Connected to the relay.',{hostId:this.config.hostId}); });
     ws.on('error', error => { if (this.socket === ws) this.error = /Unexpected server response: (401|403)\b/.test(error.message) ? 'The relay rejected this computer’s registration. Check its relay registration token or whether this computer is already connected elsewhere. To connect to another computer, use that computer’s pairing code; incoming access here is not required.' : error.message; });
-    ws.on('close', () => {
+    ws.on('close', (code) => {
+      this.service.performanceDiagnostics?.transport({closeCode:code});
       if (this.socket !== ws) return;
-      for(const id of this.peers.keys()){this.service.projectFollow?.removeActor(id);this.service.sharedInference?.jobs.disconnect(id);}this.peers.clear(); this.status = 'offline';this.config.offlineSince ||= new Date().toISOString();this.save();this.service.activity?.log('warning','transport.offline','Connection to the relay was interrupted.',{hostId:this.config.hostId});
+      this.outbound?.stop();
+      for(const id of this.peers.keys()){this.service.projectFollow?.removeActor(id);this.service.sharedInference?.jobs.disconnect(id);}this.peers.clear(); this.status = 'offline';this.config.offlineSince ||= new Date().toISOString();this.save();this.service.activity?.log('warning','transport.offline','Connection to the relay was interrupted.',{hostId:this.config.hostId,closeCode:code,remoteTransport:this.service.performanceDiagnostics?.snapshot().remoteTransport});
       clearTimeout(this.stableConnectionTimer);
       if (!this.closed && this.config.enabled) {const delay=Math.min(30000,1000*2**Math.min(this.reconnectAttempt||0,5))*(.75+Math.random()*.5);this.reconnectAttempt=(this.reconnectAttempt||0)+1;this.reconnect = setTimeout(() => this.connect(), delay);}
     });
     ws.on('message', bytes => {
+      this.service.performanceDiagnostics?.transport({direction:'receive',bytes:bytes.length});
       try {
         const message = JSON.parse(bytes);
+        if(message.type==='relay.ready'){this.relayClientDisconnect=message.capabilities?.includes('client.disconnect.v1')===true;return;}
         if (message.type === 'connect') {
           const peer = { id: message.clientId, challenge: secret(), incoming: 0, outgoing: 0, joined: Date.now() };
           this.peers.set(peer.id, peer); this.raw(peer, { type: 'challenge', challenge: peer.challenge });
-        } else if (message.type === 'disconnect') {this.service.projectFollow?.removeActor(message.clientId);this.service.sharedInference?.jobs.disconnect(message.clientId);this.peers.delete(message.clientId);}
+        } else if (message.type === 'disconnect') {this.outbound?.remove(message.clientId);this.service.projectFollow?.removeActor(message.clientId);this.service.sharedInference?.jobs.disconnect(message.clientId);this.peers.delete(message.clientId);}
         else { const peer = this.peers.get(message.clientId); if (peer) void this.receive(peer, message.packet).catch(() => { this.service.projectFollow?.removeActor(peer.id);this.peers.delete(peer.id); this.raw(peer, { type: 'rejected' }); }); }
       } catch { /* Reject malformed routing frames without taking the host down. */ }
     });
   }
-  raw(peer, packet) {
+  raw(peer, packet, kind='other') {
+    if(this.peers&&this.peers.get(peer.id)!==peer&&packet.type!=='rejected')return;
     if(this.socket?.readyState!==WebSocket.OPEN)return;
-    const payload=JSON.stringify({clientId:peer.id,packet}),bytes=Buffer.byteLength(payload);
-    if(bytes>remoteTransportLimits.packetBytes||this.socket.bufferedAmount+bytes>remoteTransportLimits.bufferedBytes){this.socket.close(1013,'Transport is busy; reconnect and refresh.');return;}
-    this.socket.send(payload);
+    const payload=JSON.stringify({clientId:peer.id,packet});
+    if(!this.outbound||this.outbound.socket!==this.socket) {
+      this.outbound?.stop();
+      this.outbound=new RemoteOutbound(this.socket,{
+        reject:target=>{this.service.projectFollow?.removeActor(target.id);this.service.sharedInference?.jobs.disconnect(target.id);this.peers?.delete(target.id);if(!this.relayClientDisconnect||!this.outbound.control(JSON.stringify({type:'client.disconnect',clientId:target.id})))this.socket.close(1013,'Transport congestion; relay upgrade required for client isolation.');},
+        sent:(size,buffered,kind)=>this.service.performanceDiagnostics?.transport({direction:'send',bytes:size,buffered,kind}),
+        congested:buffered=>this.service.performanceDiagnostics?.transport({congested:true,buffered}),
+      });
+    }
+    return this.outbound.enqueue(peer,payload,kind);
   }
-  send(peer, value) { const seq = ++peer.outgoing; this.raw(peer, { type: 'data', seq, box: seal(peer.device.key, value, `${peer.prefix}:host:${seq}`) }); }
+  send(peer, value, method) { const seq=++peer.outgoing,box=timedSync(this.service.performanceDiagnostics,'remote.send.encrypt',()=>seal(peer.device.key,value,`${peer.prefix}:host:${seq}`));return timedSync(this.service.performanceDiagnostics,'remote.send.transport',()=>this.raw(peer,{type:'data',seq,box},value.type==='event'?value.event:value.type==='result'?replyKind(method):'other')); }
   async pairing(publicURL,{management=false}={}) {
     if (this.status !== 'online') throw new Error('Enable remote access and wait for the relay to connect.');
     const relay = validateRelayURL(publicURL || (this.config.mode === 'external' ? this.config.publicURL : this.addresses()[0] || `ws://127.0.0.1:${this.config.port}`));
@@ -251,8 +272,8 @@ export class RemoteHost {
     if (!this.config.devices.some(d => d.id === peer.device.id) || packet.type !== 'data' || packet.seq !== peer.incoming + 1) throw new Error('Invalid sequence.');
     const message = unseal(peer.device.key, packet.box, `${peer.prefix}:client:${packet.seq}`); peer.incoming = packet.seq;
     if (typeof message.id !== 'string' || !/^[a-f0-9-]{36}$/i.test(message.id)) throw new Error('Invalid request ID.');
-    try { const result = await this.command(peer, message); if (this.peers.get(peer.id) === peer) this.send(peer, { type: 'result', id: message.id, result }); }
-    catch (error) { if (this.peers.get(peer.id) === peer) this.send(peer, { type: 'result', id: message.id, error: error.message, ...(error.code === 'JOURNAL_BUSY' ? {code:error.code,details:error.details} : {}) }); }
+    try { const result = await this.command(peer, message); if (this.peers.get(peer.id) === peer) this.send(peer, { type: 'result', id: message.id, result }, message.method); }
+    catch (error) { if (this.peers.get(peer.id) === peer) this.send(peer, { type: 'result', id: message.id, error: error.message, ...(error.code === 'JOURNAL_BUSY' ? {code:error.code,details:error.details} : {}) }, message.method); }
   }
   requireCommandGrants(peer, method, args) {
     if (!this.config.devices.some(device => device.id === peer.device?.id)) throw new Error('Unknown paired device.');
@@ -322,6 +343,7 @@ export class RemoteHost {
     const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Host request failed.'); return data;
   }
   async execute(peer, method, args) {
+    if(!args.agentControl&&['chat.start','chat.send','chat.reply','chat.answer-question','chat.resume'].includes(method))args={...args,inputOrigin:inputOrigin(args.inputOrigin,{hostId:this.config.hostId,deviceId:peer.device.id,client:args.inputOrigin?.client==='mobile'?'mobile':args.inputOrigin?.client==='website'?'website':'remote-desktop'})};
     if(method.startsWith('inference.')){if(!this.service.sharedInference)throw Error('Shared inference is unavailable.');return this.service.sharedInference.handle(peer,method,args);}
     const engine = this.service.engine;
     if(method==='computer.access.get')return this.service.computerAccess.get();
@@ -329,7 +351,8 @@ export class RemoteHost {
     if(method.startsWith('browser.history.')){
       const history=this.service.browserHistory;if(!history)throw new Error('Browser history is unavailable on this computer.');
       const action=method.slice('browser.history.'.length);
-      if(action==='query')return history.query(args);
+      if(action==='suggest')return historyWithSavedIcons(this.service,await history.suggest(args),args);
+      if(action==='query')return historyWithSavedIcons(this.service,await history.query(args),args);
       if(action==='record')return history.record(args);
       if(action==='delete')return history.delete(args);
       if(action==='status')return history.status();
@@ -358,7 +381,7 @@ export class RemoteHost {
     if (method === 'sync') {
       return timed(this.service.performanceDiagnostics, 'remote.sync', () => {
       const index = this.journal.findIndex(event => event.cursor === args.cursor);
-      if (index >= 0) for (const event of this.journal.slice(index + 1)) if (!event.runId || event.runId === peer.runId) this.send(peer, event);
+      if (index >= 0) for (const event of this.journal.slice(index + 1)) if (event.event !== 'state' && !(event.event === 'run' && (peer.summaryOnly || peer.deltaOnly)) && !(event.event === 'run.changed' && !peer.summaryOnly) && (!event.runId || event.runId === peer.runId)) this.send(peer, event);
       return { state: remoteState(this.service), cursor: `${this.epoch}:${this.sequence}` };
       });
     }
@@ -413,10 +436,11 @@ export class RemoteHost {
         }
         if((value.operations||[]).some(op=>op.action==='close'&&this.service.contentTabs.get(value.scope,value.id).tabs.some(tab=>tab.id===op.id&&tab.type==='terminal')))this.requireResourceAccess(peer);
         result=await this.service.mutateContentTabs(value);
-      }else result=await this.service.contentTabs.getAsync(args.scope,args.id,{historyLimit:args.historyLimit});
+      }else result=await this.service.contentTabs.getAsync(args.scope,args.id,{historyLimit:args.historyLimit??32});
       return {...result,tabs:result.tabs.filter(tab=>tab.type!=='document'||canDocuments)};
     }
-    if (method === 'chat.get') { const run = engine.getRun(args.id); if(args.agentId)return run.subagents?.some(row=>row.id===args.agentId)?subagentPage(run,args.agentId,args.beforeEvent):engine.delegation.page(run.id,args.agentId,args.beforeEvent); if(args.watch!=='none'){peer.runId = run.id;peer.summaryOnly=args.watch==='summary';} const view={...remoteRun(run, Math.max(0, Math.floor(Number(args.offset) || 0)), engine.permissions, args.beforeEvent,ownerChatControls(run,engine)),...this.service.workspaceProjects?.membership(run),...(run.schedule.purpose==='update'?{update:updateObservation(this.service,run)}:{})};return args.historyCursor?chatDelta(run,view,args.historyCursor):{...view,...(!args.offset&&args.beforeEvent===undefined?chatDelta(run,view):{})}; }
+    if (method === 'chat.watch') { if(args.watch!=='none'||typeof args.id!=='string')throw Error('Choose a chat to stop watching.');return {cleared:clearChatWatch(peer,args.id,args.watchToken)}; }
+    if (method === 'chat.get') { const run = engine.getRun(args.id); if(args.agentId)return run.subagents?.some(row=>row.id===args.agentId)?subagentPage(run,args.agentId,args.beforeEvent):engine.delegation.page(run.id,args.agentId,args.beforeEvent); if(args.watchToken!==undefined&&(typeof args.watchToken!=='string'||!/^[a-f0-9-]{36}$/i.test(args.watchToken)))throw Error('Invalid chat watch token.');if(args.watch!=='none')setChatWatch(peer,run.id,args.watch,args.watchToken); const view={...remoteRun(run, Math.max(0, Math.floor(Number(args.offset) || 0)), engine.permissions, args.beforeEvent,ownerChatControls(run,engine)),...this.service.workspaceProjects?.membership(run),...(run.schedule.purpose==='update'?{update:updateObservation(this.service,run)}:{})};const result=args.historyCursor?chatDelta(run,view,args.historyCursor):{...view,...(!args.offset&&args.beforeEvent===undefined?chatDelta(run,view):{})};if(peer.deltaOnly&&peer.runId===run.id&&args.watch!=='none'&&result.historyCursor)peer.historyCursor=result.historyCursor;return result; }
     if(method==='chat.previews.list'||method==='chat.previews.read'){
       this.requireDocumentAccess(peer);const run=engine.getRun(args.id);
       const result=await(method.endsWith('.list')?this.service.previews.list(run):this.service.previews.read(run,args.documentId));
@@ -444,7 +468,7 @@ export class RemoteHost {
       if(!engine.providers[providerId]?.acceptedMediaTypes)throw new Error(`${providerId} cannot receive ${args.mediaType} attachments. Choose a supported file type or provider.`);
       if(args.providerId!==undefined&&args.providerId!==providerId)throw new Error('The chat provider changed. Choose the attachment again.');
       if(!run&&!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(args.draftId||''))throw new Error('Choose a chat or a valid first-message draft.');
-      return this.service.attachments.begin({chatId:run?.id||'draft:'+args.draftId,deviceId:peer.device.id,messageId:args.messageId,providerId,name:args.name,mediaType:args.mediaType,size:args.size,sha256:args.sha256});
+      return this.service.attachments.begin({chatId:run?.id||'draft:'+args.draftId,deviceId:peer.device.id,messageId:args.messageId,providerId,name:args.name,mediaType:args.mediaType,size:args.size,sha256:args.sha256,...attachmentDates(args)});
     }
     if (method === 'chat.attachments.chunk') return this.service.attachments.chunk({uploadId:args.uploadId,deviceId:peer.device.id,index:args.index,dataBase64:args.dataBase64});
     if (method === 'chat.attachments.finish') return this.service.attachments.finish({uploadId:args.uploadId,deviceId:peer.device.id});
@@ -481,7 +505,7 @@ export class RemoteHost {
         if(!selection||typeof selection!=='object'||Array.isArray(selection)||Object.keys(selection).some(key=>!['releaseId','manifestDigest','channel'].includes(key))||typeof selection.releaseId!=='string'||!selection.releaseId||!/^[a-f0-9]{64}$/.test(selection.manifestDigest||'')||selection.channel!==undefined&&!['stable','preview'].includes(selection.channel))throw Error('Choose an exact published release and manifest digest.');
         const run=await startUpdateSession(this.service,{...selection,operationId:args.operationId,instructions:args.prompt});peer.runId=run.id;return {runId:run.id};
       }
-      const startArgs=pick(args,['purpose','chatType','name','prompt','provider','model','reasoningEffort','contextTier','serviceTier','workspaceId','projectId','selectedIds','agentId','includeDefaults']);
+      const startArgs=pick(args,['purpose','chatType','name','prompt','inputOrigin','provider','model','reasoningEffort','contextTier','serviceTier','workspaceId','projectId','selectedIds','agentId','includeDefaults','setupId','setupScope','setupScopeId']);
       const project=startArgs.purpose==='update'?null:this.service.workspaceProjects?.projectFor(startArgs);if(project&&(args.projectId||args.workspaceId))startArgs.workspaceId=project.workspaceId;
       if(args.commandFolder){
         const catalog=this.service.context.get(),profile=catalog.workspaces.find(w=>w.id===(startArgs.workspaceId||catalog.defaultWorkspaceId));
@@ -496,12 +520,14 @@ export class RemoteHost {
       }
       const files=Array.isArray(args.attachments)?args.attachments:[];
       if(!files.length){const run=await this.api('/api/chat',startArgs);peer.runId=run.id;return {runId:run.id};}
+      const started = await this.service.startSharedSetup(startArgs, async () => {
       if(!args.consentId||!args.draftId||!args.messageId||files.length>chatAttachmentLimits.maxBatchFiles||args.providerId!==args.provider)throw new Error('Review the exact first-message files and named provider before sending.');
-      const schedule=await this.service.buildChatSchedule(startArgs);
+      const schedule=await this.service.buildChatSchedule(startArgs,{attachmentOnly:files.length>0});
       await this.attachmentConsents.verify({consentId:args.consentId,draftId:args.draftId,messageId:args.messageId,providerId:schedule.provider,deviceId:peer.device.id,attachmentIds:files});
-      const run=engine.createRun(schedule,'chat',null,{deferStart:true});if(project)this.service.workspaceProjects.associate(run,project,engine);let prepared;
-      try{prepared=await this.attachmentConsents.prepareSend({consentId:args.consentId,draftId:args.draftId,chatId:run.id,messageId:args.messageId,providerId:schedule.provider,deviceId:peer.device.id,attachmentIds:files});engine.startDeferredRun(run.id,{proofId:prepared.proofId,attachmentIds:files,messageId:args.messageId});peer.runId=run.id;return {runId:run.id};}
+      const run=engine.createRun(schedule,'chat',null,{deferStart:true,attachmentOnly:!schedule.prompt.trim(),inputOrigin:args.inputOrigin,setupId:args.setupId});if(project)this.service.workspaceProjects.associate(run,project,engine);let prepared;
+      try{prepared=await this.attachmentConsents.prepareSend({consentId:args.consentId,draftId:args.draftId,chatId:run.id,messageId:args.messageId,providerId:schedule.provider,deviceId:peer.device.id,attachmentIds:files});engine.startDeferredRun(run.id,{proofId:prepared.proofId,attachmentIds:files,messageId:args.messageId});return run;}
       catch(error){if(prepared)await this.attachmentConsents.releaseProof(prepared.proofId).catch(()=>{});engine.discardDeferredRun(run.id);throw error;}
+      });peer.runId=started.id;return {runId:started.id};
     }
     if (method === 'schedule.run') { const run = await this.api('/api/run', { id: args.id }); peer.runId = run.id; return { runId: run.id }; }
     if (method==='chat.send'&&Array.isArray(args.attachments)&&args.attachments.length){
@@ -509,24 +535,30 @@ export class RemoteHost {
       if(args.messageId&&run.events.some(event=>event.data?.delivery?.id===args.messageId))return {runId:run.id};
       if(files.length>chatAttachmentLimits.maxBatchFiles||args.providerId!==run.schedule.provider||!args.consentId||!args.messageId)throw new Error('Review the exact files and named provider before sending.');
       const prepared=await this.attachmentConsents.prepareSend({consentId:args.consentId,chatId:run.id,messageId:args.messageId,providerId:run.schedule.provider,deviceId:peer.device.id,attachmentIds:files});
-      try{await engine.send(run.id,args.prompt,args.mode||'queue',args.messageId,args.modelOptions,{proofId:prepared.proofId,attachmentIds:files});peer.runId=run.id;return {runId:run.id};}
+      try{await engine.send(run.id,args.prompt,args.mode||'queue',args.messageId,args.modelOptions,{proofId:prepared.proofId,attachmentIds:files},undefined,args.inputOrigin);await this.service.sharedDrafts.clearSent({kind:'reply',id:run.id},args.prompt).catch(()=>{});peer.runId=run.id;return {runId:run.id};}
       catch(error){await this.attachmentConsents.releaseProof(prepared.proofId).catch(()=>{});throw error;}
     }
+    if(['draft.text.get','draft.text.save'].includes(method)){if(args.agentControl)throw Error('Draft text belongs to the human composer.');return method==='draft.text.save'?this.service.sharedDrafts.save(args):this.service.sharedDrafts.get(args);}
+    if(method==='chat.clear-question'){if(args.agentControl)throw Error('Question queue review requires the human chat interface.');clearQuestionFromQueue(engine,args.id,args.questionId);return {runId:args.id};}
     if(method==='chat.answer-question'){if(args.agentControl)throw Error('Interactive question answers require the human chat interface.');await answerQuestionWithAttachments(engine,args.id,args,peer.device.id);return {runId:args.id};}
     if(method==='chat.reply'&&args.attachments?.length){if(args.agentControl)throw Error('Agent replies cannot supply user attachments.');return replyWithAttachments(engine,args.id,args,peer.device.id);}
     if (['chat.reply', 'chat.resume', 'chat.recover', 'chat.cancel', 'chat.send', 'chat.steer-queued','chat.edit-queued','chat.remove-queued'].includes(method)) {
-      if(args.agentControl){const run=engine.getRun(args.id),projectId=this.service.workspaceProjects?.membership(run)?.projectId||null;
-        if(Object.hasOwn(args,'expectedProjectId')&&args.expectedProjectId!==projectId)throw new Error('Destination project changed. Refresh the task scope.');
+      if(args.agentControl){const captured=engine.getRun(args.id),provider=captured.schedule.provider;
+        const checkProject=()=>{const projectId=this.service.workspaceProjects?.membership(captured)?.projectId||null;if(Object.hasOwn(args,'expectedProjectId')&&args.expectedProjectId!==projectId)throw new Error('Destination project changed. Refresh the task scope.');};
+        checkProject();
+        const modelOptions=method==='chat.send'?await validateAgentSendModelOptions(this.service,captured,args):undefined;
+        if(engine.getRun(args.id)!==captured||captured.schedule.provider!==provider)throw Error('The captured run changed during model preflight. Refresh before sending.');
+        checkProject();const run=captured;
         if(method==='chat.reply'&&(run.pending?.type!=='question'||run.pending.id!==args.requestId))throw new Error('Agent replies can answer only the current ordinary question.');
         // Call the synchronous owner boundary directly so placement cannot change between validation and effect.
         if(method==='chat.reply')engine.reply(args.id,args.answer,args.requestId);
         else if(method==='chat.cancel')engine.cancel(args.id);
-        else if(method==='chat.send')await engine.send(args.id,args.prompt,args.mode,args.messageId);
+        else if(method==='chat.send')await engine.send(args.id,args.prompt,args.mode,args.messageId,modelOptions);
         else throw new Error('Unsupported agent mutation.');
         return {runId:args.id};
       }
       engine.getRun(args.id); const action = method.split('.')[1];
-      await this.api(`/api/runs/${args.id}/${action}`, pick(args, ['answer', 'requestId', 'prompt', 'mode', 'messageId', 'modelOptions', 'expectedPrompt','action','enabled','expectedPreferenceVersion','expectedUpdatedAt','expectedFailureEventAt'])); return { runId: args.id };
+      await this.api(`/api/runs/${args.id}/${action}`, pick(args, ['answer', 'requestId', 'prompt', 'mode', 'messageId', 'modelOptions', 'expectedPrompt','action','enabled','expectedPreferenceVersion','expectedUpdatedAt','expectedFailureEventAt','inputOrigin'])); return { runId: args.id };
     }
     if (method === 'chat.permissions') {
       await this.api('/api/permissions', { action: ['grant-chat-folder','revoke-chat-folder','revoke-chat-rule','set-chat-read-only'].includes(args.action) ? args.action : args.scope === 'chat' ? 'set-chat-mode' : 'set-mode', runId: args.id, ...pick(args, ['mode','folder','access','ruleId','enabled', 'expectedContextId', 'expectedRevision', 'expectedChatRevision', 'expectedRequestId']) });
@@ -535,7 +567,7 @@ export class RemoteHost {
     // Read-only, bounded chunks of a file a message in this chat references.
     if (method === 'chat.attachments.get') {
       const file = this.service.readChatAttachment(args.id, args.sha256), offset = Math.max(0, Math.min(file.bytes.length, Number.isSafeInteger(args.offset) ? args.offset : 0)), end = Math.min(file.bytes.length, offset + 384 * 1024);
-      return { name: file.name, mediaType: file.mediaType, size: file.bytes.length, offset, dataBase64: file.bytes.subarray(offset, end).toString('base64'), done: end >= file.bytes.length };
+      return { name: file.name, mediaType: file.mediaType, size: file.bytes.length, ...attachmentDates(file), offset, dataBase64: file.bytes.subarray(offset, end).toString('base64'), done: end >= file.bytes.length };
     }
     if (method === 'chat.retry-without-agents') { await this.api('/api/chat-recovery/without-agents', { runId: args.id, expectedFailureEventAt: args.expectedFailureEventAt }); return { runId: args.id }; }
     if (method === 'chat.context') { await this.api('/api/run-context', { runId: args.id, ...pick(args, ['selectedIds', 'agentId', 'includeDefaults']) }); return { runId: args.id }; }
@@ -556,16 +588,7 @@ export class RemoteHost {
     return timedSync(this.service.performanceDiagnostics, 'remote.publish', () => {
     const state = remoteState(this.service); const signature = timedSync(this.service.performanceDiagnostics, 'remote.publish.serialize', () => JSON.stringify(state));
     if (signature !== this.signature) { this.signature = signature; this.broadcast('state', state); }
-    const watched = new Set([...this.peers.values()].filter(p => p.device).map(p => p.runId).filter(Boolean));
-    for(const id of this.runSignatures?.keys()||[])if(!watched.has(id)){this.runSignatures.delete(id);this.runVersions?.delete(id);}
-    for (const id of watched) {
-      if (!this.service.engine.runs.has(id)) continue;
-      const summaryOnly=[...this.peers.values()].filter(peer=>peer.device&&peer.runId===id).every(peer=>peer.summaryOnly);
-      if(summaryOnly){const source=this.service.engine.getRun(id),summary={...runSummary(source),version:this.runVersions?.get(id)||0},hash=JSON.stringify(summary);if(this.runSignatures?.get(id)===hash)continue;this.runSignatures??=new Map();this.runSignatures.set(id,hash);this.broadcast('run.changed',summary,id);continue;}
-      const run = timedSync(this.service.performanceDiagnostics, 'remote.run.assemble', () => ({...remoteRun(this.service.engine.getRun(id), 0, this.service.engine.permissions,undefined,ownerChatControls(this.service.engine.getRun(id),this.service.engine)),...this.service.workspaceProjects?.membership(this.service.engine.getRun(id))})); const hash = timedSync(this.service.performanceDiagnostics, 'remote.run.serialize', () => createHash('sha256').update(JSON.stringify({...run,observedAt:undefined})).digest('hex'));
-      if (this.runSignatures?.get(id) === hash) continue;
-      this.runSignatures ??= new Map(); this.runSignatures.set(id, hash);this.broadcast('run',run,id);
-    }
+    publishChatStreams(this,{summary:runSummary,page:source=>timedSync(this.service.performanceDiagnostics,'remote.run.assemble',()=>({...remoteRun(source,0,this.service.engine.permissions,undefined,ownerChatControls(source,this.service.engine)),...this.service.workspaceProjects?.membership(source)}))});
     });
   }
   broadcastFollow(data) {
@@ -575,16 +598,16 @@ export class RemoteHost {
       this.send(peer,{type:'event',event:'project-follow',data});
     }
   }
-  broadcast(event, data, runId) {
+  broadcast(event, data, runId, accepts = () => true) {
     const value = { type: 'event', event, data, ...(runId ? { runId } : {}), cursor: `${this.epoch}:${++this.sequence}` };
     const bytes=Buffer.byteLength(JSON.stringify(value));this.journalBytes=(this.journalBytes||0)+bytes;
     this.journal.push(value);(this.journalSizes??=[]).push(bytes);
     while(this.journal.length>100||this.journalBytes>8_000_000){this.journal.shift();this.journalBytes-=this.journalSizes.shift();}
-    for (const peer of this.peers.values()) if (peer.device && (!runId || peer.runId === runId)) this.send(peer, value);
+    for (const peer of this.peers.values()) if (peer.device && (!runId || peer.runId === runId) && accepts(peer)) this.send(peer, value);
   }
   async stop() {
     clearTimeout(this.reconnect);clearTimeout(this.stableConnectionTimer); this.invite = null;this.documents.clear();
-    const socket = this.socket; this.socket = null; socket?.terminate(); for(const id of this.peers.keys()){this.service.projectFollow?.removeActor(id);this.service.sharedInference?.jobs.disconnect(id);}this.peers.clear();
+    this.outbound?.stop();const socket = this.socket; this.socket = null; socket?.terminate(); for(const id of this.peers.keys()){this.service.projectFollow?.removeActor(id);this.service.sharedInference?.jobs.disconnect(id);}this.peers.clear();
     if (this.relay) { await this.relay.close(); this.relay = null; }
     this.status = 'disabled';
   }

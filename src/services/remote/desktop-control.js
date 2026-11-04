@@ -48,6 +48,23 @@ function deniedPermission(result){
  return {denied:payloads.some(denied)||/permission (?:denied|not granted)|not authorized|TCC.{0,30}denied/i.test(text),text};
 }
 const sessionLabel=owner=>'proteus-'+createHash('sha256').update(owner).digest('hex').slice(0,12);
+// A missing exact window is an observation outcome, never an input grant. Older
+// Cua builds return the documented refusal as text; corroborate it with a fresh,
+// complete process-scoped WindowServer inventory before settling uncertainty.
+function missingCuaWindow(result,pid,windowId){
+ const values=[result.structuredContent];
+ for(const block of result.content||[])if(block.type==='text')try{values.push(JSON.parse(block.text));}catch{}
+ if(values.some(value=>value&&value.code==='window_id_not_found'&&value.pid===pid&&value.window_id===windowId))return true;
+ return result.isError===true&&(result.content||[]).some(block=>block.type==='text'&&block.text.startsWith(`window_id ${windowId} is not a live window (closed, or the id is stale).`));
+}
+function windowInventory(result){
+ if(result.isError||deniedPermission(result).denied)return null;
+ const candidates=[result.structuredContent];
+ for(const block of result.content||[])if(block.type==='text')try{candidates.push(JSON.parse(block.text));}catch{}
+ const value=candidates.find(value=>Array.isArray(value?.windows));
+ if(!value||value.truncated===true||value.partial===true||value.refusal||value.code||value.status&&value.status!=='ok')return null;
+ return value.windows.every(window=>Number.isSafeInteger(window.pid)&&window.pid>0&&Number.isSafeInteger(window.window_id)&&window.window_id>0)?value.windows:null;
+}
 export class DesktopControl {
  constructor({platform=process.platform,locate=desktopExecutable,connect=async(command,args)=>new DesktopMCPClient(command,args).connect(),now=Date.now,idleMs=120000,active=()=>true}={}){
   Object.assign(this,{platform,locate,connect,now,idleMs,active});this.clients=new Map();this.cuaSessions=new Set();this.observations=new Map();this.failure=new Map();this.serial=Promise.resolve();this.epoch=0;this.sessionNonce=randomUUID().slice(0,8);this.lastUsed=now();
@@ -124,6 +141,18 @@ export class DesktopControl {
    const result=await (await this.client(backend)).request('tools/call',{name:tool.name,arguments:args});
    if(epoch!==this.epoch||!this.active(owner))throw Error('Desktop control was revoked while the operation was in flight. Observe before any retry.');
    const checked=deniedPermission(result);
+   if(observe&&backend==='cua'&&!checked.denied&&!/permission|denied|not authorized|TCC/i.test(checked.text)&&missingCuaWindow(result,pid,windowId)&&(!this.uncertain||this.uncertain.backend===backend)){
+    const inventory=await (await this.client(backend)).request('tools/call',{name:'list_windows',arguments:{pid,...(args.session?{session:args.session}:{})}});
+    if(epoch!==this.epoch||!this.active(owner))throw Error('Desktop control was revoked while checking window closure.');
+    const windows=windowInventory(inventory),permission=deniedPermission(inventory);
+    if(permission.denied)this.permissionFailure={backend,message:permission.text.slice(0,1200)};
+    if(windows&&windows.every(window=>window.pid===pid&&window.window_id!==windowId)){
+     this.observations.delete(owner);if(this.uncertain?.owner)this.observations.delete(this.uncertain.owner);
+     this.uncertain=null;this.failure.delete(owner);this.lease={owner,backend,at:this.now(),uncertain:false};
+     const receipt={targetState:'closed',backend,pid,windowId,observationRequired:true};
+     return {structuredContent:receipt,content:[{type:'text',text:JSON.stringify(receipt)}]};
+    }
+   }
    if(result.isError||checked.denied){const message=checked.text,permission=checked.denied||/permission|denied|not authorized|TCC/i.test(message);this.failure.set(owner,{permission,uncertain:mutating});if(permission)this.permissionFailure={backend,message:message.slice(0,1200)};return {...result,isError:true};}
    if(observe){const receipt=result._meta?.target_receipt||result.structuredContent?.target_receipt||result.structuredContent;if(Number(receipt?.pid)!==pid||Number(receipt?.window_id)!==windowId)throw Error('The desktop backend did not confirm the requested process/window. No input is authorized from this observation.');}
    if(observe){const observed={id:randomUUID(),backend,pid,windowId,at:this.now(),snapshot:snapshotId(result)};this.observations.set(owner,observed);this.lease.uncertain=false;this.uncertain=null;this.failure.delete(owner);if(this.permissionFailure?.backend===backend)this.permissionFailure=null;return {...result,content:[{type:'text',text:JSON.stringify({observationId:observed.id,backend,pid,windowId,expiresInMs:20000})},...(result.content||[])]};}

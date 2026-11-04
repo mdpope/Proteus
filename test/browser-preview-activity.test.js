@@ -13,7 +13,7 @@ function fixture(preview=true){
  class Clock extends Date {static now(){return now;}}
  class Contents extends EventEmitter {
   constructor(){super();this.session=partition;this.url='';this.title='Synthetic';this.mainFrame={};this.entries=[];this.index=-1;this.navigationHistory={getAllEntries:()=>this.entries,getActiveIndex:()=>this.index,canGoBack:()=>this.index>0,canGoForward:()=>this.index<this.entries.length-1,goBack:()=>this.index--,goForward:()=>this.index++,restore:async history=>{this.entries=history.entries;this.index=history.index;this.url=this.entries[this.index].url;}};}
-  getZoomFactor(){return this.zoom||1;} setZoomFactor(value){this.zoom=value;} setZoomMode(){} setVisualZoomLevelLimits(){return Promise.resolve();} setWindowOpenHandler(){} send(){} isDestroyed(){return !!this.destroyed;} getURL(){return this.url;} getTitle(){return this.title;} isLoading(){return false;} getOSProcessId(){return 123;} isCurrentlyAudible(){return !!this.audible;}
+  getZoomFactor(){return this.zoom||1;} setZoomFactor(value){this.zoom=value;} setAudioMuted(value){this.audioMuted=value;} isAudioMuted(){return this.audioMuted===true;} setZoomMode(){} setVisualZoomLevelLimits(){return Promise.resolve();} setWindowOpenHandler(){} send(){} isDestroyed(){return !!this.destroyed;} getURL(){return this.url;} getTitle(){return this.title;} isLoading(){return false;} getOSProcessId(){return 123;} isCurrentlyAudible(){return !!this.audible;}
   loadURL(url){this.url=url;this.entries.push({url,title:this.title});this.index=this.entries.length-1;return Promise.resolve();} reload(){this.reloads=(this.reloads||0)+1;} stop(){}
   getBackgroundThrottling(){return true;} setBackgroundThrottling(){}
   close(){if(this.unsaved){this.emit('will-prevent-unload');return;}this.destroyed=true;this.emit('destroyed');}
@@ -191,4 +191,22 @@ test('duplicate publishes completed independent history/profile state without in
  const {browser:b}=fixture();const first=await b.create('https://example.test/one');await b.navigate(first.id,'https://example.test/two');const original=b.get(first.id);original.shared=true;original.owner='old-agent';original.view.webContents.setZoomFactor(1.2);
  const copy=await b.command({action:'duplicate',id:first.id});assert.notEqual(copy.id,first.id);assert.equal(b.get(copy.id).owner,null);assert.equal(b.get(copy.id).shared,false);assert.equal(b.get(copy.id).view.webContents.getZoomFactor(),1.2);assert.deepEqual(copy.history.entries.map(e=>e.url),b.state(original,true).history.entries.map(e=>e.url));assert.ok(b.list(true).some(row=>row.id===copy.id));
  await b.unload(copy.id);const unloaded=await b.command({action:'duplicate',id:copy.id});assert.equal(unloaded.loaded,false);assert.deepEqual(unloaded.history.entries.map(e=>e.url),copy.history.entries.map(e=>e.url));
+});
+
+
+test('scroll activity transfers only latest timestamps to its owning window without projecting tab histories',async()=>{
+ const {browser:b,tick}=fixture(),one=await b.create('https://example.test/one'),two=await b.create('https://example.test/two');
+ const first=b.get(one.id),second=b.get(two.id),sent=[];first.windowId='main';second.windowId='other';
+ b.windowRegistry={contexts:new Map(['main','other'].map(id=>[id,{id,window:{isDestroyed:()=>false,webContents:{send:(name,rows)=>sent.push({window:id,name,rows})}}}]))};
+ b.list=()=>{throw Error('Scroll activity must not project histories');};
+ for(let i=0;i<100;i++){tick();b.touch(first);b.activityChanged(first);}b.touch(second);b.activityChanged(second);b.flushActivity();
+ assert.equal(sent.length,2);for(const item of sent){assert.equal(item.name,'proteus:browser-activity');assert.equal(item.rows.length,1);const row=item.rows[0],tab=item.window==='main'?first:second;assert.equal(row.id,tab.id);assert.equal(row.lastTouchedAt,new Date(tab.lastTouchedAt).toISOString());assert.deepEqual(Object.keys(row).sort(),['id','lastActivityAt','lastTouchedAt','windowId']);}
+ b.flushActivity();assert.equal(sent.length,2,'Already delivered activity is not replayed');
+ b.activityChanged(first);b.tabs.delete(first.id);b.flushActivity();assert.equal(sent.length,2,'Closed tab activity cannot resurrect the tab');
+});
+
+test('a full structural tab update supersedes queued activity and includes its latest timestamps',async()=>{
+ const {browser:b,tick}=fixture(),{id}=await b.create('https://example.test/full');const sent=[];b.window.webContents.send=(name,rows)=>sent.push({name,rows});
+ tick();const tab=b.get(id);b.touch(tab);b.activityChanged(tab);b.flushChanged();b.flushActivity();
+ assert.equal(sent.length,1);assert.equal(sent[0].name,'proteus:browser-state');assert.equal(sent[0].rows[0].lastTouchedAt,new Date(tab.lastTouchedAt).toISOString());assert.ok(sent[0].rows[0].history);
 });

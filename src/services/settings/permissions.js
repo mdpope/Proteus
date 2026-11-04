@@ -1,3 +1,4 @@
+import {scheduleAccessScope,scheduleAccessRule,matchesScheduleAccess} from './schedule-access-rule.js';
 import fs from 'node:fs';
 import {chatAccessScope,matchesChatAccess} from './chat-access-rule.js';
 import path from 'node:path';
@@ -59,6 +60,7 @@ const protectedRequest = request => request.managedApprovalRequired === true || 
 const requestedPath = (request, context) => canonicalPath(request.resolvedPath || (request.kind === 'read' ? request.path : request.fileName), context.cwd);
 
 export function operationRule(request) {
+  if(request.kind==='schedule-access')return request.toolName==='proteus_schedules'?scheduleAccessRule(request.args?.scope):null;
   if(request.kind==='chat-access'){const scope=request.toolName==='proteus_chats'&&chatAccessScope(request.args?.scope);return scope?{kind:'chat-access',tool:'proteus_chats',scope}:null;}
   if (request.kind === 'shell' && typeof request.fullCommandText === 'string') return { kind: 'shell', command: request.fullCommandText };
   if (request.kind === 'mcp' && request.serverName && request.toolName) return { kind: 'mcp', server: request.serverName, tool: request.toolName, ...(typeof request.args?.action === 'string' ? { action: request.args.action } : {}) };
@@ -66,7 +68,7 @@ export function operationRule(request) {
   if (request.kind === 'url') { try { const url = new URL(request.url); if (['https:', 'http:'].includes(url.protocol)) return { kind: 'url', origin: url.origin }; } catch { /* No repeatable rule. */ } }
   return null;
 }
-export const ruleLabel = rule => rule.kind==='chat-access'?`Proteus conversations: ${rule.scope.actions.join(', ')} on ${rule.scope.hostId}`:rule.kind === 'shell' ? `Exact command: ${rule.command}` : rule.kind === 'url' ? rule.origin : `${rule.server ? `${rule.server} / ` : ''}${rule.tool}${rule.action ? ` / ${rule.action}` : ''}`;
+export const ruleLabel = rule => rule.kind==='custom-tool'&&rule.tool==='proteus_schedules'&&scheduleAccessScope(rule.scheduleScope)&&scheduleAccessRule(rule.scheduleScope).action===rule.action?`Schedules ${rule.scheduleScope.scheduleIds.join(', ')}: ${rule.scheduleScope.actions.join(', ')}`: rule.kind==='chat-access'?`Proteus conversations: ${rule.scope.actions.join(', ')} on ${rule.scope.hostId}`:rule.kind === 'shell' ? `Exact command: ${rule.command}` : rule.kind === 'url' ? rule.origin : `${rule.server ? `${rule.server} / ` : ''}${rule.tool}${rule.action ? ` / ${rule.action}` : ''}`;
 
 // Read-only display logic shared with the state worker. It has no file writer,
 // approval methods or provider sessions; the owner retains those capabilities.
@@ -264,6 +266,7 @@ export class PermissionStore extends PermissionProjection {
   }
   choices(schedule, request) {
     if (protectedRequest(request)) return [];
+    if(request.kind==='schedule-access')return operationRule(request)?[...(this.preserveInheritedDefaults?[{value:'always-tool-chat',label:'Remember this exact schedule scope for this chat'}]:[]),{value:'always-tool',label:'Remember this exact schedule scope for this workspace or schedule'}]:[];
     if(request.kind==='chat-access')return operationRule(request)?[...(this.preserveInheritedDefaults?[{value:'always-tool-chat',label:'Remember this conversation access scope for this chat'}]:[]),{value:'always-tool',label:'Remember this conversation access scope for this workspace or schedule'}]:[];
     const choices = [];
     const folder = this.folderOffer(schedule, request);
@@ -294,6 +297,7 @@ export class PermissionStore extends PermissionProjection {
     if (protectedRequest(request)) return { allowed: false, reason: 'Enterprise policy or sandbox escape requires a direct response.' };
     // The owner creates this request for an exact durable chat scope. A generic
     // saved tool invocation must never turn into permission to grant new scopes.
+    if(request.kind==='schedule-access'){const valid=!!operationRule(request),remembered=valid&&profile.mode!=='ask'&&profile.rules.some(rule=>matchesScheduleAccess(rule,request.args.scope));return {allowed:valid&&(profile.mode==='autopilot'||remembered),reason:remembered?'Saved exact schedule scope':'Schedule scope requires approval',mode:profile.mode};}
     if (request.kind === 'chat-access') {
       const scope=request.toolName==='proteus_chats'&&chatAccessScope(request.args?.scope);
       const automatic=!!scope&&profile.mode==='autopilot',remembered=!!scope&&profile.mode!=='ask'&&profile.rules.some(rule=>matchesChatAccess(rule,scope));

@@ -39,12 +39,13 @@ try{
   const app=apps[0],schedule=await app.buildChatSchedule({name:'Structured web questions',prompt:'Synthetic question history',provider:'copilot',model:'synthetic'}),run=app.engine.createRun(schedule,'chat',null,{deferStart:true});
   run.status='completed';delete run.deferredStart;delete run.nextPrompt;
   app.engine.providers.copilot.run=async({emit,attachments=[]})=>{if(attachments.length)app.syntheticAttachmentDeliveries.push(attachments.map(item=>({name:item.name,mediaType:item.mediaType,bytes:Buffer.from(item.bytes)})));emit('assistant','Synthetic answer accepted. No external provider.');};
-  app.engine.event(run,'assistant','Choose a web destination.',{providerItemId:'web-question-item',userQuestions:[{title:'Web destination?',options:['Web A','Web B']},{title:'Web instructions?'},{title:'Show the relevant file.'}]});
+  app.engine.event(run,'assistant','Web destination?\nWeb instructions?\nShow the relevant file.',{providerItemId:'web-question-item',userQuestions:[{title:'Web destination?',options:['Web A','Web B']},{title:'Web instructions?'},{title:'Show the relevant file.'}]});
   await page.reload();await page.locator(`[data-run="${run.id}"]`).first().click();await page.locator('.user-question-queue summary').waitFor();
   await page.locator('.user-question-queue summary').click();await page.getByRole('button',{name:'Web destination?',exact:true}).click();await page.getByRole('button',{name:'Web B',exact:true}).click();
   await until(()=>run.userQuestions[0].status==='answered');await until(()=>run.status==='completed');
   await page.locator('.user-question-queue summary').waitFor();await page.locator(`[data-question-id="${run.userQuestions[1].id}"] textarea`).fill('Custom web answer');
-  await page.locator(`[data-question-id="${run.userQuestions[1].id}"]`).getByRole('button',{name:'Send answer',exact:true}).click();await until(()=>run.userQuestions[1].status==='answered');
+  assert.equal(await page.locator(`[data-question-id="${run.userQuestions[1].id}"] h4`).textContent(),'Web instructions?','Multiple answer fields retain their own distinct question labels');
+  await page.locator(`[data-question-id="${run.userQuestions[1].id}"] textarea`).press('Enter');await until(()=>run.userQuestions[1].status==='answered');
   await until(()=>run.status==='completed');
   const commands=[];let failFileAnswer=true;
   for(const [index,owner] of apps.entries()){const execute=owner.remote.execute.bind(owner.remote);owner.remote.execute=async(peer,method,args)=>{if(method.startsWith('chat.attachments.')||method==='chat.answer-question'){commands.push({index,method,args});if(method==='chat.answer-question'&&args.attachments?.length&&failFileAnswer){failFileAnswer=false;throw Error('Synthetic uncertain answer transport');}}return execute(peer,method,args);};}
@@ -65,6 +66,8 @@ try{
   const answers=commands.filter(command=>command.method==='chat.answer-question'),uploads=commands.filter(command=>command.method==='chat.attachments.begin');assert.equal(answers.length,2);assert.deepEqual(answers[0].args,answers[1].args);assert.equal(uploads.length,1);assert.equal(answers[0].args.providerId,'copilot');assert.equal(answers[0].args.id,run.id);assert.ok(answers[0].args.consentId);
   assert.equal(app.syntheticAttachmentDeliveries.length,1);assert.deepEqual(app.syntheticAttachmentDeliveries[0],[{name:'question-evidence.txt',mediaType:'text/plain',bytes:fileBytes}]);assert.equal(apps[1].syntheticAttachmentDeliveries.length,0);
   assert.equal(run.events.filter(event=>event.data?.questionReply).length,3);assert.equal(await page.locator('#remote-composer [name=prompt]').inputValue(),'Keep this unsent composer draft');assert.deepEqual(errors,[]);console.log(JSON.stringify({passed:true,encryptedOwnerQuestions:true,choiceAndCustomAnswer:true,sameOwnerChat:true,attachmentsWithConsent:true,ownerRetainedAcrossNavigation:true,uncertainDeliveryRetriedOnceWithSameIdentity:true,narrowLayout:true}));
+ }else if(process.env.PROTEUS_TEST_CONNECTIONS_ONLY==='1'){
+  await exerciseConnections(page,apps[0],root,origin);assert.deepEqual(errors,[]);console.log(JSON.stringify({passed:true,authenticatedConnections:true,lossAndRecovery:true,pairingRenameRaces:true}));
  }else if(process.env.PROTEUS_TEST_CORRECTIONS_ONLY==='1'){
   await exerciseWebCorrections(page,apps[0]);assert.deepEqual(errors,[]);
  }else{

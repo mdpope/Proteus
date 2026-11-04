@@ -1,3 +1,13 @@
+## Nov 2 — New chat tabs
+
+New chat opens a device-local main or workspace/project tab before creating a conversation.
+Each tab retains its own prompt, model/source choices, attachment scope and placement. Cancel
+closes that setup without starting a chat or stopping unrelated work. Submitted requests persist
+their exact request identity and arguments for reconciliation after an uncertain response; retry
+does not require already-uploaded attachment bytes to remain in memory. Closing/reopening navigation
+does not authorize a different owner. iPhone/iPad simulator acceptance and physical-device acceptance
+are recorded separately in the release ledger.
+
 ## Cold notification and restored browser priority — October 15
 
 An incoming notification selects its paired host and requested chat or schedule, using the current

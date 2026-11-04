@@ -3,6 +3,8 @@ import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import historyURLs from '../../../desktop/browser/browser-history.cjs';
+import {domainToUnicode} from 'node:url';
+import {addressCompletionPrefix,websiteBaseURL} from '../../../public/models/browser-address-completion.js';
 
 const DAY = 86400000, MAX_BATCH = 200;
 const {safeHistoryURL:safeURL}=historyURLs;
@@ -43,7 +45,7 @@ export class BrowserHistoryStore {
         CREATE TABLE IF NOT EXISTS nav_changes(tab_id TEXT NOT NULL,revision INTEGER NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(tab_id,revision));`);
       this.db.prepare('INSERT OR IGNORE INTO metadata VALUES(?,?)').run('epoch', randomUUID());
       this.db.prepare('INSERT OR IGNORE INTO metadata VALUES(?,?)').run('settings', JSON.stringify({enabled:true,retentionDays:0,peers:[]}));
-      this.epoch = this.meta('epoch'); this.migrateSearch(); this.migrate(legacyFile);
+      this.epoch = this.meta('epoch'); this.migrateSearch(); this.migrateSites(); this.migrate(legacyFile);
       for (const suffix of ['', '-wal', '-shm']) if (fs.existsSync(this.file + suffix)) fs.chmodSync(this.file + suffix, 0o600);
     } catch (error) { this.db.close(); throw error; }
   }
@@ -62,6 +64,32 @@ export class BrowserHistoryStore {
         CREATE TRIGGER search_update AFTER UPDATE ON events BEGIN DELETE FROM event_search WHERE rowid=old.rowid; INSERT INTO event_search(rowid,event_id,title,url) VALUES(new.rowid,new.event_id,new.title,new.url); END;`);
       this.db.prepare('INSERT INTO metadata VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run('search-version','2');
     });
+  }
+  migrateSites() {
+    this.db.function('proteus_site_base',{deterministic:true},value=>websiteBaseURL(value)||'');
+    this.db.function('proteus_site_host',{deterministic:true},value=>{try{return new URL(value).host;}catch{return '';}});
+    this.db.function('proteus_site_key',{deterministic:true},value=>{try{return domainToUnicode(new URL(value).hostname).replace(/^www\./,'')+(new URL(value).port?':'+new URL(value).port:'');}catch{return '';}});
+    if(this.meta('site-index-version')==='1')return;
+    this.transaction(()=>{
+      this.db.exec(`CREATE TABLE IF NOT EXISTS event_sites(event_id TEXT PRIMARY KEY,profile_id TEXT NOT NULL,base_url TEXT NOT NULL,host TEXT NOT NULL,host_key TEXT NOT NULL,visited_at TEXT NOT NULL);
+        CREATE INDEX IF NOT EXISTS sites_host ON event_sites(profile_id,host,base_url,visited_at);
+        CREATE INDEX IF NOT EXISTS sites_key ON event_sites(profile_id,host_key,base_url,visited_at);
+        DELETE FROM event_sites;
+        INSERT INTO event_sites SELECT event_id,profile_id,proteus_site_base(url),proteus_site_host(url),proteus_site_key(url),visited_at FROM events WHERE proteus_site_base(url)<>'';
+        CREATE TRIGGER IF NOT EXISTS sites_insert AFTER INSERT ON events WHEN proteus_site_base(new.url)<>'' BEGIN INSERT INTO event_sites VALUES(new.event_id,new.profile_id,proteus_site_base(new.url),proteus_site_host(new.url),proteus_site_key(new.url),new.visited_at); END;
+        CREATE TRIGGER IF NOT EXISTS sites_delete AFTER DELETE ON events BEGIN DELETE FROM event_sites WHERE event_id=old.event_id; END;
+        CREATE TRIGGER IF NOT EXISTS sites_update AFTER UPDATE ON events BEGIN DELETE FROM event_sites WHERE event_id=old.event_id; INSERT INTO event_sites SELECT new.event_id,new.profile_id,proteus_site_base(new.url),proteus_site_host(new.url),proteus_site_key(new.url),new.visited_at WHERE proteus_site_base(new.url)<>''; END;`);
+      this.db.prepare('INSERT INTO metadata VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run('site-index-version','1');
+    });
+  }
+  suggest(value={}) {
+    const query=String(value.query||''),prefix=query?addressCompletionPrefix(query):null;
+    if(query&&!prefix)return {items:[]};
+    const profile=identity(value.profileId||'default','profile');if(profile.startsWith('private:'))return {items:[]};
+    const where=['profile_id=?'],args=[profile];
+    if(prefix){const key=prefix.www?'host':'host_key';where.push('('+key+'>=? AND '+key+'<?)');args.push(prefix.host,prefix.host+'\uffff');if(prefix.scheme){where.push('base_url LIKE ?');args.push(prefix.scheme+'%');}}
+    const rows=this.db.prepare('SELECT base_url AS url,COUNT(*) AS visits,MAX(visited_at) AS lastVisitedAt FROM event_sites WHERE '+where.join(' AND ')+' GROUP BY base_url ORDER BY visits DESC,lastVisitedAt DESC,base_url ASC LIMIT ?').all(...args,Math.max(1,Math.min(100,Math.floor(Number(value.limit)||20))));
+    return {items:rows.map(row=>({...row,displayHost:domainToUnicode(new URL(row.url).hostname)+(new URL(row.url).port?':'+new URL(row.url).port:'')}))};
   }
   normalize(raw,{replicated=false}={}) {
     if (!raw || typeof raw !== 'object' || raw.private === true || raw.privateBrowsing === true || String(raw.profileId || '').startsWith('private:')) throw new Error('Private browsing is excluded from shared history.');

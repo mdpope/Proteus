@@ -16,10 +16,18 @@ export function validateBrowserSettings(value){
 }
 export class BrowserProfiles {
   constructor(home,account){this.file=path.join(home,'browser-profiles.json');this.account=account;this.data=readJSON(this.file,{version:1,enabled:false,account:null,items:[],defaultSettings:{}});this.verified=false;this.error=null;}
-  identity(){const session=this.account.session||this.account.life.api;session.load?.();return session.identity();}
+  identity(){if(this.displayDepth)return this.displayIdentity;const session=this.account.session||this.account.life.api;session.load?.();return session.identity();}
+  // One synchronous display/reconciliation operation reads the account once.
+  // Never retain it across an await or an operation: revocation must remain fresh.
+  withDisplaySnapshot(action){
+    const outer=!this.displayDepth;
+    if(outer){this.displayIdentity=this.identity();this.displayDepth=1;}
+    try{const result=action();if(result&&typeof result.then==='function')throw Error('Profile display snapshots must be synchronous.');return result;}
+    finally{if(outer){this.displayDepth=0;this.displayIdentity=undefined;}}
+  }
   key(identity=this.identity()){return identity?createHash('sha256').update(JSON.stringify([identity.origin,identity.accountId])).digest('hex'):null;}
-  available(){return this.data.enabled&&!!this.identity()&&this.data.account===this.key();}
-  list(){return {enabled:this.data.enabled,authenticated:!!this.identity(),available:this.available(),verified:this.verified,error:this.error,cached:this.available()&&!this.verified,items:[{id:'default',name:'Default',settings:this.data.defaultSettings||{}},...(this.available()?this.data.items:[])]};}
+  available(identity=this.identity()){return this.data.enabled&&!!identity&&this.data.account===this.key(identity);}
+  list(){const identity=this.identity(),available=this.available(identity);return {enabled:this.data.enabled,authenticated:!!identity,available,verified:this.verified,error:this.error,cached:available&&!this.verified,items:[{id:'default',name:'Default',settings:this.data.defaultSettings||{}},...(available?this.data.items:[])]};}
   get(id='default'){const item=this.list().items.find(item=>item.id===id);if(!item)throw new Error('This browser profile is unavailable. Sign in and refresh profiles in Browser Preferences.');return item;}
   partition(id='default'){this.get(id);return id==='default'?'persist:proteus-browser':'persist:proteus-profile-'+this.data.account+'-'+id;}
   async refresh(){const identity=this.identity();if(!identity){this.verified=false;return this.list();}if(!this.data.enabled)return this.list();try{const result=await this.account.request({path:'/browser-profiles'});if(this.key(identity)!==this.key())throw new Error('The browser profile account changed.');const items=result.items||[];if(!Array.isArray(items)||items.length>32||items.some(item=>!UUID.test(item.id)||typeof item.name!=='string'))throw new Error('Invalid browser profile definitions.');this.data={...this.data,account:this.key(identity),items:items.map(item=>({...item,settings:validateBrowserSettings(Array.isArray(item.settings)&&item.settings.length===0?{}:item.settings||{})}))};atomicJSON(this.file,this.data);this.verified=true;this.error=null;return this.list();}catch(error){this.verified=false;this.error=error.message;throw error;}}

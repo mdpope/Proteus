@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "id": "2026-11-02",
+  "name": "Nov 2",
+  "version": "0.2.41",
+  "status": "open",
+  "openedOn": "2026-11-02",
+  "plan": "docs/2026-11-02-release-plan.md",
+  "implementation": "docs/releases/2026-11-02/implementation.md",
+  "rollout": "docs/releases/2026-11-02/rollout.md",
+  "closeout": "docs/releases/2026-11-02/closeout.md",
+  "mobileReviewHold": {
+    "active": false,
+    "reason": "Operator explicitly authorized this local desktop and physical iPhone/iPad update after targeted fixes including scheduler controls."
+  },
+  "priorRequestAudit": "docs/releases/2026-11-02/prior-release-audit.md",
+  "previousAcceptedSourceCommit": "4456aea8837171ba60f82775859d9ce7f4ec0810",
+  "sourceCommit": "4bbec8cadc9c24916cc7514ead9b1b53f5a6051d",
+  "candidateSourceStatus": "Final R37 application source4bbec8c published and HTTPS verified for all three OS targets. All five intended desktop installations and web/native targets are installed and verified within the qualified limits in rollout.md. Normal Mac signatures and installed-file inventories pass; retained memberships/history entries/drafts verify. Mnemosyne, remaining iOS/web performance/composer/disconnect, secondary Windows Desktop Control and permanent tab-restoration fixes are explicitly queued for Nov3. Operator requests closeout; integration and temporary artifact retirement in progress.",
+  "widerDistributionHold": {
+    "active": false,
+    "reason": "Operator explicitly authorizes all configured devices, web and release closeout after connection fixes."
+  },
+  "mnemosyneImplementationHold": {
+    "active": true,
+    "reason": "Operator moved broader Mnemosyne redesign and staged product-boundary work to Nov 3; preserved in docs/2026-11-03-mnemosyne-handoff.md."
+  },
+  "acceptedSourcePins": {
+    "darwin-arm64": "4bbec8cadc9c24916cc7514ead9b1b53f5a6051d",
+    "ios": "8d2e0df2807934ef72cc0bd1427b187ab61b5ed2",
+    "linux-x64": "4bbec8cadc9c24916cc7514ead9b1b53f5a6051d",
+    "win32-x64": "4bbec8cadc9c24916cc7514ead9b1b53f5a6051d"
+  },
+  "replacementSourceCommit": "4bbec8cadc9c24916cc7514ead9b1b53f5a6051d"
+}

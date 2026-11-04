@@ -11,6 +11,8 @@ test('extension preparation patches fresh copies and migrates an existing pre-or
  const base=path.join(root,'node_modules/electron-chrome-extensions');
  fs.mkdirSync(path.join(base,'dist/cjs'),{recursive:true});
  fs.writeFileSync(path.join(base,'package.json'),JSON.stringify({version:'4.9.0'}));
+ const preload=path.join(base,'dist/chrome-extension-api.preload.js');
+ fs.writeFileSync(preload,'if (true) { console.log(fnName, args); }\n              openOptionsPage: invokeExtension2("runtime.openOptionsPage"),');
  const file=path.join(base,'dist/cjs/index.js');
  for(const original of [
   'before\nvar NativeMessagingHost = class {};\n// src/browser/api/runtime.ts\nafter',
@@ -22,6 +24,7 @@ test('extension preparation patches fresh copies and migrates an existing pre-or
   assert.doesNotMatch(patched,/desktop\/native-messaging-host\.cjs/);
   assert.ok(patched.startsWith('before\n')&&patched.endsWith('after'));
   prepareExtensions(root);assert.equal(fs.readFileSync(file,'utf8'),patched);
+  assert.match(fs.readFileSync(preload,'utf8'),/getContexts: async/);assert.doesNotMatch(fs.readFileSync(preload,'utf8'),/if \(true\)/);
  }
  fs.writeFileSync(file,'// Proteus native messaging lifecycle v1\nunknown patch');
  assert.throws(()=>prepareExtensions(root),/host path changed/);

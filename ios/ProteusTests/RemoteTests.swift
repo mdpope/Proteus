@@ -183,10 +183,17 @@ final class RemoteTests: XCTestCase {
         let run: JSON = .object(["eventStart": .number(100), "userQuestions": .array([.object(["id": .string("async-1"), "text": .string("Choose a destination"), "choices": .array([.string("A"), .string("B")]), "status": .string("pending"), "eventIndex": .number(3)])]), "pending": .object(["type": .string("question"), "id": .string("native-2"), "question": .string("Your answer?")]), "events": .array([.object(["data": .object(["question": .object(["id": .string("native-2")])])])])])
         let questions = NativeUserQuestion.read(run)
         XCTAssertEqual(questions.count, 2)
+        var reviewed = run.object; reviewed["questionQueueCleared"] = .object(["async-1": .string("synthetic-review"), "native-2": .string("synthetic-review")])
+        let cleared = NativeUserQuestion.read(.object(reviewed))
+        XCTAssertTrue(cleared.allSatisfy(\.queueCleared)); XCTAssertTrue(cleared.allSatisfy { $0.status == "pending" })
+        XCTAssertEqual(cleared.map(\.id), questions.map(\.id), "Queue review retains original answerable cards")
         XCTAssertEqual(questions[0].id, "async-1")
         XCTAssertEqual(questions[0].choices, ["A", "B"])
         XCTAssertEqual(questions[0].eventIndex, 3)
         XCTAssertFalse(questions[0].blocking)
+        XCTAssertTrue(questions[0].promptVisible(in: "Please respond:\nChoose a  destination\nwhen ready."))
+        XCTAssertFalse(questions[0].promptVisible(in: "Choose a destination", among: 2), "Each answer needs its own prompt in a multi-question event")
+        XCTAssertFalse(questions[0].promptVisible(in: "Different surrounding context"))
         XCTAssertEqual(questions[1].eventIndex, 100)
         XCTAssertTrue(questions[1].blocking)
         XCTAssertTrue(NativeUserQuestion.read(.object(["events": .array([.object(["text": .string("Is this a question?")])])])).isEmpty)
@@ -217,6 +224,8 @@ final class RemoteTests: XCTestCase {
         }
         let before = try await results()
         XCTAssertEqual(before, ["NotAllowedError", "NotAllowedError"])
+        _ = try await view.evaluateJavaScript("navigator.userActivation.hasBeenActive=true;document.querySelector(\"iframe\").contentWindow.navigator.userActivation.hasBeenActive=true")
+        let historicalGesture = try await results(); XCTAssertEqual(historicalGesture, ["NotAllowedError", "NotAllowedError"], "Page-wide historical activation must not authorize unrelated players")
         shared.setBlockVideoAutoplay(false); try await Task.sleep(for: .milliseconds(150))
         let allowed = try await results()
         XCTAssertEqual(allowed, ["played", "played"])
@@ -287,6 +296,134 @@ final class RemoteTests: XCTestCase {
         restored.reset(for: other); XCTAssertNil(restored.documentScrollOffset(for: key))
         restored.reset(for: account); restored.rememberDocumentScrollOffset(.infinity, for: key); restored.flushDocumentScrollPositions()
         XCTAssertEqual(restored.documentScrollOffset(for: key), 820)
+    }
+
+    func testNativeWireBudgetBoundsRequestBurstsAndResetsAfterWindow() {
+        var budget = NativeSendBudget()
+        for _ in 0..<80 { XCTAssertEqual(budget.delay(bytes: 100, now: 0), 0); budget.record(bytes: 100, now: 0) }
+        XCTAssertEqual(budget.delay(bytes: 100, now: 0), 10)
+        XCTAssertEqual(budget.delay(bytes: 100, now: 10), 0)
+        XCTAssertTrue(budget.sent.isEmpty)
+        budget.record(bytes: 20_000_000, now: 10)
+        XCTAssertEqual(budget.delay(bytes: 5_000_000, now: 10), 10)
+    }
+    @MainActor func testNativeRequestBurstStaysConnectedWithinRelayBudget() async throws {
+        let (data, _) = try await URLSession.shared.data(from: URL(string: nativeFixtureHTTPOrigin + "/pair?projects=1")!)
+        let fixture = try JSONDecoder().decode(JSON.self, from: data)
+        let remote = RemoteStore(); remote.forget(); try remote.pair(fixture["code"].string)
+        defer { remote.forget() }
+        try await wait { remote.connected && remote.supportsProjects }
+        let generation = remote.authenticationGeneration
+        do {
+            try await withThrowingTaskGroup(of: Void.self) { group in
+                for _ in 0..<110 { group.addTask { @MainActor in _ = try await remote.request("tabs.get", ["scope": .string("project"), "id": fixture["projectId"]]) } }
+                try await group.waitForAll()
+            }
+        } catch {
+            print("Burst failure type=\(String(reflecting: type(of: error))), status=\(remote.status), connected=\(remote.connected), authGeneration=\(remote.authenticationGeneration), pending=\(remote.pendingCommandCount), message=\(error.localizedDescription)")
+            if let (diagnostic, _) = try? await URLSession.shared.data(from: URL(string: nativeFixtureHTTPOrigin + "/transport-evidence")!) { print("Synthetic burst transport evidence: " + String(decoding: diagnostic, as: UTF8.self)) }
+            throw error
+        }
+        XCTAssertTrue(remote.connected)
+        XCTAssertEqual(remote.authenticationGeneration, generation, "Pacing must avoid a relay disconnect/re-authentication")
+    }
+    @MainActor func testAuthenticatedTabReadRecordsOnlyBoundedSyncEvidence() async throws {
+        let (data, _) = try await URLSession.shared.data(from: URL(string: nativeFixtureHTTPOrigin + "/pair?projects=1")!)
+        let fixture = try JSONDecoder().decode(JSON.self, from: data)
+        let remote = RemoteStore(); remote.forget(); try remote.pair(fixture["code"].string)
+        defer { remote.forget() }
+        try await wait { remote.connected && remote.supportsProjects }
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let shared = SharedAppStore(cacheRoot: root, cacheKey: { nil })
+        let scope = "project:" + (remote.connection?.hostId ?? "") + ":" + fixture["projectId"].string
+        await shared.refreshContentTabs(scope: scope, remote: remote, kind: "project", id: fixture["projectId"].string)
+        let url = root.appendingPathComponent("proteus-tab-sync-evidence.json")
+        // Attempt diagnostics can create this file before the successful read's
+        // utility-queue write. Wait for that receipt, not merely file existence.
+        for _ in 0..<100 {
+            if let data = try? Data(contentsOf: url), let receipt = try? JSONDecoder().decode(JSON.self, from: data), receipt["scopes"][scope] != .null { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let evidence = try JSONDecoder().decode(JSON.self, from: Data(contentsOf: url))
+        let row = evidence["scopes"][scope]
+        XCTAssertEqual(row["tabIds"].array, shared.contentTabSnapshot(in: scope)["tabs"].array.map { $0["id"] })
+        XCTAssertTrue(row["tabIds"].array.contains(.string("native-project-browser")))
+        XCTAssertEqual(Set(row.object.keys), ["at", "tabIds", "revision"])
+        XCTAssertLessThanOrEqual(evidence["scopes"].object.count, 64)
+    }
+    @MainActor func testMembershipWindowKeepsCompleteMatchingBrowserHistory() {
+        let shared = SharedAppStore(cacheRoot: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString), cacheKey: { nil })
+        let scope = "project:synthetic:canonical"
+        let entries: [JSON] = (0..<40).map { .object(["id": .string("entry-\($0)"), "url": .string("https://example.test/\($0)"), "title": .string("Page \($0)")]) }
+        func snapshot(_ history: JSON) -> JSON { .object(["revision": .number(3), "tabs": .array([.object(["id": .string("kept"), "type": .string("browser"), "title": .string("Kept"), "url": .string("https://example.test/20"), "history": history])])]) }
+        shared.applyContentTabs(snapshot(.object(["entries": .array(entries), "index": .number(20), "currentEntryId": .string("entry-20"), "revision": .number(7)])), scope: scope)
+        shared.applyContentTabs(snapshot(.object(["entries": .array(Array(entries[18...22])), "index": .number(2), "offset": .number(18), "total": .number(40), "currentEntryId": .string("entry-20"), "revision": .number(7)])), scope: scope)
+        XCTAssertEqual(shared.tabs(in: scope).first?.history?.entries.count, 40)
+        XCTAssertEqual(shared.tabs(in: scope).first?.history?.currentEntryId, "entry-20")
+    }
+    @MainActor func testFreshOwnerReadReplacesOldCacheIncarnationWithoutOverwritingConcurrentState() {
+        let shared = SharedAppStore(cacheRoot: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString), cacheKey: { nil })
+        let scope = "project:synthetic:canonical"
+        func snapshot(_ revision: Int, _ ids: [String]) -> JSON {
+            .object(["revision": .number(Double(revision)), "tabs": .array(ids.map { .object(["id": .string($0), "type": .string("chat"), "chatId": .string($0), "title": .string($0)]) })])
+        }
+        shared.applyContentTabs(snapshot(100, ["kept", "obsolete"]), scope: scope)
+        shared.applyContentTabs(snapshot(12, ["kept"]), scope: scope)
+        XCTAssertEqual(shared.contentTabSnapshot(in: scope)["tabs"].array.count, 2, "Unsolicited stale snapshots stay rejected")
+        shared.applyContentTabs(snapshot(12, ["kept"]), scope: scope, afterReadingRevision: 100)
+        XCTAssertEqual(shared.contentTabSnapshot(in: scope)["tabs"].array.map { $0["id"].string }, ["kept"], "The desktop read removes obsolete membership without replaying it")
+        shared.applyContentTabs(snapshot(20, ["kept", "newer"]), scope: scope)
+        shared.applyContentTabs(snapshot(12, ["kept"]), scope: scope, afterReadingRevision: 12)
+        XCTAssertEqual(shared.contentTabSnapshot(in: scope)["revision"].int, 20, "A concurrently applied newer snapshot wins")
+    }
+    @MainActor func testChatReadingPositionSurvivesNewStoreAndSeparatesAccounts() throws {
+        let account = "synthetic-chat-reading-" + UUID().uuidString, other = UUID().uuidString, scope = "chat:synthetic"
+        let defaultsKey = "proteus.chat-positions." + SHA256.hash(data: Data((":" + account).utf8)).map { String(format: "%02x", $0) }.joined()
+        defer { UserDefaults.standard.removeObject(forKey: defaultsKey) }
+        let first = SharedAppStore(); first.reset(for: account)
+        first.chatScrollLocations[scope] = NativeChatScrollLocation(anchor: 104, inset: 250, offset: 820, eventStart: 0, presentationStart: 80)
+        first.persistChatScrollLocation(for: scope)
+        let restored = SharedAppStore(); restored.reset(for: account)
+        XCTAssertEqual(restored.chatScrollLocation(for: scope)?.offset, 820)
+        XCTAssertEqual(restored.chatScrollLocation(for: scope)?.presentationStart, 80)
+        restored.reset(for: other); XCTAssertNil(restored.chatScrollLocation(for: scope))
+        restored.reset(for: account)
+        restored.chatScrollLocations[scope] = NativeChatScrollLocation(anchor: 104, inset: 0, offset: .infinity)
+        restored.persistChatScrollLocation(for: scope)
+        restored.chatScrollLocations.removeAll()
+        XCTAssertEqual(restored.chatScrollLocation(for: scope)?.offset, 820, "Invalid measurements cannot replace a bookmark")
+        restored.clearChatScrollLocation(for: scope)
+        let cleared = SharedAppStore(); cleared.reset(for: account)
+        XCTAssertNil(cleared.chatScrollLocation(for: scope), "Returning to latest clears the durable reading bookmark")
+    }
+    func testChatRawOffsetRequiresSamePresentedHistoryWindow() {
+        XCTAssertFalse(NativeChatScrollLocation(anchor: -1, inset: 0, offset: 1).valid)
+        let location = NativeChatScrollLocation(anchor: 104, inset: 250, offset: 820, eventStart: 0, presentationStart: 80, viewportWidth: 800, eventRevision: "revision")
+        XCTAssertTrue(location.restoresAbsoluteOffset(loadedStart: 0, presentedStart: 80, revision: "revision", width: 800, changedWindow: false))
+        XCTAssertFalse(location.restoresAbsoluteOffset(loadedStart: 0, presentedStart: 40, revision: "revision", width: 800, changedWindow: false))
+        XCTAssertFalse(location.restoresAbsoluteOffset(loadedStart: 0, presentedStart: 80, revision: "new-output", width: 800, changedWindow: false))
+        XCTAssertFalse(location.restoresAbsoluteOffset(loadedStart: 0, presentedStart: 80, revision: "revision", width: 390, changedWindow: false))
+        let measured = NativeChatEventFrame(start: 80, frame: CGRect(x: 0, y: 420, width: 800, height: 2000))
+        XCTAssertEqual(measured.contentTop, 420, "Content anchors remain independent of the viewport offset")
+    }
+    @MainActor func testNativeScrollCommandWaitsForMomentumToFinish() async throws {
+        let scroll = MomentumScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 600))
+        scroll.contentSize = CGSize(width: 400, height: 2400)
+        let child = UIView(); scroll.addSubview(child)
+        let coordinator = NativeScrollProbe.Coordinator()
+        coordinator.attach(from: child)
+        scroll.momentum = true
+        let token = UUID(); var applied = false
+        coordinator.onApplied = { id, _ in if id == token { applied = true } }
+        coordinator.apply(NativeScrollCommand(id: token, y: 1000))
+        try await Task.sleep(for: .milliseconds(80))
+        XCTAssertEqual(scroll.contentOffset.y, 0); XCTAssertFalse(applied)
+        scroll.momentum = false
+        scroll.contentSize.height += 1
+        try await Task.sleep(for: .milliseconds(80))
+        XCTAssertEqual(scroll.contentOffset.y, 1000); XCTAssertTrue(applied)
+        coordinator.invalidate()
     }
 
     private func projectFixture() throws -> JSON {
@@ -1419,6 +1556,55 @@ final class RemoteTests: XCTestCase {
         XCTAssertNotNil(ProviderAllowance.date("2026-10-10T15:00:00.123Z"))
         XCTAssertNotNil(ProviderAllowance.date("2026-10-10T15:00:00Z"))
     }
+    @MainActor func testIncrementalChatPatchesPreserveHistoryAndRejectStaleUpdates() {
+        let store = RemoteStore(); store.forget()
+        func page(_ at: String, patches: [JSON]? = nil) -> JSON {
+            var value: [String: JSON] = ["id": .string("streamed"), "observedAt": .string(at), "eventStart": .number(0), "eventCount": .number(2), "events": .array([.object(["text": .string("first")]), .object(["text": .string("second")])])]
+            if let patches { value["events"] = .array([]); value["eventPatches"] = .array(patches) }
+            return .object(value)
+        }
+        store.mergeChat(page("2026-11-03T08:00:00Z"))
+        store.mergeChat(page("2026-11-03T08:00:02Z", patches: [.object(["index": .number(1), "event": .object(["text": .string("updated")])])]))
+        XCTAssertEqual(store.chats["streamed"]?["events"].array.map { $0["text"].string }, ["first", "updated"])
+        store.mergeChat(page("2026-11-03T08:00:01Z", patches: [.object(["index": .number(1), "event": .object(["text": .string("stale")])])]))
+        XCTAssertEqual(store.chats["streamed"]?["events"].array.last?["text"].string, "updated")
+        XCTAssertEqual(store.chats["streamed"]?["eventPatches"], .null)
+        let raced = RemoteStore(); raced.forget()
+        raced.mergeChat(page("2026-11-03T08:00:02Z", patches: [.object(["index": .number(1), "event": .object(["text": .string("raced update")])])]))
+        raced.mergeChat(page("2026-11-03T08:00:00Z"))
+        XCTAssertEqual(raced.chats["streamed"]?["events"].array.map { $0["text"].string }, ["first", "raced update"])
+    }
+    @MainActor func testHistoryReadsKeepVisibleIncrementalWatchAndDoNotRestoreItAfterLeaving() async throws {
+        let (data, _) = try await URLSession.shared.data(from: URL(string: nativeFixtureHTTPOrigin + "/pair?projects=1")!)
+        let fixture = try JSONDecoder().decode(JSON.self, from: data)
+        let store = RemoteStore(); store.forget(); try store.pair(fixture["code"].string)
+        defer { store.forget() }
+        try await wait { store.connected && store.supportsProjects }
+        let id = try XCTUnwrap(fixture["chatIds"].array.first?.string), token = UUID()
+        let opened = await store.showChat(id, token: token); XCTAssertTrue(opened)
+        _ = try await store.readChat(["id": .string(id), "beforeEvent": .number(0)])
+        func watches() async throws -> [JSON] {
+            let (data, _) = try await URLSession.shared.data(from: URL(string: nativeFixtureHTTPOrigin + "/chat-watch-evidence")!)
+            return try JSONDecoder().decode(JSON.self, from: data)["watches"].array
+        }
+        let active = try await watches()
+        XCTAssertEqual(active.count, 1); XCTAssertEqual(active.first?["id"].string, id); XCTAssertEqual(active.first?["delta"].bool, true)
+        await store.hideChat(id, token: token)
+        _ = try await store.readChat(["id": .string(id)])
+        let hidden = try await watches(); XCTAssertTrue(hidden.isEmpty)
+    }
+    @MainActor func testVisibleChatLeaseDoesNotClearReplacementOrRestoreHiddenChat() async {
+        let store = RemoteStore(); store.forget()
+        let first = UUID(), replacement = UUID()
+        _ = await store.showChat("first", token: first)
+        _ = await store.showChat("second", token: replacement)
+        await store.hideChat("first", token: first)
+        XCTAssertEqual(store.selectedChat, "second")
+        await store.hideChat("second", token: replacement)
+        XCTAssertNil(store.selectedChat)
+        _ = await store.openChat("first")
+        XCTAssertNil(store.selectedChat, "An action refresh after leaving a view must not restore its watch")
+    }
     @MainActor func testHistoryPagesStayContiguousWhenNewMessagesArrive() {
         let store = RemoteStore(); store.forget()
         func page(_ first: Int, _ last: Int) -> JSON {
@@ -1534,6 +1720,26 @@ final class DestinationTests: XCTestCase {
         let restored = DestinationStore(root: root, keychainService: service)
         XCTAssertEqual(restored.selected?.draft("reply:same-id").string, "Personal draft")
         destinations.activity(false); restored.activity(false)
+    }
+    @MainActor func testVisibleProjectResumesOnlyItsSuspendedOwnerWithoutChangingSelection() throws {
+        let (root, service) = try fixture(); let destinations = DestinationStore(root: root, keychainService: service)
+        defer { destinations.resetForTesting(); try? FileManager.default.removeItem(at: root) }
+        let a = credential(UUID().uuidString), b = credential(UUID().uuidString)
+        try destinations.register(a, label: "First"); let first = try XCTUnwrap(destinations.selected)
+        first.setDraft("reply:retained", .string("Retained draft"))
+        try destinations.register(b, label: "Second")
+        destinations.activateVisibleOwner(a.hostId)
+        XCTAssertEqual(first.status, "Offline · cached history", "Background views cannot activate connections")
+        destinations.activity(true); first.suspend()
+        destinations.activateVisibleOwner(a.hostId)
+        XCTAssertEqual(first.status, "Connecting…")
+        XCTAssertEqual(first.connection?.hostId, a.hostId)
+        XCTAssertEqual(destinations.selectedID, b.hostId)
+        XCTAssertEqual(first.draft("reply:retained").string, "Retained draft")
+        first.status = "Waiting for retry"
+        destinations.activateVisibleOwner(a.hostId)
+        XCTAssertEqual(first.status, "Waiting for retry", "An already active owner retains its retry state")
+        destinations.activity(false)
     }
     @MainActor func testSwitchFailsUnconfirmedCommandsAndOldViewCannotSendToNewHost() async throws {
         let (root, service) = try fixture(); let destinations = DestinationStore(root: root, keychainService: service)
@@ -1879,6 +2085,81 @@ extension DestinationTests {
 }
 
 final class NativeParityTests: XCTestCase {
+    func testAddressCompletionRanksRetainedOriginsAndCompletesOnlyHostPrefixes() throws {
+        let rows: [JSON] = (0..<5).map { .object(["eventId": .string("visit-" + String($0)), "url": .string("https://www.example.test/path/" + String($0)), "visitedAt": .string("2026-01-01T00:00:00Z")]) } + [.object(["eventId": .string("recent"), "url": .string("https://elsewhere.test/new"), "visitedAt": .string("2026-11-02T00:00:00Z")])]
+        let sites = NativeBrowserHistoryIndex(rows + rows).sites
+        XCTAssertEqual(sites.first?["url"].string, "https://www.example.test/")
+        XCTAssertEqual(sites.first?["visits"].int, 5)
+        XCTAssertEqual(NativeAddressCompletion.match("Ex", sites: sites), NativeAddressCompletion.Match(url: "https://www.example.test/", suffix: "ample.test/"))
+        XCTAssertNil(NativeAddressCompletion.match("example.test/path", sites: sites))
+        XCTAssertNil(NativeAddressCompletion.match("two words", sites: sites))
+        XCTAssertNil(NativeAddressCompletion.match("http://ex", sites: sites))
+    }
+
+    @MainActor func testAddressClassificationAndLocalMainMembership() async throws {
+        for input in ["https://consolefixture:8006/#v1:0:=qemu%2F106:4:::::8::", "consolefixture:8006", "nas/", "nas?q=1", "router#status", "[::1]:8080", "bücher.example"] {
+            let expected = input.hasPrefix("https://") ? input : "https://" + input
+            XCTAssertEqual(SharedAppStore.addressTarget(input)?.absoluteString, URL(string: expected)?.absoluteString, input)
+        }
+        XCTAssertEqual(SharedAppStore.addressTarget("nas")?.absoluteString, "https://www.google.com/search?q=nas")
+        for input in ["consolefixture:65536", "https://u:p@nas/", "file:///tmp/test", "javascript:alert(1)", "/tmp/file"] { XCTAssertNil(SharedAppStore.addressTarget(input), input) }
+        let (data, _) = try await URLSession.shared.data(from: URL(string: "\(nativeFixtureHTTPOrigin)/pair?projects=1")!)
+        let fixture = try JSONDecoder().decode(JSON.self, from: data), remote = RemoteStore()
+        remote.forget(); try remote.pair(fixture["code"].string); defer { remote.forget() }
+        let deadline = Date().addingTimeInterval(15)
+        while !remote.connected, Date() < deadline { try await Task.sleep(for: .milliseconds(50)) }
+        XCTAssertTrue(remote.connected)
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString), key = RemoteCrypto.random()
+        let shared = SharedAppStore(cacheWriter: NativeSharedCacheWriter(), cacheRoot: root, cacheKey: { key })
+        defer { try? FileManager.default.removeItem(at: root) }
+        shared.browserTabs = [BrowserDescriptor(id: "local-main", title: "Only this device", url: "https://example.test/local", scope: "main")]
+        shared.unload("local-main", force: true); shared.select("local-main", in: "main")
+        XCTAssertTrue(shared.unloadedBrowsers.contains("local-main")); XCTAssertFalse(shared.isBrowserLoaded("local-main"))
+        let before = try await remote.request("tabs.get", ["scope": .string("main"), "id": .string("main")])
+        await shared.refreshMainBrowserTabs(remote)
+        XCTAssertEqual(shared.tabs(in: "main").map(\.id), ["local-main"])
+        let after = try await remote.request("tabs.get", ["scope": .string("main"), "id": .string("main")])
+        XCTAssertEqual(after, before, "Mobile main-window navigation must not rewrite or import desktop main-window membership")
+    }
+
+    func testChatSetupIdentityAndInferenceMachineChoices() throws {
+        let first = NativeChatSetup(hostID: "owner", workspaceID: "workspace", projectID: "project")
+        let second = NativeChatSetup(hostID: "owner", workspaceID: "workspace", projectID: "project")
+        XCTAssertNotEqual(first.draftKey, second.draftKey)
+        XCTAssertEqual(NativeChatSetup.decode(first.json), first)
+        let source: JSON = .object(["hostId": .string("model-host"), "hostLabel": .string("Model machine"), "providerId": .string("mtplx"), "available": .bool(false)])
+        let model: JSON = .object(["id": .string("preserved-route"), "name": .string("Same model name"), "sharedSource": source])
+        let statuses: [String: JSON] = ["mtplx": .object(["available": .bool(true)]), "shared-llm": .object(["sources": .array([source]), "models": .array([model])])]
+        let choices = nativeInferenceProviderChoices(statuses, ownerName: "Executing machine")
+        XCTAssertEqual(choices.first { $0.provider == "mtplx" }?.label, "MTPLX · Executing machine")
+        let remote = try XCTUnwrap(choices.first { $0.sourceHost == "model-host" })
+        XCTAssertEqual(remote.label, "MTPLX · Model machine"); XCTAssertFalse(remote.available)
+        XCTAssertEqual(remote.catalog(statuses["shared-llm"]!)["models"].array.first?["id"].string, "preserved-route")
+        let removed = nativeInferenceProviderChoices([:], ownerName: "Owner", selected: "shared-llm", savedRoute: remote.id)
+        XCTAssertFalse(try XCTUnwrap(removed.first { $0.id == remote.id }).available)
+        XCTAssertFalse(nativeInferenceProviderChoices(["shared-llm": .object([:])], ownerName: "Owner").contains { $0.provider == "shared-llm" })
+    }
+    @MainActor func testExpiredOwnerRejectionRetainsExactIntentWithoutTreatingTimeoutAsExpiry() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString), key = RemoteCrypto.random()
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let scope = "project:" + UUID().uuidString + ":synthetic", intent = UUID().uuidString, requestID = UUID().uuidString
+        let operation: JSON = .object(["action": .string("close"), "id": .string("obsolete"), "intentId": .string(intent)])
+        let receipt: JSON = .object(["id": .string(requestID), "issuedAt": .string("2026-10-31T20:00:00Z"), "args": .object(["expectedRevision": .number(4), "operations": .array([operation])])])
+        let payload: JSON = .object(["contentPending": .object([scope: .array([operation])]), "contentRequests": .object([scope: receipt])])
+        try Data(RemoteCrypto.seal(payload, key: key, aad: "proteus-mobile-document-tabs-v1").utf8).write(to: root.appendingPathComponent("document-tabs.enc"))
+        let shared = SharedAppStore(cacheWriter: NativeSharedCacheWriter(), cacheRoot: root, cacheKey: { key })
+        XCTAssertFalse(shared.retainExpiredContentRequest(scope, error: RemoteError(message: "Request timed out. PRIVATE")))
+        XCTAssertEqual(shared.contentPending[scope], [operation]); XCTAssertTrue(shared.hasPendingContent(in: scope))
+        XCTAssertTrue(shared.retainExpiredContentRequest(scope, error: RemoteError(message: "Command expired. Refresh before trying again.")))
+        XCTAssertFalse(shared.hasPendingContent(in: scope)); XCTAssertNil(shared.contentPending[scope])
+        let retained = shared.legacyContentReview[scope + ":expired:" + requestID]
+        XCTAssertEqual(retained?["request"], receipt); XCTAssertEqual(retained?["operations"], .array([operation]))
+        XCTAssertNil(shared.flushCachedState())
+        let restored = SharedAppStore(cacheWriter: NativeSharedCacheWriter(), cacheRoot: root, cacheKey: { key })
+        XCTAssertEqual(restored.legacyContentReview[scope + ":expired:" + requestID], retained)
+        XCTAssertFalse(restored.hasPendingContent(in: scope))
+    }
     @MainActor func testLegacyInferredDeletionRetainsOriginalReceiptWithoutReplaying() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString), key = RemoteCrypto.random()
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -1904,6 +2185,133 @@ final class NativeParityTests: XCTestCase {
         NativeWorkspaceNavigation.adoptOwnerChats([.object(["id": .string("chat:new"), "type": .string("chat"), "chatId": .string("new")])], navigationKey: "project-navigation:synthetic", remote: remote)
         XCTAssertEqual(remote.draft("project-navigation:synthetic")["chats"], .array([.string("new")]))
         XCTAssertEqual(remote.draft("project-navigation:synthetic")["selected"].string, "workspace")
+        let owner: [JSON] = [.object(["id": .string("chat:new"), "type": .string("chat"), "chatId": .string("new")])]
+        NativeWorkspaceNavigation.restoreOwnerChatSelection("old", descriptors: owner, navigationKey: "project-navigation:synthetic", remote: remote)
+        XCTAssertEqual(remote.draft("project-navigation:synthetic")["chats"], .array([.string("new")]), "Restored stale app sessions cannot inject a chat into owner membership")
+        XCTAssertEqual(remote.draft("project-navigation:synthetic")["selected"].string, "workspace")
+        NativeWorkspaceNavigation.restoreOwnerChatSelection("new", descriptors: owner, navigationKey: "project-navigation:synthetic", remote: remote)
+        XCTAssertEqual(remote.draft("project-navigation:synthetic")["selected"].string, "chat:new", "An existing owner tab retains its local selection")
+    }
+    @MainActor func testSharedSetupAndReplyTextUseOwnerRevisionsWithoutPublishingPrivateChoices() async throws {
+        let (data, _) = try await URLSession.shared.data(from: URL(string: "\(nativeFixtureHTTPOrigin)/pair?projects=1")!)
+        let fixture = try JSONDecoder().decode(JSON.self, from: data), remote = RemoteStore()
+        remote.forget(); try remote.pair(fixture["code"].string); defer { remote.forget() }
+        for _ in 0..<200 { if remote.connected && remote.supportsProjects { break }; try await Task.sleep(for: .milliseconds(50)) }
+        XCTAssertTrue(remote.connected && remote.supportsProjects)
+        let project = fixture["projectId"].string, host = try XCTUnwrap(remote.connection?.hostId), scope = "project:" + host + ":" + project, id = UUID().uuidString
+        let current = try await remote.request("tabs.get", ["scope": .string("project"), "id": .string(project)])
+        _ = try await remote.request("tabs.mutate", ["scope": .string("project"), "id": .string(project), "expectedRevision": current["revision"], "operations": .array([.object(["action": .string("open"), "tab": .object(["id": .string(id), "type": .string("browser"), "title": .string("New chat"), "url": .string(""), "setup": .object(["kind": .string("chat")])])])])])
+        let shared = SharedAppStore(); defer { shared.unloadBrowsers() }
+        await shared.refreshContentTabs(scope: scope, remote: remote, kind: "project", id: project)
+        XCTAssertFalse(shared.tabs(in: scope).contains { ($0.contentTabId ?? $0.id) == id }, "A setup placeholder must never allocate a browser")
+        XCTAssertTrue(NativeWorkspaceNavigation.children(scope: scope, navigationKey: "project-navigation:" + project, remote: remote, shared: shared).contains { $0["id"].string == "draft:" + id && $0["type"].string == "chat-setup" })
+        let identity: [String: JSON] = ["kind": .string("setup"), "id": .string(id), "scope": .string("project"), "scopeId": .string(project)]
+        _ = try await remote.request("draft.text.save", identity.merging(["text": .string("Finish on iPhone"), "expectedRevision": .number(0), "operationId": .string(UUID().uuidString)]) { _, new in new })
+        let sync = NativeSharedDraftText(); var visible = ""
+        sync.activate(store: remote, identity: identity, text: visible) { visible = $0 }
+        for _ in 0..<100 { if visible == "Finish on iPhone" { break }; await sync.syncNow(); try await Task.sleep(for: .milliseconds(20)) }
+        XCTAssertEqual(visible, "Finish on iPhone")
+        visible = "Phone unfinished edit"; sync.changed(visible)
+        let base = try await remote.request("draft.text.get", identity)
+        _ = try await remote.request("draft.text.save", identity.merging(["text": .string("Desktop concurrent edit"), "expectedRevision": base["revision"], "operationId": .string(UUID().uuidString)]) { _, new in new })
+        try await Task.sleep(for: .milliseconds(800)); await sync.syncNow()
+        XCTAssertEqual(visible, "Phone unfinished edit"); XCTAssertEqual(sync.conflict["text"].string, "Desktop concurrent edit")
+        sync.useOther(); XCTAssertEqual(visible, "Desktop concurrent edit"); XCTAssertTrue(sync.copies.contains { $0["text"].string == "Phone unfinished edit" })
+        visible = "Resumed on phone"; sync.changed(visible); try await Task.sleep(for: .milliseconds(800)); await sync.syncNow()
+        let resumed = try await remote.request("draft.text.get", identity); XCTAssertEqual(resumed["text"].string, visible)
+        let inventory = try await remote.request("tabs.get", ["scope": .string("project"), "id": .string(project)])
+        XCTAssertFalse(String(decoding: try JSONEncoder().encode(inventory), as: UTF8.self).contains("Resumed on phone"))
+        let reply: [String: JSON] = ["kind": .string("reply"), "id": fixture["chatIds"].array[0]]
+        sync.activate(store: remote, identity: reply, text: "Unsent reply") { visible = $0 }
+        try await Task.sleep(for: .milliseconds(800)); await sync.syncNow()
+        let continued = try await remote.request("draft.text.get", reply); XCTAssertEqual(continued["text"].string, "Unsent reply")
+        sync.stop()
+    }
+    @MainActor func testHistoryPagingFailureCannotBlockAuthoritativeProjectMembership() async throws {
+        let (data, _) = try await URLSession.shared.data(from: URL(string: "\(nativeFixtureHTTPOrigin)/pair?projects=1")!)
+        let fixture = try JSONDecoder().decode(JSON.self, from: data), remote = RemoteStore()
+        remote.forget(); try remote.pair(fixture["code"].string); defer { remote.forget() }
+        let deadline = Date().addingTimeInterval(15)
+        while !(remote.connected && remote.supportsProjects), Date() < deadline { try await Task.sleep(for: .milliseconds(50)) }
+        XCTAssertTrue(remote.connected && remote.supportsProjects)
+        let name = "Page failure " + UUID().uuidString
+        let catalog = try await remote.updateProjects(["action": .string("create"), "workspaceId": fixture["workspaceId"], "name": .string(name)])
+        let project = try XCTUnwrap(catalog["projects"].array.first { $0["name"].string == name })["id"].string
+        let host = try XCTUnwrap(remote.connection?.hostId), scope = "project:\(host):\(project)"
+        let entries: [JSON] = (0..<450).map { .object(["id": .string("entry-\($0)"), "url": .string("https://example.test/history/\($0)"), "title": .string("Entry \($0)")]) }
+        let history: JSON = .object(["entries": .array(entries), "index": .number(449), "currentEntryId": .string("entry-449"), "revision": .number(1)])
+        _ = try await remote.request("tabs.mutate", ["scope": .string("project"), "id": .string(project), "expectedRevision": .number(0), "operations": .array([.object(["action": .string("open"), "tab": .object(["id": .string("long-history"), "type": .string("browser"), "title": .string("Desktop history"), "url": entries.last!["url"], "history": history])])])])
+        _ = try await URLSession.shared.data(from: URL(string: "\(nativeFixtureHTTPOrigin)/tab-history-failure-fixture?id=\(project)&enabled=1")!)
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString), key = RemoteCrypto.random()
+        let shared = SharedAppStore(cacheWriter: NativeSharedCacheWriter(), cacheRoot: root, cacheKey: { key })
+        defer { try? FileManager.default.removeItem(at: root) }
+        shared.browserTabs = [BrowserDescriptor(id: "ghost", title: "Closed on desktop", url: "https://example.test/ghost", scope: scope, contentTabId: "ghost")]
+        remote.setDraft("reply:keep", .string("Unsent message"))
+        await shared.refreshContentTabs(scope: scope, remote: remote, kind: "project", id: project)
+        XCTAssertEqual(shared.tabs(in: scope).compactMap(\.contentTabId), ["long-history"])
+        XCTAssertEqual(shared.tabs(in: scope).first?.history?.currentEntryId, "entry-449")
+        XCTAssertEqual(remote.draft("reply:keep").string, "Unsent message")
+        XCTAssertFalse(shared.isBrowserLoaded(shared.tabs(in: scope).first!.id))
+        _ = try await URLSession.shared.data(from: URL(string: "\(nativeFixtureHTTPOrigin)/tab-history-failure-fixture?id=\(project)&enabled=0")!)
+        await shared.refreshContentTabs(scope: scope, remote: remote, kind: "project", id: project)
+        XCTAssertEqual(shared.tabs(in: scope).first?.history?.entries.count, 450, "A later owner read repairs history without resurrecting closed membership")
+    }
+    @MainActor func testEmptyLegacyOutboxAdoptsDesktopProjectWithoutUploadingGhosts() async throws {
+        let (data, _) = try await URLSession.shared.data(from: URL(string: "\(nativeFixtureHTTPOrigin)/pair?projects=1")!)
+        let fixture = try JSONDecoder().decode(JSON.self, from: data)
+        let remote = RemoteStore(); remote.forget(); try remote.pair(fixture["code"].string)
+        defer { remote.forget() }
+        let deadline = Date().addingTimeInterval(15)
+        while !(remote.connected && remote.supportsProjects), Date() < deadline { try await Task.sleep(for: .milliseconds(50)) }
+        XCTAssertTrue(remote.connected && remote.supportsProjects)
+        let name = "Authoritative desktop " + UUID().uuidString
+        let catalog = try await remote.updateProjects(["action": .string("create"), "workspaceId": fixture["workspaceId"], "name": .string(name)])
+        let project = try XCTUnwrap(catalog["projects"].array.first { $0["name"].string == name })["id"].string
+        let host = try XCTUnwrap(remote.connection?.hostId), scope = "project:\(host):\(project)"
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString), key = RemoteCrypto.random()
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let payload: JSON = .object(["contentPending": .object([scope: .array([])])])
+        try Data(RemoteCrypto.seal(payload, key: key, aad: "proteus-mobile-document-tabs-v1").utf8).write(to: root.appendingPathComponent("document-tabs.enc"))
+        let shared = SharedAppStore(cacheWriter: NativeSharedCacheWriter(), cacheRoot: root, cacheKey: { key })
+        XCTAssertNil(shared.contentPending[scope], "An empty restored queue must not block every owner read")
+        shared.browserTabs = [BrowserDescriptor(id: "stale-local", title: "Stale mobile-only tab", url: "https://example.test/stale", scope: scope, contentTabId: "stale-owner")]
+        remote.setDraft("reply:preserved", .string("Unsent draft"))
+        let args: [String: JSON] = ["scope": .string("project"), "id": .string(project)]
+        let before = try await remote.request("tabs.get", args)
+        XCTAssertTrue(before["tabs"].array.isEmpty)
+        await shared.refreshContentTabs(scope: scope, remote: remote, kind: "project", id: project)
+        XCTAssertTrue(shared.tabs(in: scope).isEmpty, "An empty desktop project is authoritative")
+        let after = try await remote.request("tabs.get", args)
+        XCTAssertEqual(after, before, "A read must not upload stale mobile tabs into the desktop")
+        let ownerTabs = (0..<9).map { index in JSON.object(["id": .string("owner-\(index)"), "type": .string("browser"), "title": .string("Desktop tab \(index)"), "url": .string("https://example.test/\(index)")]) }
+        let expected = try await remote.request("tabs.mutate", ["scope": .string("project"), "id": .string(project), "expectedRevision": after["revision"], "operations": .array(ownerTabs.map { .object(["action": .string("open"), "tab": $0]) })])
+        remote.setDraft("project-navigation:" + project, .object(["chats": .array([.string("stale-chat")]), "selected": .string("chat:stale-chat")]))
+        await shared.refreshContentTabs(scope: scope, remote: remote, kind: "project", id: project)
+        XCTAssertEqual(shared.workspaceContentDescriptors[scope], expected["tabs"].array)
+        XCTAssertEqual(shared.tabs(in: scope).compactMap(\.contentTabId), ownerTabs.map { $0["id"].string })
+        XCTAssertTrue(remote.draft("project-navigation:" + project)["chats"].array.isEmpty)
+        XCTAssertEqual(remote.draft("reply:preserved").string, "Unsent draft")
+        let unchangedOwner = try await remote.request("tabs.get", args)
+        XCTAssertEqual(unchangedOwner, expected)
+        _ = try await remote.request("tabs.mutate", ["scope": .string("project"), "id": .string(project), "expectedRevision": expected["revision"], "operations": .array([.object(["action": .string("close"), "id": .string("owner-0")])])])
+        let pushed = Date().addingTimeInterval(5)
+        while shared.tabs(in: scope).contains(where: { $0.contentTabId == "owner-0" }), Date() < pushed { try await Task.sleep(for: .milliseconds(50)) }
+        XCTAssertEqual(shared.tabs(in: scope).compactMap(\.contentTabId), Array(ownerTabs.dropFirst()).map { $0["id"].string }, "An authenticated owner Close notice updates the native projection without a polling call")
+    }
+    @MainActor func testOrphanedTabReceiptIsQuarantinedWithoutLosingItsBytes() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString), key = RemoteCrypto.random(), scope = "project:fixture:general"
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let receipt: JSON = .object(["id": .string("original-request"), "issuedAt": .string("2026-10-31T20:00:00Z"), "args": .object(["operations": .array([.object(["action": .string("open"), "tab": .object(["id": .string("unknown-tab")])])])])])
+        let payload: JSON = .object(["contentPending": .object([scope: .array([])]), "contentRequests": .object([scope: receipt])])
+        try Data(RemoteCrypto.seal(payload, key: key, aad: "proteus-mobile-document-tabs-v1").utf8).write(to: root.appendingPathComponent("document-tabs.enc"))
+        let shared = SharedAppStore(cacheWriter: NativeSharedCacheWriter(), cacheRoot: root, cacheKey: { key })
+        XCTAssertNil(shared.contentPending[scope]); XCTAssertFalse(shared.hasPendingContent(in: scope))
+        XCTAssertEqual(shared.legacyContentReview[scope]?["request"], receipt)
+        shared.selectChatChild("chat", for: scope); XCTAssertNil(shared.flushCachedState())
+        let restored = SharedAppStore(cacheWriter: NativeSharedCacheWriter(), cacheRoot: root, cacheKey: { key })
+        XCTAssertEqual(restored.legacyContentReview[scope]?["request"], receipt)
     }
     @MainActor func testTabRebaseHonorsObservedCloseAndKeepsConcurrentOrder() {
         let tab: JSON = .object(["id": .string("chat:one"), "type": .string("chat"), "chatId": .string("one")])
@@ -2769,4 +3177,9 @@ extension RemoteTests {
         XCTAssertTrue(nativeTextAttachmentRequired(String(repeating: "🙂", count: 65537)))
         XCTAssertFalse(nativeTextAttachmentRequired(String(repeating: "🙂", count: 65536)))
     }
+}
+
+@MainActor private final class MomentumScrollView: UIScrollView {
+    var momentum = false
+    override var isDecelerating: Bool { momentum }
 }

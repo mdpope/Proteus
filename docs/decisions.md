@@ -1,3 +1,98 @@
+## Nov 2 R37 — one idle inventory for guard and diagnostics
+
+Derive live updater waiting details from the same execution inventory used at each idle barrier. Background executions are keyed by lane, so resolve their chat IDs from slot values. Include orphan execution ownership conservatively rather than trusting a terminal chat status. Diagnostics are read-only; a tool approval remains an operator decision and no cancellation is added. A new-input checkpoint reset is distinct from active work and is cleared only by a revision-checked handoff.
+
+## Nov 2 R36 — creation intent originates at creation
+
+Only an actual new extension browser-tab callback may declare creation intent; observing a locally missing ID, selecting a tab or restoring a saved view cannot declare a reopen. Carry the intent into active or background renderer registration and retain it until owner acknowledgement, including when it arrives after a synchronization snapshot. Confirmed owner close/move tombstones override it. Background extension creation uses the existing focus guard and registers without changing selection. Keep authoritative first-read behavior for ordinary stale mirrors.
+
+## Nov 2 R35 — native qualification preserves platform privacy and source identity
+
+Windows fixtures must exercise private ACLs through the existing helpers instead of assuming POSIX mode bits. Never weaken application-home validation for a test. Linux packages must record the actual full source commit, short revision and dirty state in provenance, independently of historical transfer metadata. Keep strict release-source input verification. Qualification-only changes do not relabel or rebuild an already accepted Mac package whose runtime/build inputs remain identical; retain each artifact's original source pin and companion archive.
+
+## Nov 2 R35 — sidebar refreshes read their owner connection
+
+A peer state notification is evidence already delivered to the desktop owner. Renderer sidebar refreshes must consume that authenticated snapshot rather than fetch context and full sync again. Keep a compact, memory-only navigation projection per current peer session, discard source-entry/provider/progress detail, and return detached values. Validate outgoing access, pairing, pause, session readiness and current connection status on every read. Offline cache rows cannot claim a live connection. Existing connection heartbeat/recovery supplies push-loss fallback; explicit configuration requests continue through the normal scoped remote service. Window placement and execution owner remain independent.
+
+## Nov 2 R34 — attribute wire traffic before changing refresh behavior
+
+A visible online session and zero host closes cannot establish acceptable transport load. Measure actual encrypted bytes where the outbound writer transmits them, and classify replies only into a fixed source-owned set of read methods plus Other. Keep the existing aggregate categories. Separately label sampled JSON projection sizes as plaintext estimates; retain fixed section names and counts only, never values. Limit projection sampling to once per ten seconds. No change to command delivery, replay, authentication or saved pairings is implied by this diagnostic addition.
+
+## Nov 2 R33 — preservation describes the final checkpoint
+
+A final renderer checkpoint can update canonical descriptors and drafts. Complete it before recording preservation, then recheck idleness and the handoff phase before starting the helper. A failed checkpoint leaves the application open. Save document chat associations on every surface, independently of their current project placement. Keep strict preservation/identity/barrier verification and classify timeout failures using fixed reasons without logging private owner responses.
+
+## Nov 2 R32 — presentation subscriptions belong to each transport and visible view
+
+A legacy full-page watcher must not promote summary subscribers of the same chat. Send each peer
+only its negotiated representation, with bounded transient delta cursors and a full-page fallback.
+Incremental patches are replaceable presentation state; never replay them as global journal events
+or change command receipt identities. Their envelope retains the last durable journal cursor,
+so a reconnect can still replay intervening lifecycle events. Reconnect reads the current page
+with its original pairing.
+
+Native view tokens control watch lifetime across hidden phone areas, disappearance and foreground
+transitions. Conditional owner cleanup includes both chat ID and token so late cleanup cannot
+unsubscribe a replacement view, including another view of the same chat. Action-result reads after
+leaving a view may refresh its cache but cannot silently restore its watch. Merge indexed patches
+with older retained pages and reject stale patches, including when a push beats the initial read.
+Packet-kind diagnostics accept only fixed labels and actual encoded byte counts; no content,
+URLs, titles, client IDs, pairing data or arbitrary event labels are recorded.
+
+## Nov 2: native conversation reading has one scroll owner
+
+Use the UIKit conversation probe as the sole owner of automatic bottom following and bookmark
+offsets. A genuine pan suspends following through deceleration; layout and keyboard movement do
+not enable it. Prefetch may fill cache headroom during motion, while visible prepends and native
+offset commands wait for rest. Explicit question navigation cancels competing restoration.
+
+Keep high-frequency measurements in reference state and use stable content coordinates for event
+anchors. Absolute offsets require the same loaded/rendered boundaries, revision and width; otherwise
+restore the event and inset. Persist only bounded local account/device reading metadata on completed
+gestures, acknowledged restoration and lifecycle transitions. Shared drafts and remote execution
+ownership retain their existing independent boundaries. Question forms and their controls belong
+inside the associated message surface, with responsive footer layout.
+
+## Nov 2: origin completion uses retained visits and the owner cache
+
+Rank website origins by retained visit count within a profile, then recency and a stable URL tie.
+Keep the derived index in the history worker and never request remote search suggestions. Ghost
+text is presentation until explicit Enter/Tab; Tab accepts the canonical root with a trailing slash.
+Icons use existing per-profile cache and a bounded data payload, with a globe when absent. This
+keeps the new feature separate from the live main-loop hitch under investigation.
+
+## Nov 2: shared human draft text and local audio state
+
+The operator superseded private project setup drafts with shared empty slots and then explicitly
+confirmed periodic setup and reply text sync. Store text separately from inventories, preserve
+revision conflicts and retries, and consume a setup once on Send. Keep attachments and execution
+choices device-local. App navigation remains window-local. Audio mute belongs to the local page
+and saved window session, not the shared project descriptor; visual alerts survive tab muting.
+
+## Nov 2 — window sessions and shared project content
+
+Window app tabs stay local. iPhone lists them in its sidebar with an app-tab overview;
+iPad/desktop use their top app strip and overview. Sidebar trees show workspace/project destinations,
+never project resource tabs. Projects have one owner-shared ordered content set, preserving stable
+IDs, order, hidden state and history. Chats have no nested resource strip. Phone shows the project
+row, then Chat | Live browser with overview/actions only; the project plus creates tabs. Browser
+links, documents and previews use parent project descriptors and retain their authorization origin.
+Selection/scroll/drafts stay local. Unsent New chat setup remains private pending clarification;
+opening a setup tab never synchronizes prompt text or files.
+
+Unloaded pages retain top navigation without loading to switch tabs. Browser/composer spacing uses
+the actual safe area. Native sync applies membership despite history paging failure, handles
+authenticated tab notices and reconnect, and waits for overlapping reads before fetching newer
+owner state. Empty legacy outboxes no longer suppress reads; orphan receipts and private legacy
+resources remain retained without manufacturing project membership. Unchanged offscreen scopes use
+a one-minute fallback; sidebar resource polling is removed. Broader N2 profiling remains separate.
+
+Review hold: both shared simulator Preview apps must be reviewed before any new physical-device
+build/installation, desktop release package, publication or rollout. Old accepted packages retain
+their historical identity and cannot be promoted as R12. Related superseded Windows/Linux builder
+turns are verified cancelled; queued old-source requests remain retained and require reconciliation
+before reuse. No unrelated work was cancelled.
+
 ## November 1 — reconcile repaired recovery attention without rewriting history
 
 A verified installation can fail its later recovery-retirement step. A separate owner-created
@@ -2999,3 +3094,133 @@ Extension state captures concrete windows because a presentation proxy changes i
 changes. Current sender and last-focused window are separate concepts; active tabs are per window.
 Updater permission is a persisted, versioned owner grant for update and narrow preflight actions,
 not a cross-machine permission-answering capability or arbitrary shell grant.
+## November 2 — mobile chat setup tabs and inference location
+
+New chat setup is a device-local tab, created before any conversation starts. Main navigation
+owns main drafts; a workspace/project owns its child drafts. Each draft has an independent ID,
+form state, attachment scope and request identity. Switching tabs restores that draft; closing
+it changes only local navigation. A submitted request retains its exact ID and arguments until
+the owner confirms it, including after reconnect. The existing owner continues to authorize
+execution and attachments. No browser, chat or inference route is invented to represent a draft.
+
+Local inference choices identify the inference machine and adapter. Shared routes are grouped
+by their existing source host/provider identity; equal model names from different machines remain
+distinct. A route already exposed locally is not presented again as a second independent model.
+Offline/empty sources stay visible with their actual availability, while saved route/model IDs
+are preserved for review. The execution owner remains separate from the computer doing inference.
+Catalog capabilities remain provider supplied; no model-name effort or context table is added.
+Desktop/web share catalog presentation, and native clients consume the same source identities.
+
+## November 2 — external-link focus cannot choose a destination
+
+External Outlook/Mail links require project selection unless a configured rule/default supplies
+one. Losing picker focus can occur during OS activation and does not establish a project/window
+choice. Keep the selector without a default, retain Escape cancellation, and preserve the existing
+untouched configured-default behavior. Remove the unplaced arbitrary-window fallback. Internal
+website links continue beside their originating project and never enter this external picker.
+Source-app names/icons are optional decoration; resolving them cannot gate safe destination choice.
+
+
+## November 2 — keep repeated display work out of browser input
+
+Reuse account identity only inside a synchronous browser display/reconciliation scope, with cleanup
+on success/failure and no await. Never turn this display optimization into persistent account or
+execution-permission authorization. Reading/scrolling transfers affected timestamps to the owning
+window, not full history projections. Structural changes supersede activity. Stream-only transcript
+updates remain narrow regardless of elapsed time; real changes and push-loss fallback retain owner
+refresh. Add bounded phase timings and worker-side payload byte counts rather than serialize again
+on the input-owning thread merely to measure size. Local synthetic improvement is separate from
+live installed scrolling acceptance under the release hold.
+
+
+## November 2 — native overview geometry is presentation data
+
+Read tile rectangles through overlay preferences for the transition; never write per-frame lazy-grid
+geometry back into parent state. Initial centering belongs to one overview presentation and must not
+repeat when images, membership or layout update. Opening/scrolling the overview confers no browser
+load, selection or synchronization intent.
+
+
+## November 2 — reviewing a question is separate from answering it
+
+Store queue-cleared timestamps keyed by existing structured question IDs on the owner. Do not edit
+original question events or change pending/answered status, resolve provider input, send a message,
+or synthesize approval. Clearing is idempotent review metadata and survives restart/history paging.
+The human transcript card retains its answer controls and local draft. Only pending questions can
+be newly cleared; in-flight/uncertain answer delivery retains its existing protections. Paired
+clients gate the action on the owner capability, and agent control cannot clear human questions.
+
+
+## November 2 — send model selection is scoped to a queued turn
+
+Require explicit next-turn scope for chat-control send settings. Freeze the normalized selection
+in the durable task, validate destination capability/catalog and revalidate on the executing owner.
+Recheck project, run and provider after preflight before calling the synchronous owner boundary.
+Do not switch providers, modify an active turn, edit future schedules or widen tool/source grants.
+Receipts describe requested options; scoped reads expose captured and queued settings without claiming
+provider execution or workflow completion. Never infer that older dropped options took effect.
+
+
+## November 2 — Mnemosyne operations design constraints; implementation pending
+
+Use one desktop/web visual and interaction design with platform wiring only where real constraints
+require it; operational visibility does not widen current web schedule-control authority. Mnemosyne
+is the independent core/service/iOS library and Omi is a source. Proposed additional sources and
+optional independent filing adapters require staged contracts, extraction and acceptance. Preserve
+native owners and prepared-disabled alternatives rather than reassign lifecycle for a UI. Event
+identity, execution claim and contribution lineage are distinct and join through source maps;
+applied, not-applicable and delegated outcomes must not collapse into a generic completion state.
+This design direction grants no production UI build, watcher/owner migration or rollout authority.
+
+
+## November 2 — scheduler repair stays in a scoped owner boundary
+
+Separate scheduler grants from chat access and store exact schedule IDs/actions tied to the originating
+context. Remember only an exact schedule-scope approval; generic tool rules cannot widen it. Keep the
+persisted rule kind backward-compatible for rollback. Distinguish future definitions, captured sources
+and captured test retries. Persist test intent before run creation and include its receipt in the
+initial durable run, so ambiguous delivery can reconcile without creating another execution. Preserve
+paused triggers and forbid native replacement takeover. Check permission configuration separately,
+never resolve a pending approval, and keep bounded operational results distinct from external success.
+Local desktop/physical-device update authorization does not lift wider distribution or Mnemosyne holds.
+
+
+## November 2 — recent history and canonical project tab membership
+
+Project recents remain historical navigation with counts and paging, including chats whose tab
+has closed. They are distinct from the duplicate sidebar open-tab navigation lists the operator
+removed. Restoring recents must preserve existing resource/session identities and avoid polling
+the sidebar every few seconds.
+
+A workspace tab manager defaults to its General project, with an explicit project choice and All
+projects view. Reconnection refreshes the visible scope through the shared canonical owner read.
+An obsolete cache incarnation may have a higher revision than the current owner: permit an
+authenticated serialized read to replace it only when the cached revision has not changed during
+the read. Unsolicited stale snapshots and concurrent newer updates retain their protections.
+Failed mutations refresh owner state without replaying uncertain actions. Do not delete another
+project's tabs to make differently scoped views appear equal.
+
+
+## November 2 — congestion must not impersonate authentication failure
+
+Pace ordered wire output inside unchanged relay ceilings instead of closing the shared host for a
+normal burst. Retain bounded queues and per-client fairness. Negotiate targeted temporary relay
+disconnects; an old relay falls back honestly instead of treating congestion as revoked access.
+Current sync state supersedes obsolete replayed state snapshots; lifecycle and mutation receipts
+retain their existing meanings. Measure wire bytes, queue pressure and numeric close codes without
+persisting payloads or credentials. Resume an explicitly visible project's owner independently of
+the default selected computer, preserving suspended-command and immutable-owner boundaries.
+
+
+## Nov 2 follow-up: membership is independent of history hydration
+
+Publish a valid owner membership response immediately. Optional complete Back/Forward paging must not keep obsolete tabs on screen. Retain matching complete local histories, and apply later hydration only while its owner scope/revision and absence of local pending intent still match. Draft synchronization status belongs in the desktop chat heading, keeping conflict recovery available outside message entry.
+
+
+## Nov 2: terminal expiry differs from uncertain delivery
+
+An authenticated owner rejection with the exact command-expiry message permits retiring that
+request from the active tab outbox, while retaining its original envelope and operations in
+encrypted review state. Do not issue a new mutation identity or replay those edits as new intent.
+Timeouts and unknown failures preserve the active retry unchanged. A subsequent read can reconcile
+canonical membership independently; newer local intent must still win over an in-flight read.

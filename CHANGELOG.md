@@ -1,6 +1,76 @@
-## Nov 2 — collected for a new chat
+## Nov 2 R37 — actionable update waiting status
 
-Browser sizing, vault lifecycle, closed-popup control, machine-specific local models and in-tab mobile New chat are recorded in [the Nov 2 plan](docs/2026-11-02-release-plan.md). No new implementation or version reservation is claimed.
+- Show every blocking chat by title, full ID, status and reason, including capacity retries and background execution; distinguish the update coordinator's own active turn. Show precise application/build blockers and safe next steps.
+- Explain when new input resets handoff to a checkpoint requiring review. Keep live status accurate as work finishes without cancelling chats or weakening the repeated idle checks.
+
+## Nov 2 R36 — retain extension-created tabs during first sync
+
+- Carry explicit creation intent for active and background extension tabs through owner synchronization, including a creation event arriving during a pending read. Background creation retains the selected tab. Existing selection and restoration cannot reopen owner-closed or moved identities.
+
+## Nov 2 R35 — stop sidebar catalog refetch loops
+
+- Desktop sidebars consume compact workspace metadata already received by their authenticated owner connection. Peer changes no longer trigger full context and sync network requests from every renderer window. Keep live rename/project updates, offline/paused/revoked boundaries and explicit configuration reads.
+
+## Nov 2 R34 — bounded traffic attribution
+
+- Attribute encrypted reply bytes to fixed read-method buckets and sample plaintext snapshot-section sizes at most once per ten seconds. Keep payloads, permission scope, retry identities and connection behavior unchanged. Live bandwidth acceptance remains open.
+
+## Nov 2 R33 — update preservation correction
+
+- Finish renderer checkpoints before capturing update preservation, and retain document chat associations in saved window/Team tabs. Keep all identity, data and idle guards; report a bounded recovery-check reason on timeout.
+
+## Nov 2 — 0.2.41 candidate
+
+- Preserve the idle message anchor when preceding content finishes sizing after a history prepend; retain native gesture ownership and reading state across reopen.
+
+- Nov 2 R32: keep chat subscriptions with their visible native view; isolate full, summary and incremental delivery per client, merge indexed streaming patches without losing history, and count bounded wire bytes by packet kind. Production bandwidth acceptance follows deployment.
+
+- Nov 2 R31: preserve an owner-rejected expired tab request in encrypted review state so it cannot indefinitely suppress fresh membership reads; keep uncertain retries unchanged. Add bounded, content-free reconciliation attempt diagnostics. Live iPhone General verification remains pending.
+
+- Nov 2 R30 follow-up: apply mobile project membership before optional browser-history paging while retaining matching complete histories; move desktop draft sync/conflict status into the chat header. Source validation and physical rollout remain separate.
+
+- Nov 2 R29: pace encrypted host and native request bursts, avoid replaying obsolete state snapshots, isolate overloaded clients through negotiated relay control, measure bounded wire traffic/close codes, and resume a visible project’s suspended owner without changing computer selection. Live rollout and stability acceptance follow.
+
+- Scope native tab management to the selected project and reconcile owner snapshots after reconnect, including earlier cache incarnations; retain other projects and unconfirmed mutation identities.
+
+- Restore expandable project recents, paging and right-side totals while leaving additional open-tab navigation lists removed.
+
+- Nov 2 R26: keep native question answer fields and controls inside their message card, with a visible label and bounded action layout. Correct native reading restoration across rendered history windows, defer commands/prepends during momentum, coalesce viewport reporting and retain bounded reading bookmarks across launches. Phone/tablet simulator acceptance passes and the local physical clients are updated for review.
+
+- Expose scoped, revision-checked owner scheduler controls with durable serial test receipts, status, exact stop/retry and explicit captured/future source refresh; retain paused/native ownership and constrained permissions.
+- Honor explicitly selected schedule MCPs with excluded defaults, preserving unrelated-default and disabled-source isolation.
+
+- Carry explicit queued next-turn model choices through chat-control tasks and the executing owner; validate catalogs and scope, preserve saved schedules, and expose requested versus captured selections.
+
+- Clear reviewed questions from the open queue while retaining the original card, draft and ability to answer later; synchronize review state without resolving waits or approvals.
+
+- Stop the native tab overview feeding tile geometry into parent layout; center the initial selection once so scrolling can settle.
+
+- Reduce scroll-time owner work by sharing profile reads within each projection, sending only activity timestamps, and avoiding full-state reloads for streamed text; preserve account/permission freshness and push-loss fallback.
+
+- Complete address prefixes with history-ranked website origins: Enter opens, Tab accepts a trailing slash for continued paths.
+- Show saved profile-scoped site icons beside address/history rows without fetching sites.
+
+- Synchronize shared setup slots plus setup/reply text with revision conflict recovery; keep attachments and run choices local.
+- Add window-local tab muting and a live speaker indicator before ×; retain visual website notifications when muted.
+
+- Use one shared project tab layer, no chat-nested resource strip or sidebar resources. Keep app tabs window-local: phone sidebar/overview, tablet/desktop top strip.
+- Retain unloaded-page navigation, remove redundant bottom spacing and the extra Chat / Live browser plus.
+- Apply owner membership despite history failures; handle Close/rename pushes, overlapping reads and reconnect while preserving drafts/uncertain receipts.
+- Recover intranet parsing, consented attachment-only input, concise questions/shared Enter handling, native answer attachments, ordered file viewers/dates, autoplay and continuation controls.
+- Capture authenticated submitting-window origin for agent placement without changing access; verify two actual synthetic Electron windows.
+- Hold new release packaging and physical rollout for both simulator previews.
+
+- Restore full browser layout during same-tab redraws while retaining address drafts.
+- Expose extension action-popup contexts through Chrome's runtime context API, and suppress vendor API payload logging.
+- Settle uncertain desktop input only after the exact missing window is corroborated by a fresh complete process inventory; new input still needs a new observation.
+- Identify local inference choices by machine and adapter, preserving source IDs and offline saved choices.
+- Open mobile New chat in an independent tab with retained draft, attachment scope and retry identity.
+- Hydrate mounted model pickers from refreshed owner catalogs, and distinguish Copilot Auto from unadvertised Fusion.
+- Keep external-link destination selection through focus changes and avoid a native source-icon lookup crash. Internal links retain their originating project.
+- Send inline question answers with Enter; retain Shift+Enter newlines and omit repeated card headings already shown in the transcript.
+
+Implementation and validation are tracked in [the release record](docs/releases/2026-11-02/implementation.md); no installation is claimed by these source changes.
 
 ## Nov 1 — 0.2.40 (closed)
 

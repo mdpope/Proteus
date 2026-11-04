@@ -31,6 +31,7 @@ let authConnected = false;
 let recoveryRun,recoveryAttempts=0;
 const syntheticQuota = remaining => async () => ({available:true,windows:[{id:"synthetic",label:"Synthetic account allowance",remainingPercent:remaining,resetAt:"2099-10-05T12:00:00Z"}]});
 const app = await startServer({ home, port: 0, timers: false, providers: { copilot: {
+  acceptedMediaTypes:['image/png','image/jpeg','image/webp','text/plain','application/pdf'],
   quota: syntheticQuota(73),
   mcpStatus: async () => ({servers:[{name:'synthetic-integration',status:authConnected?'connected':'needs-auth',remote:true}]}),
   mcpLogin: async () => { setTimeout(()=>{authConnected=true;},1200); return {server:'synthetic-integration',status:'sign-in-required'}; },
@@ -58,6 +59,16 @@ const app = await startServer({ home, port: 0, timers: false, providers: { copil
     return rehearsal.run(args);
   }
 }, codex:{status:async()=>({available:false,models:[]}),quota:syntheticQuota(41)},claude:{status:async()=>({available:false,models:[]}),quota:syntheticQuota(88)} } });
+const delayedHistoryScopes=new Set(),failedHistoryScopes=new Set(),executeForHistoryFixture=app.remote.execute.bind(app.remote);
+app.remote.execute=async(peer,method,args)=>{
+ if(delayedHistoryScopes.has(args.id)&&method==='tabs.history'){await new Promise(resolve=>setTimeout(resolve,30000));throw Error('Synthetic delayed history unavailable');}
+ if(failedHistoryScopes.has(args.id)&&method==='tabs.history')throw Error('Synthetic page-history transport failure');
+ const result=await executeForHistoryFixture(peer,method,failedHistoryScopes.has(args.id)&&method==='tabs.get'?{...args,historyLimit:16}:args);
+ if(delayedHistoryScopes.has(args.id)&&method==='tabs.get'){
+  const browser=result.tabs?.find(tab=>tab.type==='browser');if(browser?.history)browser.history={...browser.history,total:browser.history.entries.length+1};
+ }
+ return result;
+};
 app.liveBrowser=new LiveBrowser({list:()=>[{id:'fixture-live-tab',title:'Synthetic desktop browser',agentControlling:true}],current:()=>true,capture:async()=>({revision:1,width:800,height:600,image:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII='})});
 const schedule = app.engine.schedules.list()[0]; app.engine.schedules.save({ ...app.engine.schedules.get(schedule.id), workspace: { cwd: workspace, additionalDirectories: [] } }, schedule.revision);
 await app.remote.configure({ label: 'Build Mac', enabled: true, mode: 'external', relayURL: fixtureRelayOrigin, publicURL: fixtureRelayOrigin, relayToken: token });
@@ -115,6 +126,32 @@ async function seedProjectFixture() {
 // Website-service rehearsal shared by both simulator previews; never reads a live account.
 let previewTeamLists = [{id:'preview-team', revision:'1', name:'Platform Services Team', timezone:'America/Denver', instructions:'Review yesterday, today and any blockers.', members:[{id:'p1',name:'Alex',mode:'random'},{id:'p2',name:'Morgan',mode:'fixed'},{id:'p3',name:'Sam',mode:'random'}], links:[{id:'l1',title:'On Call — Operations',url:fixtureHTTPOrigin+'/browser/phone-preview?section=on-call'},{id:'l2',title:'Operational Health',url:fixtureHTTPOrigin+'/browser/one'},{id:'l3',title:'Team Queue',url:fixtureHTTPOrigin+'/browser/two'}]}, {id:'preview-review', revision:'1', name:'Design review', timezone:'UTC', instructions:'Review the current design.', members:[{id:'r1',name:'Taylor',mode:'fixed'}], links:[{id:'r-link',title:'Design notes',url:fixtureHTTPOrigin+'/browser/phone-preview?section=design-notes'}]}];
 const fixture = http.createServer(async (req, res) => {
+  // Review pairing must never reset another preview's active work. Invitations
+  // are issued immediately before use; creating a later one supersedes an unused one.
+  if(req.url==='/review-pair'){const invite=await app.remote.pairing();res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify({code:invite.code}));return;}
+
+  if(req.url==='/completion-fixture'){
+    await app.browserHistory.record({events:Array.from({length:12},(_,i)=>({eventId:'completion-'+i,url:fixtureHTTPOrigin+'/browser/one?visit='+i,visitedAt:new Date(Date.now()-i*1000).toISOString(),profileId:'default',sourceHostId:app.remote.config.hostId,title:'Popular completion fixture'}))});
+    res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify({origin:fixtureHTTPOrigin}));return;
+  }
+  if(req.url==='/'){res.writeHead(200,{'Content-Type':'text/html'});res.end('<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><h1>History completion origin</h1>');return;}
+
+  if(req.url==='/draft-text-fixture'&&req.method==='POST'){
+    let raw='';for await(const chunk of req){raw+=chunk;if(raw.length>262144)throw Error('Synthetic draft is too large.');}
+    res.setHeader('Content-Type','application/json');try{const args=JSON.parse(raw);res.end(JSON.stringify(args.action==='save'?await app.sharedDrafts.save(args):app.sharedDrafts.get(args)));}catch(error){res.statusCode=400;res.end(JSON.stringify({error:error.message}));}return;
+  }
+  if(req.url.startsWith('/tab-history-failure-fixture?')){
+    const query=new URL(req.url,'http://fixture').searchParams,id=query.get('id');
+    if(query.get('enabled')==='1')failedHistoryScopes.add(id);else failedHistoryScopes.delete(id);
+    res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify({synthetic:true}));return;
+  }
+  if(req.url==='/chat-watch-evidence'){res.setHeader('Content-Type','application/json');res.end(JSON.stringify({watches:[...app.remote.peers.values()].filter(peer=>peer.device&&peer.runId).map(peer=>({id:peer.runId,delta:peer.deltaOnly===true,summary:peer.summaryOnly===true}))}));return;}
+  if(req.url==='/transport-evidence'){res.setHeader('Content-Type','application/json');res.end(JSON.stringify({host:app.remote.status,wire:app.performanceDiagnostics?.snapshot().remoteTransport,relay:relay.diagnostics?.()}));return;}
+  if(req.url==='/tab-reconnect-fixture'&&req.method==='POST'){
+    let raw='';for await(const chunk of req){raw+=chunk;if(raw.length>1024)throw Error('Synthetic request too large');}
+    const value=JSON.parse(raw);if(value.action==='disconnect')await app.remote.stop();else if(value.action==='connect')await app.remote.start();else if(value.action==='delay-history'&&typeof value.id==='string')delayedHistoryScopes.add(value.id);else throw Error('Unknown synthetic connection action');
+    res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify({synthetic:true}));return;
+  }
   if(req.url==='/tab-sync-fixture'&&req.method==='POST'){
     let raw='';for await(const chunk of req){raw+=chunk;if(raw.length>262144)throw Error('Synthetic request too large');}
     const value=JSON.parse(raw),current=app.contentTabs.get(value.scope,value.id);

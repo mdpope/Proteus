@@ -220,7 +220,8 @@ struct ProviderModelPicker: View {
     @Binding var contextTier: String
     @Binding var serviceTier: String
     var provider = "copilot"
-    private var catalog: JSON { store.providerStatuses[provider] ?? (provider == "copilot" ? store.modelStatus : .null) }
+    var catalogOverride: JSON? = nil
+    private var catalog: JSON { catalogOverride ?? store.providerStatuses[provider] ?? (provider == "copilot" ? store.modelStatus : .null) }
     private var hostName: String { store.displayName }
     private var providerName: String { nativeProviderName(provider) }
     private var models: [JSON] { catalog["models"].array }
@@ -253,6 +254,7 @@ struct ProviderModelPicker: View {
             if !serviceTier.isEmpty && !controls["serviceTiers"].array.contains(where: { $0["id"].string == serviceTier }) { Text("\(serviceTier) · unavailable (saved)").tag(serviceTier) }
         }.disabled(disabled)
         if provider == "codex" { Text("Uses \(hostName)’s Codex sign-in. Context capacity may be unreported. Editor-specific agent tool filters are not supported; MCP access is granted per server.").font(.caption).foregroundStyle(.secondary) }
+        if provider == "copilot" && !catalog["fusion"]["note"].string.isEmpty { Text(catalog["fusion"]["note"].string).font(.caption).foregroundStyle(.secondary) }
         if efforts.isEmpty { Text(controls["reasoningSupported"] == .bool(false) ? "This model does not support thinking effort." : "Thinking effort choices are not reported.").font(.caption).foregroundStyle(.secondary) }
         if controls["maxOutputTokens"].int > 0 { Text("Context size is the prompt budget. Maximum output: \(modelTokenSize(controls["maxOutputTokens"])) tokens.").font(.caption).foregroundStyle(.secondary) }
         Text(catalog["checkedAt"].string.isEmpty ? "Catalog not checked yet." : "Catalog checked \(catalog["checkedAt"].string). Refreshes when \(hostName) launches and every five minutes.").font(.caption).foregroundStyle(.secondary)
@@ -303,6 +305,16 @@ struct ChatPermissionsView: View {
                 Text("Tool approvals").font(.headline)
                 Text("Current: \(names[context["mode"].string] ?? context["mode"].string) · \(context["source"].string == "chat" ? "this chat only" : "workspace setting")").font(.caption)
                 Text("\(run["automaticApprovals"].int) tool requests approved automatically").font(.caption).foregroundStyle(.secondary)
+                if run["chatControls"]["activeTimeContinuationProviders"].array.contains(run["schedule"]["provider"]) {
+                    Toggle("Continue automatically after the two-hour execution safeguard", isOn: Binding(get: { run["activeTimeContinuation"]["enabled"].bool }, set: { value in
+                        busy = true
+                        Task { defer { busy = false }; do {
+                            let updated = try await store.request("chat.recover", ["id": run["id"], "action": .string("active-time-auto"), "enabled": .bool(value), "expectedPreferenceVersion": run["activeTimeContinuation"]["version"] == .null ? .number(0) : run["activeTimeContinuation"]["version"]])
+                            store.mergeChat(updated); await store.refresh()
+                        } catch { store.error = error.localizedDescription } }
+                    })).disabled(busy || !store.connected).accessibilityIdentifier("active-time-auto")
+                    Text("Uses the same provider session, up to three consecutive continuations. Human waiting does not count. Stop, pending questions and other errors stop automatic continuation.").font(.caption).foregroundStyle(.secondary)
+                }
                 if run["chatControls"]["allowanceContinuation"].bool {
                     Toggle("Automatically continue when allowance resets", isOn: Binding(get: { run["allowanceContinuation"]["enabled"].bool }, set: { value in
                         busy = true

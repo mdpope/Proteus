@@ -5,6 +5,22 @@ import {DesktopPeers} from '../src/services/remote/desktop-peers.js';import {sta
 const key=randomBytes(32);const safeStorage={isEncryptionAvailable:()=>true,encryptString:text=>{const iv=randomBytes(12),cipher=createCipheriv('aes-256-gcm',key,iv);return Buffer.concat([iv,cipher.update(text),cipher.final(),cipher.getAuthTag()]);},decryptString:box=>{const decipher=createDecipheriv('aes-256-gcm',key,box.subarray(0,12));decipher.setAuthTag(box.subarray(-16));return Buffer.concat([decipher.update(box.subarray(12,-16)),decipher.final()]).toString();}};
 const record={hostId:'11111111-1111-4111-8111-111111111111',deviceId:'22222222-2222-4222-8222-222222222222',relay:'wss://relay.example.test',key:'ab'.repeat(32),label:'Synthetic peer'};
 const pairingCode=()=>Buffer.from(JSON.stringify({version:1,hostId:record.hostId,relay:record.relay,key:record.key,expiresAt:new Date(Date.now()+60000).toISOString()})).toString('base64url');
+test('workspace snapshots follow authenticated pushes without network reads and retain host boundaries',async t=>{
+ const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-peer-workspaces-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
+ const peers=new DesktopPeers(home,{safeStorage});peers.load();t.after(()=>peers.close());
+ peers.records.set(record.hostId,{...record});let requests=0;
+ const session={ready:true,client:{status:'online',request:async()=>{requests++;throw Error('Sidebar must not fetch');},close(){}}};peers.sessions.set(record.hostId,session);
+ const state={hostName:record.label,context:{revision:'r1',workspaces:[{id:'work',name:'Before'}],entries:[{description:'PRIVATE_SOURCE'.repeat(100000)}]},workspaceProjects:{revision:'p1',projects:[{id:'project',workspaceId:'work'}],memberships:{chat:{projectId:'project'}},sourceEntries:[{body:'PRIVATE_SOURCE'.repeat(100000)}]},runs:[{id:'chat',title:'Chat',status:'running',projectId:'project',progress:{toolSignature:'PRIVATE_TOOL'.repeat(100000)}}],capabilities:['projects.v1'],providerStatuses:{private:'not navigation data'}};
+ peers.adoptHostState(record.hostId,session,state);
+ for(let i=0;i<100;i++){const value=await peers.handle({action:'workspace-snapshot',hostId:record.hostId});assert.equal(value.context.workspaces[0].name,'Before');value.context.workspaces[0].name='Caller mutation';}
+ const snapshot=peers.workspaceState(record.hostId);assert.equal(requests,0);assert.equal(snapshot.runs[0].status,'running');assert.equal(snapshot.workspaceProjects.memberships.chat.projectId,'project');assert.ok(JSON.stringify(snapshot).length<JSON.stringify(state).length/100);assert.doesNotMatch(JSON.stringify(snapshot),/PRIVATE_SOURCE|PRIVATE_TOOL|providerStatuses/);
+ peers.adoptHostState(record.hostId,session,{...state,context:{...state.context,revision:'r2',workspaces:[{id:'work',name:'After'}]}});
+ assert.equal(peers.workspaceState(record.hostId).context.workspaces[0].name,'After');
+ peers.records.get(record.hostId).paused=true;assert.throws(()=>peers.workspaceState(record.hostId),/paused/);peers.records.get(record.hostId).paused=false;
+ session.ready=false;assert.throws(()=>peers.workspaceState(record.hostId),/not ready/);session.ready=true;
+ peers.accessPolicy={assertOutgoing(){throw Error('Managed outgoing access denied');}};assert.throws(()=>peers.workspaceState(record.hostId),/Managed/);peers.accessPolicy=null;
+ peers.records.delete(record.hostId);assert.throws(()=>peers.workspaceState(record.hostId),/not paired/);
+});
 test('desktop workspace context inspection keeps the authenticated paired-host boundary',async t=>{
  const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-peer-context-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
  const peers=new DesktopPeers(home,{safeStorage});peers.load();t.after(()=>peers.close());

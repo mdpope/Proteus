@@ -377,8 +377,8 @@ struct NativePhoneOverview: View {
     var title = "Tabs"
     var selectedID: String? = nil
     var accessibilityID = "phone-tab-overview"
+    @State private var positionedInitially = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var targets: [String: CGRect] = [:]
     private var sections: [(id: String, title: String, items: [NativePhoneTab])] {
         var result: [(id: String, title: String, items: [NativePhoneTab])] = []
         for item in items { let id = item.sectionID.isEmpty ? item.section : item.sectionID; if let index = result.indices.last, result[index].id == id { result[index].items.append(item) } else { result.append((id, item.section, [item])) } }
@@ -424,9 +424,19 @@ struct NativePhoneOverview: View {
                         }
                     }
                     // Open on the current tab, centred (the last tab naturally rests at the bottom), as on desktop.
-                    .onAppear { guard items.contains(where: { $0.id == activeID }) else { return }; proxy.scrollTo(activeID, anchor: .center); Task { @MainActor in await Task.yield(); proxy.scrollTo(activeID, anchor: .center) } }
+                    .task {
+                        guard !positionedInitially, items.contains(where: { $0.id == activeID }) else { return }
+                        positionedInitially = true
+                        await Task.yield()
+                        guard !Task.isCancelled else { return }
+                        proxy.scrollTo(activeID, anchor: .center)
+                    }
                     }
                 }.background(NativeTheme.background).opacity(reduceMotion ? p : max(0, (p - 0.12) / 0.88))
+            }.coordinateSpace(name: "phone-overview")
+            // Consume tile geometry as an overlay preference, never as parent @State.
+            // Writing each scrolling/lazy-grid rect back into layout creates a frame loop.
+            .overlayPreferenceValue(PhoneTabRects.self, alignment: .topLeading) { targets in
                 if !reduceMotion, p < 0.999, let image = current?.preview {
                     let rect = targets[activeID] ?? CGRect(x: 18, y: 70, width: (geometry.size.width - 48) / 2, height: 225)
                     Image(uiImage: image).resizable().scaledToFill()
@@ -434,7 +444,7 @@ struct NativePhoneOverview: View {
                         .clipped().clipShape(RoundedRectangle(cornerRadius: 15 * p))
                         .offset(x: rect.minX * p, y: rect.minY * p).allowsHitTesting(false)
                 }
-            }.coordinateSpace(name: "phone-overview").onPreferenceChange(PhoneTabRects.self) { targets = $0 }
+            }
         }.background(NativeTheme.background.opacity(chrome.overviewProgress)).clipped().accessibilityElement(children: .contain).accessibilityIdentifier(accessibilityID)
     }
 }

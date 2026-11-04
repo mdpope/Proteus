@@ -1,3 +1,4 @@
+import {updateIdleBlockers,updateBlockerText} from './idle-blockers.js';
 import {verifyRelease,extractRelease} from './desktop-releases.js';
 import {DesktopReleaseFeed} from './desktop-release-feed.js';
 import {initializeFreshRecovery} from './recovery-inventory.js';
@@ -14,7 +15,6 @@ import {packageOperation} from './update-package-worker.js';
 const require=createRequire(import.meta.url);
 const {inspectPackage,compatible,spaceBudget,readJob,writeJob,digest,recoveryPolicy}=require('../../../desktop/updates/update-package.cjs');
 const {helperEnvironment}=require('../../../desktop/updates/helper-environment.cjs');
-const active=new Set(['queued','running','awaiting_input']);
 const terminal=new Set(['complete','cancelled','attention']);
 export function pendingUpdate(home,installation){
  try{home=fs.realpathSync(home);installation=fs.realpathSync(installation);const root=path.join(path.dirname(home),'Proteus Updates',digest(home+'\0'+installation).slice(0,24)),reference=JSON.parse(fs.readFileSync(path.join(root,'current.json'),'utf8'));if(path.dirname(path.dirname(reference.file))!==path.join(root,'jobs'))throw Error('Invalid update owner.');const job=readJob(reference.file);return !terminal.has(job.phase)&&!['prepared','waiting-for-idle'].includes(job.phase)?reference.file:null;}catch(error){if(error.code==='ENOENT')return null;throw error;}
@@ -46,7 +46,8 @@ export class Updates {
  identity(){let packaged=this.runningIdentity;try{if(this.packaged&&!packaged){if(this.inspect!==inspectPackage)packaged=this.runningIdentity=this.inspect(this.installation);else if(!this.identityPending&&!this.closed&&!this.error)void this.refreshIdentity().catch(()=>{});}}catch(error){this.error=error.message;}return {protocol:1,sessionId:this.sessionId,platform:this.platform,arch:process.arch,pid:process.pid,packaged:this.packaged,installation:this.installation||null,home:this.ownerHome,buildRevision:packaged?.buildRevision||(this.packaged?'checking':'source'),sourceFingerprint:packaged?.sourceFingerprint||null,identityPending:!!this.identityPending,barrier:this.service.engine.updateBarrier===true,capabilities:{prepare:this.packaged&&['darwin','linux','win32'].includes(this.platform),compatibleRollback:!!packaged}};}
  status(){
   let job,resolution;try{job=this.job();if(job?.phase==='attention')resolution=require('../../../desktop/updates/attention-reconciliation.cjs').readAttentionResolution(job);}catch(error){this.error=error.message;}
-  return {identity:this.identity(),error:this.error||null,download:this.download||null,job:job?{id:job.id,revision:job.revision,phase:job.phase,runId:job.runId,version:job.candidate?.version,buildRevision:job.candidate?.buildRevision,outcome:job.outcome||null,error:job.error||job.preInstallFailure?.error||job.failureHistory?.at(-1)?.error||null,failureHistory:job.failureHistory||[],blocker:['complete','cancelled'].includes(job.phase)||resolution?null:job.blocker||null,health:job.health?{verified:true,at:job.health.at}:null,ordinaryWorkResumedAt:job.ordinaryWorkResumedAt||null,attentionResolution:resolution?{at:resolution.at,receiptHash:resolution.receiptHash,originalError:resolution.originalError,continuationReplayed:false}:null,continuation:job.continuation||null,freeSpaceChange:job.freeSpaceAfter===undefined?null:job.freeSpaceAfter-job.freeSpaceBefore}:null};
+  const idle=job?this.idleStatus(job):null;
+  return {identity:this.identity(),error:this.error||null,download:this.download||null,job:job?{id:job.id,revision:job.revision,phase:job.phase,runId:job.runId,version:job.candidate?.version,buildRevision:job.candidate?.buildRevision,outcome:job.outcome||null,error:job.error||job.preInstallFailure?.error||job.failureHistory?.at(-1)?.error||null,failureHistory:job.failureHistory||[],blocker:['complete','cancelled'].includes(job.phase)||resolution?null:job.phase==='waiting-for-idle'?(idle.blockers.map(updateBlockerText).join('; ')||'Waiting for the final idle check.'):job.blocker||null,idle,health:job.health?{verified:true,at:job.health.at}:null,ordinaryWorkResumedAt:job.ordinaryWorkResumedAt||null,attentionResolution:resolution?{at:resolution.at,receiptHash:resolution.receiptHash,originalError:resolution.originalError,continuationReplayed:false}:null,continuation:job.continuation||null,freeSpaceChange:job.freeSpaceAfter===undefined?null:job.freeSpaceAfter-job.freeSpaceBefore}:null};
  }
  readRecoveryPolicy(){try{return recoveryPolicy(this.policyFile,{home:this.ownerHome,installation:this.installation});}catch(error){if(error.code==='ENOENT')throw Error('The installer must inventory this installation’s existing recovery generations before supervised restart. See the Updates recovery setup instructions.');throw error;}}
  context(run){return digest(JSON.stringify({provider:run.schedule.provider,providerSessionId:run.providerSessionId,workspace:run.schedule.workspace,context:run.schedule.context,permissions:run.schedule.permissions,chatPermissionRevision:run.chatPermissionRevision,model:run.schedule.model,effort:run.schedule.reasoningEffort}));}
@@ -115,7 +116,7 @@ export class Updates {
   if(run&&(run.archivedAt||run.trigger!=='chat'||run.schedule.provider==='local-process'))throw Error('Choose an existing unarchived provider chat.');
   if(run&&(typeof value.checkpoint!=='string'||!value.checkpoint.trim()||value.checkpoint.length>12000))throw Error('Record completed work and remaining verification before restarting.');
   if(value.checkpoint!==undefined&&(typeof value.checkpoint!=='string'||value.checkpoint.length>12000))throw Error('The update checkpoint is too long or invalid.');
-  writeJob(this.file,{phase:'waiting-for-idle',runId:run?.id||null,provider:run?.schedule.provider||null,providerSessionId:run?.providerSessionId||null,contextHash:run?this.context(run):null,eventCount:run?.events.length||0,checkpoint:value.checkpoint?.trim()||'Operator-triggered Engine Room update.',authorization:{source:runId?'authorized updating chat':'desktop Updates handoff',at:new Date().toISOString()},blocker:'Waiting for all active work to finish.'});
+  writeJob(this.file,{phase:'waiting-for-idle',checkpointReviewRequired:false,runId:run?.id||null,provider:run?.schedule.provider||null,providerSessionId:run?.providerSessionId||null,contextHash:run?this.context(run):null,eventCount:run?.events.length||0,checkpoint:value.checkpoint?.trim()||'Operator-triggered Engine Room update.',authorization:{source:runId?'authorized updating chat':'desktop Updates handoff',at:new Date().toISOString()},blocker:'Waiting for all active work to finish.'});
   this.service.notify?.();return this.status();
  }
  releaseDirectories(){
@@ -201,15 +202,22 @@ export class Updates {
   // Its work still blocks idle through waiting(); input into the updating chat
   // itself continues to require a fresh checkpoint, regardless of provenance.
   if(source===taskFeedbackDelivery&&runId&&runId!==job.runId)return;
-  if(job.phase==='waiting-for-idle'){writeJob(this.file,{phase:'prepared',blocker:'New user input arrived. Review the checkpoint and hand off again.'});this.service.engine.updateBarrier=false;return;}
+  if(job.phase==='waiting-for-idle'){writeJob(this.file,{phase:'prepared',checkpointReviewRequired:true,blocker:'New user input arrived. Review the checkpoint and hand off again.'});this.service.engine.updateBarrier=false;return;}
   // During verified restart, Engine persists queued input behind the barrier.
   // Recovery appends its single continuation after those messages.
  }
- waiting(job){
-  const runs=this.service.engine.listRuns().filter(run=>active.has(run.status)||run.capacityRetry||this.service.engine.running.has(run.id)||this.service.engine.backgroundRuns.has(run.id));
-  const building=this.platform==='win32'?require('../../../desktop/updates/windows-builder.cjs').buildStatus(this.root):null;
-  return [...runs.map(run=>'Chat '+run.id.slice(0,8)+' is '+run.status),...(building?.job?.running||building?.job?.phase==='starting'?['Windows release build is still running.']:[]),...this.blockers()];
+ idleStatus(job){
+  if(!['prepared','waiting-for-idle'].includes(job.phase))return null;
+  const checkpointReviewRequired=job.checkpointReviewRequired===true||job.phase==='prepared'&&job.blocker==='New user input arrived. Review the checkpoint and hand off again.';
+  if(job.phase==='prepared'&&!checkpointReviewRequired)return null;
+  const blockers=this.idleBlockers(job);
+  return {checkedAt:new Date().toISOString(),checkpointReviewRequired,blockers,nextStep:checkpointReviewRequired?'New input reset the handoff to prepared. Review the saved checkpoint and hand off this same job again with its current revision. Ending a turn alone will not restart this prepared update.':blockers.length?'The update waits for every listed item. Existing work has not been cancelled.':'No active blockers. The supervisor will repeat its idle checks before restarting.'};
  }
+ idleBlockers(job){
+  const building=this.platform==='win32'?require('../../../desktop/updates/windows-builder.cjs').buildStatus(this.root):null;
+  return updateIdleBlockers(this.service.engine,job,this.blockers(),building);
+ }
+ waiting(job){return this.idleBlockers(job).map(updateBlockerText);}
  async advance(){
   if(this.busy||!this.file)return;const job=this.job();
   if(['complete','cancelled'].includes(job.phase)){if(job.phase==='complete'&&job.recovery&&!job.failedBeforeReplacement)require('../../../desktop/updates/update-helper.cjs').retainGeneration(job);if(this.retiredStagingId!==job.id){this.busy=true;try{const result=await this.packageWork('retireStaging',job.file);if(result.eligible)this.retiredStagingId=job.id;}finally{this.busy=false;}}return;}
@@ -221,6 +229,11 @@ export class Updates {
   this.busy=true;this.service.engine.updateBarrier=true;
   try{
    await this.service.engine.schedulerTick;
+   if(this.job().phase!=='waiting-for-idle'||this.waiting(job).length){this.service.engine.updateBarrier=false;return;}
+   // A renderer checkpoint can commit final tab descriptors and drafts. Finish
+   // it before hashing preservation, then repeat the idle/revision checks. Quit
+   // must never compare a pre-checkpoint inventory with post-checkpoint data.
+   await this.service.prepareUpdateCheckpoint?.();
    if(this.job().phase!=='waiting-for-idle'||this.waiting(job).length){this.service.engine.updateBarrier=false;return;}
    // No await between the final idle check, durable handoff and graceful Quit.
    await this.spawnHelper(this.job(),true);

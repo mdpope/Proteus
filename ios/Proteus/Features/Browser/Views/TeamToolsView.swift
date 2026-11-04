@@ -196,6 +196,7 @@ struct TeamBrowserView: View {
     var newTabOptions: [NativeNewTabAction] = []
     @FocusState private var homeAddressFocused: Bool
     @FocusState private var addressFocused: Bool
+    @State private var addressSites: [JSON] = []
     @State private var editingAddress = false
     private var tabs: [BrowserDescriptor] { shared.tabs(in: scope) }
     private var selectedID: String? { tabID ?? shared.selected(in: scope) }
@@ -212,7 +213,7 @@ struct TeamBrowserView: View {
         guard let remote = historyRemote, let host = remote.connection?.hostId else { return "Choose a computer for owner history. Saved navigation remains on this device." }
         return shared.historyStatus[host] ?? (remote.connected ? "History from " + remote.displayName + ". Each tab keeps its own navigation list." : "Offline · cached last 30 days and saved navigation only")
     }
-    private var historySearchIdentity: String { [selectedID ?? "", text, String(addressFocused), String(historyIndexRevision)].joined(separator: "|") }
+    private var historySearchIdentity: String { [selectedID ?? "", text, String(addressFocused || homeAddressFocused), String(historyIndexRevision)].joined(separator: "|") }
     private var accountRefreshIdentity: String { [scope, selectedID ?? "", life.accountIdentity, String(addressFocused)].joined(separator: ":") }
 
     @ViewBuilder private func browserTabMenu(_ tab: BrowserDescriptor) -> some View {
@@ -277,8 +278,8 @@ struct TeamBrowserView: View {
                 return backPreviewKey.flatMap(NativeScreenMemory.image)
             }, forwardPreview: { selectedID.flatMap { shared.adjacentPageImage($0, back: false) } }))
         }.safeAreaInset(edge: .bottom, spacing: 0) {
-            // Sit the row partly in the home-indicator area like Safari, halving the bar height.
-            if NativePhonePreview.enabled { phoneBrowserControls.fixedSize(horizontal: false, vertical: true).padding(.bottom, -16) }
+            // The shell respects the measured safe area; controls stay above the home indicator.
+            if NativePhonePreview.enabled { phoneBrowserControls.fixedSize(horizontal: false, vertical: true) }
         }
         // iPhone controls extend into the home-indicator area; allow that overflow only.
         .scaleEffect(overview && !reduceMotion ? 0.94 : 1).opacity(overview ? 0.5 : 1).clipShape(Rectangle().inset(by: NativePhonePreview.enabled ? -24 : 0))
@@ -297,12 +298,22 @@ struct TeamBrowserView: View {
         .task(id: selectedID) {
             if let id = selectedID {
                 // Selecting an unloaded page recreates its view, as on desktop; hidden tabs stay unloaded.
-                if shared.unloadedBrowsers.contains(id), let tab = selectedTab, !tab.hidden, shared.profileAvailable(tab.profileId) { shared.reload(id); shared.touch(id) }
+                // Unloaded pages keep navigation available; Load tab is the explicit residency action.
                 if tabID != nil, shared.selected(in: scope) != id { shared.select(id, in: scope, activateMainBrowser: false) }
                 shared.assignBrowserOwner(id, host: destinations.selected?.connection?.hostId)
                 if NativeDesignPreview.enabled && phoneAreaActive { phoneChrome.currentID = "browser:" + id; phoneChrome.controlsHidden = false; phoneChrome.browserOwnsBack = navigation.canGoBack }
             }
             if let remote = historyRemote { await shared.flushHistory(remote) }
+        }
+        .task(id: "completion:" + historySearchIdentity) {
+            guard addressFocused || homeAddressFocused else { addressSites = []; return }
+            addressSites = historyIndex.sites
+            do { try await Task.sleep(for: .milliseconds(100)) } catch { return }
+            guard let remote = historyRemote, remote.connected else { return }
+            do {
+                let response = try await remote.request("browser.history.suggest", ["query": .string(text), "profileId": .string(selectedTab?.profileId ?? "default"), "limit": .number(100)])
+                guard !Task.isCancelled else { return }; addressSites = response["items"].array
+            } catch { /* Cached retained origins remain available offline. */ }
         }
         .task(id: historySearchIdentity) {
             guard addressFocused || selectedTab?.url == nil else { return }
@@ -322,6 +333,7 @@ struct TeamBrowserView: View {
             }
         }
         .onAppear { if NativePhonePreview.enabled && phoneAreaActive { phoneChrome.browserSurfaceScope = scope }; if tabs.isEmpty && showTabs { shared.open(nil, scope: scope) }; text = selectedTab?.url ?? ""; engine = ["google": "Google", "duckduckgo": "DuckDuckGo", "bing": "Bing"][shared.snapshot["preferences"]["searchEngine"].string] ?? "Google"; if NativePhonePreview.enabled { editingAddress = false } else { addressFocused = false } }
+        .onChange(of: selectedTab.map { shared.unloadedBrowsers.contains($0.id) } ?? false) { _, unloaded in if unloaded { phoneChrome.setControlsHidden(false) } }
         .onChange(of: selectedID) { _, _ in text = selectedTab?.url ?? ""; if NativePhonePreview.enabled { editingAddress = false } else { addressFocused = false } }
         .task(id: accountRefreshIdentity) {
             guard addressFocused || selectedTab?.url == nil else { return }
@@ -377,7 +389,8 @@ struct TeamBrowserView: View {
                 if editingAddress {
                     TextField("Search or enter URL", text: $text, axis: .vertical)
                         .textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL).submitLabel(.go)
-                        .focused($addressFocused).onAppear { addressFocused = true }.onSubmit { navigate() }.lineLimit(1...6).fixedSize(horizontal: false, vertical: true)
+                        .focused($addressFocused).onAppear { addressFocused = true }.lineLimit(1...6).fixedSize(horizontal: false, vertical: true)
+                        .modifier(NativeAddressGhost(text: $text, sites: addressSites, focused: addressFocused, submit: { navigate() }))
                         .accessibilityIdentifier("browser-address-editor")
                 } else {
                     Button { editingAddress = true } label: {
@@ -448,7 +461,8 @@ struct TeamBrowserView: View {
                 .frame(width: 44, height: 44).contentShape(Rectangle()).disabled(!navigation.canGoForward).accessibilityLabel("Forward").accessibilityIdentifier("browser-forward")
                 .highPriorityGesture(LongPressGesture(minimumDuration: 0.45).onEnded { _ in historyDirection = false })
             Button { if let id = selectedID { navigation.isLoading ? shared.stopBrowser(id) : shared.refreshBrowser(id) } } label: { Image(systemName: navigation.isLoading ? "xmark" : "arrow.clockwise").frame(minWidth: 44, minHeight: 44) }.frame(width: 44, height: 44).contentShape(Rectangle()).disabled(selectedTab?.url == nil).accessibilityLabel(navigation.isLoading ? "Stop loading" : "Refresh page").accessibilityIdentifier("browser-refresh")
-            TextField("Search or enter URL", text: $text).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL).submitLabel(.go).focused($addressFocused).onSubmit { navigate() }
+            TextField("Search or enter URL", text: $text).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL).submitLabel(.go).focused($addressFocused)
+                .modifier(NativeAddressGhost(text: $text, sites: addressSites, focused: addressFocused, submit: { navigate() }))
                 .font(.system(size: 14)).foregroundStyle(colorScheme == .dark ? Color.white : Color.primary).padding(.horizontal, 10).frame(height: 34).background(field, in: RoundedRectangle(cornerRadius: 6)).accessibilityIdentifier("browser-address")
             Button { if let tab = selectedTab { shared.webView(tab).findInteraction?.presentFindNavigator(showingReplace: false) } } label: { Image(systemName: "magnifyingglass") }.accessibilityLabel("Find in page").keyboardShortcut("f", modifiers: .command).disabled(selectedTab?.url == nil)
             Button(action: { navigate() }) { Image(systemName: "arrow.turn.down.left") }.frame(width: 44, height: 44).contentShape(Rectangle()).disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty).accessibilityLabel("Go to address or search").accessibilityIdentifier("browser-go")
@@ -475,11 +489,11 @@ struct TeamBrowserView: View {
                 else if items.isEmpty, shared.snapshot != .null, life.credential?.appAuthorized == true, shared.error == nil, !shared.busy { Text("No recent sites yet.").foregroundStyle(.secondary).padding(12) }
                 ForEach(items, id: \.self) { item in
                     Button { text = item["url"].string; navigate() } label: {
-                        VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 10) { NativeHistorySiteIcon(item: item); VStack(alignment: .leading, spacing: 4) {
                             Text(item["title"].string.isEmpty ? item["url"].string : item["title"].string).font(.subheadline).lineLimit(1)
                             Text(item["url"].string).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                             Text(BrowserHistoryRows.details(item, timeZone: .current, locale: .current)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                        }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 12).padding(.vertical, 10).contentShape(Rectangle())
+                        }.frame(maxWidth: .infinity, alignment: .leading) }.padding(.horizontal, 12).padding(.vertical, 10).contentShape(Rectangle())
                     }.buttonStyle(.plain).accessibilityIdentifier("browser-recent-" + item["id"].string)
                     Divider()
                 }
@@ -501,11 +515,11 @@ struct TeamBrowserView: View {
                 Text("New tab").font(.largeTitle.bold())
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 130))], spacing: 12) {
                     ForEach(Array(homeActions.enumerated()), id: \.offset) { _, action in
-                        Button { let old = selectedID; if action.replacesBlank, let old { shared.close(old) }; action.run() } label: { VStack(alignment: .leading, spacing: 10) { Image(systemName: action.symbol).font(.title2); Text(action.title).font(.subheadline.weight(.semibold)) }.frame(maxWidth: .infinity, minHeight: 70, alignment: .leading).padding(14).background(NativeTheme.surface, in: RoundedRectangle(cornerRadius: 12)) }.buttonStyle(.plain).disabled(!action.enabled)
+                        Button { let old = selectedID; if action.replacesBlank, let old { shared.close(old) }; action.run() } label: { VStack(alignment: .leading, spacing: 10) { Image(systemName: action.symbol).font(.title2); Text(action.title).font(.subheadline.weight(.semibold)) }.frame(maxWidth: .infinity, minHeight: 70, alignment: .leading).padding(14).background(NativeTheme.surface, in: RoundedRectangle(cornerRadius: 12)) }.buttonStyle(.plain).disabled(!action.enabled).accessibilityIdentifier("new-tab-action-" + action.title)
                     }
                 }
                 HStack {
-                    TextField("https://example.com", text: $text).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL).submitLabel(.go).focused($homeAddressFocused).onSubmit { navigate() }.accessibilityLabel("Website address or filter history").accessibilityIdentifier("new-tab-address")
+                    TextField("https://example.com", text: $text).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL).submitLabel(.go).focused($homeAddressFocused).modifier(NativeAddressGhost(text: $text, sites: addressSites, focused: homeAddressFocused, submit: { navigate() })).accessibilityLabel("Website address or filter history").accessibilityIdentifier("new-tab-address")
                     Button { navigate() } label: { Image(systemName: "arrow.turn.down.right").frame(width: 44, height: 44) }.disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty).accessibilityLabel("Open address")
                 }.padding(.leading, 14).background(NativeTheme.surface, in: RoundedRectangle(cornerRadius: 12))
                 Picker("Search engine", selection: $engine) { ForEach(["Google", "DuckDuckGo", "Bing"], id: \.self) { Text($0).tag($0) } }.pickerStyle(.segmented)
@@ -523,9 +537,7 @@ struct TeamBrowserView: View {
         if NativePhonePreview.enabled { editingAddress = false }
         let input = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let selectedEngine = searchEngine ?? engine
-        var target = URL(string: input.contains("://") ? input : input.contains(".") && !input.contains(" ") ? "https://" + input : "")
-        if target?.host == nil || searchEngine != nil { var components = URLComponents(string: selectedEngine == "Bing" ? "https://www.bing.com/search" : selectedEngine == "DuckDuckGo" ? "https://duckduckgo.com/" : "https://www.google.com/search")!; components.queryItems = [URLQueryItem(name: "q", value: input)]; target = components.url }
-        guard let target, ["https", "http"].contains(target.scheme), target.user == nil, target.password == nil else { return }
+        guard let target = SharedAppStore.addressTarget(input, engine: selectedEngine, search: searchEngine != nil) else { shared.error = "Enter an HTTP or HTTPS address without credentials, or a search."; return }
         addressFocused = false; homeAddressFocused = false
         if let id = selectedID { _ = shared.navigate(target, in: id) }
         else { shared.open(target, title: target.host ?? "Browser", scope: scope) }
@@ -541,11 +553,11 @@ struct BrowserHistoryRows: View {
     var body: some View {
         ForEach(Array(items.prefix(limit)), id: \.self) { item in
             Button { open(item) } label: {
-                VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 10) { NativeHistorySiteIcon(item: item); VStack(alignment: .leading, spacing: 4) {
                     Text(item["title"].string.isEmpty ? item["url"].string : item["title"].string)
                     Text(Self.details(item, timeZone: timeZone, locale: locale)).font(.caption).foregroundStyle(.secondary)
                         .accessibilityIdentifier("browser-history-details-" + item["id"].string)
-                }
+                } }
             }
         }
         if items.count > limit { Button("More history") { limit += 25 }.accessibilityIdentifier("browser-history-more") }

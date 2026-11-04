@@ -37,6 +37,16 @@ test('AES-GCM authenticates the payload and routing context', () => {
   assert.throws(() => unseal(secret(), box, 'connection:client:1'));
   const corrupt = Buffer.from(box, 'base64'); corrupt[14] ^= 1; assert.throws(() => unseal(key, corrupt.toString('base64'), 'connection:client:1'));
 });
+test('encrypted reply measurements identify fixed read methods at actual wire send',async t=>{
+ const {app,connect}=await fixture(t),client=await connect();
+ const snapshot=await client.request('sync');assert.ok(snapshot.state.context);
+ const tabs=await client.request('tabs.get',{scope:'main',id:'main'});assert.ok(Array.isArray(tabs.tabs));
+ await until(()=>app.performanceDiagnostics.snapshot().remoteTransport?.sentReplies?.['tabs.get']?.packets>0);
+ const traffic=app.performanceDiagnostics.snapshot().remoteTransport;
+ assert.ok(traffic.sentReplies.sync.bytes>Buffer.byteLength(JSON.stringify(snapshot)),'wire count includes encrypted encoding');
+ assert.equal(traffic.sentReplies['tabs.get'].packets,1);
+ assert.ok(traffic.sentKinds.reply.bytes>=traffic.sentReplies.sync.bytes+traffic.sentReplies['tabs.get'].bytes);
+});
 test('relay registration rejection remains actionable during retry and clears after a successful connection', async t => {
   const { app } = await fixture(t);
   const token = app.remote.config.relayToken;
@@ -51,6 +61,24 @@ test('relay registration rejection remains actionable during retry and clears af
   await app.remote.configure({ enabled: true, relayToken: token });
   await until(() => app.remote.status === 'online');
   assert.equal(app.remote.info().error, null);
+});
+test('oversize client output disconnects only that client and retains authenticated pairing',async t=>{
+ const {app,connect}=await fixture(t),invite=RemoteClient.capsule((await app.remote.pairing()).code),first=await connect(invite),second=await connect();
+ await until(()=>app.remote.relayClientDisconnect===true);
+ const peer=[...app.remote.peers.values()].find(peer=>peer.device?.id===first.device.id);
+ app.remote.raw(peer,{type:'synthetic',value:'x'.repeat(8_000_000)});
+ await until(()=>first.ws.readyState===3);
+ assert.equal(app.remote.status,'online');assert.ok((await second.request('sync')).state.capabilities.includes('content-tabs.v1'));
+ const restored=await connect(invite,first.device);assert.ok((await restored.request('sync')).state.capabilities.includes('content-tabs.v1'));
+});
+test('reconnect sync skips obsolete state snapshots while retaining lifecycle replay',async t=>{
+ const {app,connect}=await fixture(t),invite=RemoteClient.capsule((await app.remote.pairing()).code),first=await connect(invite);
+ app.remote.broadcast('synthetic-anchor',{});await until(()=>first.events.some(event=>event.event==='synthetic-anchor'));
+ const cursor=first.events.find(event=>event.event==='synthetic-anchor').cursor;first.close();
+ for(let i=0;i<5;i++)app.remote.broadcast('state',{obsolete:i});
+ app.remote.broadcast('chat.lifecycle',{id:'synthetic-retained',archivedAt:'synthetic'});
+ const next=await connect(invite,first.device),result=await next.request('sync',{cursor});
+ assert.ok(result.state.capabilities.includes('content-tabs.v1'));assert.equal(next.events.some(event=>event.event==='state'),false);assert.equal(next.events.some(event=>event.event==='chat.lifecycle'&&event.data.id==='synthetic-retained'),true);
 });
 test('protocol v1 mobile peers discover this host platform, reconnect and retain device grants',async t=>{
   const {app,connect}=await fixture(t);const invitation=RemoteClient.capsule((await app.remote.pairing()).code),first=await connect(invitation);
@@ -129,6 +157,31 @@ test('paired chat archive and delete synchronize without resurrecting cached his
   await assert.rejects(first.request('chat.attachments.begin',{id:run.id,messageId:'synthetic',name:'x.txt',mediaType:'text\/plain',size:1,sha256:'x'}),/not found/);
   assert.equal((await second.request('runs.list',{includeArchived:true})).length,0);
   assert.equal((await app.activity.logs(40)).items.some(item=>item.event==='chat.undefined'),false);
+});
+test('authenticated mixed watches preserve deltas, summary isolation and conditional unwatch',async t=>{
+  const {app,connect,workspace}=await fixture(t),full=await connect(),summary=await connect(),delta=await connect();
+  const run=app.engine.createRun({...app.engine.schedules.list()[0],workspace:{cwd:workspace,additionalDirectories:[]}},'chat',null,{deferStart:true});
+  run.deferredStart=false;run.status='completed';
+  run.events=Array.from({length:100},(_,index)=>({type:'assistant',text:'x'.repeat(1000),at:new Date().toISOString(),index}));app.engine.persist(run);
+  assert.ok((await delta.request('sync')).state.capabilities.includes('chat.delta.v1'));
+  await full.request('chat.get',{id:run.id});await summary.request('chat.get',{id:run.id,watch:'summary'});
+  const initial=await delta.request('chat.get',{id:run.id,watch:'delta'});assert.equal(initial.events.length,100);
+  await delta.request('chat.get',{id:run.id,beforeEvent:50,watch:'none'});
+  app.remote.publish();await until(()=>delta.events.some(event=>event.event==='run'));
+  full.events=[];summary.events=[];delta.events=[];
+  run.events[99]={...run.events[99],text:'changed'};run.updatedAt=new Date().toISOString();app.engine.persist(run);app.engine.emit('change',run);app.remote.publish();
+  await until(()=>full.events.some(event=>event.event==='run')&&summary.events.some(event=>event.event==='run.changed')&&delta.events.some(event=>event.event==='run'));
+  const deltaEvent=delta.events.find(event=>event.event==='run'),checkpoint=deltaEvent.cursor,patch=deltaEvent.data;
+  assert.deepEqual(patch.events,[]);assert.equal(patch.eventPatches.length,1);assert.equal(patch.eventPatches[0].index,99);
+  assert.equal(summary.events.some(event=>event.event==='run'),false);assert.equal(full.events.some(event=>event.event==='run.changed'),false);
+  assert.equal((await delta.request('chat.watch',{id:'stale-view',watch:'none'})).cleared,false);
+  assert.equal((await delta.request('chat.watch',{id:run.id,watch:'none'})).cleared,true);
+  delta.events=[];run.events[99]={...run.events[99],text:'after leaving'};app.engine.persist(run);app.remote.publish();
+  // A sync round trip drains prior packets without a timing-only assertion.
+  await delta.request('sync');assert.equal(delta.events.some(event=>event.runId===run.id),false);
+  delta.close();app.remote.broadcast('chat.lifecycle',{id:run.id,archivedAt:'synthetic-reconnect'});
+  const restored=await connect(delta.capsule,delta.device);await restored.request('sync',{cursor:checkpoint});
+  assert.ok(restored.events.some(event=>event.event==='chat.lifecycle'&&event.data.archivedAt==='synthetic-reconnect'),'incremental pushes must preserve a replayable durable cursor');
 });
 test('a paired client can apply permissions to the current waiting chat and receive tool details', async t => {
   const { app, connect, workspace } = await fixture(t, { copilot: { run: async ({ ask, emit }) => {

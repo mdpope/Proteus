@@ -1,3 +1,21 @@
+## Nov 2 — one inline answer and ordered attachments
+
+Question cards own their answers; the general composer queues a separate message. A redundant
+legacy pending-question composer is hidden only when the inline card exists. Exact repeated
+choice-list lines and single headings are removed from presentation, preserving original events,
+choice descriptions and distinct multi-question labels. Answered cards show the answer and queued
+state. Desktop/web share Return handling; native reuses Send/Return with IME/newline guards.
+
+Native inline answers support files/photos/paste and exact sender consent. Retry IDs and prepared
+payload metadata persist; missing bytes require reattachment. Ordinary attachment-only new chats,
+messages, queues/edits and steer require verified dispatch. The provider receives a review
+instruction while the stored human text remains exact, including blank text.
+
+Stored and draft file viewers navigate an ordered collection with arrows, keyboard and swipe,
+loading only the selected file. Names and optional creation/modification dates are display metadata.
+Shared HTML previews remain inert text. Native remote downloads verify bounded bytes and digest.
+Phone resources are peer project tabs; older chat-child navigation descriptions below are superseded.
+
 ## October 30 — configurable content residency
 
 Navigation retains lightweight chat/tab metadata; complete transcripts are not loaded for every
@@ -19,6 +37,16 @@ these controls bound inactive content rather than promise an exact process-memor
 The disposable native residency fixture verifies eviction of both data and DOM, reloading older
 pages of a 2,507-event history to the same event/offset, draft preservation and UI settings writes.
 Installed profile behavior is verified during the separate rollout.
+
+## November 2 — quick question answers
+
+Inline question answer fields send with Enter and retain Shift+Enter or Alt/Option+Enter for
+newlines. IME composition, held Return and empty answers without files do not send. Submission
+uses the same form, consent and retained operation identity as Send answer. Native cards reuse
+the existing composer Return/Send handling. When the event prose already contains a question's
+prompt, its card omits the repeated heading; distinct prompts and choice buttons remain.
+Events with several questions retain each card's heading to identify its answer field.
+The accepted earlier R1–R8 mobile/desktop artifacts remain separate from this source addition.
 
 ## October 29 — compact question answers
 

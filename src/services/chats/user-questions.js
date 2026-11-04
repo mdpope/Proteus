@@ -9,11 +9,11 @@ export function captureUserQuestions(run, data, eventIndex, now) {
     if(typeof value?.title!=='string'||!value.title.trim())return;
     const id=createHash('sha256').update(JSON.stringify([run.schedule.provider,run.providerSessionId,data.providerItemId,index])).digest('hex');
     if(run.userQuestions.some(question=>question.id===id))return;
-    run.userQuestions.push({id,text:value.title,choices:Array.isArray(value.options)?value.options.map(option=>typeof option==='string'?option:option?.label).filter(option=>typeof option==='string'&&option.trim()):[],status:'pending',askedAt:now,eventIndex,provider:run.schedule.provider,sessionId:run.providerSessionId||null,providerItemId:data.providerItemId});
+    run.userQuestions.push({id,text:value.title,...(Array.isArray(value.options)?{options:value.options.slice(0,32).map(option=>typeof option==='string'?{label:option}:{label:String(option?.label||'').slice(0,2000),description:String(option?.description||'').slice(0,4000)})}:{}),choices:Array.isArray(value.options)?value.options.map(option=>typeof option==='string'?option:option?.label).filter(option=>typeof option==='string'&&option.trim()):[],status:'pending',askedAt:now,eventIndex,provider:run.schedule.provider,sessionId:run.providerSessionId||null,providerItemId:data.providerItemId});
   });
 }
 
-export async function answerUserQuestion(engine,id,questionId,answer,messageId,action='answer',dispatch=null) {
+export async function answerUserQuestion(engine,id,questionId,answer,messageId,action='answer',dispatch=null,inputOrigin=null) {
   const run=engine.getRun(id),question=run.userQuestions?.find(item=>item.id===questionId);
   if(!question)throw Error('This question is no longer available. Refresh the chat.');
   if(action==='dismiss'){
@@ -37,6 +37,7 @@ export async function answerUserQuestion(engine,id,questionId,answer,messageId,a
   const files=dispatch?engine.verifyAttachmentDispatch(run,dispatch):[];
   // Claim before awaiting transport. Restart or ambiguous delivery must never
   // replay a response or turn a repeated button click into a second user turn.
+  if(inputOrigin)run.turnOrigin=inputOrigin;
   Object.assign(question,{answer,messageId,status:'sending',answeredAt:engine.now(),...(dispatch?{attachmentSignature:dispatch.signature}:{})});engine.persist(run);
   try{
     if(native){
@@ -46,7 +47,7 @@ export async function answerUserQuestion(engine,id,questionId,answer,messageId,a
     }
     const provider=engine.providers[run.schedule.provider],canSteer=provider?.steer&&files.every(file=>provider.acceptedSteeringMediaTypes?.includes(file.mediaType));
     const mode=run.status==='running'&&engine.running.has(id)&&canSteer?'steer':'queue';
-    await engine.send(id,`Answer to your question: ${question.text}\n\n${answer}`,mode,messageId,undefined,dispatch);
+    await engine.send(id,`Answer to your question: ${question.text}\n\n${answer}`,mode,messageId,undefined,dispatch,undefined,inputOrigin);
     const event=run.events.find(item=>item.data?.delivery?.id===messageId),state=event?.data.delivery.state;
     if(!['queued','delivered','steered'].includes(state))throw Error('The provider did not confirm answer delivery.');
     event.data.questionReply={requestId:question.id};question.status='answered';question.deliveryState=state;engine.persist(run);return run;
@@ -69,4 +70,17 @@ export function askBackgroundQuestion(engine,run,request,signal,id){
     engine.backgroundQuestions.set(key,{resolve:answer=>{cleanup();resolve(answer);}});signal.addEventListener('abort',abort,{once:true});
     (run.userQuestions??=[]).push(question);engine.event(run,'system',request.question,{question});
   });
+}
+
+
+// Queue visibility is review metadata, never an answer, cancellation or approval.
+export function clearQuestionFromQueue(engine,id,questionId){
+ if(typeof questionId!=='string'||!questionId||questionId.length>256)throw Error('Choose a question.');
+ const run=engine.getRun(id);
+ const question=run.userQuestions?.find(q=>q.id===questionId)
+   || (run.pending?.type==='question'&&run.pending.id===questionId?{id:questionId,status:'pending'}:null)
+   || run.events.find(event=>event.data?.question?.id===questionId)?.data?.question;
+ if(!question||question.status!=='pending')throw Error('This question is no longer waiting for an answer.');
+ if(Object.hasOwn(run.questionQueueCleared||{},questionId))return run;
+ run.questionQueueCleared={...run.questionQueueCleared,[questionId]:engine.now()};engine.persist(run);return run;
 }

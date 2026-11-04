@@ -4,9 +4,12 @@ import {applyNavigationDelta} from '../shared/navigation/navigation-history.js';
 export function syncableTabURL(value){return value?safeContentTabURL(value):'';}
 // A membership-only pass may remove only identities confirmed absent by the owner.
 // Newly captured local opens must survive until the subsequent mutation pass.
-export function shouldRemoveCapturedTab(id,ownerIds,capturedIds,{membershipOnly=false,removedIds=[],preservedIds=[]}={}){
+export function shouldRemoveCapturedTab(id,ownerIds,capturedIds,{membershipOnly=false,removedIds=[],preservedIds=[],pendingOpen=false}={}){
   if(!id||ownerIds.has(id)||!capturedIds.has(id))return false;
   if(membershipOnly&&!removedIds.includes(id))return false;
+  // A creation event can arrive after the read snapshot. Preserve that explicit
+  // local intent until the next mutation, while confirmed owner closes still win.
+  if(pendingOpen&&!removedIds.includes(id))return false;
   return !preservedIds.includes(id)||removedIds.includes(id);
 }
 export function tabChanges(before,after,{navigation=false,seed=false}={}){
@@ -94,7 +97,8 @@ function changesAfterOwnerUpdates(baseline,local,remote,navigation){
   const operations=tabChanges([...baseline,...arrivals.values()],observed,{navigation});
   const previousOrder=baseline.filter(tab=>!arrivals.has(tab.id)).map(tab=>tab.id);
   const localOrder=local.filter(tab=>!arrivals.has(tab.id)).map(tab=>tab.id);
-  return previousOrder.join('\0')===localOrder.join('\0')?operations.filter(op=>op.action!=='reorder'):operations;
+  const explicitChatOpen=local.some(tab=>arrivals.has(tab.id)&&tab.type==='chat'&&tab.navigationPending);
+  return !explicitChatOpen&&previousOrder.join('\0')===localOrder.join('\0')?operations.filter(op=>op.action!=='reorder'):operations;
 }
 export function createTabSynchronizer({scopes,readLocal,apply,acknowledge=async()=>{},request,onError=()=>{},navigation=false,explicitCloseOnly=false,pendingStorage,now=Date.now,preserveUntracked=()=>false}){
   const records=new Map(),navigationCache=new Map(),backoff=new Map();
@@ -192,6 +196,9 @@ export function createTabSynchronizer({scopes,readLocal,apply,acknowledge=async(
         if(remaining.length){pendingStorage?.setItem(closeKey,JSON.stringify(remaining));record.again=true;}else pendingStorage?.removeItem(closeKey);
         pendingStorage?.removeItem(closeRequestKey);
         local=local.filter(tab=>!closes.includes(tab.id));
+        // Confirmed explicit closes may accompany a replacement in the same
+        // position. They must not make that complete local order look partial.
+        if(record.baseline)record.baseline=record.baseline.filter(tab=>!closes.includes(tab.id));
       }
       if(records.get(id)!==record)return;
       if(raw.revision<record.revision)throw Error('The owner returned an older tab revision. Retry synchronization.');
@@ -320,7 +327,7 @@ export function createTabSynchronizer({scopes,readLocal,apply,acknowledge=async(
       // apply receives the captured snapshot, so it preserves additions made during I/O.
       if(records.get(id)!==record)return;
       rememberOwner(); // Mutation acknowledgements also prove owner participation.
-      await apply(scope,remote.tabs,captured,{preservedIds:[...(record.localAliases||[])]});record.pendingSnapshot=null;
+      await apply(scope,remote.tabs,captured,{preservedIds:[...(record.localAliases||[])],removedIds:[...new Set([...removedIds,...captured.filter(tab=>Object.hasOwn(remote.closed||{},tab.id)).map(tab=>tab.id)])]});record.pendingSnapshot=null;
       record.baseline=structuredClone(remote.tabs);record.revision=remote.revision;record.retry=null;if(wrote)backoff.delete(hostKey(scope));
     };
     record.busy=work().catch(error=>{

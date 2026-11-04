@@ -6,7 +6,9 @@ import UIKit
 struct NativeBrowserHistoryIndex: Sendable {
     private struct Row: Sendable { let value: JSON; let search: String }
     private let rows: [Row]
+    let sites: [JSON]
     init(_ items: [JSON]) {
+        sites = NativeAddressCompletion.ranked(items)
         let formatter = ISO8601DateFormatter()
         let fractional = ISO8601DateFormatter(); fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         func date(_ item: JSON) -> Date {
@@ -74,8 +76,9 @@ struct NativeDocumentDescriptor: Identifiable, Codable, Equatable {
     var previewVersion: String? = nil
     // Contents and consent do not survive a cold launch; publish the first fresh read even
     // when its hash matches the persisted descriptor. Keep this state out of CodingKeys.
+    var sourceChatID: String? = nil
     var previewLoaded = false
-    enum CodingKeys: String, CodingKey { case id, chatKey, title, mediaType, parentID, relativePath, customTitle, previewSource, previewTabID, previewVersion }
+    enum CodingKeys: String, CodingKey { case id, chatKey, title, mediaType, parentID, relativePath, customTitle, previewSource, previewTabID, previewVersion, sourceChatID }
 }
 struct NativeDocumentSession {
     let requestID: String
@@ -92,7 +95,16 @@ struct NativeDraftAttachment: Identifiable {
     let name: String
     let mediaType: String
     let bytes: Data
+    var createdAt: String? = nil
+    var modifiedAt: String? = nil
     var image: UIImage? { mediaType.hasPrefix("image/") ? UIImage(data: bytes) : nil }
+}
+
+extension NativeDraftAttachment {
+    var fileDates: [String: JSON] {
+        var values: [String: JSON] = [:]
+        if let createdAt { values["createdAt"] = .string(createdAt) }; if let modifiedAt { values["modifiedAt"] = .string(modifiedAt) }; return values
+    }
 }
 
 struct BrowserChatDraft: Identifiable { let id: UUID; let hostID: String; let hostName: String }

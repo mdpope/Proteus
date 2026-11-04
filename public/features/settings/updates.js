@@ -12,7 +12,7 @@ export async function renderUpdates(container,ui,active){
  const showError=error=>{if(active())find('[data-update-error]').textContent=error.message;};
  const refresh=async()=>{
   const status=await ui.api('/api/updates');if(!active())return status;const {identity,job,error,download}=status;
-  find('[data-update-status]').innerHTML=`<p>${identity.packaged?'Installed '+esc(identity.buildRevision):'Running from source. Install a desktop release to use Updates.'}</p>${download?`<p>${esc(download.phase)} · ${esc(download.version)} · ${esc(download.buildRevision)}</p>`:''}${job?`<p><strong>${esc(job.phase)}</strong>${job.outcome?' · '+esc(job.outcome):''} · ${esc(job.buildRevision||'')}</p>${job.blocker?`<p>${esc(job.blocker)}</p>`:''}${job.error?`<p class="banner">${esc(job.error)}</p>`:''}${job.phase==='attention'&&identity.barrier?'<p>The update needs inspection. You can resume ordinary work in the verified app.</p><button data-update-resume-work>Resume ordinary work</button>':''}${job.continuation?'<p>The update chat resumed automatically.</p>':''}${Number.isFinite(job.freeSpaceChange)?`<p class="note">Free space change: ${(job.freeSpaceChange/1024**3).toFixed(2)} GiB.</p>`:''}`:''}${error?`<p class="banner">${esc(error)}</p>`:''}`;
+  find('[data-update-status]').innerHTML=`<p>${identity.packaged?'Installed '+esc(identity.buildRevision):'Running from source. Install a desktop release to use Updates.'}</p>${download?`<p>${esc(download.phase)} · ${esc(download.version)} · ${esc(download.buildRevision)}</p>`:''}${job?`<p><strong>${esc(job.phase)}</strong>${job.outcome?' · '+esc(job.outcome):''} · ${esc(job.buildRevision||'')}</p>${renderUpdateIdle(job,esc)}${job.error?`<p class="banner">${esc(job.error)}</p>`:''}${job.phase==='attention'&&identity.barrier?'<p>The update needs inspection. You can resume ordinary work in the verified app.</p><button data-update-resume-work>Resume ordinary work</button>':''}${job.continuation?'<p>The update chat resumed automatically.</p>':''}${Number.isFinite(job.freeSpaceChange)?`<p class="note">Free space change: ${(job.freeSpaceChange/1024**3).toFixed(2)} GiB.</p>`:''}`:''}${error?`<p class="banner">${esc(error)}</p>`:''}`;
   const resume=find('[data-update-resume-work]');if(resume)resume.onclick=action(()=>ui.api('/api/updates',{action:'resume-work',id:job.id,expectedRevision:job.revision}));
   if(job?.phase==='attention'&&job.attentionResolution){
    const note=document.createElement('p');note.className='note';note.textContent='Recovery reconciled after verification. The original failure is retained above; no update continuation was replayed. Maintenance can inspect a fresh plan.';find('[data-update-status]').append(note);
@@ -55,7 +55,7 @@ function dismiss(job){dismissedUpdateNotices.add(job.id);try{const ids=new Set(J
 export function renderUpdateCard(root,status,runId,escape,open){
  const previous=root.querySelector('.update-chat-card'),job=status?.job;
  if(job?.runId!==runId||dismissibleUpdateJob(job)&&isDismissed(job)){previous?.remove();return;}
- const card=previous||document.createElement('section');card.className='card update-chat-card';card.setAttribute('role','status');card.innerHTML=`<strong>Proteus update · ${escape(job.phase)}</strong>${job.outcome?`<p>${escape(job.outcome==='rollback'?'Recovered the compatible previous app.':'Updated app verified.')}</p>`:''}${job.blocker?`<p>${escape(job.blocker)}</p>`:''}${job.error?`<p>${escape(job.error)}</p>`:''}<p class="note">${job.continuation?'This same chat resumed automatically.':'The helper retains this chat’s checkpoint through restart or compatible rollback.'}</p><button data-open-update-status>Update status</button>`;
+ const card=previous||document.createElement('section');card.className='card update-chat-card';card.setAttribute('role','status');card.innerHTML=`<strong>Proteus update · ${escape(job.phase)}</strong>${job.outcome?`<p>${escape(job.outcome==='rollback'?'Recovered the compatible previous app.':'Updated app verified.')}</p>`:''}${renderUpdateIdle(job,escape)}${job.error?`<p>${escape(job.error)}</p>`:''}<p class="note">${job.continuation?'This same chat resumed automatically.':'The helper retains this chat’s checkpoint through restart or compatible rollback.'}</p><button data-open-update-status>Update status</button>`;
  card.querySelector('button').onclick=open;
  if(dismissibleUpdateJob(job)){const close=document.createElement('button');close.textContent='Dismiss';close.setAttribute('aria-label','Dismiss completed update notice');close.dataset.dismissUpdateNotice='';close.onclick=()=>{dismiss(job);card.remove();};card.append(close);}
  if(!previous)(root.querySelector('#conversation-host')||root.lastElementChild)?.before(card);
@@ -76,4 +76,12 @@ export async function mountDesktopControlReadiness(container,ui,active){
   const setup=section.querySelector('[data-desktop-setup]');if(setup)setup.onclick=async()=>{setup.disabled=true;try{const run=await ui.api('/api/desktop-control/setup',{});await ui.openUpdateChat?.(run);}catch(error){ui.toast(error.message);}finally{setup.disabled=false;}};
  };
  await draw();
+}
+
+// Shared by the settings screen and the updating chat; owner status is live and
+// remains the only authority for what must finish before replacement.
+export function renderUpdateIdle(job,escape){
+ const idle=job?.idle;
+ if(!idle)return job?.blocker?`<p>${escape(job.blocker)}</p>`:'';
+ return `<div data-update-idle>${idle.checkpointReviewRequired?'<p><strong>Checkpoint review required</strong></p>':''}<ul>${idle.blockers.map(item=>`<li><strong>${escape(item.title)}</strong>${item.chatId?` · <code style="overflow-wrap:anywhere">${escape(item.chatId)}</code> · ${escape(item.status)}${item.coordinator?' · update coordinator':''}`:''}<ul>${item.reasons.map(reason=>`<li>${escape(reason.text)}${reason.nextAttemptAt?' Next attempt: '+escape(reason.nextAttemptAt):''}</li>`).join('')}</ul><p class="note">${escape(item.nextStep)}</p></li>`).join('')}</ul><p>${escape(idle.nextStep)}</p></div>`;
 }

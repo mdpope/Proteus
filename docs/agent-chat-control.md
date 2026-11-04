@@ -6,6 +6,28 @@ the authenticated local endpoint is `POST /api/chat-control`. It uses existing
 Proteus peer authentication, encryption, provider adapters and command receipts.
 It does not transfer provider credentials or native sessions between computers.
 
+## R21 — scoped next-turn model settings through chat control
+
+`proteus_chats` send can explicitly select model/effort/context/service settings with
+`modelScope: "next-turn"` and queue mode. The captured provider stays fixed. The sender refreshes
+the destination catalog; the executing owner validates again and rechecks run identity, provider
+and project after asynchronous preflight. Steering, replies and cancellation cannot change model
+settings. Older destinations without the scoped-send capability are refused rather than silently
+ignoring options.
+
+The durable task freezes the requested settings and returns `modelSelection` with `state: requested`.
+This is not proof that a model executed. `read` exposes bounded `modelState` with the captured
+settings and queued selections. An active turn retains its original settings; the queued message's
+settings apply when that next turn starts. The initial captured schedule and model history remain
+available. No saved future schedule, sources, tools or permissions are edited. Future schedule
+updates and source/context refresh remain separate owner operations in R19, not part of send.
+
+Retry reuses the same operation ID and frozen selection without another message. Changed arguments
+with the same ID are rejected. Older uncertain/prepared tasks that never captured model settings
+must be inspected before submitting a new operation; the fix does not retrofit their prior sends.
+This is source-only for Nov 2. Do not claim changes through the currently installed send path took
+effect, and do not relabel prior runs with newly saved future schedule settings.
+
 ## Discovery and authorization
 
 Use `computers`, then `projects`, `models`, `list` and `read`. Select an explicit
@@ -160,3 +182,17 @@ mobile grant-management UI, installed-feature acceptance or deployment is claime
 At integration, the overlap remained limited to `CHANGELOG.md`, `docs/handoff.md` and
 `docs/planned-updates.md`; their newer entries were preserved. Private test receipts and the
 desktop screenshot are retained outside the repository.
+
+
+## Owner scheduler tool
+
+Use `proteus_schedules computers`, then request an exact schedule-ID/action scope before listing or
+reading through an internal agent. Read each definition's revision before update, enable, disable,
+preflight or test. Updates use `settingsScope: future-runs`; captured source refresh uses `existing-run`
+with an idle `runId` and `expectedRunRevision`. Retry selects `future-runs` or `captured-run` explicitly.
+Start, retry and stop use stable UUID operation IDs. `status` gives schedule-to-run linkage and bounded
+results; its `model-turn-completed` outcome is not proof that a workflow filed or changed anything.
+Pause/test do not enable recurring triggers, stop targets one exact manual/test run, and no scheduler
+action can approve provider tool requests. Permission configuration is separately scoped from ordinary
+schedule updates. Only the explicit local owning host is supported; use that host's registered tool
+rather than falling back across machines. Existing remote web scheduling authority is unchanged.

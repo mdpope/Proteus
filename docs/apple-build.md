@@ -1,3 +1,17 @@
+## Nov 2 — targeted update authorization and acceptance
+
+The latest operator instruction authorizes this local Mac and physical iPhone/iPad after R23 scheduler fixes. It supersedes the historical simulator-only hold for these targets. Wider distribution and broad Mnemosyne implementation remain held. Native source acceptance and the unresolved simulator rotation check are recorded in the [release implementation](releases/2026-11-02/implementation.md); signed artifact and device preservation receipts remain distinct from UI tests.
+
+## Nov 2 — simulator review before rollout
+
+Use the existing shared phone/tablet with separate Proteus Preview identities and an isolated
+synthetic owner. Build-only previews cannot select physical devices or the production bundle.
+`PROTEUS_PREVIEW_DERIVED_DATA` reuses a caller-owned compiler cache; each resulting review app is
+copied outside that mutable cache before its receipt is written. `PROTEUS_IOS_DERIVED_DATA` reuses
+the test compiler cache while each invocation retains independent results and fixture receipts.
+Normal installed applications, real destinations and physical data are untouched by these checks.
+The operator holds new physical builds/installations and desktop release promotion for review.
+
 ## October 30 — isolated native tests and normal-app repair
 
 `apple-build.mjs test` builds `org.proteusapp.proteus.mobile-tests` and verifies that identity before

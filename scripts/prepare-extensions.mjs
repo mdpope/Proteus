@@ -21,6 +21,25 @@ export function prepareExtensions(root=path.resolve(path.dirname(fileURLToPath(i
   if(start<0||end<start)throw Error('Native messaging patch target changed.');
   text=text.slice(0,start)+marker+"\nvar NativeMessagingHost = require('../../../../desktop/services/native-messaging-host.cjs').createNativeMessagingHost({readConfig:readNativeMessagingHostConfig,spawn:import_node_child_process.spawn});\n\n"+text.slice(end);
  }
+ const preloadFile=path.join(base,'dist/chrome-extension-api.preload.js');let preload=fs.readFileSync(preloadFile,'utf8');
+ const contextsMarker='// Proteus extension contexts v1';
+ if(!preload.includes(contextsMarker)){
+  const needle='              openOptionsPage: invokeExtension2("runtime.openOptionsPage"),';
+  if(!preload.includes(needle))throw Error('Extension runtime context patch target changed.');
+  preload=preload.replace(needle,`              ${contextsMarker}
+              getContexts: async (filter = {}, callback) => {
+                const native = typeof base?.getContexts === "function" ? await base.getContexts(filter) : [];
+                const owned = await invokeExtension2("runtime.getContexts")(filter);
+                const contexts = [...(native || []), ...(owned || [])];
+                if (callback) callback(contexts);
+                return contexts;
+              },
+${needle}`);
+ }
+ // The vendor development bundle logs every API argument/result by default.
+ // Extension messages can contain vault material; never send it to the console.
+ preload=preload.replaceAll('if (true) {','if (false) {');
  fs.writeFileSync(file,text);
+ fs.writeFileSync(preloadFile,preload);
 }
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url))prepareExtensions();

@@ -42,10 +42,29 @@ try{
   const url=fixture.origin+'/strip-'+scope;
   await page.locator('#browser-home-url').fill(url);await page.locator('#browser-home-url').press('Enter');
   await page.waitForFunction(async({created,url})=>(await window.desktop.browser({action:'list'})).some(tab=>tab.id===created&&tab.url===url),{created,url});
+  // The host can resize without a window resize or a tab switch. The native
+  // view must follow it both when space is taken and when it is restored.
+  const nativeBounds=()=>app.evaluate(({app},id)=>process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser().get(id).view?.getBounds(),created);
+  const area=page.locator('#browser-area');
+  await page.waitForFunction(()=>document.querySelector('#browser-area')?.getBoundingClientRect().height>300);
+  await area.evaluate(node=>{node.style.marginBottom='160px';});
+  await page.waitForFunction(async id=>{const r=document.querySelector('#browser-area')?.getBoundingClientRect();const result=await window.desktop.browser({action:'list'});return !!r&&result.some(tab=>tab.id===id&&tab.loaded);},created);
+  await expectBounds(area,nativeBounds);
+  await area.evaluate(node=>{node.style.marginBottom='0px';});
+  await expectBounds(area,nativeBounds);
  }
  assert.deepEqual(errors,[]);
  console.log('PASS: main/project empty-strip double-click retains its selected tab and navigates after owner reconciliation');
 }finally{
  if(app){const timer=setTimeout(()=>app.process().kill('SIGKILL'),5000);await app.close().catch(()=>{});clearTimeout(timer);}
  await fixture.cleanup();
+}
+
+async function expectBounds(area,nativeBounds){
+ for(let attempt=0;attempt<50;attempt++){
+  const rect=await area.boundingBox(),bounds=await nativeBounds();
+  if(rect&&bounds&&['x','y','width','height'].every(key=>Math.abs(Math.round(rect[key])-bounds[key])<=1))return;
+  await new Promise(resolve=>setTimeout(resolve,100));
+ }
+ assert.fail('Native browser view did not follow its host area');
 }

@@ -7,6 +7,13 @@ const path = require('node:path');
 const run = (args, timeout = 800) => new Promise(resolve => {
   execFile('/usr/bin/lsappinfo', args, { timeout, encoding: 'utf8' }, (error, stdout) => resolve(error ? '' : stdout));
 });
+// getFileIcon can terminate Electron in its native worker for a sending app's
+// bundle. Read only its declared resource instead; missing icons stay optional.
+async function applicationIcon(bundlePath, imageFromPath) {
+  const name = await new Promise(resolve => execFile('/usr/bin/plutil', ['-extract', 'CFBundleIconFile', 'raw', '-o', '-', path.join(bundlePath, 'Contents/Info.plist')], {timeout:800, maxBuffer:4096, encoding:'utf8'}, (error, stdout) => resolve(error ? '' : stdout.trim())));
+  if (!name || name.length > 255 || path.basename(name) !== name || /[\x00-\x1f\x7f]/.test(name)) return '';
+  try { const image = imageFromPath(path.join(bundlePath, 'Contents/Resources', name.endsWith('.icns') ? name : name+'.icns')); return image && !image.isEmpty() ? image.toDataURL() : ''; } catch { return ''; }
+}
 function parse(output) {
   const name = output.match(/^"([^"]{1,120})"\s+ASN:/m)?.[1] || '';
   const bundleId = output.match(/bundleID="([^"]{1,200})"/)?.[1] || '';
@@ -20,7 +27,7 @@ async function frontmostApplication({ platform = process.platform, self = 'org.p
   const app = parse(await run(['info', '-only', 'name', '-only', 'bundlepath', '-only', 'bundleid', asn]));
   if (!app || app.bundleId === self || /^org\.proteusapp\.proteus/.test(app.bundleId)) return null;
   let iconURL = '';
-  if (icon && app.bundlePath) try { const image = await icon(app.bundlePath); iconURL = image && !image.isEmpty() ? image.toDataURL() : ''; } catch {}
+  if (icon && app.bundlePath) iconURL = await applicationIcon(app.bundlePath, icon);
   return { name: app.name, bundleId: app.bundleId, icon: iconURL.length <= 200000 ? iconURL : '' };
 }
-module.exports = { frontmostApplication, parseApplicationInfo: parse };
+module.exports = { frontmostApplication, parseApplicationInfo: parse, applicationIcon };

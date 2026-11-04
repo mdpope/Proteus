@@ -38,7 +38,7 @@ export class ModelCatalog {
         if (result.error || result.available === false) throw new Error(result.error || 'Provider unavailable.');
         this.value = { ...result, models: uniqueModels(result.models), stale: false, attemptedAt: null, checkedAt: new Date(this.now()).toISOString(), refreshIntervalMs: this.ttl, error: null };
       } catch (error) {
-        this.value = { ...(this.value || { available: false, models: [], checkedAt: null }), ...(reported?.authenticationCommand ? { authenticationCommand: reported.authenticationCommand } : {}), stale: true, error: error.message, attemptedAt: new Date(this.now()).toISOString(), refreshIntervalMs: this.ttl };
+        this.value = { ...(this.value || { available: false, models: [], checkedAt: null }), ...(Array.isArray(reported?.sources)?{sources:reported.sources}:{}), ...(reported?.authenticationCommand ? { authenticationCommand: reported.authenticationCommand } : {}), stale: true, error: error.message, attemptedAt: new Date(this.now()).toISOString(), refreshIntervalMs: this.ttl };
       }
       return this.value;
     })().finally(() => { this.pending = null; });

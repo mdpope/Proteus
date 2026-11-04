@@ -1,3 +1,332 @@
+## R37 — updater waiting diagnostics implemented for final qualification
+
+The earlier R25 usability request is implemented after local R36 preservation and signing acceptance. Live owner status names all blocking chats and precise execution/retry/background/owner reasons, distinguishes the coordinator and checkpoint-review reset, and gives safe next steps. The same inventory guards restart. Source and disposable UI checks pass; final packaged qualification and rollout remain open. Newly reported iOS performance/composer/disconnect follow-ups and Mnemosyne redesign remain in the Nov 3 queue.
+
+## Nov 3 queue — iOS performance, composer and residual disconnect
+
+The actual iPhone test message arrived, but the operator reports very poor app performance, a message editor that does not grow with its text, and one subsequent disconnect. These follow-ups are explicitly moved to [the Nov 3 issues list](2026-11-03-issues.md). Continue Nov 2 rollout and closeout independently; do not call one delivered message sustained connection acceptance. The secondary Windows laptop’s missing Cua Driver and Desktop Control setup are also explicitly deferred to the Nov 3 issues list; its Nov 2 installation and preservation checks passed.
+
+## Nov 3 queue — Mnemosyne redesign
+
+The operator moved the wider Mnemosyne design and staged product-boundary implementation to Nov 3. See [the preserved handoff](2026-11-03-mnemosyne-handoff.md). Nov 2 deployment and closeout continue independently; prototype review and native-owner safeguards remain.
+
+## Nov 2 R36 — extension creation intent in validation
+
+Native Linux qualification reproduced a real blank-tab loss through the supported extension API: an existing main scope's first authoritative read captured a newly created tab without local pending intent and removed its native view. Source now carries creation intent only from the actual extension creation callback into foreground/background registration, preserves it across an older read snapshot and settles it on owner acknowledgement. Confirmed owner closes and moves retain authority. Focused owner/callback regressions pass; full source, native UI and replacement-package acceptance remain required. Earlier R35 packages retain their original pins and do not contain this correction. The separate intermittent extension-runtime exit remains unproven.
+
+## Nov 2 R35 — push-backed desktop workspace navigation
+
+R34 attribution identified full sync and context reads as the dominant reply traffic: approximately 275 MB in the first 75-second sample, versus 0.23 MB for tab reads. Peer notifications reset the desktop sidebar refresh interval; each refresh fetched context plus another full sync. Source now projects compact sidebar metadata from the owner connection’s authenticated push state and serves detached, read-only snapshots to renderer windows. Detailed source/configuration reads remain explicit. A regression fails against R34 and passes after the correction; two real Electron windows receive 30 pushed changes, show the new name in both, and issue zero remote catalog reads. Full Node validation passes 1,477 tests/four skipped; static checks pass. This is source acceptance; installed bandwidth and native/web message acknowledgement still require verification with updated consumers. R25 usability remains held until full local acceptance; Mnemosyne remains deferred.
+
+## Nov 2 R34 — large reply attribution
+
+R33 is installed and owner-health verified. Independent strict signature checks and the installed package/source hash match after verification outside the restricted shell. Both physical clients run native build10 and their current General list matches the owner. A 92-second live R33 sample measured 4.36 MB/s, dominated by replies and full state; no host close or congestion was recorded in that sample. This does not establish sustained acceptance. Bounded fixed read-method byte counters and ten-second snapshot-section measurements will identify the remaining large payload without recording content or changing polling/retry behavior. R25 usability remains held until full local acceptance; Mnemosyne remains deferred.
+
+## Nov 2 R33 — recovery investigation and iPad follow-through
+
+The last Mac candidate and rollback both timed out during recovery verification; the previous owner is running, without a completed recovery-health receipt. A read-only comparison found two document descriptors lost their chat association between the pre-Quit inventory and the cold snapshot. Source now preserves that metadata and checkpoints before the preservation snapshot. Recovery diagnostics retain only fixed check reasons. Existing recovery guards and historical evidence remain; deployment and sustained connection acceptance are still open. The operator has now authorized the physical iPad follow-up using the existing signed build10. R25 usability and the wider Mnemosyne redesign remain held/deferred.
+
+## Nov 2 R32 — validated source, live traffic acceptance pending
+
+The iPhone build9 live General read now matches the desktop's 12 ordered tab IDs and revision.
+The iPad's earlier exact match remains recorded; its follow-up installation is explicitly deferred.
+
+An iPad prepend rehearsal also found late layout drift; source now preserves the idle message
+anchor as earlier content finishes sizing. The corrected iPad prepend/reopen rehearsal passes.
+
+Source now isolates full/summary/incremental chat delivery per transport and stops native watches
+when their view leaves the active surface. Indexed patches retain history, stale-response guards
+and old-owner full-page compatibility. Watch tokens protect a replacement view of the same chat
+from late cleanup. Fixed packet-kind counters measure actual encoded outbound bytes without
+retaining arbitrary labels or content. Source validation is distinct from installed bandwidth and
+sustained authenticated chat-send acceptance. Broader Mnemosyne work remains deferred, updater
+usability stays held until full local acceptance, and final distribution/closeout remains open.
+
+## Nov 2 R31 investigation in validation
+
+The iPhone General mismatch remains confirmed after build8. Follow-up source handles only
+authenticated terminal expiry rejections, preserves original edits/receipts for review, and adds
+bounded attempt diagnostics to identify the live blocker. It is not yet installed or accepted.
+The physical iPad follow-up is explicitly deferred. Other rollout and closeout obligations remain.
+
+## Nov 2 follow-up in validation
+
+Immediate mobile tab membership ahead of optional browser-history paging and desktop draft-status
+header placement are implemented. Physical General comparison, sustained authenticated iPhone/iPad
+and web connectivity, Mac installation, other desktop rollout, updater usability after local
+acceptance, and release closeout remain open. The wider distribution hold is lifted; broader
+Mnemosyne implementation remains deferred.
+
+## R29 — transport stability and visible project owners
+
+The operator reports continued iPad disconnects and an obsolete iPhone General tab cache. A physical
+iPad read matches all 12 desktop General IDs in order and revision, independently confirmed by the
+operator. The iPhone still displays an older 13-tab cache; no successful General read was captured
+in its bounded diagnostic sample. The Mac owner log independently confirms repeated shared relay
+transport loss, rather than a conclusion drawn from a client offline label.
+
+A controlled reproduction sends two 3.5 MB plaintext snapshots: each becomes approximately
+4.67 MB on the encrypted wire, and the former sender closes the entire shared host socket when
+the second frame exceeds its 8 MB buffer ceiling. This demonstrates a failure mechanism, not yet
+a measured explanation of every live outage. The installed diagnostics did not record close codes
+or byte rates; the new bounded private report counts actual encoded bytes/packets, peak packet and
+buffer size, congestion, close-code buckets and twelve ten-second traffic windows. It records no
+message text, URLs, titles, request IDs, pairing keys or arbitrary labels.
+
+The host now uses one ordered bounded writer, waits for socket capacity, respects relay byte and
+packet windows, and lets other clients proceed when one exhausts its own budget. It retains a
+16 MB queue plus a small bounded control reserve. A negotiated relay capability closes only an
+overloaded client with temporary code 1013, preserving its pairing. Old relays remain compatible
+with ordinary paced traffic, but exceptional isolation requires their upgrade; the fallback is an
+explicit temporary host disconnect, never a false authentication rejection. Reconnect sync omits
+obsolete full state events because it returns the current state once, while retaining lifecycle
+and other replay. No uncertain mutation is automatically restarted under a new identity.
+
+Identical in-flight scope reads share history work without retaining a completed-result cache or
+overwriting a different membership revision. Initial remote tab reads carry a 32-entry history window;
+existing paging retains access to the full backstack. Native requests allow four concurrent wire
+operations and bound pending work, preventing history-worker admission overload. The reconnect
+retry set is captured before authentication completes, excluding new requests submitted afterward.
+Native request bursts now pace below the relay's 100 packets / 32 MB per ten-second client limit,
+with bounded pending requests and checks that expired queued actions cannot transmit. A visible
+project can resume its own suspended computer without changing selected-computer state, keys,
+drafts or reconnect backoff. Existing host-switch handling for unconfirmed commands remains.
+
+Observed source polling: host state comparison every two seconds (transmit only on change), visible
+project refresh every three seconds, main-tab refresh every three seconds, known-scope fallback
+roughly once per minute (checked every five seconds), and notifications every five seconds per
+connected owner. Live bytes/second must be measured after the instrumented build is installed;
+these intervals alone cannot establish bandwidth or the cause of disconnects.
+
+Source checks: final Node suite 1,463 pass / four skip; static checks pass. Actual two-client relay
+acceptance proves isolated overload, another client's continued sync, and successful reconnection
+with the original device pairing. Native visible-owner and host-switch unit cases plus phone
+same-screen tab reconnect pass. The full native suite passes 179 cases, including an actual 110-request burst without a new
+authentication generation. Final source checks and all live rollout/stability checks follow; do not report source success as an installed fix.
+
+The operator now authorizes all configured platform deployments and release closeout after these
+fixes. Wider distribution hold is lifted; broader Mnemosyne implementation remains deferred.
+Updater usability remains separately gated on completed local acceptance.
+
+## R28 — canonical tab scope and reconnect reconciliation
+
+The native workspace tab manager previously merged all projects without an explicit location and
+held a view-local snapshot across scope changes/reconnects. Default to the canonical General project,
+with an explicit project picker and All projects option; do not delete legitimate items in other
+projects. Read through the shared owner boundary, observe child project snapshots, refresh on
+connection/catalog/scope changes and keep action revisions with their owning scope. Hide a previous
+scope's rows during a new selection, disable host mutations offline and refresh after an uncertain
+response without retrying the mutation. Serialized fresh reads can replace an older cache incarnation
+only if no newer cache revision arrived while reading; unsolicited stale snapshots remain rejected.
+Validation includes a genuine disconnect, owner close/open while offline and reconnect on the same
+screen. Both Preview simulators run 0.2.41/2611.2.6 with protected data and destinations retained; both physical clients also run this build with protected files and saved destinations verified. See [mobile tab acceptance](releases/2026-11-02/mobile-project-tabs.md). Existing holds remain unchanged.
+
+## R27 — restore project recents and counts
+
+The operator clarifies that project recents and their right-side counts must remain, matching
+desktop. Only the additional open-tab/navigation lists were meant to be removed. Restore the
+expandable recent-item shortcuts, paging and project-scoped activation without reinstating those
+extra lists. Native summaries include project chats even when their tab is closed, plus visible
+resource descriptors, deduplicated and sorted by activity. Fetch metadata only for expanded
+workspaces on expansion/catalog change/reconnect; do not restore five-second polling.
+Source implementation and phone/tablet/focused desktop validation pass. The combined signed
+update is installed on both physical clients with protected data and destinations verified. Incremental phone/tablet
+updates remain authorized; wider distribution, updater usability and Mnemosyne holds persist.
+
+## R26 — iPad question layout and chat reading performance
+
+The operator requests desktop parity for the iOS answer card and an in-depth correction of jumping, choppy chat scrolling and lost reading positions on iPad. Incremental deployment to the physical iPad and iPhone is explicitly authorized as fixes validate. Preserve the accepted Mac candidate; wider distribution and Mnemosyne holds remain. The updater usability change remains held pending full Mac acceptance.
+
+The first native correction places the answer form and attachment/Clear/Send controls inside the question's message surface, adds the persistent answer label and bordered editor, and accommodates narrow action layouts. Simulator bounds and interaction acceptance precede the next paid iPad build. The scroll correction now uses one native follow owner, stable content-coordinate anchors, gesture/deceleration guards and durable reading bookmarks. Phone/tablet drag, settle, prepend, reopen, cold-launch and question-card acceptance pass, along with the bounded 1,000-event workload. Both physical clients and both Preview simulators run 0.2.41/2611.2.5; physical gestures and authenticated connection stability remain separate live-review checks. See [native scrolling acceptance](releases/2026-11-02/native-chat-scrolling.md).
+
+## R24 — iOS and web connection stability
+
+The operator reports both clients repeatedly reconnecting/offline against Build Mac, with web worse. Investigate on the accepted updated desktop baseline, distinguishing owner relay availability, transport backpressure/size, authenticated handshake, request timeouts and client reconnect behavior. Preserve pairing keys, drafts, selection and retry receipts; do not reset pairing or weaken permissions as a shortcut. Current cause and fix remain unverified. This follow-up does not lift wider distribution or Mnemosyne implementation holds.
+
+## R23 — scoped owner scheduler controls and targeted local update
+
+The operator authorized finishing scheduler fixes and updating only this desktop and the physical
+iPhone/iPad. Wider distribution and the broader Mnemosyne UI/source/owner extraction remain held.
+Historical simulator-only holds below are superseded for these three targets only.
+
+`proteus_schedules` is registered through the same shared owner service for provider tools and the
+local stdio MCP adapter. It explicitly targets this owning computer, with separate context-bound
+grants for exact schedule IDs: read, update, test, stop, source refresh and permission configuration.
+Generic chat/filesystem grants do not authorize scheduler actions. Saved approval rules match an
+exact normalized schedule/action scope; broad tool rules cannot mint new scheduler scopes. Grants
+have a separate private store, and remembered rules use a backward-compatible custom-tool record.
+
+Inventory is bounded and revision-aware; updates/enable/disable require current schedule revisions
+and explicit future-runs scope. They preserve unknown definition fields and captured runs. Pausing
+remains available while a provider is offline. Repository-owned definitions retain their source
+workflow boundary. Editing future permission profiles requires its own scope and cannot introduce
+blanket automatic/shell/tool approvals. No action approves a pending provider tool request.
+
+Test start/retry has durable operation identity and run linkage written before provider execution,
+source/model/tool-configuration/permission preflight, overlap protection and explicit future-versus-
+captured settings. Uncertain starts reconcile an existing linked run; missing claims never replay
+automatically. Exact manual/test stop is independently idempotent, never a recurring-job cancel.
+Status exposes pending human approvals, bounded results and reported usage, distinguishing model
+completion from verified external effects. Native service replacements cannot be started/enabled
+through this tool; their existing owners and takeover gates remain untouched.
+
+Source refresh explicitly chooses future-runs or an idle existing run and checks both schedule and
+captured revisions. Earlier context/history/model choices are retained. Explicit scheduled Codex MCP
+servers now survive `includeDefaults:false`; unrelated chat/workspace defaults remain excluded and
+disabled sources remain disabled. Dedicated Internet Search and update coordinator isolation remain.
+
+## R22 — shared Mnemosyne operations design and staged product boundary
+
+Record one desktop/web design with existing web schedule authority preserved. Mnemosyne core and
+iOS library remain independent; Omi is one source, with Stardate and other audio/text adapters
+proposed. Extract optional independent filing adapters in stages, preserving today's native owners
+and disabled Proteus replacements. Source-map lineage joins event IDs to claims/contributions;
+applied/not-applicable/delegated outcomes stay distinct. Fresh unattended checklist acceptance,
+source/watcher migration and production UI implementation remain pending. See the
+[release plan](2026-11-02-release-plan.md); no review or deployment hold is lifted.
+
+## R21 — scoped next-turn model settings through chat control
+
+`proteus_chats` send can explicitly select model/effort/context/service settings with
+`modelScope: "next-turn"` and queue mode. The captured provider stays fixed. The sender refreshes
+the destination catalog; the executing owner validates again and rechecks run identity, provider
+and project after asynchronous preflight. Steering, replies and cancellation cannot change model
+settings. Older destinations without the scoped-send capability are refused rather than silently
+ignoring options.
+
+The durable task freezes the requested settings and returns `modelSelection` with `state: requested`.
+This is not proof that a model executed. `read` exposes bounded `modelState` with the captured
+settings and queued selections. An active turn retains its original settings; the queued message's
+settings apply when that next turn starts. The initial captured schedule and model history remain
+available. No saved future schedule, sources, tools or permissions are edited. Future schedule
+updates and source/context refresh remain separate owner operations in R19, not part of send.
+
+Retry reuses the same operation ID and frozen selection without another message. Changed arguments
+with the same ID are rejected. Older uncertain/prepared tasks that never captured model settings
+must be inspected before submitting a new operation; the fix does not retrofit their prior sends.
+This is source-only for Nov 2. Do not claim changes through the currently installed send path took
+effect, and do not relabel prior runs with newly saved future schedule settings.
+
+## R20 — clear reviewed questions from the open queue
+
+Question cards add **Clear from queue** immediately left of **Send answer**. The owner persists
+review metadata separately from answer status, so the question disappears from the open queue
+across clients/restart while its original transcript card and unsent answer remain. The retained
+card can still be answered later through the normal owner/provider path. Clearing sends no answer,
+resolves no provider wait, cancels no work and grants no approval. Actual waits/attention remain
+accurate; this is not the existing terminal dismissal action. Answer delivery already in progress
+cannot be hidden by the button. Old paired owners omit the action until they advertise support.
+
+## R19 — requested schedule owner capabilities
+
+Queue revision-checked schedule management and idempotent test-run start/status/retry/stop through
+the registered MCP owner boundary, with scoped preflight, durable receipts, overlap checks and
+explicit existing-run versus future-run refresh. Repair schedule-specific MCP selection without
+loading unrelated defaults. Use bounded workflow tools/action rules, never blanket shell approvals.
+Transcription UI implementation awaits the schedule-testing chat's mockup review; independent
+Mnemosyne execution and current review/rollout holds remain. See the [release plan](2026-11-02-release-plan.md).
+
+## R18 — native overview stability
+
+Remove the live-diagnosed tile preference/layout feedback and duplicate initial centering. Preserve
+project membership, overview transitions and user scrolling. See [Nov 2 validation](releases/2026-11-02/implementation.md).
+
+## R17 — scrolling correction implemented in source
+
+Reuse one freshly read account identity per synchronous browser projection; send window-scoped
+activity timestamps without full histories; avoid full owner refreshes for text-only streaming.
+Permission freshness and reconnect/push-loss fallback remain intact. Controlled Electron input gap:
+128 ms before, 30 ms after. See [measurements and live acceptance](releases/2026-11-02/scroll-performance.md).
+Desktop publication/rollout remains held for simulator review.
+
+## Nov 2 address completion and site icons
+
+Browser and New tab URL fields now offer history-ranked origin ghost text. Enter opens it; Tab
+accepts a canonical URL ending in `/` and keeps focus for a path. Saved site icons appear left of
+history rows, using profile-scoped cache only and a globe fallback. Lookups are debounced, run in
+the history worker and stop outside address editing. Native retains multiline URL editing and
+supports owner history with a cached fallback. Details and verification are in the
+[Nov 2 implementation](releases/2026-11-02/implementation.md).
+
+The separate [scrolling investigation](releases/2026-11-02/scroll-performance.md) records the live baseline and implemented profile/activity/stream correction, with controlled
+before/after measurements. Live post-install acceptance remains open; no deadlock is claimed. Simulator review and the release hold remain in force.
+
+## R13 — shared setup slots and composer text
+
+The operator confirmed syncing both setup text and ordinary unsent replies. Shared project and
+workspace setup forms use one canonical blank browser descriptor with only a safe setup-kind marker.
+Converting a blank page preserves its logical ID and order; native conversion retires the old local
+browser view without publishing Close. Workspace-root setup creation resolves the default project.
+The owner consumes a setup once on explicit Send; simultaneous attempts cannot create two chats.
+
+Composer text uses a separate human-only owner API, never tab inventory or chat history projections.
+Desktop, web and native clients periodically synchronize idle text with revision checks and durable
+operation IDs. Concurrent edits require an explicit choice and keep recovery copies. Accepted replies
+clear only the exact sent text. Attachment selection, provider/model/source choices and permissions
+stay on the sending device. Window-local app setup tabs stay local. Canonical project-associated
+local previews are discoverable without recreating a chat child strip; denied profiles stay denied.
+
+Validation and review status: [Nov 2 implementation](releases/2026-11-02/implementation.md).
+
+## R14 — website notifications and tab audio
+
+Audit confirmed that permitted page `Notification` events already enter the shared Proteus
+notification history and optional system presenter, preserving site silent intent and exact click
+routing. Page audio remains ordinary Chromium audio. System sounds require system notifications to
+be enabled; operating-system sound settings still apply. This audit does not establish Slack's live
+site permission, workspace sound preference, push delivery or service-worker notification ingestion.
+The existing bridge intercepts the page constructor; background worker delivery needs separate
+acceptance and must not be advertised as verified Proteus inbox integration.
+
+Browser tab menus now offer Mute tab / Unmute tab in app, project/chat and Team Tools strips. Actual
+Chromium audibility drives a speaker immediately before the close button; muted tabs retain a muted
+indicator. Muting silences page audio and that tab's bridged notification sound while retaining visual
+history. State survives unload/reload and saved window sessions; muting an unloaded tab does not
+load it. It remains window-local and is excluded from shared project descriptors. A real Electron
+WebAudio/page-notification rehearsal verifies menu actions, indicator position, sound intent,
+unload behavior and saved state. It does not claim audible output was heard or live Slack tested.
+
+## Nov 2 — R12 simulator review
+
+Window app tabs stay local. iPhone lists them in its sidebar with an app-tab overview;
+iPad/desktop use their top app strip and overview. Sidebar trees show workspace/project destinations,
+never project resource tabs. Projects have one owner-shared ordered content set, preserving stable
+IDs, order, hidden state and history. Chats have no nested resource strip. Phone shows the project
+row, then Chat | Live browser with overview/actions only; the project plus creates tabs. Browser
+links, documents and previews use parent project descriptors and retain their authorization origin.
+Selection and scroll stay local. R13 supersedes the earlier private-draft assumption: shared-project
+New chat/Internet Search slots synchronize empty setup markers, setup text and unsent reply text.
+Attachments and provider/model/source/permission choices remain local to the sending device.
+
+Unloaded pages retain top navigation without loading to switch tabs. Browser/composer spacing uses
+the actual safe area. Native sync applies membership despite history paging failure, handles
+authenticated tab notices and reconnect, and waits for overlapping reads before fetching newer
+owner state. Empty legacy outboxes no longer suppress reads; orphan receipts and private legacy
+resources remain retained without manufacturing project membership. Unchanged offscreen scopes use
+a one-minute fallback; sidebar resource polling is removed. Broader N2 profiling remains separate.
+
+Review hold: both shared simulator Preview apps must be reviewed before any new physical-device
+build/installation, desktop release package, publication or rollout. Old accepted packages retain
+their historical identity and cannot be promoted as R12. Related superseded Windows/Linux builder
+turns are verified cancelled; queued old-source requests remain retained and require reconciliation
+before reuse. No unrelated work was cancelled.
+
+Recovered requests and remaining live acceptance are tracked in [the audit](releases/2026-11-02/prior-release-audit.md).
+
+## Nov 2 — 0.2.41 candidate underway
+
+R10 restores the earlier requested iPhone Chat / Live browser row and repairs stale organizational
+tab projection. The operator requires shared phone/tablet simulator review before further physical
+builds/installations. [The prior-request/branch audit](releases/2026-11-02/prior-release-audit.md)
+keeps the other missing October items visible. Only main and the Nov 2 branch remain; all old
+committed heads are integrated and uncommitted historical work is preserved.
+
+[The Nov 2 plan](2026-11-02-release-plan.md) now includes current GPT/Claude catalogs, distinct
+Copilot Fusion availability, the external Outlook-link selector regression and R9 quick question
+answers without repeated prompts. Source corrections cover R1–R9. Local and synthetic acceptance, exact packages, installation and live workflows are
+recorded separately in [implementation](releases/2026-11-02/implementation.md) and
+[rollout](releases/2026-11-02/rollout.md). Nov 1 remains closed.
+
 ## Nov 1 closed; Nov 2 handoff
 
 Nov 1 / 0.2.40 is closed by the operator with deployed outcomes and qualifications in

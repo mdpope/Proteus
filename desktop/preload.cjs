@@ -42,6 +42,7 @@ contextBridge.exposeInMainWorld('desktop', {
   onDocumentOpened: handler => {const listener=(_event,value)=>handler(value);ipcRenderer.on('proteus:open-document',listener);return ()=>ipcRenderer.removeListener('proteus:open-document',listener);},
   onBrowserAction: handler => { const listener = (_event, value) => handler(value); ipcRenderer.on('proteus:browser-action', listener); return () => ipcRenderer.removeListener('proteus:browser-action', listener); },
   onAddressFocus: handler => { const listener = () => handler(); ipcRenderer.on('proteus:focus-address', listener); return () => ipcRenderer.removeListener('proteus:focus-address', listener); },
+  onBrowserActivity: handler => {const listener=(_event,value)=>handler(value);ipcRenderer.on('proteus:browser-activity',listener);return()=>ipcRenderer.removeListener('proteus:browser-activity',listener);},
   onBrowserState: handler => { const listener = (_event, value) => handler(value); ipcRenderer.on('proteus:browser-state', listener); return () => ipcRenderer.removeListener('proteus:browser-state', listener); },
   onBrowserScroll: handler => { const listener=(_event,value)=>handler(value);ipcRenderer.on('proteus:browser-scroll',listener);return()=>ipcRenderer.removeListener('proteus:browser-scroll',listener); },
   onBrowserResize: handler => { const listener = () => handler(); ipcRenderer.on('proteus:browser-resize', listener); return () => ipcRenderer.removeListener('proteus:browser-resize', listener); }

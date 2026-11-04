@@ -1,3 +1,4 @@
+import {attachmentDates} from './attachment-dates.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
@@ -114,7 +115,7 @@ export class ChatAttachmentStore {
   bound(record, { chatId, deviceId, messageId, providerId }) {
     if (record.chatId !== identity(chatId, 'chat') || record.deviceId !== identity(deviceId, 'device') || record.messageId !== identity(messageId, 'message') || record.providerId !== identity(providerId, 'provider')) throw new Error('This attachment belongs to another chat, device, message or provider.');
   }
-  async begin({ chatId, deviceId, messageId, providerId, name, mediaType, size, sha256 } = {}) {
+  async begin({ chatId, deviceId, messageId, providerId, name, mediaType, size, sha256, createdAt, modifiedAt } = {}) {
     this.ensureOpen();
     chatId = identity(chatId, 'chat'); deviceId = identity(deviceId, 'device'); messageId = identity(messageId, 'message'); name = filename(name);
     if (!PROVIDERS.has(providerId)) throw new Error('Unsupported attachment provider.');
@@ -130,9 +131,10 @@ export class ChatAttachmentStore {
         staged.length >= MAX_PENDING || deviceStage.length >= MAX_PER_DEVICE ||
         staged.reduce((total, item) => total + item.size, 0) + size > MAX_PENDING_BYTES ||
         deviceStage.reduce((total, item) => total + item.size, 0) + size > MAX_PER_DEVICE_BYTES) throw new Error('Too many attachments are being prepared. Finish or remove one first.');
+    attachmentDates({createdAt,modifiedAt});
     const id = randomUUID(), file = path.join(this.root, id);
     const fd = fs.openSync(file, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | (fs.constants.O_NOFOLLOW || 0), 0o600);
-    const record = { id, path: file, fd, inode: fs.fstatSync(fd).ino, chatId, deviceId, messageId, providerId, name, mediaType, size, sha256, received: 0, nextIndex: 0, finished: false, expiresAt: this.clock() + TTL_MS };
+    const record = { ...attachmentDates({createdAt,modifiedAt}), id, path: file, fd, inode: fs.fstatSync(fd).ino, chatId, deviceId, messageId, providerId, name, mediaType, size, sha256, received: 0, nextIndex: 0, finished: false, expiresAt: this.clock() + TTL_MS };
     this.records.set(id, record); this.touchBatch(record);
     return { uploadId: id, chunkSize: CHUNK_BYTES, expiresAt: new Date(record.expiresAt).toISOString() };
   }
@@ -155,7 +157,7 @@ export class ChatAttachmentStore {
     const bytes = readStaged(record);
     if (bytes.length !== record.size || createHash('sha256').update(bytes).digest('hex') !== record.sha256 || !fileType(bytes, record.mediaType)) { this.remove(record); throw new Error('Attachment bytes did not match the declared file, type or digest.'); }
     record.finished = true; this.touchBatch(record);
-    return { attachmentId: record.id, name: record.name, mediaType: record.mediaType, size: record.size, sha256: record.sha256 };
+    return { attachmentId: record.id, name: record.name, mediaType: record.mediaType, size: record.size, sha256: record.sha256, ...attachmentDates(record) };
   }
   /** Rebind a finished, still-staged first-message file after the host creates its chat. */
   async claimDraft({ attachmentId, draftId, chatId, deviceId, messageId, providerId } = {}) {
@@ -167,14 +169,14 @@ export class ChatAttachmentStore {
     if (chatId.startsWith('draft:')) throw new Error('A created chat is required to claim an attachment.');
     this.verify(record);
     record.chatId = chatId;
-    return { attachmentId: record.id, name: record.name, mediaType: record.mediaType, size: record.size, sha256: record.sha256 };
+    return { attachmentId: record.id, name: record.name, mediaType: record.mediaType, size: record.size, sha256: record.sha256, ...attachmentDates(record) };
   }
   async resolve({ attachmentId, chatId, deviceId, messageId, providerId } = {}) {
     this.ensureOpen();
     const record = this.records.get(attachmentId); if (!record || !record.finished) throw new Error('Attachment is unavailable or expired.');
     this.bound(record, { chatId, deviceId, messageId, providerId });
     this.verify(record);
-    return { path: record.path, name: record.name, mediaType: record.mediaType, size: record.size, sha256: record.sha256 };
+    return { path: record.path, name: record.name, mediaType: record.mediaType, size: record.size, sha256: record.sha256, ...attachmentDates(record) };
   }
   verify(record) {
     const bytes = readStaged(record);
@@ -185,20 +187,20 @@ export class ChatAttachmentStore {
     this.ensureOpen();
     const record = this.records.get(attachmentId); if (!record || !record.finished) throw new Error('Attachment is unavailable or expired.');
     this.bound(record, { chatId, deviceId, messageId, providerId });
-    return { bytes: this.verify(record), name: record.name, mediaType: record.mediaType, size: record.size, sha256: record.sha256 };
+    return { bytes: this.verify(record), name: record.name, mediaType: record.mediaType, size: record.size, sha256: record.sha256, ...attachmentDates(record) };
   }
   async accept({ attachmentId, chatId, deviceId, messageId, providerId } = {}) {
     this.ensureOpen();
     const record = this.records.get(attachmentId); if (!record || !record.finished) throw new Error('Attachment is unavailable or expired.');
     this.bound(record, { chatId, deviceId, messageId, providerId }); this.verify(record);
-    if (record.accepted) return { attachmentId: record.id, name: record.name, mediaType: record.mediaType, size: record.size, sha256: record.sha256 };
+    if (record.accepted) return { attachmentId: record.id, name: record.name, mediaType: record.mediaType, size: record.size, sha256: record.sha256, ...attachmentDates(record) };
     const target = path.join(this.acceptedRoot, record.id), metadata = target + '.json';
-    const manifest = { id: record.id, chatId: record.chatId, deviceId: record.deviceId, messageId: record.messageId, providerId: record.providerId, name: record.name, mediaType: record.mediaType, size: record.size, sha256: record.sha256 };
+    const manifest = { id: record.id, chatId: record.chatId, deviceId: record.deviceId, messageId: record.messageId, providerId: record.providerId, name: record.name, mediaType: record.mediaType, size: record.size, sha256: record.sha256, ...attachmentDates(record) };
     fs.writeFileSync(metadata, JSON.stringify(manifest), { flag: 'wx', mode: 0o600 });
     try { fs.renameSync(record.path, target); fs.chmodSync(target, 0o400); }
     catch (error) { fs.rmSync(metadata, { force: true }); throw error; }
     record.path = target; record.accepted = true; record.expiresAt = Infinity;
-    return { attachmentId: record.id, name: record.name, mediaType: record.mediaType, size: record.size, sha256: record.sha256 };
+    return { attachmentId: record.id, name: record.name, mediaType: record.mediaType, size: record.size, sha256: record.sha256, ...attachmentDates(record) };
   }
   async release({ attachmentId, chatId, deviceId, messageId, providerId } = {}) {
     this.ensureOpen();

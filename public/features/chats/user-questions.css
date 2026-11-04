@@ -3,7 +3,7 @@
 .user-question-card{border-top:1px solid var(--line);padding:12px 0;margin-top:12px;overflow-wrap:anywhere}
 .user-question-card h4{margin:0 0 10px}.user-question-card form{display:grid;gap:8px}.user-question-card form>label{margin:0}
 .user-question-card textarea{display:block;width:100%;min-height:68px}.user-question-choices{display:flex;gap:8px;flex-wrap:wrap}.user-question-choices:empty{display:none}.user-question-card button{white-space:normal;max-width:100%}
-.user-question-footer{display:flex;align-items:center;flex-wrap:wrap;gap:6px 8px;min-width:0}.user-question-footer>button{margin-inline-start:auto;flex-shrink:0}
+.user-question-footer{display:flex;align-items:center;flex-wrap:wrap;gap:6px 8px;min-width:0}.user-question-actions{margin-inline-start:auto;display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px}.user-question-actions>button{flex-shrink:0}
 .user-question-footer .chat-attachment-picker{display:contents}.user-question-footer .attachment-controls{flex:0 0 auto}
 .user-question-footer .attachment-strip{order:-1;flex-basis:100%;margin:0}.user-question-footer .attachment-strip:empty{display:none}
 .remote-messages>.user-question-queue{position:sticky;top:0;z-index:1;max-height:35%;margin-bottom:12px}

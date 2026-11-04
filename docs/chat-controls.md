@@ -1,3 +1,20 @@
+## R20 — clear reviewed questions from the open queue
+
+Question cards add **Clear from queue** immediately left of **Send answer**. The owner persists
+review metadata separately from answer status, so the question disappears from the open queue
+across clients/restart while its original transcript card and unsent answer remain. The retained
+card can still be answered later through the normal owner/provider path. Clearing sends no answer,
+resolves no provider wait, cancels no work and grants no approval. Actual waits/attention remain
+accurate; this is not the existing terminal dismissal action. Answer delivery already in progress
+cannot be hidden by the button. Old paired owners omit the action until they advertise support.
+
+## Nov 2 — continuation controls
+
+The provider-supported active-time safeguard sits immediately above allowance continuation in
+shared Run details and native chat controls. Desktop, remote desktop and website bind the same
+versioned owner preference; native uses the advertised capability. Controls disable while a save
+is pending and restore the previous value on error. Existing real-chat preferences are unchanged.
+
 ## October 25 — Combined preview recovery and remote parity
 
 The combined review candidate shares local/remote permission controls and model/effort/context/

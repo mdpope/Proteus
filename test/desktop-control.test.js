@@ -76,3 +76,51 @@ test('required Peekaboo permission failures are detected even when the native re
 test('a backend response for another window never becomes an input observation',async()=>{
  const f=fixture();try{f.setReply(()=>({structuredContent:{pid:10,window_id:21},content:[{type:'text',text:'Synthetic wrong window'}]}));await assert.rejects(observe(f.broker),/did not confirm/);assert.equal(f.broker.observations.size,0);}finally{await f.broker.close();}
 });
+
+test('an exact closed-window refusal plus authoritative absence settles uncertainty without granting input',async()=>{
+ const f=fixture();try{
+  const id=JSON.parse((await observe(f.broker)).content[0].text).observationId;
+  await f.broker.handle({action:'call',tool:'click',arguments:{pid:10,window_id:20},observationId:id},'chat');
+  const closed={isError:true,content:[{type:'text',text:'window_id 20 is not a live window (closed, or the id is stale). Refusing other surfaces.'}]};
+  f.setReply(args=>args.name==='list_windows'?{structuredContent:{windows:[{pid:10,window_id:21}]}}:closed);
+  const result=await observe(f.broker);assert.equal(result.structuredContent.targetState,'closed');assert.equal(result.structuredContent.observationRequired,true);
+  assert.equal(f.broker.status().uncertainTarget,null);assert.equal(f.broker.observations.size,0);
+  await assert.rejects(f.broker.handle({action:'call',tool:'click',arguments:{pid:10,window_id:21},observationId:id},'chat'),/fresh observation/);
+  f.setReply(()=>({structuredContent:{pid:10,window_id:21},content:[]}));
+  const observed=await f.broker.handle({action:'call',tool:'get_window_state',arguments:{pid:10,window_id:21}},'chat');
+  await f.broker.handle({action:'call',tool:'click',arguments:{pid:10,window_id:21},observationId:JSON.parse(observed.content[0].text).observationId},'chat');
+ }finally{await f.broker.close();}
+});
+
+test('reuse, incomplete or denied discovery, transport loss and Stop cannot invent a closed-window settlement',async()=>{
+ for(const inventory of [
+  {structuredContent:{windows:[{pid:10,window_id:20}]}},
+  {structuredContent:{windows:[{pid:11,window_id:21}]}},
+  {structuredContent:{windows:[],partial:true}},
+  {structuredContent:{windows:[],truncated:true}},
+  {isError:true,content:[{type:'text',text:'Screen Recording permission denied'}]},
+  {content:[{type:'text',text:'Unknown result'}]},
+  null
+ ]){
+  const f=fixture();try{
+   const id=JSON.parse((await observe(f.broker)).content[0].text).observationId;
+   await f.broker.handle({action:'call',tool:'click',arguments:{pid:10,window_id:20},observationId:id},'chat');
+   await f.broker.stop('operator');assert.ok(f.broker.status().uncertainTarget);
+   f.setReply(args=>{if(args.name==='list_windows'){if(!inventory)throw Error('Lost inventory response');return inventory;}return {isError:true,structuredContent:{code:'window_id_not_found',pid:10,window_id:20},content:[]};});
+   if(!inventory)await assert.rejects(observe(f.broker),/Lost inventory/);else assert.equal((await observe(f.broker)).isError,true);
+   assert.ok(f.broker.status().uncertainTarget);assert.equal(f.broker.observations.size,0);
+   await assert.rejects(f.broker.handle({action:'call',tool:'get_window_state',arguments:{pid:10,window_id:21}},'chat'),/Stop this lease|uncertain target/);
+  }finally{await f.broker.close();}
+ }
+});
+
+test('discovery alone and unrelated missing-window text do not settle an uncertain input',async()=>{
+ const f=fixture();try{
+  const id=JSON.parse((await observe(f.broker)).content[0].text).observationId;
+  await f.broker.handle({action:'call',tool:'click',arguments:{pid:10,window_id:20},observationId:id},'chat');
+  f.setReply(()=>({structuredContent:{windows:[]},content:[]}));
+  await f.broker.handle({action:'call',tool:'list_windows',arguments:{pid:10}},'chat');assert.ok(f.broker.status().uncertainTarget);
+  f.setReply(()=>({isError:true,content:[{type:'text',text:'Window not found, maybe permission denied'}]}));
+  await observe(f.broker);assert.ok(f.broker.status().uncertainTarget);
+ }finally{await f.broker.close();}
+});

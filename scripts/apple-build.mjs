@@ -39,9 +39,11 @@ if (action === 'doctor') {
 const device = options['--device'] ? devices.find(item => item.udid === options['--device']) : devices.find(item => item.name.startsWith('iPhone'));
 if (!device) throw new Error('No matching available iOS simulator. Use doctor to list simulator identifiers.');
 const output = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-apple-'));
+// Reuse a caller-owned simulator compiler cache without reusing result/fixture receipts.
+const derivedData = process.env.PROTEUS_IOS_DERIVED_DATA || path.join(output, 'DerivedData');
 const resultPath = path.join(output, 'Tests.xcresult');
 const releaseMetadata=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
-const buildArgs = ['MARKETING_VERSION='+releaseMetadata.version,'PROTEUS_RELEASE_DATE='+(releaseMetadata.releaseDate||''),'-project', path.join(root, 'ios/Proteus.xcodeproj'), '-scheme', 'Proteus', '-destination', `platform=iOS Simulator,id=${device.udid}`, '-derivedDataPath', path.join(output, 'DerivedData'), '-parallel-testing-enabled', 'NO'];
+const buildArgs = ['MARKETING_VERSION='+releaseMetadata.version,'PROTEUS_RELEASE_DATE='+(releaseMetadata.releaseDate||''),'-project', path.join(root, 'ios/Proteus.xcodeproj'), '-scheme', 'Proteus', '-destination', `platform=iOS Simulator,id=${device.udid}`, '-derivedDataPath', derivedData, '-parallel-testing-enabled', 'NO'];
 if(action==='test')buildArgs.push('PROTEUS_APP_BUNDLE_IDENTIFIER=org.proteusapp.proteus.mobile-tests');
 if (process.env.PROTEUS_CLANG_PROBE_WORKAROUND === '1') {
   const compiler = exec('xcrun', ['--find', 'clang']).trim();
@@ -123,12 +125,12 @@ try {
   };
   await runBuild(buildArgs, 'xcodebuild.log');
   if (action === 'test') {
-    const appInfo=path.join(output,'DerivedData/Build/Products/Debug-iphonesimulator/Proteus.app/Info.plist');
+    const appInfo=path.join(derivedData,'Build/Products/Debug-iphonesimulator/Proteus.app/Info.plist');
     const testBundle=exec('/usr/libexec/PlistBuddy',['-c','Print :CFBundleIdentifier',appInfo]).trim();
     if(testBundle!=='org.proteusapp.proteus.mobile-tests')throw Error('Refusing to install native test fixtures into the normal simulator app.');
     // xcodebuild does not reliably forward arbitrary TEST_RUNNER_ variables to
     // UI runners. Bind each generated test target to this run's actual ports.
-    const products=path.join(output,'DerivedData/Build/Products');
+    const products=path.join(derivedData,'Build/Products');
     const runs=fs.readdirSync(products).filter(name=>name.endsWith('.xctestrun'));
     if(runs.length!==1)throw Error('Expected one generated native test run.');
     const file=path.join(products,runs[0]);

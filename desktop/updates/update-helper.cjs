@@ -33,7 +33,7 @@ async function ownerRequest(job,route,body){
  const response=await fetch(url.origin+route,{method:body?'POST':'GET',headers:{Authorization:'Bearer '+connection.token,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{}),signal:AbortSignal.timeout(10000)});
  const result=await response.json();if(!response.ok)throw Error(result.error||'Update owner request failed.');return result;
 }
-async function verifyLive(job,identity){let receipt;await until(async()=>{try{receipt=await ownerRequest(job,'/api/updates/recovery',{action:'verify',id:job.id,secret:job.secret});return receipt.identity?.sourceFingerprint===identity.sourceFingerprint&&receipt.identity?.installation===job.installation&&receipt.identity?.home===job.home&&receipt.identity?.barrier===true;}catch{return false;}},60000,'updated host identity and recovery barrier');return receipt;}
+async function verifyLive(job,identity){return require('./recovery-verification.cjs').verifyRecovery(job,identity,{request:ownerRequest});}
 function launch(job){const executable=require('./update-package.cjs').packagePaths(job.installation).executable,log=fs.openSync(path.join(path.dirname(job.file),'launch.log'),'a',0o600),child=spawn(executable,['--user-data-dir='+job.browserHome],{detached:true,stdio:['ignore',log,log],env:environment(job.home,false,{PROTEUS_UPDATE_JOB:job.file})});child.unref();fs.closeSync(log);return child;}
 function retire(file,job,{inspect=inspectPackage}={}){
  const inventory=recoveryPolicy(file,job),rows=inventory.generations.slice().sort((a,b)=>a.at.localeCompare(b.at));

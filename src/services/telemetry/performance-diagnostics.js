@@ -7,7 +7,7 @@ import { performance } from 'node:perf_hooks';
 export const performancePhaseNames = Object.freeze([
   'scheduler.tick', 'scheduler.permissions', 'scheduler.claim', 'scheduler.list',
   'context.get', 'run.persist', 'http.serialize', 'http.state.assemble', 'http.state.transfer', 'http.state.project', 'desktop.session.save',
-  'browser.cookies.encrypt', 'browser.profiles.reconcile', 'remote.state',
+  'browser.cookies.encrypt', 'browser.profiles.reconcile', 'browser.state.project', 'browser.state.send', 'browser.activity.send', 'remote.send.encrypt', 'remote.send.transport', 'remote.state',
   'remote.publish', 'remote.publish.serialize', 'remote.run.assemble',
   'remote.run.serialize', 'remote.sync', 'peer.heartbeat', 'peer.cache.serialize',
   'peer.cache.encrypt', 'peer.cache.disk',
@@ -16,6 +16,7 @@ export const performancePhaseNames = Object.freeze([
   'attachments.cleanup', 'activity.persist',
 ]);
 const allowed = new Set(performancePhaseNames);
+const measuredReplies=new Set(['sync','tabs.get','tabs.history','projects.get','context.get','chat.get','provider.status','notifications.list']);
 const ring = (values, value, limit) => { values.push(value); if (values.length > limit) values.shift(); };
 const rounded = value => Math.round(Math.max(0, Math.min(86_400_000, Number.isFinite(value) ? value : 0)) * 100) / 100;
 const MAX_FILE_BYTES = 128 * 1024;
@@ -96,6 +97,40 @@ export class PerformanceDiagnostics {
     const counts=Object.fromEntries(['runs','candidates','skipped','probed','rejected','globalEnumerations','batches'].map(key=>[key,Math.max(0,Math.min(1000000,Math.trunc(Number(values[key])||0)))]));
     ring(this.integrationBatches,counts,32);this.dirty=true;
   }
+  // Projection sizes explain large snapshots; these are plaintext JSON byte
+  // estimates, separately labeled from actual encrypted transport counters.
+  stateShape(state) {
+    if(!this.enabled||this.closed||!state||typeof state!=='object')return;
+    const now=this.clock.monotonic();if(now-(this.stateShapeAt??-Infinity)<10000)return;
+    this.stateShapeAt=now;
+    const keys=['context','workspaceProjects','runs','schedules','attention','providerStatus','providerStatuses'];
+    const size=value=>Buffer.byteLength(JSON.stringify(value)??'');
+    this.remoteStateShape={at:this.clock.wall(),plaintextBytes:size(state),fields:Object.fromEntries(keys.map(key=>[key,size(state[key])]))};
+    this.dirty=true;
+  }
+  // Aggregate wire metadata only; callers cannot supply payloads or labels.
+  transport({direction,bytes=0,buffered=0,closeCode,congested=false,kind}={}) {
+    if(!this.enabled||this.closed)return;
+    this.remoteTransport ??= {receivedPackets:0,receivedBytes:0,sentPackets:0,sentBytes:0,maxPacketBytes:0,maxBufferedBytes:0,congestionCount:0,closes:{},windows:[]};
+    const value=this.remoteTransport, size=Math.max(0,Math.min(16_000_000,Math.trunc(Number(bytes)||0))), now=this.clock.wall();
+    if(direction==='receive'||direction==='send') {
+      const prefix=direction==='receive'?'received':'sent';value[prefix+'Packets']++;value[prefix+'Bytes']+=size;value.maxPacketBytes=Math.max(value.maxPacketBytes,size);
+      const bucket=Math.floor(now/10000)*10000;
+      let window=value.windows.at(-1);if(window?.at!==bucket){window={at:bucket,receivedBytes:0,sentBytes:0,receivedPackets:0,sentPackets:0};ring(value.windows,window,12);}
+      window[prefix+'Bytes']+=size;window[prefix+'Packets']++;
+      if(direction==='send'){
+        const reply=typeof kind==='string'&&kind.startsWith('reply:')?(measuredReplies.has(kind.slice(6))?kind.slice(6):'other'):null;
+        const category=reply?'reply':['state','run','run.changed','tabs','reply'].includes(kind)?kind:'other';
+        for(const target of [value,window]){target.sentKinds??={};const row=target.sentKinds[category]??={packets:0,bytes:0};row.packets++;row.bytes+=size;
+          if(reply){target.sentReplies??={};const method=target.sentReplies[reply]??={packets:0,bytes:0};method.packets++;method.bytes+=size;}
+        }
+      }
+    }
+    value.maxBufferedBytes=Math.max(value.maxBufferedBytes,Math.max(0,Math.min(32_000_000,Number(buffered)||0)));
+    if(congested)value.congestionCount++;
+    if(Number.isInteger(closeCode)&&closeCode>=1000&&closeCode<=4999){const code=[1000,1001,1006,1008,1009,1012,1013].includes(closeCode)?String(closeCode):'other';value.closes[code]=(value.closes[code]||0)+1;}
+    this.dirty=true;
+  }
   snapshot() {
     const phases = [...this.metrics].map(([key, values]) => {
       const split = key.indexOf(':'), totalMs = values.reduce((sum, value) => sum + value, 0);
@@ -105,6 +140,8 @@ export class PerformanceDiagnostics {
     return { version: 1, enabled: this.enabled, started: this.started, closed: this.closed, createdAt: this.createdAt,
       observedAt: this.clock.wall(), uptimeMs: rounded(this.clock.monotonic() - this.startedMono),
       limits: { phaseSamples: 128, slowPhases: 64, eventLoop: 32, longEventLoop: 16, fileBytes: MAX_FILE_BYTES },
+      remoteTransport: this.remoteTransport ? structuredClone(this.remoteTransport) : null,
+      remoteStateShape: this.remoteStateShape ? structuredClone(this.remoteStateShape) : null,
       phases, integrationBatches: structuredClone(this.integrationBatches), slowPhases: structuredClone(this.slowPhases), eventLoop: structuredClone(this.eventLoop), longEventLoop: structuredClone(this.longEventLoop),
       activeAsyncPhases: [...this.active].map(([name, value]) => ({ name, count: value.count, elapsedMs: rounded(this.clock.monotonic() - value.startMono) })),
       persistence: { failures: this.writeFailures } };

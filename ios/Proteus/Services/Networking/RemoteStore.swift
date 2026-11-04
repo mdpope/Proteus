@@ -1,6 +1,18 @@
+import CryptoKit
 import Observation
 import Foundation
 import Combine
+
+// Relay ceilings are 100 packets / 32 MB per ten seconds. Reserve headroom
+// for authentication and retain only a bounded sliding window of wire sizes.
+struct NativeSendBudget {
+    var sent: [(at: Double, bytes: Int)] = []
+    mutating func delay(bytes: Int, now: Double) -> Double {
+        sent.removeAll { now - $0.at >= 10 }
+        return sent.count >= 80 || sent.reduce(0, { $0 + $1.bytes }) + bytes > 24_000_000 ? max(0.001, (sent.first?.at ?? now) + 10 - now) : 0
+    }
+    mutating func record(bytes: Int, now: Double) { sent.append((now, bytes)) }
+}
 
 /// Optional metadata from the authenticated host state. Older protocol-1 hosts need no upgrade.
 struct RemoteHostInfo: Equatable {
@@ -47,6 +59,8 @@ struct RemoteHostInfo: Equatable {
     var runtimeClockOffset: TimeInterval?
     var error: String?
     var selectedChat: String?
+    @ObservationIgnored private var chatVisibilityManaged = false
+    @ObservationIgnored private var visibleChat: (id: String, token: UUID)?
     var paired = false
     // Draft edits belong to their editor, not to every view observing host state.
     // Keep the in-memory value current without invalidating the loaded transcript;
@@ -74,11 +88,16 @@ struct RemoteHostInfo: Equatable {
     private var readTask: Task<Void, Never>?
     private var retryTask: Task<Void, Never>?
     private var sendTask: Task<Void, Error>?
+    private var sendBudget = NativeSendBudget()
+    private var sentRequests = Set<String>()
+    private var capacityWaiter: CheckedContinuation<Void, Never>?
     private var active = true
     private var generation = UUID()
     private var waiting: [String: CheckedContinuation<JSON, Error>] = [:]
     private var timeouts: [String: Task<Void, Never>] = [:]
     private var pendingCommands: [String: JSON] = [:]
+    var onContentTabsChanged: ((JSON) -> Void)?
+    private(set) var authenticationGeneration = 0
     var pendingCommandCount: Int { pendingCommands.count }
     private var cacheTimer: Task<Void, Never>?
     private let cacheWriter = DispatchQueue(label: "com.proteus.remote-cache", qos: .utility)
@@ -134,12 +153,14 @@ struct RemoteHostInfo: Equatable {
     /// Downloads a file kept with a chat on its owner into a private temporary copy.
     func attachmentFile(chatID: String, sha256: String, name: String) async throws -> URL {
         var data = Data(), offset = 0
+        let host = connection?.hostId
         for _ in 0..<400 {
             let page = try await request("chat.attachments.get", ["id": .string(chatID), "sha256": .string(sha256), "offset": .number(Double(offset))])
             guard let chunk = Data(base64Encoded: page["dataBase64"].string) else { throw RemoteError(message: "The attachment could not be read.") }
-            data.append(chunk); offset += chunk.count
+            guard connection?.hostId == host, data.count + chunk.count <= NativeAttachmentBudget.maxFileBytes else { throw RemoteError(message: "The attachment destination changed or the file exceeds 8 MB.") }; data.append(chunk); offset += chunk.count
             if page["done"].bool || chunk.isEmpty { break }
         }
+        guard SHA256.hash(data: data).map({ String(format: "%02x", $0) }).joined() == sha256 else { throw RemoteError(message: "The saved attachment bytes changed.") }
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("chat-attachments/" + sha256, isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let safe = name.replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: ":", with: "_").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -201,6 +222,8 @@ struct RemoteHostInfo: Equatable {
         let host = connection?.hostId ?? invite?["hostId"].string ?? ""
         guard let url = URL(string: "\(relay)/socket?role=client&host=\(host)") else { return }
         generation = UUID(); let current = generation
+        sentRequests = []; capacityWaiter?.resume(); capacityWaiter = nil
+        sendBudget = NativeSendBudget()
         incoming = 0; outgoing = 0; challenge = ""; prefix = ""; status = "Connecting…"
         // Hosts and the relay accept 8 MB packets. URLSession defaults to 1 MiB and drops the socket
         // ("Message too long") once a real host's state grows past it, leaving the device offline.
@@ -216,9 +239,9 @@ struct RemoteHostInfo: Equatable {
                     try await receive(Self.decoded(data))
                 }
             } catch {
-                if generation == current {
+                if generation == current && self.socket === task {
                     #if DEBUG
-                    print("Proteus transport: \(error.localizedDescription)")
+                    print("Proteus transport: \(error.localizedDescription); state=\(task.state.rawValue), closeCode=\(task.closeCode.rawValue), active=\(active), pending=\(pendingCommands.count)")
                     #endif
                     lost()
                 }
@@ -227,7 +250,14 @@ struct RemoteHostInfo: Equatable {
     }
     private func raw(_ packet: JSON) async throws {
         guard let socket else { throw RemoteError(message: "\(displayName) is disconnected.") }
-        try await socket.send(.data(JSONEncoder().encode(packet)))
+        do { try await socket.send(.data(JSONEncoder().encode(packet))) }
+        catch {
+            #if DEBUG
+            print("Proteus wire send failure: state=\(socket.state.rawValue), closeCode=\(socket.closeCode.rawValue), paired=\(paired), active=\(active), pending=\(pendingCommands.count), recentPackets=\(sendBudget.sent.count)")
+            #endif
+            if self.socket === socket { lost() }
+            throw error
+        }
     }
     private func authenticate() async throws {
         guard let connection else { return }
@@ -262,10 +292,12 @@ struct RemoteHostInfo: Equatable {
             guard let connection else { return }
             let ready = try RemoteCrypto.open(packet["box"].string, key: connection.key, aad: "\(prefix):ready")
             guard ready["protocol"].int == 1 else { throw RemoteError(message: "Unsupported remote protocol.") }
+            authenticationGeneration += 1
             connected = true; status = "Connected"; error = nil
             onConnected?()
             // Separate task: the receive loop must remain free to deliver these responses.
-            Task { await refresh(); if let selectedChat { await openChat(selectedChat) }; await retryPending() }
+            let retainedCommands = pendingCommands
+            Task { await refresh(); if let selectedChat { await openChat(selectedChat) }; await retryPending(retainedCommands) }
         case "data":
             guard let connection, packet["seq"].int == incoming + 1 else { throw RemoteError(message: "Invalid message sequence.") }
             let seq = packet["seq"].int
@@ -277,6 +309,7 @@ struct RemoteHostInfo: Equatable {
                 suspend(reason: "\(displayName) authenticated revocation of this device."); status = "Access revoked by \(displayName)"; onAuthenticatedRevocation?(); error = "\(displayName) revoked access. Your cached history remains available. Add a new pairing from Connections to reconnect."
             } else if value["type"].string == "result" {
                 let id = value["id"].string
+                sentRequests.remove(id); capacityWaiter?.resume(); capacityWaiter = nil
                 timeouts.removeValue(forKey: id)?.cancel()
                 pendingCommands.removeValue(forKey: id)
                 if let continuation = waiting.removeValue(forKey: id) {
@@ -286,6 +319,7 @@ struct RemoteHostInfo: Equatable {
             } else if value["type"].string == "event" {
                 cursor = value["cursor"].string
                 if value["event"].string == "state" { updateState(value["data"]) }
+                if value["event"].string == "tabs" { onContentTabsChanged?(value["data"]) }
                 if value["event"].string == "run" { mergeChat(value["data"]) }
                 if value["event"].string == "chat.lifecycle" { applyLifecycle(value["data"]); Task { await refresh() } }
                 saveCache()
@@ -302,23 +336,47 @@ struct RemoteHostInfo: Equatable {
         let task = Task { @MainActor in
             _ = try? await previous?.value
             guard current == self.generation, self.connected else { throw RemoteError(message: "Connection changed.") }
+            while self.sentRequests.count >= 4 {
+                await withCheckedContinuation { self.capacityWaiter = $0 }
+                guard current == self.generation, self.connected, self.pendingCommands[command["id"].string] != nil else { throw RemoteError(message: "Connection changed or request expired before transmission.") }
+            }
+            let estimatedBytes = ((try JSONEncoder().encode(command).count + 30) * 4 + 2) / 3 + 160
+            guard estimatedBytes <= 8_000_000 else { throw RemoteError(message: "This request exceeds the connection packet limit.") }
+            while true {
+                let delay = self.sendBudget.delay(bytes: estimatedBytes, now: ProcessInfo.processInfo.systemUptime)
+                if delay == 0 { break }
+                try await Task.sleep(for: .seconds(delay))
+                guard current == self.generation, self.connected, self.pendingCommands[command["id"].string] != nil else { throw RemoteError(message: "Connection changed or request expired before transmission.") }
+            }
+            guard self.pendingCommands[command["id"].string] != nil else { throw RemoteError(message: "Request expired before transmission.") }
             self.outgoing += 1; let seq = self.outgoing
             let box = try RemoteCrypto.seal(command, key: connection.key, aad: "\(self.prefix):client:\(seq)")
+            self.sentRequests.insert(command["id"].string)
+            self.sendBudget.record(bytes: estimatedBytes, now: ProcessInfo.processInfo.systemUptime)
             try await self.raw(.object(["type": .string("data"), "seq": .number(Double(seq)), "box": .string(box)]))
         }
         sendTask = task; try await task.value
     }
     func request(_ method: String, _ args: [String: JSON] = [:], requestID: String? = nil, issuedAt: String? = nil) async throws -> JSON {
         guard active, connected else { throw RemoteError(message: "\(displayName) is offline. Your draft is preserved; reconnect before sending.") }
+        guard waiting.count < 128 else { throw RemoteError(message: "The connection is busy. Wait for current requests to finish.") }
         let id = requestID ?? UUID().uuidString.lowercased()
         guard UUID(uuidString: id) != nil, waiting[id] == nil else { throw RemoteError(message: "This action is already awaiting confirmation.") }
         let formatter = ISO8601DateFormatter(); formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        var args = args
+        if ["chat.start", "chat.send", "chat.reply", "chat.answer-question", "chat.resume"].contains(method) && args["inputOrigin"] == nil {
+            let key = "proteus.mobile.window-id"
+            let windowID = UserDefaults.standard.string(forKey: key) ?? UUID().uuidString
+            UserDefaults.standard.set(windowID, forKey: key)
+            args["inputOrigin"] = .object(["client": .string("mobile"), "windowId": .string(windowID)])
+        }
         let command: JSON = .object(["id": .string(id), "method": .string(method), "args": .object(args), "issuedAt": .string(issuedAt ?? formatter.string(from: Date()))])
         return try await withCheckedThrowingContinuation { continuation in
             waiting[id] = continuation; pendingCommands[id] = command
             timeouts[id] = Task {
                 try? await Task.sleep(for: .seconds(75)); guard !Task.isCancelled else { return }
                 if let continuation = waiting.removeValue(forKey: id) { continuation.resume(throwing: RemoteError(message: "The host did not confirm the action. Refresh before trying again.")) }
+                sentRequests.remove(id); capacityWaiter?.resume(); capacityWaiter = nil
                 pendingCommands.removeValue(forKey: id); timeouts.removeValue(forKey: id)
             }
             let requestGeneration = generation
@@ -328,9 +386,9 @@ struct RemoteHostInfo: Equatable {
             }
         }
     }
-    private func retryPending() async {
+    private func retryPending(_ retained: [String: JSON]) async {
         let retryGeneration = generation
-        for (id, command) in pendingCommands {
+        for (id, command) in retained {
             guard generation == retryGeneration, pendingCommands[id] != nil else { return }
             try? await transmit(command)
         }
@@ -424,10 +482,34 @@ struct RemoteHostInfo: Equatable {
         }
         saveCache()
     }
+    func showChat(_ id: String, token: UUID) async -> Bool {
+        chatVisibilityManaged = true; visibleChat = (id, token); selectedChat = id
+        return await openChat(id)
+    }
+    func hideChat(_ id: String, token: UUID) async {
+        guard visibleChat?.id == id, visibleChat?.token == token else { return }
+        visibleChat = nil
+        if selectedChat == id { selectedChat = nil }
+        guard connected, state["capabilities"].array.contains(.string("chat.watch.v1")) else { return }
+        // This controls only this transport's presentation subscription. It never
+        // cancels the chat, deletes its cache, or changes pending command identity.
+        do { _ = try await request("chat.watch", ["id": .string(id), "watch": .string("none"), "watchToken": .string(token.uuidString)]) } catch { }
+    }
     @discardableResult func openChat(_ id: String) async -> Bool {
-        selectedChat = id
-        guard connected else { return false } // Offline opening is a cache read; it never sends or changes hosts.
-        do { mergeChat(try await request("chat.get", ["id": .string(id)])); saveCache(); return true } catch { self.error = error.localizedDescription; return false }
+        let watching = !chatVisibilityManaged || visibleChat?.id == id
+        if watching { selectedChat = id }
+        guard connected else { return false }
+        let delta = state["capabilities"].array.contains(.string("chat.delta.v1"))
+        let watch = watching ? (delta ? "delta" : "full") : "none"
+        var arguments: [String: JSON] = ["id": .string(id), "watch": .string(watch)]
+        if watching, let visibleChat, state["capabilities"].array.contains(.string("chat.watch.v1")) { arguments["watchToken"] = .string(visibleChat.token.uuidString) }
+        do { mergeChat(try await request("chat.get", arguments)); saveCache(); return true } catch { self.error = error.localizedDescription; return false }
+    }
+    /// History, previews and action preflight must not change the visible view's
+    /// subscription or silently promote its incremental stream back to full pages.
+    func readChat(_ arguments: [String: JSON]) async throws -> JSON {
+        var value = arguments; value["watch"] = .string("none")
+        return try await request("chat.get", value)
     }
     func recoverChat(_ run: JSON, action: String, expectedFailureEventAt: JSON) async throws -> JSON {
         let id = run["id"].string
@@ -436,7 +518,7 @@ struct RemoteHostInfo: Equatable {
             // Only this explicit old-owner rejection permits the equivalent
             // manual continuation. A timeout never falls through to another send.
             guard action == "continue", ["manual", "scheduled", "schedule"].contains(run["trigger"].string), let rejection = error as? RemoteError, rejection.message.contains("Open an ordinary chat before continuing.") else { throw error }
-            let fresh = try await request("chat.get", ["id": .string(id), "watch": .string("summary")])
+            let fresh = try await readChat(["id": .string(id)])
             let deliveryID = "continue_" + id + "_" + expectedFailureEventAt.string.filter { $0 >= "0" && $0 <= "9" }
             if fresh["events"].array.contains(where: { $0["data"]["delivery"]["id"].string == deliveryID }) { return .object(["runId": .string(id)]) }
             guard ["failed", "interrupted"].contains(fresh["status"].string), fresh["archivedAt"].string.isEmpty, fresh["pending"] == .null, fresh["failureEventAt"] == expectedFailureEventAt, fresh["providerSessionId"] == run["providerSessionId"], fresh["schedule"]["provider"] == run["schedule"]["provider"] else { throw RemoteError(message: "This remote chat changed. Refresh before continuing.") }
@@ -458,7 +540,10 @@ struct RemoteHostInfo: Equatable {
         if let observed = ProviderAllowance.date(value["observedAt"].string) { runtimeClockOffset = observed.timeIntervalSinceNow }
         let id = value["id"].string
         guard !id.isEmpty else { return }
-        guard let old = chats[id] else { chats[id] = value; return }
+        if chats[id] == nil && value["eventPatches"] == .null { chats[id] = value; return }
+        // A push may beat its initial chat.get response. Retain its indexed
+        // patches now so that the older full response cannot overwrite them.
+        let old = chats[id] ?? .object(["events": .array([]), "eventCount": .number(0)])
         // Older paged replies may still add history but cannot replace current
         // status, selection-related metadata, questions or streaming content.
         let incomingAt = ProviderAllowance.date(value["observedAt"].string) ?? ProviderAllowance.date(value["updatedAt"].string) ?? .distantPast
@@ -468,6 +553,14 @@ struct RemoteHostInfo: Equatable {
         for page in old["retainedHistory"].array + (incomingIsCurrent ? [old, value] : [value, old]) {
             for (index, event) in page["events"].array.enumerated() { events[page["eventStart"].int + index] = event }
         }
+        if incomingIsCurrent {
+            for patch in value["eventPatches"].array {
+                guard case .number(let index) = patch["index"], index.isFinite, index >= 0,
+                      index.rounded(.down) == index, index < Double(value["eventCount"].int),
+                      patch["event"] != .null else { return }
+                events[Int(index)] = patch["event"]
+            }
+        }
         var pages: [(start: Int, events: [JSON])] = []
         for key in events.keys.sorted() {
             if let last = pages.last, last.start + last.events.count == key { pages[pages.count - 1].events.append(events[key]!) }
@@ -475,6 +568,7 @@ struct RemoteHostInfo: Equatable {
         }
         let latest = pages.popLast() ?? (start: 0, events: [])
         var merged = (incomingIsCurrent ? value : old).object
+        merged.removeValue(forKey: "eventPatches")
         merged["events"] = .array(latest.events)
         merged["eventStart"] = .number(Double(latest.start)); merged["earlier"] = merged["eventStart"]
         merged["retainedHistory"] = .array(pages.map { .object(["eventStart": .number(Double($0.start)), "events": .array($0.events)]) })
@@ -506,13 +600,16 @@ struct RemoteHostInfo: Equatable {
             usage["error"] = .string("Usage could not be refreshed from \(displayName)."); snapshot["providerUsage"] = .object(usage); state = .object(snapshot)
         }
     }
+    // A visible owner-bound project may outlive a different computer selection.
+    // Resume only an explicitly suspended owner; leave reconnect backoff alone.
+    func resumeIfSuspended() { guard !active else { return }; activity(true) }
     func activity(_ isActive: Bool) { active = isActive; if active { connect() } else { flushCache(); disconnect() } }
     private func lost() {
         socket?.cancel(with: .goingAway, reason: nil); socket = nil; connected = false; status = paired ? "\(displayName) offline · reconnecting" : "Pairing connection lost"
         if active && (paired || invite != nil) { retryTask?.cancel(); retryTask = Task { try? await Task.sleep(for: .seconds(3)); if !Task.isCancelled { connect() } } }
     }
-    func disconnect() { generation = UUID(); readTask?.cancel(); retryTask?.cancel(); socket?.cancel(with: .goingAway, reason: nil); socket = nil; connected = false; status = paired ? "Offline · cached history" : "Not paired" }
-    func forget() { active = false; suspend(); if legacyCredentials { DeviceKeychain.clear() }; connection = nil; invite = nil; paired = false; state = .null; chats = [:]; allRuns = []; allRunOffset = 0; drafts = [:]; draftRevision &+= 1; selectedChat = nil; cursor = ""; cacheTimer?.cancel(); removeCache(); for c in waiting.values { c.resume(throwing: RemoteError(message: "Device forgotten.")) }; waiting.removeAll(); pendingCommands.removeAll(); timeouts.values.forEach { $0.cancel() }; timeouts.removeAll() }
+    func disconnect() { sentRequests = []; capacityWaiter?.resume(); capacityWaiter = nil; generation = UUID(); readTask?.cancel(); retryTask?.cancel(); socket?.cancel(with: .goingAway, reason: nil); socket = nil; connected = false; status = paired ? "Offline · cached history" : "Not paired" }
+    func forget() { active = false; suspend(); if legacyCredentials { DeviceKeychain.clear() }; connection = nil; invite = nil; paired = false; state = .null; chats = [:]; allRuns = []; allRunOffset = 0; drafts = [:]; draftRevision &+= 1; selectedChat = nil; visibleChat = nil; chatVisibilityManaged = false; cursor = ""; cacheTimer?.cancel(); removeCache(); for c in waiting.values { c.resume(throwing: RemoteError(message: "Device forgotten.")) }; waiting.removeAll(); pendingCommands.removeAll(); timeouts.values.forEach { $0.cancel() }; timeouts.removeAll() }
     // A host switch never leaves a retry behind. Commands already accepted by the host continue there.
     func suspend(reason: String = "Computer selection changed. An unconfirmed action may have reached that computer; refresh its history before retrying.") {
         flushCache(); active = false; disconnect(); sendTask?.cancel(); sendTask = nil
@@ -745,6 +842,10 @@ struct PairingCompletion: Equatable {
         guard destinations.contains(where: { $0.id == id }), let credential = DeviceKeychain.load(hostID: id, service: service), credential.hostId == id else { return nil }
         let remote = RemoteStore(connection: credential, cacheRoot: cacheRoot(id), legacyCredentials: false)
         stores[id] = remote; observeHostName(remote, id: id); return remote
+    }
+    func activateVisibleOwner(_ id: String) {
+        guard active else { return }
+        remote(for: id)?.resumeIfSuspended()
     }
     func refreshAll() async {
         for destination in destinations { if let remote = remote(for: destination.id) { remote.activity(active); if remote.connected { await remote.refresh() } } }

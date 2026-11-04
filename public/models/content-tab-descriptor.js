@@ -2,6 +2,11 @@
 // Several window-local view IDs can represent one owner descriptor. Count that
 // identity once when comparing order with a deduplicated synchronization snapshot.
 export const contentTabOrder=ids=>[...new Set(ids.filter(Boolean))];
+// Saved renderer checkpoints must retain the document's original chat binding,
+// including after its presentation moves into a project or Team surface.
+export function documentSessionMetadata(tab){
+ return {file:tab.markdown?.file||tab.file,...(tab.associationChatId?{associationChatId:tab.associationChatId}:{})};
+}
 export function windowContentTabId(tab){
  if(['run','remote-run'].includes(tab.type))return 'chat:'+(tab.runId||tab.chatId||(tab.contentTabId?.startsWith('chat:')?tab.contentTabId.slice(5):tab.id.replace(/^chat:/,'')));
  if(tab.type==='terminal')return 'terminal:'+tab.terminal?.id;
@@ -45,6 +50,7 @@ export function normalizeContentTabDescriptor(value){
   Object.assign(tab,contentTabMetadata(value));
   const customTitle=contentTabTitle(value.customTitle);if(customTitle)tab.customTitle=customTitle;
   if(tab.type==='browser'){
+    if(value.setup?.kind==='chat'||value.setup?.kind==='internet')tab.setup={kind:value.setup.kind};
     if(value.profileId&&value.profileId!=='default')tab.profileId=value.profileId;
     tab.url=value.url?(safeContentTabURL(value.url)??value.url):'';
     const history=normalizeContentTabHistory(value.history);

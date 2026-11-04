@@ -1,3 +1,8 @@
+import {ScheduleControl} from './services/scheduling/schedule-control.js';
+import {clearQuestionFromQueue} from './services/chats/user-questions.js';
+import {localInputOrigin} from './services/chats/input-origin.js';
+import {attachmentDates} from './services/chats/attachment-dates.js';
+import {attachmentPrompt} from './services/chats/attachment-prompt.js';
 import {resolveScheduleContext} from './services/scheduling/schedule-context.js';
 import { StateProjectionClient } from './services/state/state-projection-client.js';
 import { StateResponseCache } from './services/state/state-response-cache.js';
@@ -18,7 +23,7 @@ import { hostPlatformMetadata } from './shared/host-platform.js';
 import {TabManagement} from './services/workspaces/tab-management.js';
 import {ChatControl} from './services/chats/chat-control.js';
 import { PerformanceDiagnostics } from './services/telemetry/performance-diagnostics.js';
-import {BrowserHistory,browserHistorySettings} from './services/browser/browser-history.js';
+import {BrowserHistory,browserHistorySettings,historyWithSavedIcons} from './services/browser/browser-history.js';
 import {BrowserProfiles} from './services/browser/browser-profiles.js';
 import { SessionProvider } from './providers/session-provider.js';
 import { IntegrationHealth } from './services/integrations/integrations.js';
@@ -96,6 +101,7 @@ async function body(req, maxBytes = 2_000_000) {
 }
 
 export async function startServer({ home = defaultHome(), port = 4317, providers, browser, openExternal, timers = true, withSeed = true, background = false, lifeOptions = {}, desktopPreview = false, updateRecovery=false } = {}) {
+  async function sendHumanMessage(...args){const result=await engine.send(...args);await service.sharedDrafts?.clearSent({kind:'reply',id:args[0]},args[1]).catch(()=>{});return result;}
   const previewCodexHome = desktopPreview ? desktopPreviewCodexHome(home, desktopPreview.codexHome) : null;
   // Validate the access boundary before starting workers, providers or network owners.
   const computerAccess=new ComputerAccess(home);
@@ -211,7 +217,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   function readChatAttachment(chatId, sha256){
     const run = engine.getRun(chatId), reference = run.events.flatMap(event => event.role === 'user' ? event.data?.attachments || [] : []).find(item => item.sha256 === sha256);
     if (!reference) throw new Error('Choose an attachment from this chat.');
-    return { bytes: attachments.history(run.id, sha256), name: String(reference.name || 'attachment'), mediaType: String(reference.mediaType || 'application/octet-stream') };
+    return { bytes: attachments.history(run.id, sha256), name: String(reference.name || 'attachment'), mediaType: String(reference.mediaType || 'application/octet-stream'),...attachmentDates(reference) };
   }
   function desktopSetupPrompt(status,missing){
     return `Help me set up native desktop control for Proteus on this ${status.platform==='darwin'?'Mac':status.platform} computer.\n`+
@@ -237,11 +243,13 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
     engine.resume(run.id, failure.retryPrompt || 'Retry the previous request.');
     return { ok: true, runId: run.id };
   }
-  async function buildChatSchedule(value){
+  async function buildChatSchedule(value,{attachmentOnly=false}={}){
+    let requestedMcpServers=value.mcpServers;
     const defaults=settings.get();
     const updateCoordinator=value.purpose==='update',buildCoordinator=value.purpose==='build';
     if(updateCoordinator&&value.chatType==='internet')throw Error('Update coordinators require an ordinary unassigned chat.');
     if(updateCoordinator){
+      requestedMcpServers={};
       const {updateCoordinatorConfiguration,updateCoordinatorPrompt}=await import('./services/updates/update-coordinator.js');
       value={...value,reasoningEffort:'',contextTier:'default',serviceTier:'',...await updateCoordinatorConfiguration(defaults,catalogs),workspaceId:null,projectId:null,includeDefaults:false,selectedIds:[],agentId:null,skillDirectories:[],mcpServers:{},workspace:defaults.workspace,prompt:updateCoordinatorPrompt(value.prompt||'Check and install the explicitly requested release after required validation.')};
     }
@@ -254,6 +262,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
     }
     if(value.workspaceId){ const profile = context.scope(value.workspaceId); value = {...profile.defaults,...value}; }
     if(value.chatType==='internet'){
+      requestedMcpServers={};
       const provider=value.provider,configured=defaults.internetSearches?.[provider];
       if(!configured?.model)throw new Error('Configure Internet Searches for this provider in Engine Room first.');
       const catalog=await catalogs[provider]?.get(),model=catalog?.models?.find(m=>m.id===configured.model);
@@ -264,7 +273,8 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
     const snapshot=context.capture({workspaceId:value.workspaceId,workspace:value.workspace||(!value.workspaceId?defaults.workspace:undefined),selectedIds:value.selectedIds,agentId:value.agentId,includeDefaults:value.includeDefaults});
     if(updateCoordinator)Object.assign(snapshot,{workspaceId:null,workspaceName:null,workspace:structuredClone(defaults.workspace),baseWorkspace:structuredClone(defaults.workspace),includeDefaults:false,selectedIds:[],agentId:null,entries:[]});
     const chatTitle=typeof value.name==='string'?value.name.trim():'';
-    return validateSchedule({schemaVersion:1,id:`chat-${Date.now()}-${randomBytes(4).toString('hex')}`,name:chatTitle||'Workspace chat',chatType:value.chatType==='internet'?'internet':'user',chatTitleManual:!!chatTitle,...(buildCoordinator?{purpose:'build'}:{}),...(updateCoordinator?{purpose:'update',updateAuthorization:{tool:'proteus_update',scopeVersion:2,hostId:remote.info().hostId,grantedAt:new Date().toISOString()}}:{}),enabled:false,cron:'0 9 * * 1-5',timezone:value.timezone||defaults.timezone,provider:value.provider||defaults.provider,model:value.model||defaults.model,reasoningMode:value.reasoningMode,reasoningEffort:value.reasoningEffort??((value.model||defaults.model)===defaults.model&&(value.provider||defaults.provider)===defaults.provider?defaults.reasoningEffort:undefined),contextTier:value.contextTier??((value.model||defaults.model)===defaults.model&&(value.provider||defaults.provider)===defaults.provider?defaults.contextTier:undefined),serviceTier:value.serviceTier??((value.model||defaults.model)===defaults.model&&(value.provider||defaults.provider)===defaults.provider?defaults.serviceTier:undefined),workspace:snapshot.workspace,context:snapshot,skillDirectories:value.skillDirectories||defaults.skillDirectories,mcpServers:value.mcpServers||defaults.mcpServers,editorContext:value.editorContext,misfire:'skip',prompt:value.prompt});
+    const schedule=validateSchedule({schemaVersion:1,id:`chat-${Date.now()}-${randomBytes(4).toString('hex')}`,name:chatTitle||'Workspace chat',chatType:value.chatType==='internet'?'internet':'user',chatTitleManual:!!chatTitle,...(buildCoordinator?{purpose:'build'}:{}),...(updateCoordinator?{purpose:'update',updateAuthorization:{tool:'proteus_update',scopeVersion:2,hostId:remote.info().hostId,grantedAt:new Date().toISOString()}}:{}),enabled:false,cron:'0 9 * * 1-5',timezone:value.timezone||defaults.timezone,provider:value.provider||defaults.provider,model:value.model||defaults.model,reasoningMode:value.reasoningMode,reasoningEffort:value.reasoningEffort??((value.model||defaults.model)===defaults.model&&(value.provider||defaults.provider)===defaults.provider?defaults.reasoningEffort:undefined),contextTier:value.contextTier??((value.model||defaults.model)===defaults.model&&(value.provider||defaults.provider)===defaults.provider?defaults.contextTier:undefined),serviceTier:value.serviceTier??((value.model||defaults.model)===defaults.model&&(value.provider||defaults.provider)===defaults.provider?defaults.serviceTier:undefined),workspace:snapshot.workspace,context:snapshot,skillDirectories:value.skillDirectories||defaults.skillDirectories,mcpServers:requestedMcpServers??(snapshot.includeDefaults===false?{}:value.mcpServers||defaults.mcpServers),editorContext:value.editorContext,misfire:'skip',prompt:attachmentOnly&&!value.prompt?.trim()?attachmentPrompt:value.prompt});
+    if(attachmentOnly&&!value.prompt?.trim())schedule.prompt='';return schedule;
   }
   const token = randomBytes(32).toString('hex'); let origin; let remote; const schedulerErrors = []; const eventClients = new Set();
   // All windows share one assembled state per owner generation. Streaming text does
@@ -276,7 +286,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   // chats; `stream:true` means only live transcripts changed, so a window that is not
   // showing one of those chats can skip its full state refresh.
   let notifyTimer=null,notifyRuns=new Set(),notifyStream=true;
-  const flushNotify=()=>{notifyTimer=null;const data=JSON.stringify({runs:[...notifyRuns].slice(0,50),stream:notifyStream});notifyRuns=new Set();notifyStream=true;stateCache.clear();for(const client of eventClients)client.write('event: change\ndata: '+data+'\n\n');};
+  const flushNotify=()=>{notifyTimer=null;const data=JSON.stringify({runs:[...notifyRuns].slice(0,50),stream:notifyStream});notifyRuns=new Set();if(!notifyStream)stateCache.clear();notifyStream=true;for(const client of eventClients)client.write('event: change\ndata: '+data+'\n\n');};
   const notify=(run,change)=>{if(!change?.stream)stateGeneration++;if(run?.id)notifyRuns.add(run.id);notifyStream&&=change?.stream===true;if(!notifyTimer)notifyTimer=setTimeout(flushNotify,change?.stream?120:40);};
   engine.on('change', notify);
   engine.on('scheduler-error', error => { stateGeneration++;stateCache.clear();schedulerErrors.push(error); if (schedulerErrors.length > 20) schedulerErrors.shift(); try { atomicJSON(path.join(home, 'scheduler-errors.json'), schedulerErrors); } catch (failure) { schedulerErrors.at(-1).persistenceError = failure.code || 'IO_ERROR'; } });
@@ -331,7 +341,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       if (url.pathname === '/api/app' && req.method === 'POST') return json(200, await account.request(await body(req)));
       if (url.pathname === '/api/team/lists' && req.method === 'GET') return json(200, await account.lists());
       if (url.pathname === '/api/team/lists' && req.method === 'POST') return json(200, await account.team(await body(req)));
-      if(url.pathname==='/api/browser-history'){const value=req.method==='GET'?{action:'query',...Object.fromEntries(url.searchParams)}:await body(req);const action=value.action||'query';if(!['query','record','delete','settings','sync','status'].includes(action))throw new Error('Unknown browser history action.');return json(200,action==='sync'?await service.peers?.syncHistory()||{synced:false}:action==='settings'?await browserHistorySettings(service,value):await service.browserHistory[action](value));}
+      if(url.pathname==='/api/browser-history'){const value=req.method==='GET'?{action:'query',...Object.fromEntries(url.searchParams)}:await body(req);const action=value.action||'query';if(!['suggest','query','record','delete','settings','sync','status'].includes(action))throw new Error('Unknown browser history action.');const result=action==='sync'?await service.peers?.syncHistory()||{synced:false}:action==='settings'?await browserHistorySettings(service,value):await service.browserHistory[action](value);return json(200,['query','suggest'].includes(action)?await historyWithSavedIcons(service,result,value):result);}
       if(url.pathname==='/api/updates/coordinator'&&req.method==='POST')return json(200,await (await import('./services/updates/update-session.js')).startUpdateSession(service,await body(req)));
       if(url.pathname==='/api/updates/recovery'&&req.method==='POST'){if(!service.updates)throw Error('Supervised desktop updates are unavailable.');return json(200,await service.updates.recovery(await body(req)));}
       if(url.pathname==='/api/updates'){if(!service.updates)return json(200,{identity:{packaged:false,capabilities:{prepare:false}},job:null});return json(200,await service.updates.handle(req.method==='GET'?{action:'status'}:await body(req)));}
@@ -375,6 +385,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       }
       if(url.pathname==='/api/terminal-agent'&&req.method==='POST'){if(!service.terminalAgent)throw Error('Terminal agent access requires the host desktop.');return json(200,await service.terminalAgent(await body(req,128000),'operator'));}
       if(url.pathname==='/api/tabs/manage'&&req.method==='POST')return json(200,await service.tabManagement.handle(await body(req,64000)));
+      if(url.pathname==='/api/schedule-control'&&req.method==='POST')return json(200,await service.scheduleControl.handle(await body(req,64000),'operator'));
       if(url.pathname==='/api/chat-control'&&req.method==='POST')return json(200,await service.chatControl.handle(await body(req,64000),'operator'));
       if(url.pathname==='/api/chat-workspace'&&req.method==='POST'){
         const value=await body(req,16000);
@@ -562,7 +573,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       // decides what is safe to preview.
       if (url.pathname === '/api/chat-attachment' && req.method === 'GET') {
         const file = readChatAttachment(url.searchParams.get('chatId'), url.searchParams.get('sha256'));
-        res.writeHead(200, { 'Content-Type': 'application/octet-stream', 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'private, no-store', 'Content-Disposition': 'attachment', 'X-Proteus-Media-Type': file.mediaType, 'X-Proteus-File-Name': encodeURIComponent(file.name) });
+        res.writeHead(200, { 'Content-Type': 'application/octet-stream', 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'private, no-store', 'Content-Disposition': 'attachment', 'X-Proteus-Media-Type': file.mediaType, ...(file.createdAt?{'X-Proteus-File-Created':file.createdAt}:{}),...(file.modifiedAt?{'X-Proteus-File-Modified':file.modifiedAt}:{}), 'X-Proteus-File-Name': encodeURIComponent(file.name) });
         res.end(file.bytes); return;
       }
       if (url.pathname === '/api/chat-recovery/without-agents' && req.method === 'POST') return json(200, await retryWithoutAgents(await body(req)));
@@ -615,6 +626,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         return json(200, { imported: schedules.length, enabled: false });
       }
       if(url.pathname==='/api/subagents'&&req.method==='GET'){const run=engine.getRun(url.searchParams.get('id')),agentId=url.searchParams.get('agentId'),before=url.searchParams.has('before')?Number(url.searchParams.get('before')):undefined;return json(200,run.subagents?.some(row=>row.id===agentId)?subagentPage(run,agentId,before):engine.delegation.page(run.id,agentId,before));}
+      if(url.pathname==='/api/shared-draft'&&req.method==='POST'){const value=await body(req);if(!['get','save'].includes(value.action))throw Error('Choose a draft action.');return json(200,value.action==='save'?await service.sharedDrafts.save(value):service.sharedDrafts.get(value));}
       if (url.pathname === '/api/run' && req.method === 'POST') { const { id } = await body(req); return json(200, engine.createRun(engine.schedules.get(id))); }
       if (url.pathname === '/api/chat-title' && req.method === 'POST') {
         const value = await body(req);
@@ -625,7 +637,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         if(value.action==='begin'){
           if(value.providerId!==providerId||!adapters[providerId]?.acceptedMediaTypes)throw new Error(`${providerId} cannot receive ${value.mediaType} attachments.`);
           if(!value.id&&!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value.draftId||''))throw new Error('Choose a valid chat draft.');
-          return json(200,await attachments.begin({chatId:value.id||'draft:'+value.draftId,deviceId,messageId:value.messageId,providerId,name:value.name,mediaType:value.mediaType,size:value.size,sha256:value.sha256}));
+          return json(200,await attachments.begin({chatId:value.id||'draft:'+value.draftId,deviceId,messageId:value.messageId,providerId,name:value.name,mediaType:value.mediaType,size:value.size,sha256:value.sha256,...attachmentDates(value)}));
         }
         if(value.action==='chunk')return json(200,await attachments.chunk({uploadId:value.uploadId,deviceId,index:value.index,dataBase64:value.dataBase64}));
         if(value.action==='finish')return json(200,await attachments.finish({uploadId:value.uploadId,deviceId}));
@@ -633,19 +645,22 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         throw new Error('Unknown attachment action.');
       }
       if (url.pathname === '/api/chat' && req.method === 'POST') {
-        let value = await body(req);
+        let value = await body(req);value={...value,inputOrigin:localInputOrigin(value.inputOrigin,service)};
+        const run = await service.startSharedSetup(value, async () => {
         const project=value.purpose==='update'?null:preview?.projectFor(value);if(project&&(desktopPreview||value.projectId||value.workspaceId))value={...value,workspaceId:project.workspaceId};
-        const schedule=await buildChatSchedule(value),files=Array.isArray(value.attachments)?value.attachments:[];
-        if(!files.length){const run=engine.createRun(schedule,'chat');if(project)preview.associate(run,project,engine);return json(200,run);}
+        const files=Array.isArray(value.attachments)?value.attachments:[],schedule=await buildChatSchedule(value,{attachmentOnly:files.length>0});
+        if(!files.length){const run=engine.createRun(schedule,'chat',null,{inputOrigin:value.inputOrigin,setupId:value.setupId});if(project)preview.associate(run,project,engine);return run;}
         if(files.length>chatAttachmentLimits.maxBatchFiles||!value.consentId||!value.draftId||!value.messageId||value.providerId!==schedule.provider)throw new Error('Review the exact files and named provider before sending.');
         await remote.attachmentConsents.verify({consentId:value.consentId,draftId:value.draftId,messageId:value.messageId,providerId:schedule.provider,deviceId:'local-desktop',attachmentIds:files});
-        const run=engine.createRun(schedule,'chat',null,{deferStart:true});if(project)preview.associate(run,project,engine);let prepared;
-        try{prepared=await remote.attachmentConsents.prepareSend({consentId:value.consentId,draftId:value.draftId,chatId:run.id,messageId:value.messageId,providerId:schedule.provider,deviceId:'local-desktop',attachmentIds:files});engine.startDeferredRun(run.id,{proofId:prepared.proofId,attachmentIds:files,messageId:value.messageId});return json(200,run);}
+        const run=engine.createRun(schedule,'chat',null,{deferStart:true,attachmentOnly:!schedule.prompt.trim(),inputOrigin:value.inputOrigin,setupId:value.setupId});if(project)preview.associate(run,project,engine);let prepared;
+        try{prepared=await remote.attachmentConsents.prepareSend({consentId:value.consentId,draftId:value.draftId,chatId:run.id,messageId:value.messageId,providerId:schedule.provider,deviceId:'local-desktop',attachmentIds:files});engine.startDeferredRun(run.id,{proofId:prepared.proofId,attachmentIds:files,messageId:value.messageId});return run;}
         catch(error){if(prepared)await remote.attachmentConsents.releaseProof(prepared.proofId).catch(()=>{});engine.discardDeferredRun(run.id);throw error;}
+        });return json(200,run);
       }
-      const match = url.pathname.match(/^\/api\/runs\/([a-f0-9-]+)\/(answer-question|reply|resume|cancel|send|edit-queued|remove-queued|steer-queued|recover)$/);
+      const match = url.pathname.match(/^\/api\/runs\/([a-f0-9-]+)\/(clear-question|answer-question|reply|resume|cancel|send|edit-queued|remove-queued|steer-queued|recover)$/);
       if (match && req.method === 'POST') {
-        const value = await body(req); const [, id, action] = match;
+        let value = await body(req); const [, id, action] = match;value={...value,inputOrigin:localInputOrigin(value.inputOrigin,service)};
+        if(action==='clear-question')return json(200,clearQuestionFromQueue(engine,id,value.questionId));
         if (action === 'answer-question') return json(200,await answerQuestionWithAttachments(engine,id,value,'local-desktop'));
         if (action === 'reply') return json(200, await replyWithAttachments(engine,id,value,'local-desktop'));
         if (action === 'send' && typeof value.prompt === 'string' && /^\/mcp\s+auth(?:\s|$)/i.test(value.prompt.trim())) {
@@ -688,10 +703,10 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
           if(files.length){
             if(files.length>chatAttachmentLimits.maxBatchFiles||!value.messageId||!value.consentId||value.providerId!==run.schedule.provider)throw new Error('Review the exact files and named provider before sending.');
             const prepared=await remote.attachmentConsents.prepareSend({consentId:value.consentId,chatId:run.id,messageId:value.messageId,providerId:run.schedule.provider,deviceId:'local-desktop',attachmentIds:files});
-            try{return json(200,await engine.send(id,value.prompt,value.mode||'queue',value.messageId,value.modelOptions,{proofId:prepared.proofId,attachmentIds:files}));}
+            try{return json(200,await sendHumanMessage(id,value.prompt,value.mode||'queue',value.messageId,value.modelOptions,{proofId:prepared.proofId,attachmentIds:files},undefined,value.inputOrigin));}
             catch(error){await remote.attachmentConsents.releaseProof(prepared.proofId).catch(()=>{});throw error;}
           }
-          return json(200, await engine.send(id, value.prompt, value.mode, value.messageId, value.modelOptions));
+          return json(200, await sendHumanMessage(id, value.prompt, value.mode, value.messageId, value.modelOptions,undefined,undefined,value.inputOrigin));
         }
         if (action === 'edit-queued') return json(200,engine.editQueued(id,value.messageId,value.prompt,value.expectedPrompt));
         if (action === 'steer-queued') return json(200,await engine.steerQueued(id,value.messageId));
@@ -704,12 +719,12 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
               if(!model)throw new Error('Selected model is unavailable. Refresh models and choose an available model.');
               validateModelOptions(options,model);
             }
-            return json(200,await engine.send(id,value.prompt,'queue',value.messageId,options));
+            return json(200,await sendHumanMessage(id,value.prompt,'queue',value.messageId,options,undefined,undefined,value.inputOrigin));
           }
           // Modern remote clients include an idempotent delivery ID even when
           // resuming an ended turn. Preserve it and let the owner choose queue/start.
-          if(value.messageId)return json(200,await engine.send(id,value.prompt,value.mode||'queue',value.messageId));
-          return json(200, engine.resume(id, value.prompt));
+          if(value.messageId)return json(200,await sendHumanMessage(id,value.prompt,value.mode||'queue',value.messageId,undefined,undefined,undefined,value.inputOrigin));
+          return json(200, engine.resume(id, value.prompt,{inputOrigin:value.inputOrigin}));
         }
         engine.cancel(id); return json(200, { ok: true });
       }
@@ -774,8 +789,8 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   atomicJSON(path.join(home, 'connection.json'), { origin, token, pid: process.pid });
   const timer = timers ? setInterval(() => { void performanceDiagnostics.measure('scheduler.tick', () => engine.tick()).catch(error => engine.emit('scheduler-error', { error: error.message, at: new Date().toISOString() })); }, 1000) : null;
   const service = { readChatAttachment, desktopControl,workspaceProjects:preview, desktopPreview:desktopPreview?preview:null, performanceDiagnostics, notify, desktopAttention:()=>[...(service.browserAttention?.()||[]),...remote.documents.list().filter(item=>!item.approvedAt).map(item=>({id:'document:'+item.requestId,kind:'document',title:item.deviceName+' requests '+item.title,requestId:item.requestId,path:item.path,at:new Date(Date.parse(item.expiresAt)-600000).toISOString()})),...service.attention()], attention:()=>[...integrations.consumers().filter(item=>['needs-auth','failed'].includes(item.connection)).map(item=>({id:'integration:'+item.id,kind:'connection',title:(item.profile.label||item.server)+' needs attention',section:'integrations',at:item.checkedAt})),...activity.notifications().items.filter(item=>!item.readAt).map(item=>({id:'notification:'+item.id,notificationId:item.id,kind:'notification',title:item.title,body:item.body,chatId:item.chatId,silent:item.silent===true,...(item.browserIssue?{browserIssue:item.browserIssue,silent:item.silent===true}:{}),at:item.createdAt}))], browserProfiles, integrations, engine, settings, context, standup, omi, life, account, activity, workspaceFiles, attachments, buildChatSchedule, usage, catalog, catalogs, origin, token, home, url: `${origin}/?token=${token}`, async close() {
-    await stateProjection.close();await service.updates?.close();await service.chatControl?.close();await desktopControl?.close();
-    activity.log('info','app.stopping','Proteus is shutting down.');clearInterval(integrationTimer);await integrations.close(); if(activityTimer)clearInterval(activityTimer); if (timer) clearInterval(timer); if (catalogTimer) clearInterval(catalogTimer); await Promise.all(Object.values(catalogs).map(c => c.pending)); await providerAuth.close(); await service.sharedInference.close(); await remote.close(); let engineCloseError; try { await engine.close(); } catch (error) { engineCloseError=error; } await attachments.close(); await copilot.close(); await codex.close(); await claude.close(); await life.close?.(); await service.browserHistory?.close(); let activityCloseError; try { await activity.close(); } catch (error) { activityCloseError=error; }
+    await stateProjection.close();await service.updates?.close();await service.scheduleControl?.close();await service.chatControl?.close();await desktopControl?.close();
+    activity.log('info','app.stopping','Proteus is shutting down.');clearInterval(integrationTimer);await integrations.close(); if(activityTimer)clearInterval(activityTimer); if (timer) clearInterval(timer); if (catalogTimer) clearInterval(catalogTimer); await Promise.all(Object.values(catalogs).map(c => c.pending)); await providerAuth.close(); await service.sharedInference.close(); await remote.close(); let engineCloseError; try { await engine.close(); } catch (error) { engineCloseError=error; } await attachments.close(); await copilot.close(); await codex.close(); await claude.close(); await life.close?.(); await service.browserHistory?.close(); await service.sharedDrafts?.close(); let activityCloseError; try { await activity.close(); } catch (error) { activityCloseError=error; }
     for (const client of eventClients) client.end(); eventClients.clear();
     await new Promise(resolve => {
       server.close(resolve);
@@ -794,6 +809,11 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   service.computerAccess=computerAccess;computerAccess.on('change',()=>{service.notify();service.remote?.changed();});
   service.browserHistory=new BrowserHistory(home,{hostId:()=>service.remote?.info().hostId});
   service.contentTabs=new ContentTabs(home,{history:service.browserHistory,profiles:()=>browserProfiles.list().items,onChange:result=>{const metadata={scope:result.scope,id:result.id,revision:result.revision};for(const client of eventClients)client.write('event: content-tabs\ndata: '+JSON.stringify(metadata)+'\n\n');notify();remote?.broadcast('tabs',metadata,result.scope==='chat'?result.id:undefined);}});
+  service.startSharedSetup=sharedSetupStarts(service);
+  service.sharedDrafts=new SharedDrafts(home,{validate:value=>{
+    if(value.kind==='reply'){engine.getRun(value.id);return;}
+    if(!['workspace','project'].includes(value.scope)||!service.contentTabs.get(value.scope,value.scopeId).tabs.some(tab=>tab.id===value.id&&tab.setup))throw Error('This setup tab is no longer open in its project.');
+  },changed:metadata=>remote?.broadcast('draft-text',metadata)});
   service.projectFollow = new ProjectFollow({
     validationStamp: () => fileStamp([context.file,preview.file]),
     validate: value => { if(value.scope==='project')preview.projectFor({projectId:value.id},preview.snapshot());else context.scope(value.id); },
@@ -816,6 +836,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   sharedInference=service.sharedInference=new SharedInference(service);
   remote = service.remote = new RemoteHost(service); activity.attach(engine,()=>remote.info().hostId,()=>remote.info().label); activity.log('info','app.started','Proteus started.'); await remote.start();
   service.chatControl=new ChatControl(service);
+  service.scheduleControl=new ScheduleControl(service);
   for(const adapter of Object.values(adapters))adapter.chatControl=service.chatControl;
   const integrationTimer=timers?setInterval(()=>void integrations.tick(),300000):null;
   const activityTimer = timers ? setInterval(()=>void activity.flush(),60000) : null;
@@ -832,3 +853,5 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, async () => { await app.close(); process.exit(0); });
 }
 import {ChatPreviews} from './services/chats/chat-previews.js';
+import {SharedDrafts} from './services/chats/shared-drafts.js';
+import {sharedSetupStarts} from './services/chats/shared-setup.js';
