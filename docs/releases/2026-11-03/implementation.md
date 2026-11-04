@@ -91,6 +91,10 @@ window observation. It sends no input and keeps counts and fixed labels only. It
 driver on this Mac; **it has not run on Windows**, so driver discovery, UI Automation availability and a
 Windows window observation remain unverified, as does input delivery on any platform.
 
+## N1 and N2 — iOS
+
+See [iOS performance](ios-performance.md). The composer now grows to a bounded height and scrolls internally on phone and tablet. Native state uses patches and field deltas, cache writes are debounced, tab projection is indexed and rich renderers are admitted by viewport. **The simulator traces do not reproduce the reported slowness, and physical-device feel is unverified.**
+
 ## Validation limits
 
 Run the Node suite with a short canonical `TMPDIR` such as `/private/tmp/...`: the default macOS path breaks

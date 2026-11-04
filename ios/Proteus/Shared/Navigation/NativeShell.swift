@@ -1250,13 +1250,15 @@ struct NativeHome: View {
     }
     private var version: String { Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown" }
     private var build: String { Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "Unknown" }
-    private var releaseDate: String {
+    // Fixed for the life of the process: Home's body must not build formatters on every pass.
+    private static let releaseDateText: String = {
         guard let raw = Bundle.main.infoDictionary?["ProteusReleaseDate"] as? String else { return "" }
         let parser = DateFormatter(); parser.locale = Locale(identifier: "en_US_POSIX"); parser.timeZone = TimeZone(secondsFromGMT: 0); parser.dateFormat = "yyyy-MM-dd"; parser.isLenient = false
         guard let date = parser.date(from: raw), parser.string(from: date) == raw else { return "" }
         let display = DateFormatter(); display.locale = Locale(identifier: "en_US"); display.timeZone = parser.timeZone; display.dateFormat = "MMM d"
         return display.string(from: date)
-    }
+    }()
+    private var releaseDate: String { Self.releaseDateText }
     var body: some View {
         NavigationStack {
             if let remote = destinations.selected {

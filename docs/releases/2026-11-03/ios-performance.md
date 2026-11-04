@@ -222,6 +222,17 @@ dispatch or after an authenticated terminal rejection, under the owner's journal
 This avoids silently reinterpreting a Back/Forward operation while allowing deliberate forward
 navigation to converge despite unrelated owner activity. The coordinator owns that policy decision.
 
+## Coordinator takeover and whole-app profile
+
+The iOS agent's Codex session lost authentication partway through. Its uncommitted work (indexed tab projection, cached row timestamps, reconnect refresh ordering, the combined push-and-typing fixture) was committed unchanged as `85ddd63`, and the coordinator finished the lane: field-only chat deltas, a static release-date label and these traces. Unit counts in the section below predate that; the current suite is **203 tests, none failing** on iPhone 17.
+
+Time Profiler traces of the whole app on the iPhone 17 simulator, iOS 26.5, Debug:
+
+- `testTypingDuringLargeGeneralStatePushes` (1,500 chats, 200 tabs, about 2 MB state, full-state then patch delivery, 880 typed characters): 12,746 main-thread samples, mostly idle. The largest app frame is UIKit text insertion (1,632 samples); 1 hang and 3 microhangs. `NativeHome` and `AggregateChatsView` still re-evaluate behind an open chat (about 300 samples).
+- `testProjectChatsOpenAsProjectTabsAndSwitchRepeatedly`: 17,043 samples, mostly idle, with 5 potential hangs. The busiest app frames are small, and XCTest automation accounts for part of the hang time.
+
+**These traces do not reproduce the operator's report.** The simulator has far more CPU than a phone, and a Debug fixture is not the operator's data over a real relay. The largest measured load on the installed build is the owner traffic recorded live (about 2 MB per push, about 3 MB/s). The patch path removes that load from this client's receive and render work (88.89 → 8.85 ms mean encrypted receive per push in the combined run), which makes it the leading explanation but **not a proven cause**. Whether the app now feels acceptable needs a physical device, with a new client and a new owner together. A remaining migration target is the raw-state consumers behind an open chat.
+
 ## Acceptance limits
 
 The initial product implementation is `db526f8a05851d5251dea3d8e7e138d2326e67ac`;
