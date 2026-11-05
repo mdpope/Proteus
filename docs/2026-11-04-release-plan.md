@@ -43,11 +43,37 @@ To resolve:
 3. Do the same for local code archives and build folders: retire on acceptance as part of the deploy, so the next build is never blocked and nobody deletes files by hand.
 4. Report actual free-space change separately from logical bytes.
 
-### P3 — Signing is a single point of failure
+### P3 — The Build Mac must be the release authority, not a Windows builder
 
-The publisher key exists only on the Windows builder, so a Mac, Linux or Windows package can only be published while that machine is reachable and its chat is not stalled. On Nov 3 an unanswered approval prompt there blocked publishing everything and pushed Work Mac to a private transfer route.
+Operator rule: the Build Mac, not any builder, is the authority for releasing packages. No release may depend on a Windows build, or on a Windows machine being reachable, for signing, staging or publishing.
 
-To resolve: decide and write down the supported fallback when that builder is unreachable (for example, an offline signing procedure on a second trusted machine with the same key under the same rules), without copying the key casually. Also surface a stuck approval prompt on a builder in the coordinator's view rather than discovering it hours later.
+What is true today: the Ed25519 publisher private key (public key ID `92b49fc0…`) exists only on the Windows builder. The build operation configured there signs at the end of its own build, so a platform build and the release authority are the same chat. On Nov 3 an unanswered approval prompt on that machine, then a Windows build that stopped itself rather than sign, left the already built and accepted Mac package unpublishable for hours, and pushed Work Mac onto a one-off private transfer. The reason the key lives on Windows is not recorded; it appears to be history.
+
+How verification works, which constrains the fix: installed apps and the website verify a release manifest against public keys bundled inside them (`resources/desktop-release-keys.json` and the app's own copy). An app only trusts keys it already shipped with, so a new key cannot be used until a release containing it has been installed everywhere that must verify the next one.
+
+Target design:
+1. **Builders only build.** A native builder produces the package, its source companion and an unsigned manifest payload, runs acceptance, and hands the exact bytes over. It never holds the key and never signs or publishes. The Windows build operation's signing step is removed or disabled by default.
+2. **The Build Mac signs, verifies, stages and publishes.** It holds the key, runs `sign-desktop-payload.mjs` and `stage-desktop-distribution.mjs`, verifies the result against the bundled trust, and deploys to downloads.proteus.example. It also keeps the release ledger.
+3. **Hand-over is a private draft with hash checks,** as the Nov 3 HC transfer did, not text in a chat. Chat-returned base64 corrupted a signed envelope on Nov 2.
+4. **Platforms publish independently.** Today staging a subset gives every other platform an empty catalog, so one late builder blanks everyone else's updates. Replace that with an explicit "pending" state per platform that keeps the previous valid entry, so consumers can neither select a superseded version silently nor lose updates entirely.
+
+Key custody, a decision for the operator before any change:
+- **Option 1, move the existing key.** A one-time, operator-authorized move of the current private key to this Mac's protected storage (an owner-only file outside every checkout, with a Bitwarden recovery record), then verify it signs a test manifest that the existing trust accepts, then retire the Windows copy and record that it was removed. No release needed and no trust change. The cost is that the key travels once, and copying a signing key is exactly the risk to avoid.
+- **Option 2, rotate to a new key generated on this Mac.** The private key never leaves it. Ship the new public key in a release signed by the old key (one last use of Windows or of Option 1), wait until every target runs that release, sign with the new key from then on, and retire the old one. Nothing is copied, but there is a transition period and a release to ship first.
+- Recommendation: Option 2 if the old key can be used once more under supervision, because it ends with a key that has only ever existed on the authority machine. Choose Option 1 only if rotation cannot wait.
+
+Acceptance:
+1. A full release (Mac, Linux, Windows) signed on the Build Mac with the Windows builder powered off.
+2. Staging and verification pass against the bundled trust, and a consumer completes a real update from the published release.
+3. A subset publish, such as Mac only, leaves the other platforms' catalogs valid.
+4. The private key's location, permissions and backup are documented without its value or path details in Git.
+5. Nothing in the release process names a builder as an authority; `docs/release-process.md` is updated to say so.
+
+### P4 — A remote computer's command history fills up and blocks dispatch
+
+On Nov 5 Work Mac refused every command, including an authorized update, with "Remote command history is busy: 268,496,545 / 268,435,456 bytes; 0 unresolved". It keeps every received command's receipt for 24 hours and caps the total at 256 MiB. Receipts of large results, such as tab-list replies with long browser histories, evidently fill it, and nothing drains until entries age past 24 hours. This blocks dispatch and probably also tab sync to that computer.
+
+To resolve: find what dominates the bytes, using the diagnostics the journal already exposes, and measure it on a real owner rather than guessing. Keep retry protection but do not store full large results in each receipt (store a digest and size, since a retry needs the outcome, not the whole tab list). Warn before the cap is reached, so it shows in the owner's status and in a dispatch error that names the cause and the time until space frees. Test that existing claims still complete and retries still return the original outcome. Also confirm the activity-write change in 0.2.42 actually reduced this on a live owner.
 
 ## Carried forward
 
