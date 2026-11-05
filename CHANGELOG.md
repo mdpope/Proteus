@@ -1,3 +1,7 @@
+## Nov 5 — source only, build held
+
+- Schedule tools expose resolved folders, source metadata and effective permissions; preview proposed future settings without writing, retain test-start configuration and return consistent list/read revisions. Schemas and the installed-version workaround are documented. This is not installed or live workflow acceptance.
+
 ## Nov 3 — 0.2.42 candidate
 
 - Send owner state as versioned patches to clients that opt in, skip the snapshot on a conditional sync and batch progress churn. Older clients keep whole snapshots at a slower progress cadence. State no longer enters the replay journal, where it evicted lifecycle events.

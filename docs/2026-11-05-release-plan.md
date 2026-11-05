@@ -1,6 +1,16 @@
-# Nov 4 release plan
+# Nov 5 release plan
 
-Opened as a plan only. A release cannot be reserved until Nov 3 is closed; opening it then reserves the next version once, through `scripts/release.mjs open`.
+Migrated from the Nov 4 plan on November 5, 2026. All queued scope and historical observation dates below are preserved. Planning only; no version is reserved and no build is authorized.
+
+## Operator hold — November 5, 2026
+
+- **Nov 3 must close first.** Nov 3 / 0.2.42 remains open. Do not build Nov 5 changes or open/reserve the next release until Nov 3 closeout is verified. This migration does not close Nov 3 or authorize its closeout work.
+- **Wait for the daily-digest improvement chat.** Hold pending further instructions from that chat; capture any needed Proteus changes here as queued scope when its handoff arrives. The automation audit handoff has been received; its tool visibility requests are tracked below and are explicitly not a hard blocker requiring a build.
+- **Build hold stays in force until the operator explicitly lifts it.** Routine requests, a completed chat, or Nov 3 closeout alone do not lift the hold.
+- **Narrow exception:** if the daily-digest chat explicitly identifies a change as a blocker on its end, record the blocker and exact required scope. The operator permits that blocker-specific exception to the digest hold; it does not lift the hold for other changes or bypass the Nov 3 closeout prerequisite.
+- No implementation, packaging, publication, installation or build dispatch is authorized by this plan migration. Continue collecting planning updates while held.
+
+Once Nov 3 is closed and the applicable hold is lifted or its explicit blocker exception applies, open Nov 5 once through `scripts/release.mjs open` to reserve the next version. Do not reserve a version during this hold.
 
 ## Update-blocking rules
 
@@ -100,3 +110,77 @@ To resolve:
 - iOS physical-device responsiveness, gestures, push and reconnect remain unverified.
 - Mnemosyne work stays deferred.
 - Any Nov 3 item left open at closeout, including the relay deployment and server retention.
+
+
+## P6 — Schedule configuration inspection and preview
+
+The automation-audit workflow reports saved-only reads, opaque permission/workspace-reference
+schemas and no source discovery or change preview in the schedule tool. Source inspection
+confirms these gaps. The workflow owner explicitly says this is not a hard blocker requiring
+a build; the existing hold and Nov 3 closeout prerequisite remain unchanged.
+
+Source work is isolated on branch nov5-schedule-visibility. It adds saved/resolved configuration
+inspection, scoped source metadata paging, typed permission/reference schemas, non-writing
+change preview, start-preflight configuration in test receipts, and consistent list/read revisions.
+The current supported schema and installed-version workaround are documented in
+schedule-tool-configuration.md on that branch. Workflow manifests, customer data, live schedules,
+enabled state and unrelated runs remain with their existing owner.
+
+Acceptance: synthetic revision/permission/preview/history tests plus the required full source
+suite and static checks; future installed acceptance must verify actual captured runs and workflow
+outputs separately. No packaging, publication, installation or real workflow acceptance is claimed.
+
+
+### P6 source validation
+
+Ten focused schedule-control tests pass. The full suite passes 1,542 tests with four skipped
+using a short canonical temporary root; static checks pass. The initial default-temp run had
+11 path-alias/socket-path failures, all independently reproduced on unchanged Nov 3 source.
+No package was built, no installation changed and no real unattended workflow was tested.
+P7/P8 remain queued; these results apply only to P6 inspection/preview and revision fixes.
+
+
+## P7 — Source-aware schedule reconciliation (queued, not implemented)
+
+The workflow owner confirmed that editing and validating its canonical manifest still leaves
+tool update blocked by source ownership. The installed CLI refresh validates exported schedule
+JSON and matching source.system/source.manifest, captures its own save revision, preserves
+history, and always pauses. It has no caller-supplied expected revision or keep-enabled option.
+The local editor supports revision-checked exported-record saves, but does not verify provenance;
+the remote editor refuses source-managed writes. None satisfies the complete requested contract.
+
+Add a supported owner reconciliation path shared by tools and UI/CLI: accept the workflow's
+validated export with explicit source identity and manifest/export hashes, require the caller's
+exact current schedule revision, preview the proposed changes without writing, and reject stale
+or mismatched evidence. Foreign manifest validation remains with its workflow owner; Proteus
+must verify its declared provenance without invoking arbitrary exporters or claiming to understand
+foreign schemas. Preserve current enabled state by default, unknown fields, prior runs, captured
+settings and history; require an explicit separate choice to change enabled state. Permission
+changes retain schedule-configure-permissions checks and ordinary owner authorization. Return
+a durable reconciliation receipt and resulting revision, then verify a real captured test run.
+
+Do not work around the source guard with raw app-data edits or a generic schedule API call.
+No live organization workflows schedule mutation is authorized for this coordinator. This request is not yet a
+hard blocker requiring a build.
+
+## P8 — Scoped unattended workflow execution (queued, design/implementation pending)
+
+The current Codex adapter fixes native approvalPolicy to untrusted and network access to false.
+Native trusted reads may proceed, but explicit filesystem grants do not authorize dynamically
+generated shell commands. Custom mode matches exact operation rules; no workflow-scoped dynamic
+shell execution mode exists. Do not promise unattended synthesis from a list of exact commands.
+
+Define an explicit workflow permission profile that supports normal read/edit/research work
+inside reviewed filesystem and network boundaries, with enforcement by the actual provider
+sandbox and owner, capability checks, inspectable effective settings, and captured-run evidence.
+Distinguish working roots, read/write grants, selected tool/action rules, network destinations and
+workflow execution authorization. Fail closed for unsupported provider capability, changed
+workflow/source identity, scope escalation or access outside approved boundaries. Prove that
+variable commands within scope work while writes/reads/network access outside scope cannot gain
+permission from their executable name. No blanket interpreter/prefix approval, sandbox bypass,
+automatic approval of pending requests, or weakening of protected credential boundaries.
+A constrained workflow entrypoint is an interim option only when it performs the complete
+authorized operation; it is not a general dynamic-command approval policy.
+
+Workflow/manifests and customer-local testing remain with the automation owner. No hard blocker
+or build-hold exception is claimed.

@@ -1,3 +1,12 @@
+## November 5 — schedule inspection remains an owner-scoped read
+
+Expose saved settings separately from current resolved policy; a read must not save, enable or
+execute a schedule. Source discovery is limited to its base and already referenced workspace
+catalogs and returns metadata only. Proposed changes share update validation and permission
+guards but can preview source-managed schedules without writing them. Record test-start preflight
+configuration as evidence, without treating it as a frozen runtime approval grant or proof of
+external workflow success. Existing test receipts without this evidence remain explicitly unknown.
+
 ## Nov 2 R37 — one idle inventory for guard and diagnostics
 
 Derive live updater waiting details from the same execution inventory used at each idle barrier. Background executions are keyed by lane, so resolve their chat IDs from slot values. Include orphan execution ownership conservatively rather than trusting a terminal chat status. Diagnostics are read-only; a tool approval remains an operator decision and no cancellation is added. A new-input checkpoint reset is distinct from active work and is cleared only by a revision-checked handoff.
