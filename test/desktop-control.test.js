@@ -11,7 +11,8 @@ const observe=broker=>broker.handle({action:'call',tool:'get_window_state',argum
 test('a desktop launch finds the official user install without a shell PATH and honors explicit overrides',t=>{
  const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-control-discovery-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
  const binary=path.join(home,'.local/bin/cua-driver');fs.mkdirSync(path.dirname(binary),{recursive:true});fs.writeFileSync(binary,'#!/bin/sh\nexit 0\n',{mode:0o700});
- for(const platform of ['darwin','linux'])assert.equal(desktopExecutable('cua',{PATH:'/usr/bin:/bin'},{platform,home}),binary);
+ // The simulated Unix platforms use POSIX separators even when this test runs on a Windows host.
+ for(const platform of ['darwin','linux'])assert.equal(desktopExecutable('cua',{PATH:'/usr/bin:/bin'},{platform,home}),path.posix.join(home,'.local/bin/cua-driver'));
  assert.equal(desktopExecutable('cua',{PATH:'/usr/bin:/bin',PROTEUS_CUA_DRIVER_PATH:path.join(home,'missing')},{home}),null,'an explicit missing backend must not silently select another install');
 });
 test('desktop broker lazily starts, restricts tools, binds fresh input and preserves model images',async()=>{
