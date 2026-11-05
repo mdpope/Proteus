@@ -1,11 +1,23 @@
+## Nov 5 scoped schedule controls — implementation complete, build held
+
+Source now includes manifest/export reconciliation, scoped Codex command execution, true catalog
+rescan, owner-proven unsent-create recapture and newest-first bounded status. See the
+[configuration guide](schedule-tool-configuration.md) and [release plan](2026-11-05-release-plan.md).
+Scoped execution is an explicit hard workflow blocker, but Nov 3 is still open; no build or
+deployment started. Real organization workflows acceptance belongs to the workflow owner after authorized update.
+Final validation: 1,548 tests pass, four skip, zero fail; npm run check passes. Native Mac
+sandbox and MCP-catalog probes use only synthetic data and start no model turn. The sandbox
+probe verifies scoped writes and denies outside reads/writes, symlink escape, protected metadata
+writes and network access. The catalog probe accepts annotated reads and rejects writes/unknown tools.
+
 ## Nov 5 schedule tooling — source only, build held
 
 The automation audit requested supported configuration guidance and missing inspection/preview
-capabilities. It explicitly does not report a hard blocker requiring a build. See the
+capabilities. Its later acceptance handoff confirms scoped execution and source reconciliation as hard workflow blockers. See the
 [Nov 5 plan](2026-11-05-release-plan.md) and [tool configuration guide](schedule-tool-configuration.md).
 Source work is isolated on nov5-schedule-visibility; Nov 3 closeout and the operator build hold
 still gate packaging/deployment. No live workflow schedules, permissions, enabled states or runs
-were changed. P6 passes ten focused tests, the full suite (1,542 pass/four skip) and static checks. Source-aware reconciliation and scoped unattended execution are queued as P7/P8; neither is implemented or a hard build blocker.
+were changed. P6 passes ten focused tests, the full suite (1,542 pass/four skip) and static checks. P7/P8 are now implemented in the isolated source branch; see the newer checkpoint above. Their installed workflow acceptance remains outstanding.
 
 ## R31 live General accepted / R32 traffic validation
 

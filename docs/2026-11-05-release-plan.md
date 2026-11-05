@@ -5,7 +5,7 @@ Migrated from the Nov 4 plan on November 5, 2026. All queued scope and historica
 ## Operator hold — November 5, 2026
 
 - **Nov 3 must close first.** Nov 3 / 0.2.42 remains open. Do not build Nov 5 changes or open/reserve the next release until Nov 3 closeout is verified. This migration does not close Nov 3 or authorize its closeout work.
-- **Wait for the daily-digest improvement chat.** Hold pending further instructions from that chat; capture any needed Proteus changes here as queued scope when its handoff arrives. The automation audit handoff has been received; its tool visibility requests are tracked below and are explicitly not a hard blocker requiring a build.
+- **Wait for the daily-digest improvement chat.** Hold pending further instructions from that chat; capture any needed Proteus changes here as queued scope when its handoff arrives. The automation audit handoff has been received; its scoped unattended-execution requirement is now explicitly a hard blocker for fully automated synthesis. Only that blocker scope may use the narrow exception after Nov 3 closeout; no build starts while Nov 3 remains open.
 - **Build hold stays in force until the operator explicitly lifts it.** Routine requests, a completed chat, or Nov 3 closeout alone do not lift the hold.
 - **Narrow exception:** if the daily-digest chat explicitly identifies a change as a blocker on its end, record the blocker and exact required scope. The operator permits that blocker-specific exception to the digest hold; it does not lift the hold for other changes or bypass the Nov 3 closeout prerequisite.
 - No implementation, packaging, publication, installation or build dispatch is authorized by this plan migration. Continue collecting planning updates while held.
@@ -140,7 +140,7 @@ No package was built, no installation changed and no real unattended workflow wa
 P7/P8 remain queued; these results apply only to P6 inspection/preview and revision fixes.
 
 
-## P7 — Source-aware schedule reconciliation (queued, not implemented)
+## P7 — Source-aware schedule reconciliation (implemented in isolated source)
 
 The workflow owner confirmed that editing and validating its canonical manifest still leaves
 tool update blocked by source ownership. The installed CLI refresh validates exported schedule
@@ -160,10 +160,11 @@ changes retain schedule-configure-permissions checks and ordinary owner authoriz
 a durable reconciliation receipt and resulting revision, then verify a real captured test run.
 
 Do not work around the source guard with raw app-data edits or a generic schedule API call.
-No live organization workflows schedule mutation is authorized for this coordinator. This request is not yet a
-hard blocker requiring a build.
+No live organization workflows schedule mutation is authorized for this coordinator. The latest acceptance
+handoff identifies source reconciliation as a hard unattended-workflow blocker, alongside P8.
+Nov 3 closeout and the existing build hold remain release prerequisites.
 
-## P8 — Scoped unattended workflow execution (queued, design/implementation pending)
+## P8 — Scoped unattended workflow execution (implemented in isolated source; hard workflow blocker)
 
 The current Codex adapter fixes native approvalPolicy to untrusted and network access to false.
 Native trusted reads may proceed, but explicit filesystem grants do not authorize dynamically
@@ -182,5 +183,60 @@ automatic approval of pending requests, or weakening of protected credential bou
 A constrained workflow entrypoint is an interim option only when it performs the complete
 authorized operation; it is not a general dynamic-command approval policy.
 
-Workflow/manifests and customer-local testing remain with the automation owner. No hard blocker
-or build-hold exception is claimed.
+Workflow/manifests and customer-local testing remain with the automation owner. The later operator handoff identifies this as a hard blocker for fully automated synthesis. The narrow blocker exception remains subordinate to verified Nov 3 closeout; no build or deployment is authorized while Nov 3 remains open.
+
+
+## November 5 — scoped capability implementation checkpoint
+
+P7 now has preview-reconcile and reconcile operations. They validate exported Proteus JSON,
+matching source identity and exact manifest/export hashes; the foreign manifest validator remains
+with the workflow owner. Caller revision, permission-configuration scope, preview digest and
+durable operation receipt gate the write. Enabled state, unknown fields and prior runs/history
+are retained. Source files are reread after asynchronous preflight.
+
+P8 adds explicit executionPermissions.sandboxedCommands for Codex custom mode with explicit
+folder grants. Native on-request approval lets variable commands run inside a restrictive
+permission profile; root/temp access is denied except granted paths and public runtime reads.
+Command network access stays disabled. Research uses separately authorized MCP connectors.
+An exact named tool grant or explicit readOnlyTools policy permits its selected server connection.
+Native calls use actual connected thread-scoped catalog annotations; only unambiguously annotated
+non-destructive reads qualify for read-only authorization. Writes and unknown tools retain approval.
+No interpreter/prefix grants, auto-review or pending-request approvals are introduced. Runtime
+profile identity, selected roots, approval policy and network state are checked before a turn.
+Changed permission mode or conflicting native profile configuration fails closed.
+
+The real Mac native sandbox probe (no model turn) permits an in-scope write and rejects outside
+read/write, a symlink escape, read-only child writes, .git writes and a live local test connection.
+This is source/native-boundary acceptance, not a real organization workflows workflow run or cross-platform proof.
+Other operating-system and installed end-to-end acceptance remains required before claiming it.
+
+### P9 — Real catalog rescan and unsent-create recapture
+
+Partial discovery previously reused a stale hash when a shared source remained under another
+root. Discovery now rereads the bytes. Schedule refresh-catalog rescans the base and referenced
+workspace catalogs without changing schedule selections; refresh-sources uses that same rescan.
+A chat recapture action requires an ordinary create task and stable new operationId. The owner
+must retain the exact settled pre-create source-hash rejection; pending, absent or successful
+original receipts are refused. It rescans, captures fresh sources, and claims one durable logical
+create before delivery. Original task/error/attempt evidence stays retained. Both encrypted
+transport retry and lost-reply recovery verify one created chat. A genuinely uncertain claim
+requires review and is never silently replayed. No existing live task is recaptured by this work.
+
+### P10 — Bounded schedule run status
+
+Status now sorts newest creation time first and honors limit/cursor with a stable snapshot guard.
+An exact runId still returns that run. No pending permission, enabled state or unrelated run is
+changed by reading status.
+
+### Workflow acceptance handoff
+
+Workflow source tests and real managed connector reads establish preparation and credential
+availability. They do not satisfy installed acceptance. Existing schedules remain enabled on
+their original provider settings, and the planning fixture's native approval remains unanswered.
+After authorized installation, verify real catalog refresh, revision-preserving reconciliation,
+retained enabled state/history, complete prompt-free Codex workflow execution and a second
+no-new-evidence run. Verify workflow outputs independently of model-turn completion.
+
+Final isolated-source validation: 1,548 tests pass, four skip, zero fail; static checks pass.
+Native synthetic Mac sandbox and MCP-catalog probes pass without a model turn. No installed
+workflow success, cross-platform acceptance, build, publication or deployment is claimed.

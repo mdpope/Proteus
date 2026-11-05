@@ -1,3 +1,23 @@
+## November 5 — source reconciliation and native scoped autonomy
+
+A workflow owns foreign manifest validation. Proteus validates its exported schedule and exact
+manifest/export identities, previews the change, and requires the current revision plus unchanged
+plan digest before saving; enabled state is retained. It runs no exporter.
+
+Scoped command autonomy uses native filesystem enforcement and on-request boundary approval,
+not executable-name rules. Deny ambient root/temp access and command network access; retain
+explicit folder grants and required public runtime reads. Connector startup is a prerequisite
+for named tool grants or an explicit read-only tool policy. Native calls use actual connected
+thread-scoped catalog annotations; missing, ambiguous or destructive annotations fail closed.
+Actual calls remain independently authorized. Capability/runtime
+verification must fail closed. See https://learn.chatgpt.com/docs/permissions and
+https://learn.chatgpt.com/docs/sandboxing (official OpenAI documentation, reviewed November 5).
+
+A source-rejected create may recapture only when the destination journal proves that exact
+ordinary create failed during source capture. Preserve that receipt and bind all recapture
+attempts to a second durable logical-create claim; pending outcomes cannot replay. Existing
+successful or unknown delivery outcomes do not qualify.
+
 ## November 5 — schedule inspection remains an owner-scoped read
 
 Expose saved settings separately from current resolved policy; a read must not save, enable or

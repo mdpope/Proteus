@@ -1,4 +1,4 @@
-import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import {randomUUID} from 'node:crypto';
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import {randomUUID,createHash} from 'node:crypto';
 import {startServer} from '../src/server.js';import {revision} from '../src/services/scheduling/schedules.js';import {ScheduleControl} from '../src/services/scheduling/schedule-control.js';import {scheduleAccessRule} from '../src/services/settings/schedule-access-rule.js';import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';import {until} from './remote-client.mjs';
 import {scheduleControlTools} from '../src/services/scheduling/schedule-control-tools.js';
 async function fixture(t){
@@ -8,6 +8,27 @@ async function fixture(t){
  const schedule={schemaVersion:1,id:'serial-test',name:'Synthetic serial test',enabled:false,provider:'copilot',model:'fixture',reasoningEffort:'low',workspace:{cwd:home,additionalDirectories:[]},cron:'0 9 * * 1-5',timezone:'UTC',misfire:'skip',prompt:'complete',contextSelection:{selectedIds:[],includeDefaults:false},mcpServers:{},extensionMetadata:{keep:true}};app.engine.schedules.save(schedule);
  const control=app.scheduleControl,hostId=app.remote.info().hostId,request=(action,extra={})=>({action,hostId,scheduleId:schedule.id,expectedRevision:revision(app.engine.schedules.get(schedule.id)),...extra});return {home,app,control,hostId,schedule,request};
 }
+test('source reconciliation verifies hashes and CAS, preserves enabled/history, and reconciles repeated delivery',async t=>{
+ const {home,app,control,request,schedule}=await fixture(t),manifest=path.join(home,'workflow.json'),exportPath=path.join(home,'export.json');
+ fs.writeFileSync(manifest,'{"workflow":"synthetic"}');
+ const current={...schedule,enabled:true,source:{system:'fixture',manifest}};app.engine.schedules.save(current,revision(schedule));
+ const captured=app.engine.createRun(current,'manual');await until(()=>captured.status==='completed');
+ fs.writeFileSync(exportPath,JSON.stringify({...current,name:'New source name',enabled:false}));
+ const hash=file=>createHash('sha256').update(fs.readFileSync(file)).digest('hex'),sourceExport={exportPath,exportSha256:hash(exportPath),manifestSha256:hash(manifest)};
+ const preview=await control.handle(request('preview-reconcile',{settingsScope:'future-runs',sourceExport}));assert.equal(preview.applied,false);assert.equal(app.engine.schedules.get(schedule.id).name,current.name);
+ const args=request('reconcile',{settingsScope:'future-runs',sourceExport,planDigest:preview.planDigest,operationId:randomUUID()});
+ const saved=await control.handle(args);assert.equal(saved.enabled,true);assert.equal(saved.name,'New source name');assert.equal((await control.handle(args)).taskId,saved.taskId);assert.equal(captured.schedule.name,current.name);
+ fs.writeFileSync(manifest,'changed');await assert.rejects(control.handle(request('preview-reconcile',{settingsScope:'future-runs',sourceExport})),/changed/);
+ await assert.rejects(control.handle({...request('preview-reconcile',{settingsScope:'future-runs',sourceExport}),expectedRevision:'stale'}),/changed/);
+});
+test('schedule status respects newest-first paging and catalog rescan leaves future settings unchanged',async t=>{
+ const {app,control,request,schedule,home}=await fixture(t);
+ for(let i=0;i<5;i++){const run=app.engine.createRun(schedule,'manual');await until(()=>run.status==='completed');run.createdAt=new Date(1000*i).toISOString();}
+ const first=await control.handle(request('status',{limit:3}));assert.equal(first.runs.length,3);assert.equal(first.runs[0].createdAt,new Date(4000).toISOString());assert.ok(first.nextCursor);
+ const second=await control.handle(request('status',{limit:3,cursor:first.nextCursor}));assert.equal(second.runs.length,2);
+ const before=revision(app.engine.schedules.get(schedule.id));fs.writeFileSync(path.join(home,'AGENTS.md'),'new source');
+ const refreshed=await control.handle(request('refresh-catalog'));assert.equal(refreshed.refreshed,true);assert.equal(revision(app.engine.schedules.get(schedule.id)),before);assert.ok(refreshed.sources.some(entry=>entry.kind==='instruction'));
+});
 test('resolved schedule reads and source discovery expose metadata without source bodies or MCP secrets',async t=>{
  const {home,app,control,request}=await fixture(t);
  fs.writeFileSync(path.join(home,'AGENTS.md'),'PRIVATE_SOURCE_BODY');await app.context.refreshAsync();

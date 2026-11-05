@@ -239,16 +239,13 @@ export class ContextStore {
     const addDocument = (file, root, explicitKind) => {
       try {
         const canonical = fs.realpathSync(file); const id = hash(canonical); const existing = entries.get(id);
-        if (existing) {
-          existing.sources = unique([...existing.sources, file]); existing.roots = unique([...existing.roots, root]);
-          if (explicitKind) { existing.kind = explicitKind; existing.agent = explicitKind === 'agent' ? agentMetadata(readDocument(canonical)) : undefined; existing.unsupportedAgentFields = existing.agent?.issues || []; }
-          return;
-        }
+        // A shared source can survive under an unscanned root. Discovery of that
+        // source must still reread its bytes, not retain the previous hash.
         const text = readDocument(canonical); const meta = markdownMetadata(text, canonical); const kind = explicitKind || kindFor(file);
         const scope = meta.applyTo || (['AGENTS.md', 'CLAUDE.md'].includes(path.basename(file)) ? path.dirname(file) : path.basename(file) === 'copilot-instructions.md' ? root : 'Selected task');
         const agent = kind === 'agent' ? agentMetadata(text) : undefined;
         const defaultMode = kind === 'instruction' && [path.join(root, 'AGENTS.md'), path.join(root, 'CLAUDE.md'), path.join(root, '.github/copilot-instructions.md')].includes(file) ? 'workspace' : 'available';
-        entries.set(id, { id, kind, path: canonical, sources: [file], roots: [root], name: meta.name, characters: text.length, description: meta.description, runtimeName: meta.fields.name || path.basename(path.dirname(file)), agent, unsupportedAgentFields: agent?.issues || [], scope, hash: hash(text), defaultMode });
+        entries.set(id, { id, kind, path: canonical, sources: unique([...(existing?.sources||[]),file]), roots: unique([...(existing?.roots||[]),root]), name: meta.name, characters: text.length, description: meta.description, runtimeName: meta.fields.name || path.basename(path.dirname(file)), agent, unsupportedAgentFields: agent?.issues || [], scope, hash: hash(text), defaultMode });
       } catch (error) { errors.push({ path: file, message: error.message }); }
     };
     const walk = (dir, root) => {

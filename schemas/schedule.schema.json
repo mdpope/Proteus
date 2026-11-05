@@ -230,6 +230,10 @@
             },
             "additionalProperties": true
           }
+        },
+        "sandboxedCommands": {
+          "type": "boolean",
+          "description": "Codex custom-mode native sandbox autonomy within explicit folder grants. Network is disabled; out-of-scope approvals are not granted."
         }
       },
       "additionalProperties": true

@@ -63,6 +63,7 @@ export class RemoteCommandStore {
     });
     this.metrics.migrationRecords = migrationRecords; this.metrics.migrationBytes = migrationBytes;
   }
+  lookup(key) { const row=this.get.get(key);return row?JSON.parse(row.payload):null; }
   claim(key, digest, issuedAt, now = Date.now()) {
     let prunedAt;
     const result = this.transaction(() => {

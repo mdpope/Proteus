@@ -2,6 +2,10 @@ import {createHash} from 'node:crypto';
 
 const pick=(value,keys)=>Object.fromEntries(keys.filter(key=>value?.[key]!==undefined).map(key=>[key,value[key]]));
 export const sourceMetadata=entry=>pick(entry,['id','name','kind','hash','path','mode','missing']);
+export async function refreshScheduleCatalog(service,schedule){
+ const base=schedule.context?.workspaceId||service.context.get().workspaceId;
+ for(const workspaceId of new Set([base,...(schedule.workspaceSources||[]).map(ref=>ref.workspaceId)]))await service.context.refreshAsync({workspaceId});
+}
 
 // Report metadata only. MCP commands, environments and source bodies stay on the
 // owner. Resolving this view never saves a schedule or launches a provider.

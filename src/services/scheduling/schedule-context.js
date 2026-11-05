@@ -1,7 +1,9 @@
+import {validateScopedExecution} from './scoped-execution.js';
 import {permissionRuleId} from '../settings/permissions.js';
 export const workspaceSourceCategories=['folders','permissions','instructions','agents','skills','mcps'];
 export function validateScheduleSources(schedule){
  if(schedule.workspaceSources!==undefined&&(!Array.isArray(schedule.workspaceSources)||schedule.workspaceSources.some(ref=>typeof ref?.workspaceId!=='string'||!ref.workspaceId||!Array.isArray(ref.categories)||ref.categories.some(category=>!workspaceSourceCategories.includes(category)))))throw Error('Choose valid workspace references and configuration categories.');
+ validateScopedExecution(schedule);
  const p=schedule.executionPermissions;
  if(p===undefined)return;
  if(!p||typeof p!=='object'||Array.isArray(p))throw Error('Choose valid schedule filesystem and approval settings.');

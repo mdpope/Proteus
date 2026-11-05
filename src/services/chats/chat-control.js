@@ -181,7 +181,7 @@ export class ChatControl {
     }
   }
   taskFor(actor,id){const task=this.tasks.get(id);if(!task||(actor!=='operator'&&task.actor!==actor))throw Error('Task not found in this originating scope.');return task;}
-  taskView(task,includeFeedback=true){return {taskId:task.id,...pick(task,['id','operationId','originChatId','hostId','chatId','action','state','status','createdAt','updatedAt','error','notify','deliveryError']),...(includeFeedback&&task.feedback?{feedback:task.feedback}:{}),...(task.sendModelOptions?{modelSelection:{scope:'next-turn',provider:task.sendProvider,options:task.sendModelOptions,state:'requested'}}:{}),externalOutcomeVerified:false};}
+  taskView(task,includeFeedback=true){return {taskId:task.id,...pick(task,['id','operationId','originChatId','hostId','chatId','action','state','status','createdAt','updatedAt','error','notify','deliveryError','recaptureHistory']),...(includeFeedback&&task.feedback?{feedback:task.feedback}:{}),...(task.sendModelOptions?{modelSelection:{scope:'next-turn',provider:task.sendProvider,options:task.sendModelOptions,state:'requested'}}:{}),externalOutcomeVerified:false};}
   async models(hostId,provider){
     if(provider==='rehearsal')return {available:true,models:[{id:'',name:'Local rehearsal',controls:{}}],rehearsal:true};
     if(typeof provider!=='string'||!/^[-a-z0-9]{1,64}$/.test(provider))throw Error('Choose an advertised provider.');
@@ -362,6 +362,18 @@ export class ChatControl {
       const prior=args.cursor?decode(args.cursor):{offset:0,snapshot};if(prior.snapshot!==snapshot||!Number.isSafeInteger(prior.offset)||prior.offset<0)throw Error('Task inventory changed. Restart paging.');
       const page=tasks.slice().reverse().slice(prior.offset,prior.offset+limit);
       return {tasks:await Promise.all(page.map(async t=>{try{await this.authorizeTask(t);return this.taskView(t,false);}catch{return {taskId:t.id,state:'unavailable',error:'Destination no longer authorized.'};}})),nextCursor:prior.offset+page.length<tasks.length?encode({snapshot,offset:prior.offset+page.length}):null};
+    }
+    if(args.action==='recapture'){
+      const task=this.taskFor(actor,args.taskId);
+      if(task.action!=='create'||task.args.purpose||!uuid.test(args.operationId||''))throw Error('Choose an ordinary create task and a stable recapture operationId.');
+      this.assertAccess(actor,task.hostId,'dispatch',undefined,task.projectId);
+      if(task.chatId&&task.state==='accepted')return this.taskView(task);
+      if(task.hostId!==this.localId()&&!(await this.connection(task.hostId)).capabilities.includes('chat.recapture.v1'))throw Error('The destination needs source recapture support.');
+      const payload={...pick(task.args,['purpose','name','prompt','provider','model','reasoningEffort','contextTier','serviceTier','workspaceId','projectId','selectedIds','includeDefaults','agentId','updateRelease']),reasoningEffort:task.args.reasoningEffort||'',contextTier:task.args.contextTier||'default',serviceTier:task.args.serviceTier||''};
+      const result=await this.request(task.hostId,'chat.recapture',{originalTaskId:task.id,originalDigest:task.digest,originalPayload:payload},{id:args.operationId,issuedAt:new Date().toISOString()});
+      this.assertAccess(actor,task.hostId,'dispatch',undefined,task.projectId);
+      task.recaptureHistory??=[];task.recaptureHistory.push({operationId:args.operationId,priorError:task.error,at:new Date().toISOString(),sourceHashes:result.sourceHashes});
+      task.chatId=result.runId;task.state='accepted';task.status='accepted';delete task.error;task.updatedAt=new Date().toISOString();this.save(task);return {...this.taskView(task),recaptured:true};
     }
     if(args.action==='retry')return this.perform(this.taskFor(actor,args.taskId));
     if(['create','send','reply','cancel'].includes(args.action))return this.submit(actor,args);

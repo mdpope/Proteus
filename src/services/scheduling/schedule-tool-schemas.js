@@ -5,6 +5,7 @@ export const workspaceSourcesSchema={type:'array',items:{type:'object',required:
 }}};
 const folder={type:'object',required:['path','access'],additionalProperties:false,properties:{path:{type:'string',description:'Absolute owner-local path; use the narrowest required directory.'},access:{type:'string',enum:['read','read-write']}}};
 export const executionPermissionsSchema={type:'object',additionalProperties:false,description:'Future-run override, merged with inherited owner permissions. Omitted fields inherit. Arrays replace the explicit arrays, not inherited grants. Requires schedule-configure-permissions. Does not answer pending approvals.',properties:{
+ sandboxedCommands:{type:'boolean',description:'Codex only: run variable commands within explicit folder grants using a native restrictive profile. No shell prefix grants or network access; out-of-scope operations still require human approval.'},
  mode:{type:'string',enum:['ask','custom'],description:'custom uses saved exact rules; ask requires human approval for tools. Blanket automatic approval is unavailable here.'},
  readOnlyTools:{type:'boolean'},folders:{type:'array',items:folder},
  rules:{type:'array',items:{type:'object',description:'Exact operation rule. Shell command is the complete command, never an interpreter-wide grant. MCP rules require server and tool; include action for action-based tools. No wildcard tool/server/action.',properties:{

@@ -1,3 +1,11 @@
+## Nov 5 scoped controls — source only
+
+- Reconcile source-owned schedule exports with pinned hashes, caller revision and preview digest while preserving enabled state and history.
+- Run Codex commands within explicit filesystem grants using native sandbox enforcement; keep network disabled and connector calls individually authorized.
+- Carry saved read-only MCP policy through native Codex startup and tool calls using connected catalog annotations; unknown tools and writes retain individual approval.
+- Rescan shared sources correctly, recapture owner-proven rejected chat creates without duplicate delivery, and page schedule status newest first.
+- No build, deployment or real workflow acceptance is claimed.
+
 ## Nov 5 — source only, build held
 
 - Schedule tools expose resolved folders, source metadata and effective permissions; preview proposed future settings without writing, retain test-start configuration and return consistent list/read revisions. Schemas and the installed-version workaround are documented. This is not installed or live workflow acceptance.

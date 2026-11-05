@@ -1,3 +1,5 @@
+import {scopedExecutionSandbox} from '../services/scheduling/scoped-execution.js';
+import {codexMcpReadOnly} from './codex-mcp-policy.js';
 import {subagentJournal} from '../services/chats/subagents.js';
 import {questionAttachmentTools} from '../services/chats/question-attachments.js';
 import {providerActivity} from '../shared/provider-activity.js';
@@ -35,6 +37,7 @@ export function codexModel(model) {
 // Filesystem grants never imply approval of a shell command. Keep native untrusted
 // approval routing; the engine applies the user's separate saved operation rules.
 export function codexSandbox(schedule, profile, { desktopPreview = false, permissionControls = desktopPreview } = {}) {
+ const scoped=scopedExecutionSandbox(schedule);if(scoped){if(!permissionControls||profile?.mode!=='custom')throw Error('Scoped command enforcement is unavailable or its permission mode changed.');return scoped;}
  if(permissionControls&&profile?.workingFolders?.length){
   const cwd=canonicalPath(schedule.workspace.cwd,schedule.workspace.cwd);
   if(!cwd)throw Error('The working folder is unavailable.');
@@ -88,7 +91,7 @@ export function codexSandboxPreservesAccess(original, current) {
 }
 export function verifyCodexSandbox(thread, expected, cwd) {
  if(expected.managedProfile){
-  if(thread.cwd!==cwd||thread.approvalPolicy!=='untrusted'||thread.approvalsReviewer!=='user'||thread.activePermissionProfile?.id!==expected.managedProfile||thread.activePermissionProfile?.extends!==':workspace'||thread.sandbox?.networkAccess!==false||JSON.stringify([...(thread.runtimeWorkspaceRoots||[])].sort())!==JSON.stringify(expected.runtimeWorkspaceRoots))throw Error('Codex did not confirm the selected filesystem permission profile. No turn was started.');
+  if(thread.cwd!==cwd||thread.approvalPolicy!==(expected.approvalPolicy||'untrusted')||thread.approvalsReviewer!=='user'||thread.activePermissionProfile?.id!==expected.managedProfile||(thread.activePermissionProfile?.extends??null)!==(expected.scopedCommands?null:':workspace')||thread.sandbox?.networkAccess!==false||JSON.stringify([...(thread.runtimeWorkspaceRoots||[])].sort())!==JSON.stringify(expected.runtimeWorkspaceRoots))throw Error('Codex did not confirm the selected filesystem permission profile. No turn was started.');
   return;
  }
  if(expected.sandbox!=='workspace-write')return;
@@ -160,7 +163,7 @@ export class CodexProvider {
   if(run.schedule.skillDirectories?.length && snapshot?.includeDefaults!==false)throw new Error('For Codex, select individual skills from the context list; legacy skill directories are not supported.');
   const mcp=Object.fromEntries(Object.keys(existing).map(name=>[name,{enabled:false}]));
   for(const [name,def] of Object.entries(selected)){
-    const answer=await ask({type:'permission',question:`Allow ${name} server tools for this Codex turn?`,details:{kind:'mcp',serverName:name,toolName:'*',intention:`Enable the selected ${name} MCP server for this turn. Codex manages individual tool execution.`,readOnly:false}});
+    const answer=await ask({type:'permission',question:`Connect selected ${name} server for this Codex turn?`,details:{kind:'mcp-connect',serverName:name,toolName:'*',intention:`Connect the selected ${name} MCP server. Individual tool calls retain their own permissions.`,readOnly:false}});
     if(!['approve','approve-auto'].includes(answer))throw new Error('Selected MCP server declined: '+name);
     if(def.type==='sse')throw new Error('Codex requires streamable HTTP for remote MCP servers. Update the selected server transport first.');
     if(def.type==='http')mcp[name]={enabled:true,url:def.url,...(def.headers?{http_headers:def.headers}:{})};
@@ -169,6 +172,7 @@ export class CodexProvider {
   }
   const roots=[run.schedule.workspace.cwd,...run.schedule.workspace.additionalDirectories];
   const sandbox=codexSandbox(run.schedule,permissionProfile?.(),{permissionControls:(this.options.permissionControls===true||this.options.desktopPreview===true)});
+  if(sandbox.scopedCommands&&(native.config?.permissions?.[sandbox.managedProfile]||(native.layers||[]).some(layer=>layer.config?.permissions?.[sandbox.managedProfile])))throw Error('A native configuration layer already defines this scoped profile. Review it before running.');
   const currentBrowserTools=browserTools(this.browser,run.id),currentIntegrationTools=[...integrationTools(this.integrations,run.id),...chatControlTools(this.chatControl,run.id)];const browser=[...questionAttachmentTools(this,run.id),...currentBrowserTools,...currentIntegrationTools];const items=new Map();const calls=new Map();
   const approvedBridgeCalls=new Map();
   captureAppCapabilities(run,browser,update);
@@ -260,7 +264,9 @@ export class CodexProvider {
        if(definition.tools?.length&&!definition.tools.includes('*')&&!definition.tools.includes(name))throw new Error('This MCP tool is outside the selected tool set.');
        assertAppToolActive();
        const beforeApproval=JSON.stringify(permissionProfile?.());
-       const answer=await scopeAsk({type:'permission',question:`Allow ${p.serverName} ${name}?`,details:{kind:'mcp',serverName:p.serverName,toolName:name,args:meta.tool_params,toolCallId:p.itemId||String(msg.id),intention:`${p.serverName} ${name}`,readOnly:false}});
+       const readOnly=permissionProfile?.()?.readOnlyTools===true&&await codexMcpReadOnly(client,p.threadId,p.serverName,name);
+       assertPendingApprovalCurrent();assertAppToolActive();
+       const answer=await scopeAsk({type:'permission',question:`Allow ${p.serverName} ${name}?`,details:{kind:'mcp',serverName:p.serverName,toolName:name,args:meta.tool_params,toolCallId:p.itemId||String(msg.id),intention:`${p.serverName} ${name}`,readOnly}});
        assertPendingApprovalCurrent();assertAppToolActive();
        if(answer==='approve-auto'&&JSON.stringify(permissionProfile?.())!==beforeApproval)throw new Error('Saved permissions changed before the MCP approval could be delivered.');
        if(p.turnId!==active.turnId)throw new Error('MCP approval belongs to an ended turn.');
@@ -292,7 +298,7 @@ export class CodexProvider {
    }
    const instructions=`${appInstructions}${resumedBrowserTools.length?'\nUse the fresh tools published by the proteus_app MCP server. Native desktop control uses its proteus_desktop tool so screenshots arrive as images. For browser and tab operations in resumed chats, also prefer that fresh catalog: older unprefixed dynamic schemas may be stale. The fresh catalog supports hidden/unloaded lifecycle actions and every available profile; normal workflow approvals still apply.':''}\nYou are working inside Proteus. Use only the selected sources below. Workspace folders:\n${roots.join('\n')}\n${managed?.instructionText||''}\n${(managed?.customAgents||[]).map(a=>`Agent: ${a.displayName}${a.name===managed.agent?' (main identity)':''}\n${a.prompt}`).join('\n\n')}\nEditor context: ${JSON.stringify(run.schedule.editorContext||null)}`;
    const config={...sandbox.config,project_doc_max_bytes:0,developer_instructions:instructions,mcp_servers:mcp,features:{skip_host_skill_discovery:true,skill_mcp_dependency_install:false,enable_mcp_apps:false,multi_agent:true},plugins:Object.fromEntries(Object.keys(plugins).map(name=>[name,{enabled:false}])),apps:{_default:{enabled:false}},web_search:'disabled'};
-   const params={model:run.schedule.model,cwd:sandbox.cwd,runtimeWorkspaceRoots:sandbox.runtimeWorkspaceRoots,approvalPolicy:'untrusted',approvalsReviewer:'user',...(sandbox.managedProfile?{}:{sandbox:sandbox.sandbox}),developerInstructions:instructions,config};
+   const params={model:run.schedule.model,cwd:sandbox.cwd,runtimeWorkspaceRoots:sandbox.runtimeWorkspaceRoots,approvalPolicy:sandbox.approvalPolicy||'untrusted',approvalsReviewer:'user',...(sandbox.managedProfile?{}:{sandbox:sandbox.sandbox}),developerInstructions:instructions,config};
    const thread=run.providerSessionId?await client.request('thread/resume',{...params,threadId:run.providerSessionId}):await client.request('thread/start',{...params,dynamicTools:browser.filter(t=>!['proteus_open_document','proteus_desktop'].includes(t.name)).map(t=>({type:'function',name:t.name,description:t.description,inputSchema:t.parameters}))});
    verifyCodexSandbox(thread,sandbox,sandbox.cwd);
    run.providerSessionId=thread.thread.id;run.providerHome=this.options.env?.CODEX_HOME||process.env.CODEX_HOME||path.join(os.homedir(),'.codex');run.nativeSessionPath=thread.thread.path||null;run.modelCapabilities={id:model.id,controls:model.controls,capturedAt:new Date().toISOString()};run.explicitProviderContext={mcpNames:Object.keys(selected),skillDirectories:[],disabledSkills:managed?.disabledSkills||[]};if(snapshot){snapshot.suppliedAt=new Date().toISOString();snapshot.delivery='Codex thread configuration accepted';}update();
@@ -311,7 +317,7 @@ export class CodexProvider {
       const file=path.join(imageDir,`image-${index}.${extensions[item.mediaType]}`);fs.writeFileSync(file,item.bytes,{mode:0o600,flag:'wx'});input.push({type:'localImage',path:file});
     }
    }
-   const result=await client.request('turn/start',{threadId:run.providerSessionId,...(sandbox.managedProfile?{}:{sandboxPolicy:sandbox.policy}),approvalPolicy:'untrusted',approvalsReviewer:'user',runtimeWorkspaceRoots:sandbox.runtimeWorkspaceRoots,input,effort:run.schedule.reasoningEffort||model.controls.defaultReasoningEffort||null,serviceTier:run.schedule.serviceTier||null});active.turnId=result.turn.id;if(signal.aborted||active.permissionRevoked){clearTimeout(abortTimer);abortTimer=null;abort();}await completed;
+   const result=await client.request('turn/start',{threadId:run.providerSessionId,...(sandbox.managedProfile?{}:{sandboxPolicy:sandbox.policy}),approvalPolicy:sandbox.approvalPolicy||'untrusted',approvalsReviewer:'user',runtimeWorkspaceRoots:sandbox.runtimeWorkspaceRoots,input,effort:run.schedule.reasoningEffort||model.controls.defaultReasoningEffort||null,serviceTier:run.schedule.serviceTier||null});active.turnId=result.turn.id;if(signal.aborted||active.permissionRevoked){clearTimeout(abortTimer);abortTimer=null;abort();}await completed;
   }finally{agents.finish();for(const request of userInputRequests.values()){request.resolved=true;request.controller.abort({code:'provider-resolved'});}userInputRequests.clear();capture.finish();if(appBridge)await appBridge.close();clearTimeout(abortTimer);if(active.turnId&&!settled)await client.close();signal.removeEventListener('abort',abort);client.off('notification',onNotification);client.off('request',onRequest);client.off('closed',closed);for(const tool of calls.values())if(tool.status==='running')tool.status='interrupted';if(this.active===active)this.active=null;if(imageDir)fs.rmSync(imageDir,{recursive:true,force:true});for(const directory of active.steeringImageDirs||[])fs.rmSync(directory,{recursive:true,force:true});update();}
  }
  recheckPermissions(){this.active?.recheckPermissions?.();}
