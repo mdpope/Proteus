@@ -1,3 +1,7 @@
+## Nov 5 — planning only, build held
+
+- Migrated the Nov 4 queue to [Nov 5](docs/2026-11-05-release-plan.md), retaining all scope. Await Nov 3 closeout, daily-digest instructions and the operator's hold release; the documented digest-blocker exception does not bypass Nov 3 closeout. No version reserved or implementation/build performed.
+
 ## Nov 3 — 0.2.42 candidate
 
 - Send owner state as versioned patches to clients that opt in, skip the snapshot on a conditional sync and batch progress churn. Older clients keep whole snapshots at a slower progress cadence. State no longer enters the replay journal, where it evicted lifecycle events.
