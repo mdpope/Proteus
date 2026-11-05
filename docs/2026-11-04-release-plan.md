@@ -75,6 +75,25 @@ On Nov 5 Work Mac refused every command, including an authorized update, with "R
 
 To resolve: find what dominates the bytes, using the diagnostics the journal already exposes, and measure it on a real owner rather than guessing. Keep retry protection but do not store full large results in each receipt (store a digest and size, since a retry needs the outcome, not the whole tab list). Warn before the cap is reached, so it shows in the owner's status and in a dispatch error that names the cause and the time until space frees. Test that existing claims still complete and retries still return the original outcome. Also confirm the activity-write change in 0.2.42 actually reduced this on a live owner.
 
+### P5 — Sending a message shows "State display is temporarily unavailable", and the message is missing for a while
+
+Reported by the operator on Nov 5, on the Build Mac running 0.2.42: every time a message is submitted in a chat, a toast reads "State display is temporarily unavailable. Retry the refresh." and the submitted message does not appear in the history for some time. It happens on every submit, not occasionally. Whether it began with 0.2.42 or earlier is unknown.
+
+What the code shows: the text comes from one place, the `/api/state` endpoint in `src/server.js`, which returns HTTP 503 from a catch-all around building and serializing the whole app state. That state is assembled by a projection worker (`src/services/state/state-projection-client.js`) that has a 15-second timeout, a bounded number of pending snapshots and deliberately no synchronous fallback. So any error, timeout or overflow in that path becomes this same message.
+
+Two facts that make it hard to diagnose today:
+1. The catch discards the underlying error. No log entry records it. A search of this owner's log found no related entry, so the cause cannot be read back from it.
+2. After a send, the app asks for the full state again. If that refresh fails, the chat is not updated from the send's own result, so the user's message stays invisible until a later refresh succeeds. The message was presumably sent; that has not been checked.
+
+Not yet established: whether the worker is timing out, refusing a pending snapshot while another is in flight (a send triggers several refreshes at once), or failing on something in the state. This owner holds 148 chats, 8 workspaces and 239 tabs, so size is a suspect but unproven.
+
+To resolve:
+1. Log the real error, with its cause and the worker's pending count and elapsed time, content-free, before changing anything. Reproduce on a copy of a large owner, not guess.
+2. Find the cause and fix it, for example coalescing overlapping state refreshes so a send does not queue several full snapshots, or keeping the worker from rejecting while a prior one runs.
+3. Make a send independent of the full refresh: show the submitted message immediately from the send's own response (optimistic display with its retry identity), and reconcile when the refresh arrives. A failed refresh should never hide a message.
+4. Make the toast useful: say what failed, retry automatically with backoff, and clear itself when the retry succeeds.
+5. Regression: submit messages in a large synthetic owner, with the state worker forced to fail and to be slow, and verify the message appears at once and that no duplicate is created on retry.
+
 ## Carried forward
 
 - Linux renderer-crash recovery fails on the unmodified baseline and is unexplained (see the Nov 3 Linux qualification).
