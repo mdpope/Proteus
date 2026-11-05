@@ -163,6 +163,42 @@ to public Proteus downloads and private agent staging. Protected hosting verific
 fixed read-only audit command; retain the existing bounded website updater. Keep exact account,
 key references, permission receipts and hosting commands in the private deployment workspace.
 
+### Server access and root operations
+
+Release work reaches the server over the deployment SSH alias; the Webmin browser session is a
+fallback, not the routine path.
+
+- **SSH reliability.** The alias must carry the macOS Keychain options (`UseKeychain yes`,
+  `AddKeysToAgent yes`) so a plain `ssh ALIAS` works without per-call flags. The key's
+  passphrase lives in the login Keychain, so a locked Mac screen produces
+  `Permission denied (publickey)`. Check that the Mac is unlocked before diagnosing anything
+  else, and never work around it by weakening the key.
+- **Root-only work** (retention, recovery rotation, relay container upgrade, inventories of
+  root-owned areas) runs through an audited root wrapper over SSH and `sudo`, not by driving the
+  Webmin UI. Stage a helper in agent staging, compute its SHA-256 locally, then run the wrapper
+  with the helper name and that hash. The wrapper copies the helper to a root-only directory,
+  verifies the hash on the copy, runs one operation at a time, and appends every start, end and
+  refusal to a root-owned audit log. Destructive helpers must print a plan first and apply only
+  against that plan's digest, after the plan has been reviewed. An authorized administrator
+  installs the wrapper once (through Webmin); deleting its sudoers file revokes it. The wrapper,
+  its installer and exact paths stay in the private deployment workspace.
+- **Reading output.** Webmin's Command Shell ignores everything after a leading `cd`, shows no
+  command output in the page, and rejects direct URLs (open it through the menu). When it is
+  unavoidable, use absolute paths, redirect output to a file the agent can read over SSH, and
+  verify the effect over SSH. A browser tab renders at zero width unless it is visible in the
+  app window, which fails clicks and screenshots with "fetch failed"; ask for the tab to be
+  shown rather than retrying. Page snapshots of Webmin are very large; avoid repeating them.
+- **Windows owner update calls are single-flight.** The owner rejects an update call while another
+  one (including a maintenance inspection of 25 to 60 seconds or more) is running, with
+  "Another update operation is running", and the Codex provider shows only "dynamic tool request
+  failed". An update coordinator must make `proteus_update` calls one at a time and wait for a
+  yielded cell before the next call. `status` does not show the busy flag.
+- **Windows owner builds cannot override TEMP.** The owner build worker inherits the user's
+  default TEMP, which can carry extra access grants that the private-storage check rejects.
+  Test fixtures must create their homes with the private temporary directory helper and register
+  cleanup before anything can fail; otherwise a rejected start leaves a listening relay and the
+  source suite hangs with no error.
+
 After recovery verification and upload, use the server's exact public root and the distribution
 receipt to inspect and apply current-only package retention:
 
