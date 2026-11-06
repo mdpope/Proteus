@@ -2,6 +2,23 @@
 
 Migrated from the Nov 4 plan on November 5, 2026. All queued scope and historical observation dates below are preserved. Planning only; no version is reserved and no build is authorized.
 
+## Source integration and checkout cleanup — November 5
+
+The single release branch is `nov5-release` in the primary checkout. All four remaining older
+worktrees and two separate obsolete release clones are retired; their commits were already in
+main. Small dirty patches and historical evidence are preserved privately, with the browser-sizing
+fix confirmed already integrated. Unused dependency caches were retired after dependency-link and
+active-process checks. No additional worktree is retained.
+
+Linux document-preservation source `160b647` is integrated as `63bfa6f`: stale window snapshots
+retain the same document origin, all saved aliases regain the binding, and explicit reopening
+reuses its existing destination descriptor. The updater preservation gate and authorization remain
+unchanged. This addresses the association-loss and duplicate-destination failures below; it does
+not claim to diagnose every historical closed tombstone or add the other queued receipt controls.
+Integrated source validation passes 1,552 tests with four skips and zero failures, plus static
+checks. Disposable Mac acceptance also passes startup, Reload Window and cold restart. Packaging, Linux
+installed acceptance and the existing attention/rollback receipt remain outstanding.
+
 ## Current release prerequisite — November 5 closeout
 
 Nov 3 is now closed; see [its closeout](releases/2026-11-03/closeout.md). Its release prerequisite

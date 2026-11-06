@@ -36,14 +36,15 @@ were changed. P6 passes ten focused tests, the full suite (1,542 pass/four skip)
 
 ## Nov 5 — Linux document preservation correction
 
-Implemented in source for release integration: prevent saved-window synchronization from stripping
+Integrated on nov5-release as 63bfa6f: prevent saved-window synchronization from stripping
 registry-only document chat associations, hydrate every document alias when restoring, and prefer
 the existing destination when reopening a document with historical aliases in multiple scopes.
 The updater preservation gate stays unchanged; no live stores or recovery generations are edited.
 Regression tests reproduce both reported failures on the previous source. Disposable Linux
 Electron acceptance passes startup, Reload Window and cold restart with stable project descriptors
 and revisions. See [workspace contract and tests](workspaces.md#nov-5--document-origin-survives-window-restore).
-Final release integration, packaging and installed acceptance remain with the release coordinator.
+Disposable Mac startup, reload and cold-restart acceptance also passes after integration.
+Packaging and installed acceptance remain with the release coordinator.
 
 ## Nov 2 closed — Nov 3 follow-up queue
 

@@ -2,16 +2,18 @@
 
 Nov 3 / 0.2.42 is merged to main, published for accepted Mac/Windows targets and closed with
 Linux deferred and explicit acceptance limits. See [closeout](releases/2026-11-03/closeout.md).
-The [Nov 5 plan](2026-11-05-release-plan.md) retains all carry-over scope; digest source remains
-on its isolated branch. No Nov 5 build or version reservation has started.
+The [Nov 5 plan](2026-11-05-release-plan.md) retains all carry-over scope; digest source is consolidated
+on the primary nov5-release branch. No Nov 5 build or version reservation has started.
 
 ## Nov 5 preparation — one release branch
 
 The primary checkout uses nov5-release. Nov 3 is closed and its worktrees/branches are retired.
 The Nov 5 plan preserves the carried-over requests and prepared digest controls. The narrow
 digest-blocker build scope is first; no version reservation, package or installation has started.
-The Linux owner is implementing the document-preservation fix for review and integration into
-this same branch. No additional worktrees are needed outside explicitly delegated work.
+The Linux document-preservation fix is integrated as 63bfa6f in this same branch; source and
+disposable Mac restore/reload/restart acceptance pass (1,552 tests, four skips, static checks).
+Installed acceptance remains pending. All older local worktrees/clones and unused dependency
+caches are retired; only the primary release checkout remains. No additional worktrees are needed outside explicitly delegated work.
 
 ## Nov 5 scoped schedule controls — implementation complete, build held
 
