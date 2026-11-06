@@ -1,3 +1,11 @@
+## Nov 6 request — remote Allow and remember reliability
+
+N6-02 in [the Nov 6 plan](2026-11-06-release-plan.md#n6-02--reliable-remote-allow-and-remember)
+tracks a human approval dialog remaining visible on a remote chat. Verify owner-side permission
+persistence, exact request resolution, acknowledgment and remote dismissal separately, including
+applicable scopes, uncertainty/reconnect and journal-capacity failure. Requested only; no live
+approval or implementation is claimed.
+
 ## Nov 6 — protected journal capacity and live Slack follow-up
 
 Installed browser correction `578a509` passed native fixture and owner health/preservation checks.

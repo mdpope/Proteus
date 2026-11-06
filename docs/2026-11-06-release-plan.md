@@ -61,6 +61,51 @@ actual OAuth consent, server catalog, provider exposure and effective run policy
 5. Coordinate resulting contract with the existing organization workflows owner and retain its separate real
    workflow/no-new-evidence acceptance. No pending agent request is approved on its behalf.
 
+## N6-02 — Reliable remote Allow and remember
+
+Status: requested; not implemented or verified.
+
+The operator reports that **Allow and remember** sometimes leaves the permission dialog and
+pending approval visible when controlling an Work Mac chat from Build Mac. The supplied screenshot
+shows the Remember permission dialog with This workspace selected over an owner-side
+`proteus_desktop` / `verify` request. It does not establish whether the permission was saved,
+whether the pending request was answered, or whether only the remote display failed to refresh.
+Keep machine/chat identifiers and the original screenshot in private release evidence, outside Git.
+
+### Required behavior
+
+- Trace the full human action: selected scope and owner, durable permission save, exact pending
+  request resolution, owner acknowledgment, remote state propagation and dialog dismissal.
+  Report save and answer outcomes separately when one succeeds and the other does not.
+- Offer only applicable scopes. An unassigned update chat must not accidentally save a workspace
+  rule against the controller's workspace or an unrelated destination workspace. Preserve exact
+  tool/action matching and the user's selected chat/workspace scope; do not widen grants.
+- Show immediate in-progress feedback and a visible actionable error on rejection, timeout,
+  disconnect or journal-capacity refusal. Do not leave an inert dialog or require unexplained
+  repeated clicks. Keep pending approvals visible until authoritative owner resolution is known.
+- Reconcile uncertain saves/answers with stable operation and pending-request identities before
+  retrying. A retry must not duplicate tool execution, save extra rules, answer a newer request,
+  or imply success from a local button click. Recover after reconnect/reload without losing state.
+- Once the owner confirms resolution, clear the modal and approval card consistently in desktop,
+  web and mobile remote views and display the actual remembered scope. Preserve drafts and
+  reading position. If a different request is now pending, show that request distinctly.
+
+### Acceptance
+
+1. Reproduce the Build Mac to Work Mac human approval flow, including `proteus_desktop verify`,
+   This chat and applicable This workspace scopes, and unassigned update chats. Use authorized
+   disposable approval fixtures; agents must not answer another agent's live permission request.
+2. Verify the destination's saved rule, resolution of the exact pending request, exactly one
+   resumed tool action and prompt removal without an extra click. Confirm the next matching
+   request uses the saved rule while nonmatching tools/actions/scopes remain protected.
+3. Cover slow responses, disconnect/reconnect, journal-capacity rejection, save-success/answer-
+   failure, double clicks, stale/replaced requests, and owner resolution from another client.
+   Preserve protected/uncertain receipts. The recently observed journal capacity issue is a
+   possible failure path to test, not an established cause of this reported UI symptom.
+4. Verify desktop/web/mobile rendering against owner state, with useful sanitized diagnostics
+   distinguishing saved, answered, acknowledged and displayed states. No permission bypass,
+   blanket approval, unrelated cancellation or raw-store edit.
+
 ## Release boundaries
 
 Nov 5 outstanding rollout/acceptance remains in its existing records; this plan does not close it
