@@ -1,3 +1,11 @@
+## Agent communication preference — instruction update
+
+The operator selected guidance rather than forced automatic delivery. Shared agent orientation
+and the chat tool describe explicit steering as the preferred choice for relevant updates to
+running, steer-capable chats. Queue separate/deferred work, idle/unsupported destinations and
+next-turn model changes. Preserve pending human approvals and uncertain-delivery receipts.
+Source guidance is updated; runtime defaults, mode enum and feedback routing are unchanged.
+
 ## Nov 5 managed ADO source checkpoint
 
 Both initial adapters now have owner controls and scoped runtime paths. ADO uses protected MSAL

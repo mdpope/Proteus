@@ -1,3 +1,8 @@
+## Nov 5 agent communication guidance
+
+- Guide agents to steer relevant updates to active, capable chats and queue messages that should
+  wait. Keep explicit agent choice, existing delivery defaults and permission boundaries.
+
 ## Nov 5 managed Azure DevOps connections (source)
 
 - Add explicit corporate public-client sign-in with protected SDK caching and serialized renewal.

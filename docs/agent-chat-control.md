@@ -61,6 +61,22 @@ Revoke requires the current access revision. These tools do not create new
 network listeners or expose the loopback API token in results. The service's
 normal host, authorization and origin checks apply.
 
+## Choosing steering or queueing
+
+For agent-to-agent messages, prefer explicit `mode: "steer"` for corrections, answers,
+requirements and progress relevant to work already underway, after a fresh `read` confirms a
+running chat and `chatControls.steering`. This lets the recipient incorporate the update during
+its current work. Delivery timing still depends on the provider and its current operation.
+
+Choose `mode: "queue"` for a separate task, a message that should wait, an idle or unsupported
+destination, or next-turn model changes. Use `reply` for a pending ordinary question. Steering
+never answers or bypasses another run's permission request. Agents choose the mode; omitting it
+still queues. Existing automatic task-feedback routing is unchanged.
+
+If delivery is uncertain, inspect its task receipt and preserve the operation ID and arguments.
+Do not switch modes and send again merely because the recipient finished while delivery was in
+flight; first establish the original outcome through the supported recovery path.
+
 ## Dispatch, recovery and feedback
 
 `create`, `send`, `reply` and `cancel` require a caller-generated UUID

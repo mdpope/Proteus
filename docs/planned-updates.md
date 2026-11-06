@@ -1,3 +1,9 @@
+## Nov 5 agent communication guidance
+
+Prefer explicit steering for relevant updates to running, steer-capable chats; agents choose
+queue for separate/deferred tasks, idle/unsupported destinations and model changes. Shared
+orientation and tool guidance are updated. No forced runtime default or new delivery mode.
+
 ## Nov 5 managed ADO source checkpoint
 
 Both initial adapters now have owner controls and scoped runtime paths. ADO uses protected MSAL

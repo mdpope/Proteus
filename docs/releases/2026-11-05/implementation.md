@@ -1,3 +1,12 @@
+## Agent communication guidance
+
+Updated shared orientation, chat-tool description/mode help and agent-control documentation to
+prefer explicit steering for relevant active-work updates, with queue exceptions and unchanged
+approval/retry boundaries. This supersedes the proposed automatic runtime default; no execution
+or persistence code changed. Existing orientation/chat-control checks: 36 pass, zero fail;
+JavaScript syntax and diff checks pass. The first sandboxed attempt could not create temporary
+fixtures; the authorized rerun passed. Source guidance only, not an installed release.
+
 # Nov 5 implementation
 
 Version: 0.2.43
