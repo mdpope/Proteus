@@ -1,3 +1,20 @@
+## Mac candidate 1 accepted for private delivery
+
+Source `fc0b318cded97cda7fdec613261bf34b579f7b31`; build
+`fc0b318cded9+src.7fff6552aef0`, darwin/arm64, Electron 44.10.2. Clean provenance records
+496 runtime files. Existing Apple signing identity and vendor signatures verify; the exact signed
+app launches in an isolated profile and lists 16 live runtime models. Synthetic Keychain testing
+does not establish real owner credential acceptance. Official archive extraction matches the
+application hash. Matching source companion verifies all packaged inputs.
+
+Release ID `0.2.43-darwin-arm64-c791f4cc7610d0670d07e3e6`; manifest digest
+`69fb06aab30762e0ba79023180a2a21d6c752d7738b0f6bb8e8642c7ba31095e`.
+Build Mac signed with the legacy transition publisher key, while the app bundles both trusted
+public keys. The private draft and all four assets were downloaded and hash-verified. No public
+publication or other-platform build occurred. Work Mac installation is dispatched through a separate
+owner coordinator and awaits its local command approval; installed/workflow acceptance is pending.
+Private routing and full transfer receipts remain outside Git.
+
 ## Mac candidate source freeze validation
 
 Final source suite: 1,639 passed, four skipped, zero failed; static checks pass. Disposable

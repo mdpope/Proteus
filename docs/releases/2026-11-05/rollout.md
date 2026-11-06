@@ -4,8 +4,8 @@ Version: 0.2.43
 
 | Target | Stage | Evidence and remaining work |
 | --- | --- | --- |
-| Mac artifact | Source freeze and candidate preparation | Prioritized signed Mac candidate for private Work Mac acceptance; full public release waits. |
-| Work Mac digest owner | Not started | Consume accepted Mac artifact through a separate owner update coordinator; verify preservation, managed connections, captured scoped permissions and real digest outputs, including outage recovery and a second no-new-evidence run. |
+| Mac artifact | Signed and private-transfer verified | Candidate 1 from fc0b318; source/static/native UI and exact packaged startup/archive checks pass. Full public release waits. |
+| Work Mac digest owner | Installation dispatched; owner approval pending | Separate update coordinator has exact signed artifact/source pins. Installation and managed workflow acceptance remain unverified; preserve the two-run/outage/output criteria. |
 | Linux / Windows / iOS | Operator hold | Do not build until the Mac candidate is delivered and digest iteration permits the full release. |
 | Web and full public release | Pending later release stage | P1/P2 acceptance/retention work remains tracked; no new deployment claimed. |
 
