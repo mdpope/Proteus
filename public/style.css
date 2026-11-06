@@ -1,3 +1,4 @@
+@import "./features/settings/connections.css";
 @import "./proteus-theme.css";
 @import "./features/chats/user-questions.css";
 .chat-recovery-controls{margin-top:12px;padding-top:10px;border-top:1px solid var(--line)}.chat-recovery-controls>.note{margin:0 0 10px}.chat-recovery-controls .actions{gap:8px;flex-wrap:wrap}.chat-recovery-controls button{max-width:100%;white-space:normal}

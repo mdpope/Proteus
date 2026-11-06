@@ -355,3 +355,15 @@ compatibility. Only ready connections enter the native catalog. Integration `lis
 `runReadiness` for selected requirements, including name, requested capabilities, required flag
 and captured state; distinguish this run evidence from current connection health. Required
 failures still stop preparation. No live workflow acceptance is implied.
+
+## Connection page presentation (Nov 5 source)
+
+Accounts & Integrations now leads with managed MCP cards, with source-discovered provider
+configurations in a separate expandable inventory below. See [design and references](connection-page-design.md).
+Readiness, stale evidence, account identity and independent authentication/transport/access states
+remain owner-reported. The visual redesign grants no additional permissions and performs no sign-in.
+
+The operator cannot obtain a new ADO public-client registration for this workflow. See
+[alternative qualification](ado-authentication-alternatives.md) for explicit corporate CLI and
+separate PAT paths. They require additional adapters and qualification; no account fallback
+or plaintext cache adoption is authorized.

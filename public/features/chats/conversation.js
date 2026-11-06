@@ -1,3 +1,4 @@
+import {navigateQuestion} from './question-navigation.js';
 import {mountSubagentViewer} from './subagent-view.js';
 import {chatQuestions,mountQuestionCard,mountQuestionQueue,questionPromptVisible,questionMessageText} from './user-questions.js';
 import {chatHistoryWindowStart,firstAssistantKeys} from './chat-history.js';
@@ -103,19 +104,20 @@ export function conversation(target, run, options) {
     view.position = position;
     const earlier=document.createElement('div');earlier.className='history-status';earlier.setAttribute('role','status');scroll.prepend(earlier);view.earlier=earlier;
     view.loadEarlier=async(manual=false)=>{
-      if(!view.more||!view.fetchEarlier||view.paging||(!manual&&view.pageError)||!shell.isConnected)return;
+      if(view.paging)return manual?view.pagingTask:undefined;
+      if(!view.more||!view.fetchEarlier||(!manual&&view.pageError)||!shell.isConnected)return;
       if(!manual&&scroll.scrollTop>Math.max(240,scroll.clientHeight*.65))return;
       const underfilled=scroll.scrollHeight<=scroll.clientHeight+80;
       if(!manual&&!underfilled&&(!view.historyGestureAvailable||view.updating))return;
       // Keep the reading gesture available until its already-started cache fill completes.
-      if(view.prefetching&&view.eventStart===(view.run.eventStart||0))return;
+      if(view.prefetching&&view.eventStart===(view.run.eventStart||0))return manual?view.prefetchTask:undefined;
       view.historyGestureAvailable=false;
       view.paging=true;view.pageError=false;earlier.textContent='Loading earlier messages…';
-      try{if(view.eventStart>(view.run.eventStart||0)){view.renderStart=(view.run.eventStart||0)+chatHistoryWindowStart(view.run.events,view.eventStart-(view.run.eventStart||0));conversation(view.target,view.run,view.options);}else {view.renderStart=Math.max(0,view.eventStart-100);await view.fetchEarlier();}earlier.textContent='';}catch(error){view.pageError=true;const retry=document.createElement('button');retry.textContent='Retry earlier messages';retry.title=error.message;retry.onclick=()=>void view.loadEarlier(true);earlier.replaceChildren(retry);}finally{view.paging=false;if(!view.pageError)requestAnimationFrame(()=>void view.loadEarlier());}
+      const task=(async()=>{try{if(view.eventStart>(view.run.eventStart||0)){view.renderStart=(view.run.eventStart||0)+chatHistoryWindowStart(view.run.events,view.eventStart-(view.run.eventStart||0));conversation(view.target,view.run,view.options);}else {view.renderStart=Math.max(0,view.eventStart-100);await view.fetchEarlier();}earlier.textContent='';}catch(error){view.pageError=true;const retry=document.createElement('button');retry.textContent='Retry earlier messages';retry.title=error.message;retry.onclick=()=>void view.loadEarlier(true);earlier.replaceChildren(retry);}finally{view.paging=false;if(!view.pageError)requestAnimationFrame(()=>void view.loadEarlier());}})();view.pagingTask=task;return task;
     };
     view.prefetch=async()=>{
       if(!view.fetchEarlier||view.prefetching||view.paging||view.following||!view.run?.eventStart||view.prefetchFailedAt===view.run.eventStart||view.eventStart-view.run.eventStart>=40||scroll.scrollTop>scroll.clientHeight*2)return;
-      view.prefetching=true;const first=view.run.eventStart;try{await view.fetchEarlier();}catch{view.prefetchFailedAt=first;}finally{view.prefetching=false;if(view.historyGestureAvailable)void view.loadEarlier();}
+      view.prefetching=true;const first=view.run.eventStart;view.prefetchTask=(async()=>{try{await view.fetchEarlier();}catch{view.prefetchFailedAt=first;}finally{view.prefetching=false;if(view.historyGestureAvailable)void view.loadEarlier();}})();await view.prefetchTask;
     };
     scroll.addEventListener('scroll',()=>{void view.loadEarlier();void view.prefetch();},{passive:true});
     scroll.addEventListener('scroll', () => {
@@ -148,12 +150,12 @@ export function conversation(target, run, options) {
   if(view.shell.parentElement!==target)target.replaceChildren(view.shell);
   let questionQueue=view.shell.querySelector('.user-question-queue');if(!questionQueue){questionQueue=document.createElement('div');questionQueue.className='user-question-queue';view.shell.prepend(questionQueue);}
   const questions=chatQuestions(run),questionOptions={clear:options.clearQuestion,answer:options.answerQuestion,notify:options.notify,attachments:options.questionAttachments};
-  mountQuestionQueue(questionQueue,run,{...questionOptions,jump:async question=>{
-    view.following=false;
-    while(question.eventIndex<view.eventStart&&view.more){const before=view.eventStart;await view.loadEarlier(true);if(view.eventStart===before)break;}
-    const node=[...view.messages.querySelectorAll('[data-question-id]')].find(node=>node.dataset.questionId===question.id);
-    if(node){node.scrollIntoView({block:'center'});node.querySelector('textarea')?.focus({preventScroll:true});view.top=view.scroll.scrollTop;}
-    else options.notify?.('Load earlier messages to view this question.');
+  mountQuestionQueue(questionQueue,run,{...questionOptions,jump:question=>{
+    view.following=false;view.followPositionGeneration=(view.followPositionGeneration||0)+1;
+    return navigateQuestion({owner:view,current:()=>view.shell.isConnected&&view.target===target,
+      locate:()=>[...view.messages.querySelectorAll('[data-question-id]')].find(node=>node.dataset.questionId===question.id),
+      loadEarlier:async()=>{if(!view.more||view.pageError)return false;const before=view.eventStart,transport=view.run.eventStart;await view.loadEarlier(true);return view.eventStart<before||view.run.eventStart<transport;},
+      position:()=>{view.following=false;view.top=view.scroll.scrollTop;view.position();},notify:options.notify});
   }});
   const entries = activityEntries([...run.events.slice(view.renderStart-transportStart).map((event, index) => ({ key: `event-${view.renderStart+index}`, ...event })), ...Object.entries(run.liveMessages || {}).map(([id, text]) => ({ key: `stream-${id}`, role: 'assistant', text, streaming: true,data:{turnId:run.turns?.at(-1)?.id} }))].filter(entry => entry.role !== 'assistant' || entry.text?.trim()),run);
   const nodes = new Map([...view.messages.children].map(node => [node.dataset.key, node]));

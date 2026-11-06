@@ -3304,3 +3304,11 @@ inappropriate development client, or accept the ADO server's azcli fallback chai
 uses supported envvar bearer injection only inside its dedicated owner child. Native providers use
 the same per-run managed broker as Atlassian. Initial corporate application approval remains an
 explicit local setup prerequisite. Source tests do not establish corporate authorization or access.
+
+## Nov 5: managed connections lead the account page
+
+Use shared renderer cards and local service logos for managed MCP connections. Keep independent
+credential/authentication/transport/resource evidence visible and move source inventory and
+less-frequent actions into expandable sections. Load the source inventory only when opened.
+This changes presentation, not owner setup or per-run authority. Design references and tests
+are in [connection-page-design.md](connection-page-design.md).

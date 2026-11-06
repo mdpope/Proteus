@@ -1,4 +1,72 @@
-## Current delivery order — Mac digest candidate first
+## Current operator scope — feature expansion; build/test only
+
+The operator authorizes the additions below and explicitly holds ALL further deployments. This
+supersedes the prior digest-first feature restriction and iterative installation authorization.
+Continue on the single nov5-release branch. Build/test isolated desktop, web and iPhone/iPad
+previews; do not publish, install over production apps, change live schedules/auth or dispatch
+updates. Mac candidate 2 is signed locally but not uploaded/delivered/installed. Candidate 1 stays
+on Work Mac. The earlier idle-blocker question is historical, not new deployment authorization.
+
+| ID | Requested work | Acceptance |
+| --- | --- | --- |
+| N1 | iPhone/iPad browser performance | Measure WebKit scrolling/input/frame and payload costs on representative remote views; fix reproduced choppiness and record device/simulator limits. |
+| N2 | Remote chat/tab control reliability and speed | Lost-response/reconnect/rapid-selection fixtures, stable IDs, exact-once mutations, no stale state overwrites. |
+| N3 | Relay data efficiency | Measure method/byte/serialization costs; scope state and send necessary deltas only; no unrelated chats, full histories or repeated media on idle. |
+| N4 | Remote update approvals | Verify purpose:update captures narrow future-operation authority once, without per-tool/chat reapproval; retain idle barrier and never approve unrelated pending requests. |
+| N5 | Web feature/style/fix parity | Compare desktop and web against an explicit feature matrix; local authenticated acceptance before any later deployment. |
+| N6 | iPhone feature/fix parity | Compare native mobile actions/state/recovery against desktop; shared simulators and isolated synthetic owner tests. |
+| N7 | Larger desktop/web tab overview | More usable viewport area and legible previews, responsive layouts, keyboard/touch navigation. |
+| N8 | Project/workspace card parity | Match desktop hierarchy, formatting and sizing across web/remote, with responsive mobile adaptation. |
+| N9 | One completion notification reaching iPhone | Deduplicate by actual run completion event through owner/relay/APNs paths; verify foreground/background boundaries without claiming simulator proof of physical push. |
+| N10 | File viewer images and Obsidian Markdown | Extend the existing viewer/authorization boundary for standalone filesystem image links; structured frontmatter, Markdown and wiki links with safe scoped resolution and no ambiguity guessing. |
+| N11 | Workspace file browser tab | Configured workspace folders/sources only; lazy directory drilldown and bounded cancellable filter search; filename/type/size/created/modified columns and icons; open supported images/Markdown; compact margins and right-side selected-file preview; release preview on selection change and stop work when unloaded/idle. |
+| N12 | Restore Proteus Design Preview | Separate data/browser identity, synthetic fixtures for new features, no production changes; validate the actual UI and retain a reviewable preview. |
+| N13 | Accounts & Integrations design | Managed MCP first, generous card spacing, bundled service logos, clear account/health/actions, responsive shared styling and isolated preview verification; no deployment. |
+| N14 | Reliable question navigation | First click waits for existing history loads, reveals the selected question and focuses its answer; later navigation/input cancels stale focus. Desktop and remote shared behavior. |
+
+### Current source checkpoints
+
+N13 Connections redesign is implemented and exercised in disposable Electron at desktop/tablet/phone
+widths; local web build and static checks pass. The final regression suite including the question
+fix passed 1,641 tests with four skips using a short canonical temporary root. A default Mac temporary path
+run exposed fixture alias/socket-length assumptions; no production guard was weakened.
+Design Preview is open independently on Accounts & Integrations. Populated cards were tested
+with synthetic accounts; no live connection or authentication changed. N1–N11 remain open.
+
+The operator confirms no new Entra public-client registration will be available. It is no longer a
+waiting prerequisite for this workflow. [ADO alternative qualification](ado-authentication-alternatives.md)
+records the explicit CLI/no-fallback route, cache protection/isolation caveats, and the pinned
+server's distinct PAT/Basic path. Neither alternative is installed or live accepted; auth and
+all further deployment remain held.
+
+N14 first-click navigation passes desktop and authenticated web relay fixtures with an earlier
+history read already in flight. Later input cancels stale focus; drafts, attachment consent and
+uncertain-answer delivery identity are preserved. A second reproduced defect accumulated draft
+status rows and polling timers on keyed web renders; replacement now retains exactly one binding.
+The phone-width transcript remains usable. Long-history desktop acceptance passed 2,507 events.
+These are synthetic source/UI checks, not installed acceptance; deployment remains held.
+
+### Audit of prior scope at expansion
+
+P3 publisher custody, P4 journal diagnostics/compaction, P5 send-display recovery, P6–P10 source
+reconcile/scoped execution/catalog recapture/status and P11 allowance explanation have source
+implementation and tests. Idle download rules, pollable maintenance, private Windows TEMP and
+navigation difference receipts are implemented. This does not imply all-platform installed proof.
+Linux document association/reopen fixes are integrated; rollback attention review and historical
+window-closure attribution remain open. Windows installed terminal rendering/UIA acceptance is
+unresolved. Web P1 authenticated acceptance and P2 reusable retention remain open.
+
+P12 managed connections are implemented but NOT fully accepted: Work Mac candidate1 is healthy;
+two scheduled Terra-low empty-inbox runs passed without prompts and preserved enabled/history.
+Optional missing connections allowed provider continuation, but a chat-only auto-approval later
+released the integration-list fixture; that is not saved-policy prompt-free acceptance. Managed
+Atlassian startup failed before the browser, with cause swallowed by candidate1; candidate2 adds
+sanitized diagnostics but is now held from deployment. A direct operator click also produced no
+browser or popup. Correction acceptance requires visible startup stage/error feedback and a
+verified browser launch, with secret-free diagnostics and no automatic sign-in retries. ADO public-client registration is unavailable; alternative CLI/PAT qualification is tracked above. Nonempty inbox, managed planning/digest and complete repeated-evidence
+acceptance remain open. Track captured initial gaps separately from later registry state.
+
+## Earlier delivery order — superseded by the build/test-only hold
 
 The operator now holds Linux, Windows and iOS builds until the Mac candidate is delivered to
 Work Mac and its digest workflow is exercised. Build/sign the current validated Mac source and

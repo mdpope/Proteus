@@ -1,3 +1,13 @@
+## Nov 5 question navigation
+
+- Keep a question jump active through an in-flight history load so one click reaches its answer box. New input cancels old jumps; desktop and web use the same focus controller.
+- Replace duplicate draft-sync timers/status rows on keyed web refreshes, preserving one binding and keeping the narrow-screen transcript usable.
+
+## Nov 5 connection page design
+
+- Put managed MCP connections first, with branded service cards, clearer account/health evidence and more space between connections.
+- Move source configuration inventory and less frequent actions into expandable sections; keep owner permissions and authentication unchanged.
+
 ## Nov 5 follow-up
 
 - Report sanitized Atlassian owner sign-in startup stage and HTTP status instead of a misleading generic owner-review message.

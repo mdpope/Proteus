@@ -37,6 +37,7 @@ test('preview copies only authentication, preserving existing private preview au
   const root=fixture(t),userHome=path.join(root,'user');fs.mkdirSync(path.join(userHome,'.codex'),{recursive:true});
   fs.writeFileSync(path.join(userHome,'.codex/auth.json'),'synthetic-credential-fixture');fs.writeFileSync(path.join(userHome,'.codex/config.toml'),'do not import');
   const locations=initializePreviewRoot(path.join(root,'preview'),{userHome});
+  assert.equal(stageCodexAuthentication(locations,{env:{PROTEUS_PREVIEW_AUTH:'none'},userHome}).disabled,true);assert.deepEqual(fs.readdirSync(locations.codexHome),[]);
   assert.equal(stageCodexAuthentication(locations,{env:{},userHome}).available,true);
   assert.deepEqual(fs.readdirSync(locations.codexHome),['auth.json']);assertPrivate(path.join(locations.codexHome,'auth.json'),0o600);
   fs.writeFileSync(path.join(locations.codexHome,'auth.json'),'changed-preview-auth');stageCodexAuthentication(locations,{env:{},userHome});

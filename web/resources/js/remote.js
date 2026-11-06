@@ -1,3 +1,4 @@
+import {navigateQuestion} from '../../../public/features/chats/question-navigation.js';
 import {createVisibleChatWatch} from './chat-watch.js';
 import {updateWebState,applyLifecycleState,updateRunSummary,onlyChatIndexChanges} from './remote-state.js';
 import {acceptRemoteState,coalesceRender,draftSubmission,acknowledgeDraft} from "./remote-updates.js";
@@ -656,12 +657,14 @@ function renderChats(current) {
     const historyPane=root.querySelector('.remote-messages');
     historyPane?.addEventListener('scroll',()=>{if(earlier&&renderStart-eventStart<40&&historyPane.scrollTop<historyPane.clientHeight*2)prefetchHistory();},{passive:true});
     async function loadEarlier(){
-        if(current.loadingEarlier||!earlier||current.run?.id!==run.id)return;
+        if(current.loadingEarlier)return current.historyLoadTask;
+        if(!earlier||current.run?.id!==run.id)return;
         const pane=root.querySelector('.remote-messages'),status=$('remote-earlier-status');if(!pane)return;
         const oldHeight=pane.scrollHeight,oldTop=pane.scrollTop;current.loadingEarlier=true;current.earlierError=false;if(status)status.textContent='Loading earlier messages…';
-        try{if(renderStart>eventStart){current.historyWindows.set(run.id,eventStart+chatHistoryWindowStart(run.events||[],renderStart-eventStart));}else{const older=await prefetchHistory(true);current.historyPrefetch=null;current.historyPrefetchFailedAt=null;if(current.run?.id!==run.id)return;current.historyWindows.set(run.id,(older.eventStart||0)+chatHistoryWindowStart(older.events||[]));current.run=mergeChatHistory(current.run,older);}render();const next=root.querySelector('.remote-messages');if(next){next.scrollTop=oldTop+next.scrollHeight-oldHeight;current.scroll ||= new Map();current.scroll.set(run.id,next.scrollTop);}
-        }catch(error){current.earlierError=true;if(status){status.innerHTML='<button id="remote-earlier-retry" type="button">Retry loading earlier messages</button>';$('remote-earlier-retry').onclick=()=>void loadEarlier();}notice(error.message);}finally{current.loadingEarlier=false;}
+        const task=(async()=>{try{if(renderStart>eventStart){current.historyWindows.set(run.id,eventStart+chatHistoryWindowStart(run.events||[],renderStart-eventStart));}else{const older=await prefetchHistory(true);current.historyPrefetch=null;current.historyPrefetchFailedAt=null;if(current.run?.id!==run.id)return;current.historyWindows.set(run.id,(older.eventStart||0)+chatHistoryWindowStart(older.events||[]));current.run=mergeChatHistory(current.run,older);}render();const next=root.querySelector('.remote-messages');if(next){next.scrollTop=oldTop+next.scrollHeight-oldHeight;current.scroll ||= new Map();current.scroll.set(run.id,next.scrollTop);}
+        }catch(error){current.earlierError=true;if(status){status.innerHTML='<button id="remote-earlier-retry" type="button">Retry loading earlier messages</button>';$('remote-earlier-retry').onclick=()=>void loadEarlier();}notice(error.message);}finally{current.loadingEarlier=false;}})();current.historyLoadTask=task;return task;
     }
+    current.questionHistory={runId:run?.id,start:renderStart,loadEarlier};
     requestAnimationFrame(()=>{const pane=root.querySelector('.remote-messages');if(pane&&run&&current.run?.id===run.id&&!current.earlierError&&pane.scrollHeight<=pane.clientHeight+80)void loadEarlier();});
     if(run&&historyPane){
         // File consent can remain open while navigation changes. Every stage belongs
@@ -670,13 +673,11 @@ function renderChats(current) {
         // The transcript owns this queue's bounds. Reusing the pending-input grid
         // row would overlap the existing answer/permission form in docked chats.
         let queue=historyPane.querySelector(':scope>.user-question-queue');if(!queue){queue=document.createElement('div');queue.className='user-question-queue';historyPane.prepend(queue);}
-        mountQuestionQueue(queue,run,{answer:answerQuestion,notify:notice,jump:async question=>{
-            const card=[...root.querySelectorAll('[data-question-id]')].find(node=>node.dataset.questionId===question.id);
-            if(card){card.scrollIntoView({block:'center'});card.querySelector('textarea')?.focus({preventScroll:true});return;}
-            const before=current.historyWindows?.get(run.id)??renderStart;await loadEarlier();
-            const after=current.historyWindows?.get(run.id)??renderStart;
-            if(after<before){await root.querySelector('.user-question-queue')?.questionActions.jump(question);}else notice('Load earlier messages to view this question.');
-        }});
+        mountQuestionQueue(queue,run,{answer:answerQuestion,notify:notice,jump:question=>navigateQuestion({owner:current,
+            current:()=>session()===current&&view==='chats'&&current.run?.id===run.id&&current.selected===run.id,
+            locate:()=>[...root.querySelectorAll('[data-question-id]')].find(node=>node.dataset.questionId===question.id),
+            loadEarlier:async()=>{const history=current.questionHistory;if(history?.runId!==run.id||current.earlierError)return false;const before=history.start;await history.loadEarlier();return current.questionHistory?.runId===run.id&&current.questionHistory.start<before;},
+            position:()=>{const pane=root.querySelector('.remote-messages');if(pane){current.scroll ||=new Map();current.scroll.set(run.id,pane.scrollTop);}},notify:notice})});
         const questions=chatQuestions(run),ids=new Set(questions.map(question=>question.id)),questionCounts=new Map();
         for(const question of questions)questionCounts.set(question.eventIndex,(questionCounts.get(question.eventIndex)||0)+1);
         for(const card of root.querySelectorAll('.user-question-card'))if(!ids.has(card.dataset.questionId))card.remove();

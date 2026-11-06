@@ -1,3 +1,9 @@
+## Deployment hold — expanded Nov 5 scope
+
+All new deployments/publication are held by the operator. Build/test and isolated Design Preview
+are authorized. Candidate2 diagnostics are signed locally only; candidate1 remains installed.
+See N1–N12 in the release plan. Earlier rollout authorization below is historical.
+
 # Nov 5 rollout
 
 Version: 0.2.43
@@ -12,3 +18,17 @@ Version: 0.2.43
 organization workflows configuration and workflow tests stay with its workflow owner. Product source, artifact
 acceptance and release delivery stay with the coordinator. Model completion is not external
 workflow success. Private task/device routing and receipts stay outside Git.
+
+## Held source checkpoint — connection page and question navigation
+
+Managed-first connection cards, responsive spacing/logos, lazy configuration inventory and isolated
+Design Preview are source-verified. A synthetic owner browser-launch rejection exposes its stage
+and remains visible after refresh without initiating another sign-in. Actual workstation.example.test auth launch
+remains unverified; its direct human reproduction produced no visible window on candidate1.
+
+Question navigation now waits for an in-flight history read and focuses the answer on the first
+click. Later user input cancels delayed focus. Repeated keyed web rendering retains one draft
+sync timer/status, preserving the phone transcript and unsent text. Desktop, authenticated web
+relay, attachment/uncertain-answer and 2,507-event history fixtures pass. Full source suite:
+1,641 passed, four skipped, zero failures; static checks and local web asset build pass.
+No new package was published or installed; existing deployment hold remains in force.

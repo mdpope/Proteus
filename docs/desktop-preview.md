@@ -1,3 +1,12 @@
+## Nov 5 review restart — no deployment
+
+The source preview can skip new Codex authentication staging with
+`PROTEUS_PREVIEW_AUTH=none npm run desktop:preview`. This leaves any existing preview
+authentication untouched and does not turn real chats into synthetic provider execution.
+No model turn or sign-in is needed to review Accounts & Integrations. The populated card
+fixtures in `test/managed-connections-ui.mjs` use an independent disposable Electron process
+with no real service calls.
+
 ## October 25 — Full captured Activity review candidate
 
 Current candidate `70b9013065ab+dirty.677bae048f0c` in `dist/design-preview-activity-capture`

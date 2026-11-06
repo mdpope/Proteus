@@ -63,6 +63,7 @@ function configureDesktopPreview(app, { env = process.env, metadata = require('.
 }
 
 function stageCodexAuthentication(locations, { env = process.env, userHome = os.homedir() } = {}) {
+  if(env.PROTEUS_PREVIEW_AUTH==='none')return {available:false,reused:false,disabled:true};
   const source = path.join(env.CODEX_HOME || path.join(userHome, '.codex'), 'auth.json');
   const target = path.join(locations.codexHome, 'auth.json');
   if (fs.existsSync(target)) {

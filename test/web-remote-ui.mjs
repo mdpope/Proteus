@@ -41,8 +41,15 @@ async function run(){try{
   run.status='completed';delete run.deferredStart;delete run.nextPrompt;
   app.engine.providers.copilot.run=async({emit,attachments=[]})=>{if(attachments.length)app.syntheticAttachmentDeliveries.push(attachments.map(item=>({name:item.name,mediaType:item.mediaType,bytes:Buffer.from(item.bytes)})));emit('assistant','Synthetic answer accepted. No external provider.');};
   app.engine.event(run,'assistant','Web destination?\nWeb instructions?\nShow the relevant file.',{providerItemId:'web-question-item',userQuestions:[{title:'Web destination?',options:['Web A','Web B']},{title:'Web instructions?'},{title:'Show the relevant file.'}]});
+  for(let index=0;index<340;index++)app.engine.event(run,'assistant','Synthetic history row '+index+' — '+'. '.repeat(60));
+  const executeBeforeHistory=app.remote.execute.bind(app.remote);let historyStarted=false,releaseHistory;const historyGate=new Promise(resolve=>releaseHistory=resolve);
+  app.remote.execute=async(peer,method,args)=>{if(method==='chat.get'&&args.id===run.id&&args.beforeEvent>0&&!historyStarted){historyStarted=true;await historyGate;}return executeBeforeHistory(peer,method,args);};
   await page.reload();await page.locator(`[data-run="${run.id}"]`).first().click();await page.locator('.user-question-queue summary').waitFor();
-  await page.locator('.user-question-queue summary').click();await page.getByRole('button',{name:'Web destination?',exact:true}).click();await page.getByRole('button',{name:'Web B',exact:true}).click();
+  for(let attempt=0;attempt<8&&!historyStarted;attempt++){await page.locator('.remote-messages').evaluate(pane=>{pane.scrollTop=0;pane.dispatchEvent(new WheelEvent('wheel',{deltaY:-100}));pane.dispatchEvent(new Event('scroll'));});await new Promise(resolve=>setTimeout(resolve,150));}
+  assert.equal(historyStarted,true,'An earlier remote history read is in flight before the question click');
+  await page.locator('.user-question-queue summary').click();await page.getByRole('button',{name:'Web destination?',exact:true}).click();releaseHistory();
+  await page.waitForFunction(id=>document.activeElement?.closest('[data-question-id]')?.dataset.questionId===id,run.userQuestions[0].id);
+  app.remote.execute=executeBeforeHistory;await page.getByRole('button',{name:'Web B',exact:true}).click();
   await until(()=>run.userQuestions[0].status==='answered');await until(()=>run.status==='completed');
   await page.locator('.user-question-queue summary').waitFor();await page.locator(`[data-question-id="${run.userQuestions[1].id}"] textarea`).fill('Custom web answer');
   assert.equal(await page.locator(`[data-question-id="${run.userQuestions[1].id}"] h4`).textContent(),'Web instructions?','Multiple answer fields retain their own distinct question labels');
@@ -55,6 +62,9 @@ async function run(){try{
   await card.locator('input[type=file]').setInputFiles({name:'question-evidence.txt',mimeType:'text/plain',buffer:fileBytes});await card.locator('textarea').fill('Review the attached evidence');
   await page.setViewportSize({width:390,height:844});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
   assert.equal(await card.locator('.attachment-chip').count(),1);assert.equal(await card.locator('.attachment-controls').evaluate(node=>getComputedStyle(node).display),'flex');
+  assert.equal(await page.locator('.shared-draft-status').count(),1,'Repeated history/answer renders retain one draft status and binding');
+  assert.ok(await page.locator('.remote-messages').evaluate(node=>node.clientHeight>=80),'Composer must leave the question transcript usable');
+  if(process.env.PROTEUS_UI_ARTIFACTS){await page.screenshot({path:path.join(process.env.PROTEUS_UI_ARTIFACTS,'question-web-narrow.png')});console.log(JSON.stringify(await card.evaluate(node=>{const rect=el=>{const r=el.getBoundingClientRect();return {x:r.x,y:r.y,w:r.width,h:r.height,scroll:el.scrollTop,sh:el.scrollHeight,ch:el.clientHeight};};return {questionGeometry:{card:rect(node),button:rect(node.querySelector('[type=submit]')),pane:rect(document.querySelector('.remote-messages')),composer:rect(document.querySelector('#remote-composer')),main:rect(document.querySelector('.remote-chat-main'))}};})));}
   await card.getByRole('button',{name:'Send answer',exact:true}).click();const consent=page.locator('dialog.attachment-confirm[open]');await consent.waitFor();
   assert.match(await consent.innerText(),/Studio Desktop · Structured web questions/);assert.match(await consent.innerText(),/Copilot/);assert.equal(commands.length,0);
   // Navigation while confirmation is open must not move the upload or answer.

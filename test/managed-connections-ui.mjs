@@ -13,6 +13,7 @@ try{
    if(!args)return fixture.snapshot;fixture.calls.push(args);
    if(args.action==='save'){if(fixture.conflict)throw Error('Managed connections changed. Refresh before acting.');fixture.snapshot.connections=[{...args.definition,status:{state:'unchecked',credentialStore:'available',ownerSignIn:{state:'unchecked'}},references:[],active:false}];fixture.snapshot.revision='r2';}
    if(args.action==='verify')fixture.snapshot.connections[0].status={state:'ready',credentialStore:'available',authentication:'verified',transport:'connected',access:'verified',lastSuccessfulRead:'2026-11-05T12:00:00Z',capabilities:['jira.issue.read','jira.issue.search'],ownerSignIn:{state:'authenticated'}};
+   if(args.action==='sign-in'){const nextAction='Atlassian sign-in could not start at browser-open (AUTH_REQUIRED). Review this connection setup; no consent completion is recorded.';fixture.snapshot.connections[0].status.ownerSignIn={state:'sign-in-required',stage:'browser-open',code:'AUTH_REQUIRED',nextAction};throw Error(nextAction);}
    if(args.action==='disable')fixture.snapshot.connections[0].enabled=false;
    if(args.action==='remove')fixture.snapshot.connections=[];
    return fixture.snapshot;
@@ -21,7 +22,15 @@ try{
  await page.getByRole('button',{name:'Add connection',exact:true}).click();await page.getByLabel('Expected Atlassian account ID').fill('fixture-person');await page.getByLabel('Expected cloud/site ID').fill('fixture-site');await page.getByLabel('Expected site URL').fill('https://fixture.atlassian.net');await page.getByLabel('Fixture workspace',{exact:true}).check();await page.getByLabel('Issue key/ID for approved minimal Jira health reads').fill('FIXTURE-1');
  await page.getByRole('button',{name:'Save configuration',exact:true}).click();await page.locator('[data-connection]').waitFor();
  const saved=await page.evaluate(()=>fixture.calls[0]);assert.equal(saved.expectedRevision,'r1');assert.equal(saved.definition.name,'hc-atlassian');assert.equal(saved.definition.probes.length,2);assert.deepEqual(saved.definition.workspaceIds,['workspace']);assert.equal(saved.definition.expected.principal,'fixture-person');
- await page.getByRole('button',{name:'Verify now',exact:true}).click();await page.getByText(/authentication: verified/).waitFor();
+ // A rejected owner browser launch is visible, leaves retry to the owner, and survives refresh.
+ await page.getByRole('button',{name:'Sign in',exact:true}).click();
+ await page.locator('[data-managed-error]').filter({hasText:'browser-open (AUTH_REQUIRED)'}).waitFor();
+ assert.equal(await page.getByRole('button',{name:'Sign in',exact:true}).isEnabled(),true);
+ await page.getByRole('button',{name:'Refresh status',exact:true}).click();
+ await page.locator('[data-connection]').filter({hasText:'browser-open (AUTH_REQUIRED)'}).waitFor();
+ assert.equal(await page.evaluate(()=>fixture.calls.filter(call=>call.action==='sign-in').length),1,'Status refresh must not retry authentication');
+ await page.getByRole('button',{name:'Verify now',exact:true}).click();await page.locator('.connection-health dd').filter({hasText:'Verified'}).first().waitFor();
+ await page.locator('.connection-details summary').click();
  assert.match(await page.locator('[data-managed-rows]').textContent(),/jira.issue.read, jira.issue.search/);
  await page.getByRole('button',{name:'Configure',exact:true}).click();await page.getByLabel('Display name',{exact:true}).fill('Retained draft');await page.evaluate(()=>fixture.conflict=true);await page.getByRole('button',{name:'Save configuration',exact:true}).click();await page.getByText('Managed connections changed. Refresh before acting.',{exact:true}).waitFor();assert.equal(await page.getByLabel('Display name',{exact:true}).inputValue(),'Retained draft');
  await page.getByRole('button',{name:'Cancel',exact:true}).click();await page.getByRole('button',{name:'Disable',exact:true}).click();await page.getByRole('button',{name:'Enable',exact:true}).waitFor();assert.equal(await page.getByRole('button',{name:'Verify now',exact:true}).isDisabled(),true);
@@ -30,5 +39,34 @@ try{
  const guid='11111111-1111-4111-8111-111111111111';for(const label of ['Expected corporate Entra object ID','Expected corporate tenant ID','Approved public application client ID','Expected Azure DevOps organization ID','Project ID for approved health reads','Team ID for the settings health read'])await page.getByLabel(label,{exact:true}).fill(guid);
  await page.getByLabel('Expected organization URL',{exact:true}).fill('https://dev.azure.com/fixture');await page.getByLabel('Work item ID for the read and exact-ID query',{exact:true}).fill('7');await page.getByLabel('Fixture workspace',{exact:true}).check();await page.getByRole('button',{name:'Save configuration',exact:true}).click();await page.locator('[data-connection]').waitFor();
  const ado=await page.evaluate(()=>fixture.calls.at(-1).definition);assert.equal(ado.name,'hc-ado-corporate');assert.equal(ado.authentication.clientId,guid);assert.equal(ado.expected.organizationId,guid);assert.equal(ado.probes.length,4);assert.equal(ado.probes.find(p=>p.capability==='ado.work-items.query').parameters.workItemId,7);assert.equal(ado.transport.type,'stdio');
+ // Exercise the composed page: managed first, legacy inventory lazy, two brands and narrow layout.
+ await page.evaluate(async()=>{
+  const ado=fixture.snapshot.connections[0];ado.references=[{id:'fixture-schedule'}];ado.active=true;
+  ado.status={state:'sign-in-required',credentialStore:'available',authentication:'unverified',transport:'unchecked',access:'unverified',ownerSignIn:{nextAction:'Sign in with the approved corporate account to verify access.'}};
+  const jira={...structuredClone(ado),id:'jira-fixture',name:'hc-atlassian',label:'Engineering Jira',active:false,references:[],authentication:{adapter:'atlassian-oauth-v2'},transport:{endpoint:'https://mcp.atlassian.com/v1/mcp/authv2'},expected:{principal:'engineering@example.test',tenant:'fixture-site',resource:'https://engineering.atlassian.net'},status:{state:'ready',credentialStore:'available',authentication:'verified',transport:'connected',access:'verified',verified:{principal:'engineering@example.test',resource:'https://engineering.atlassian.net'},lastSuccessfulRead:'2026-11-05T12:00:00Z',capabilities:['jira.issue.read','jira.issue.search']}};
+  fixture.snapshot.connections=[jira,ado];fixture.inventoryLoads=0;
+  document.body.innerHTML='<main id="main" style="height:100vh;padding:28px;overflow:auto"></main>';
+  const {initEngineRoom,renderEngineRoom}=await import('/public/features/settings/engine-room.js');
+  initEngineRoom({state:{page:'engine',engineSection:'integrations',data:{runs:[]}},escape:v=>String(v??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;'),toast:()=>{},api:async(route)=>{if(route==='/api/managed-connections')return fixture.snapshot;if(route==='/api/integrations'){fixture.inventoryLoads++;return {consumers:[],configurations:[]};}throw Error('Unexpected fixture request');}});
+  renderEngineRoom('integrations');
+ });
+ await page.locator('[data-connection]').nth(1).waitFor();
+ assert.equal(await page.locator('#engine-content > :first-child').getAttribute('class'),'managed-connections');
+ assert.equal(await page.evaluate(()=>fixture.inventoryLoads),0);
+ assert.equal(await page.locator('.connection-logo svg').count(),2);
+ await page.setViewportSize({width:1320,height:1050});
+ const gap=await page.locator('.managed-connection-grid').evaluate(node=>parseFloat(getComputedStyle(node).gap));assert.ok(gap>=20);
+ if(process.env.PROTEUS_UI_ARTIFACTS){fs.mkdirSync(process.env.PROTEUS_UI_ARTIFACTS,{recursive:true});await page.screenshot({path:path.join(process.env.PROTEUS_UI_ARTIFACTS,'connections-desktop.png')});}
+ await page.locator('[data-connection]').nth(1).locator('.connection-details summary').click();
+ assert.equal(await page.locator('[data-connection]').nth(1).locator('[data-managed-remove]').isDisabled(),true);
+ assert.equal(await page.locator('[data-connection]').nth(1).locator('[data-managed-edit]').isDisabled(),true);
+ await page.locator('[data-connection]').nth(1).locator('.connection-details summary').click();
+ for(const width of [768,390]){
+  await page.setViewportSize({width,height:1000});
+  assert.equal(await page.locator('#main').evaluate(node=>node.scrollWidth<=node.clientWidth),true);
+  assert.equal(await page.locator('[data-connection]').first().evaluate(node=>node.scrollWidth<=node.clientWidth),true);
+ }
+ if(process.env.PROTEUS_UI_ARTIFACTS)await page.screenshot({path:path.join(process.env.PROTEUS_UI_ARTIFACTS,'connections-mobile.png')});
+ await page.getByText('Other MCP configurations',{exact:true}).click();await page.getByRole('heading',{name:'MCP configuration inventory',exact:true}).waitFor();assert.equal(await page.evaluate(()=>fixture.inventoryLoads),1);
  assert.deepEqual(errors,[]);await page.evaluate(()=>fixture.active=false);console.log(JSON.stringify({passed:true,electron:true,explicitAccountWorkspace:true,distinctJiraProbes:true,explicitAdoClientAndCorporateBinding:true,staleEditDraftRetained:true,disableAndRemove:true,noCredentialValues:true}));
 }finally{await app?.close();await new Promise(resolve=>server.close(resolve));fs.rmSync(temporary,{recursive:true,force:true});}

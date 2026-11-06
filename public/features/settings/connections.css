@@ -1,0 +1,50 @@
+/* Shared connection presentation. No animation, remote images or background work. */
+.accounts-integrations{display:grid;gap:28px;max-width:1320px;margin-inline:auto}
+.managed-connections{display:grid;gap:20px;min-width:0}
+.managed-connections-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:24px}
+.managed-connections-heading h2{font-size:24px;letter-spacing:-.035em;margin:3px 0 9px}
+.managed-connections-heading p{max-width:620px;margin:0;color:var(--soft);line-height:1.6}
+.managed-connections-heading .connection-eyebrow{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}
+.managed-connections .actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0}
+.managed-connections-heading .actions{flex-shrink:0;padding-top:5px}
+.connection-section-meta{display:flex;flex-wrap:wrap;gap:10px 20px;font-size:12px;color:var(--soft);padding-bottom:16px;border-bottom:1px solid var(--line)}
+.managed-connection-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,390px),1fr));gap:24px;align-items:start}
+.managed-connection-grid .managed-connection-card{min-width:0;padding:24px;margin:0;border:1px solid var(--line);border-radius:16px;background:var(--panel)}
+.connection-card-heading{display:flex;align-items:flex-start;gap:14px;margin-bottom:22px;flex-wrap:wrap}
+.connection-logo{display:grid;place-items:center;width:48px;height:48px;flex:0 0 48px;border-radius:12px;background:#fff;border:1px solid #dfe5ee;color:#284b70}
+.connection-title{flex:1;min-width:120px;overflow-wrap:anywhere}
+.connection-title .connection-service{color:var(--soft);font-size:11px;line-height:1.4;margin:0 0 3px}
+.connection-title h3{font-size:18px;letter-spacing:-.02em;margin:0 0 5px;line-height:1.3}
+.connection-title code{font-size:11px;color:var(--soft);background:none;padding:0;overflow-wrap:anywhere}
+.connection-status{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;border:1px solid var(--line);border-radius:999px;font-size:11px;font-weight:650;max-width:100%;color:var(--soft)}
+.connection-status:before{content:'';width:6px;height:6px;flex-shrink:0;border-radius:50%;background:currentColor}
+.connection-status[data-tone=ready]{color:var(--accent);background:color-mix(in srgb,var(--accent) 8%,transparent)}
+.connection-status[data-tone=attention]{color:var(--warn);background:color-mix(in srgb,var(--warn) 8%,transparent)}
+.connection-status[data-tone=working]{color:var(--ink)}
+.managed-connections .connection-account{display:grid;gap:12px;margin:0 0 18px}
+.connection-account>div{min-width:0}.connection-account dt,.connection-health dt{color:var(--soft);font-size:11px;font-weight:500;margin-bottom:4px}
+.connection-account dd{margin:0;font-size:13px;line-height:1.5;overflow-wrap:anywhere}
+.managed-connections .connection-health{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;padding:16px;margin:0 0 18px;border:1px solid var(--line);border-radius:10px;background:var(--bg)}
+.connection-health dd{margin:0;font-size:12px;font-weight:600;overflow-wrap:anywhere}
+.managed-connections .connection-guidance{padding:12px 14px;margin:0 0 16px;line-height:1.6;font-size:12px;border-left:3px solid var(--accent);background:color-mix(in srgb,var(--accent) 5%,transparent);overflow-wrap:anywhere}
+.connection-freshness{color:var(--soft);font-size:11px;line-height:1.7;margin:0 0 14px}.connection-freshness strong{font-weight:500;color:var(--ink);display:block}
+.connection-workspaces{display:flex;flex-wrap:wrap;align-items:center;gap:7px;font-size:11px;color:var(--soft);margin-bottom:20px}
+.connection-chip{border:1px solid var(--line);border-radius:5px;padding:3px 7px;color:var(--ink);overflow-wrap:anywhere}
+.connection-details{border-top:1px solid var(--line);margin-top:20px;padding-top:16px;font-size:12px}
+.connection-details>summary{cursor:pointer;color:var(--soft);line-height:1.6}.connection-details[open]>summary{margin-bottom:18px}
+.connection-details .note{font-size:11px;line-height:1.6;color:var(--soft);margin:12px 0 0}
+.managed-connections button{font-size:12px;min-height:36px;line-height:1.4}.managed-connections button:not(.primary){background:var(--proteus-control);color:var(--ink);border:1px solid var(--line)}
+.managed-connections button.danger{color:var(--warn)}.managed-connections button:hover{filter:brightness(1.08)}
+.managed-connections button:focus-visible,.connection-details>summary:focus-visible,.connection-secondary-section>summary:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
+.connection-error:empty,[data-managed-editor]:empty{display:none}.connection-error{padding:14px;border:1px solid var(--warn);border-radius:8px;color:var(--warn);margin:0;overflow-wrap:anywhere}
+.connection-empty{padding:28px;border:1px dashed var(--line);border-radius:14px}.connection-empty h3{margin:0 0 8px}.connection-empty p{color:var(--soft);line-height:1.6;margin:0;max-width:600px}
+.managed-connections .connection-footnote{color:var(--soft);font-size:12px;line-height:1.7;margin:0;max-width:820px}
+.connection-secondary-section{padding:20px 24px;border:1px solid var(--line);border-radius:12px;min-width:0}
+.connection-secondary-section>summary{cursor:pointer;font-weight:600;line-height:1.5}.connection-secondary-section>summary small{display:block;color:var(--soft);font-size:12px;font-weight:400;margin:6px 0 0 18px}.connection-secondary-section[open]>summary{margin-bottom:24px}
+.integration-inventory,.integration-inventory .integration-list{display:grid;gap:18px;min-width:0}.integration-inventory .card{margin:0}.integration-inventory .integration-row{margin-top:18px;padding-top:18px;border-top:1px solid var(--line)}.integration-inventory .actions{gap:8px;flex-wrap:wrap}.integration-inventory p{line-height:1.6}.integration-inventory summary{cursor:pointer;line-height:1.6;overflow-wrap:anywhere}
+[data-managed-form]{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px 24px;border:1px solid var(--line);border-radius:14px;background:var(--panel);padding:24px;scroll-margin-top:24px}
+[data-managed-form]>h3,[data-managed-form]>fieldset,[data-managed-form]>p,[data-managed-form]>.actions{grid-column:1/-1;margin:0}
+[data-managed-form]>label{margin:0;line-height:1.6;min-width:0}[data-managed-form] input,[data-managed-form] textarea,[data-managed-form] select{margin-top:5px}
+[data-managed-form] fieldset{border:1px solid var(--line);border-radius:8px;padding:14px;display:flex;flex-wrap:wrap;gap:12px 20px;min-width:0}[data-managed-form] fieldset label{margin:0;font-weight:400;overflow-wrap:anywhere}[data-managed-form] legend{font-size:12px;color:var(--soft);padding:0 6px}
+[data-managed-form] p{font-size:12px;line-height:1.7;color:var(--soft);overflow-wrap:anywhere}
+@media(max-width:760px){.managed-connections-heading{flex-direction:column;gap:14px}.managed-connection-grid{grid-template-columns:1fr;gap:20px}.managed-connection-grid .managed-connection-card{padding:20px}.connection-secondary-section{padding:18px}.managed-connections button{min-height:42px}.accounts-integrations{gap:24px}[data-managed-form]{grid-template-columns:1fr;padding:20px}}
