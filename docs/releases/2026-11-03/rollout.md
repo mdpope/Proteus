@@ -27,9 +27,12 @@ This checkpoint supersedes earlier pending-publication and in-progress consumer 
   Desktop Control's full read-only Verify passed; recovery integrity inspection reported no issues.
   OS-denied receipt reads were not bypassed.
 - Build Mac owner evidence reconfirms the complete/updated job and saved-window comparison
-  recorded below. Work Mac's earlier verified build/signature/health and two recoveries stand;
-  the additional read-only audit could not run because its native Claude provider returned
-  rate_limit immediately. No settings or provider were changed.
+  recorded below. Work Mac's follow-up audit completed in a new operator-selected Codex Sol medium chat after
+  Claude rate-limited. Its owner receipt matches 691 chats, 54,741 events, 3 workspaces,
+  11 projects, 67 scopes, 250 tabs and 4 windows. Receipt hash verified; all 5 schedules,
+  pairing configuration, encrypted peers and saved window configuration/layouts match recovery.
+  All original chat directories remain. A state-restore failure recovered on attempt two before
+  health acceptance. Strict signing and both recovery generations verify. No reinstall occurred.
 - Full independent descriptor/history/draft/source/pairing comparisons remain qualified where
   inaccessible; no installed terminal was available to observe on either Windows consumer.
   Signed-in web acceptance, physical iOS gestures/push/reconnect, sustained relay stability and

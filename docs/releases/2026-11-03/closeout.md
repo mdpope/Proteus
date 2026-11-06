@@ -22,8 +22,8 @@ navigation counts match and its zero current-window tab result matches the old l
 Windows owner's project tabs are present despite an empty chat-scoped browser list. Neither
 Windows consumer had an existing terminal view available for rendering acceptance. Full independent
 history/draft/source/pairing comparisons remain unverified where access was unavailable. Work Mac's
-additional audit hit the native Claude provider rate limit; its earlier verified installation,
-signature, health and recovery evidence stands. Signed-in web acceptance, physical-device feel
+additional audit completed with the operator-selected Codex provider after Claude rate-limited;
+its preservation counts, schedule/pairing/window bytes, signing and two recoveries verify. Signed-in web acceptance, physical-device feel
 and sustained relay stability remain qualified. These are not claimed as successful tests.
 
 The release branch and both merged implementation branches were retired. On the operator's
