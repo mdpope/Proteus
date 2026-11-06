@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {atlassianOAuth,atlassianOAuthProfile as p} from '../src/services/integrations/managed-atlassian-oauth.js';
 const binding=()=>({ownerId:'fixture-owner',credentialOwnerId:'fixture-owner',credentialRef:'opaque',adapter:p.adapter,issuer:p.issuer,clientId:'fixture-client',expected:{principal:'fixture-person',tenant:'fixture-site',audience:p.endpoint,scopes:['read:jira-work']}});
 const metadata=()=>({issuer:p.issuer,authorization_endpoint:p.authorization,token_endpoint:p.token,registration_endpoint:p.registration,response_types_supported:['code'],grant_types_supported:['authorization_code','refresh_token'],code_challenge_methods_supported:['S256'],token_endpoint_auth_methods_supported:['none']});
-function fixture({resource,meta,status=200,redirect=false}={}){
+function fixture({resource,meta,status=200,redirect=false,registration={}}={}){
  const calls=[];
  const oauth=atlassianOAuth({now:()=>1000,fetchFn:async(url,init)=>{
   calls.push({url:String(url),method:init.method||'GET',body:init.body,headers:init.headers});assert.equal(init.credentials,'omit');assert.equal(init.redirect,'manual');
@@ -11,7 +11,7 @@ function fixture({resource,meta,status=200,redirect=false}={}){
   if(redirect)return new Response(null,{status:302,headers:{location:'https://untrusted.invalid'}});
   if(String(url)===p.resourceMetadata)return Response.json(resource||{resource:p.endpoint,authorization_servers:[p.issuer],scopes_supported:['read:jira-work']});
   if(String(url)===p.metadata)return Response.json(meta||metadata());
-  if(String(url)===p.registration){const request=JSON.parse(init.body);return Response.json({...request,client_id:'fixture-client'});}
+  if(String(url)===p.registration){const request=JSON.parse(init.body);return Response.json({...request,client_id:'fixture-client',...registration});}
   if(String(url)===p.token)return Response.json({token_type:'Bearer',access_token:'synthetic-access',refresh_token:'synthetic-rotated',expires_in:3600,scope:'read:jira-work'});
   assert.fail('unexpected OAuth destination');
  }});
@@ -59,4 +59,18 @@ test('begin preserves only sanitized stage and code for discovery and registrati
   return new Response('secret registration response',{status:400});
  }});
  await assert.rejects(oauth.begin(args),e=>e.stage==='client-registration'&&e.code==='AUTH_REQUIRED'&&e.httpStatus===400&&!e.message.includes('secret'));
+});
+
+test('Atlassian public DCR response may contain an unused secret; only explicit none survives into PKCE and renewal',async()=>{
+ const {oauth,calls}=fixture({registration:{client_secret:'synthetic-unused-secret',client_secret_expires_at:0,client_profile:'native'}});
+ const flow=await oauth.begin({redirectUri:'http://127.0.0.1:53683/managed-mcp/callback',state:'a'.repeat(64),scopes:['read:jira-work']});
+ assert.equal(flow.clientInformation.token_endpoint_auth_method,'none');assert.equal(flow.clientInformation.client_secret,undefined);assert.ok(!JSON.stringify(flow).includes('synthetic-unused-secret'));
+ const granted=await oauth.exchange(binding(),flow,'synthetic-code');assert.ok(!JSON.stringify(granted).includes('synthetic-unused-secret'));
+ const prepared=await oauth.prepare({binding:binding(),credential:granted.credential});await oauth.refresh({binding:binding(),credential:granted.credential,prepared});
+ for(const call of calls.filter(c=>c.url===p.token)){const body=new URLSearchParams(call.body);assert.equal(body.get('client_secret'),null);assert.equal(body.get('client_id'),'fixture-client');assert.equal(new Headers(call.headers).has('authorization'),false);}
+ for(const method of [undefined,'client_secret_post','client_secret_basic']){
+  const rejected=fixture({registration:{token_endpoint_auth_method:method,client_secret:'synthetic-unused-secret'}});
+  await assert.rejects(rejected.oauth.begin({redirectUri:'http://127.0.0.1:53683/managed-mcp/callback',state:'a'.repeat(64)}),e=>e.stage==='client-registration'&&e.code==='CONFIGURATION_MISMATCH');
+  assert.equal(rejected.calls.some(c=>c.url===p.token),false);
+ }
 });

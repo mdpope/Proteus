@@ -18,7 +18,7 @@ export async function mountManagedConnections(container,ui,active){
  function draw(){
   const expanded=new Set([...host.querySelectorAll('[data-connection]:has(.connection-details[open])')].map(node=>node.dataset.connection));
   host.innerHTML=managedConnectionsMarkup(snapshot,esc,expanded);
-  host.querySelector('[data-managed-add]').onclick=()=>edit();host.querySelector('[data-managed-refresh]').onclick=()=>void refresh().catch(e=>error(e.message));
+  host.querySelector('[data-managed-add]').onclick=()=>{if(editing){const editor=host.querySelector('[data-managed-editor]');editor.scrollIntoView({block:'start'});editor.querySelector('select,input,button')?.focus({preventScroll:true});return;}error('');edit();};host.querySelector('[data-managed-refresh]').onclick=()=>void refresh().catch(e=>error(e.message));
   for(const element of host.querySelectorAll('[data-connection]')){
    const row=snapshot.connections.find(c=>c.id===element.dataset.connection);
    element.querySelector('[data-managed-edit]').onclick=()=>edit(row);
@@ -26,8 +26,9 @@ export async function mountManagedConnections(container,ui,active){
    element.querySelector('[data-managed-toggle]').onclick=event=>void action(event.target,row.enabled?{action:'disable',connectionId:row.id}:{action:'save',definition:{...definitionOf(row),enabled:true}});
   }
  }
+ function markEditing(){const add=host.querySelector('[data-managed-add]');if(add){add.textContent='Back to setup';add.setAttribute('aria-label','Back to setup');}}
  function setup(state){
-  editing=true;clearTimeout(timer);const editor=host.querySelector('[data-managed-editor]');
+  editing=true;markEditing();clearTimeout(timer);const editor=host.querySelector('[data-managed-editor]');
   const cancelled=state&&['cancelled','complete'].includes(state.state);if(cancelled){editing=false;void refresh().catch(e=>error(e.message));return;}
   const pending=state&&['starting','authorizing','discovering','saving'].includes(state.state);
   const header='<h3>Connect Atlassian</h3><p>Sign in on Atlassian’s approval page. Proteus will discover your account and Jira sites; you choose what to connect.</p>';
@@ -39,14 +40,14 @@ export async function mountManagedConnections(container,ui,active){
   }else{
    editor.innerHTML=`${!state?types:''}${header}${permissions}<p role="status">${esc(state?.message||'Your password stays with Atlassian. No account IDs or tokens to copy.')}</p><div class="actions">${pending?'':`<button type="button" data-setup-start>${state?'Try again':'Connect Atlassian'}</button>`}<button type="button" data-setup-cancel>Cancel</button></div>`;
    const select=editor.querySelector('[data-setup-type]');if(select)select.onchange=event=>edit(undefined,event.target.value);
-   const start=editor.querySelector('[data-setup-start]');if(start)start.onclick=async()=>{start.disabled=true;error('');try{const next=await ui.api('/api/managed-connections',{action:'atlassian-setup-start',expectedRevision:snapshot.revision});if(active())setup(next);}catch(e){error(e.message);start.disabled=false;}};
+   const start=editor.querySelector('[data-setup-start]');if(start)start.onclick=async()=>{start.disabled=true;error('');try{const next=await ui.api('/api/managed-connections',{action:'atlassian-setup-start',expectedRevision:snapshot.revision});if(active())setup(next);}catch(e){const current=await ui.api('/api/managed-connections',{action:'atlassian-setup-status'}).catch(()=>null);if(active()){if(current)setup(current);else start.disabled=false;error(e.message);}}};
   }
   editor.querySelector('[data-setup-cancel]').onclick=async()=>{clearTimeout(timer);try{if(state?.id)await ui.api('/api/managed-connections',{action:'atlassian-setup-cancel',setupId:state.id});editing=false;await refresh();}catch(e){error(e.message);}};
-  if(!pending)editor.scrollIntoView({block:'start'});
+  if(!pending){editor.scrollIntoView({block:'start'});if(!state)editor.querySelector('select,button')?.focus({preventScroll:true});}
   if(pending)timer=setTimeout(async()=>{if(!active())return;try{const next=await ui.api('/api/managed-connections',{action:'atlassian-setup-status'});if(active())setup(next);}catch(e){error(e.message);}},1500);
  }
  function enterPat(row){
-  editing=true;clearTimeout(timer);const editor=host.querySelector('[data-managed-editor]');
+  editing=true;markEditing();clearTimeout(timer);const editor=host.querySelector('[data-managed-editor]');
   editor.innerHTML='<form data-pat-entry autocomplete="off"><h3>Store approved ADO PAT</h3><p>Enter an existing PAT issued under your organization policy with Project and Team read and Work Items read. It will be verified against this connection user/organization and saved in protected OS storage. No PAT is created or rotated automatically.</p><label>Account email<input name="email" type="email" required autocomplete="off"></label><label>Personal access token<input name="pat" type="password" required autocomplete="new-password"></label><div class="actions"><button type="submit">Verify and store PAT</button><button type="button" data-cancel>Cancel</button></div></form>';
   editor.scrollIntoView({block:'start'});editor.querySelector('[name=email]').focus();
   const clear=()=>{editor.querySelector('form')?.reset();editor.replaceChildren();editing=false;};
@@ -54,7 +55,7 @@ export async function mountManagedConnections(container,ui,active){
   editor.querySelector('form').onsubmit=async event=>{event.preventDefault();const form=event.target,pat=form.elements.pat.value,email=form.elements.email.value;form.reset();form.querySelector('button').disabled=true;try{await ui.api('/api/managed-connections',{action:'store-pat',connectionId:row.id,expectedRevision:snapshot.revision,pat,email});clear();await refresh();}catch(e){error(e.message);form.querySelector('button').disabled=false;}};
  }
  function edit(existing,adapterId){
-  editing=true;clearTimeout(timer);const editor=host.querySelector('[data-managed-editor]'),adapter=snapshot.adapters.find(a=>a.id===(existing?.authentication.adapter||adapterId))||snapshot.adapters.find(a=>a.onboarding)||snapshot.adapters[0],ado=adapter.id.startsWith('ado-'),pat=adapter.id==='ado-pat',cli=adapter.id==='ado-azure-cli';
+  editing=true;markEditing();clearTimeout(timer);const editor=host.querySelector('[data-managed-editor]'),adapter=snapshot.adapters.find(a=>a.id===(existing?.authentication.adapter||adapterId))||snapshot.adapters.find(a=>a.onboarding)||snapshot.adapters[0],ado=adapter.id.startsWith('ado-'),pat=adapter.id==='ado-pat',cli=adapter.id==='ado-azure-cli';
   if(!existing&&adapter.onboarding)return setup();
   const value=existing||{name:ado?'hc-ado-corporate':'hc-atlassian',label:ado?'Azure DevOps corporate':'Atlassian',workspaceIds:[],authentication:{},expected:{principal:'',tenant:'',resource:'',organizationId:'',scopes:adapter.scopes||[]},capabilities:ado?adapter.capabilities:['jira.issue.read','jira.issue.search'],probes:[]};
   const field=(name,label,current,extra='')=>`<label>${esc(label)}<input name="${name}" ${extra} value="${esc(current||'')}"></label>`;

@@ -57,22 +57,25 @@ try{
   fixture.active=false;
   const {mountManagedConnections}=await import('/public/features/settings/managed-connections.js');
   const snapshot={...fixture.snapshot,connections:[],atlassianSetup:null,adapters:[{id:'atlassian-oauth-v2',name:'Atlassian / Jira',onboarding:true,endpoint:'https://mcp.atlassian.com/v1/mcp/authv2',capabilities:[]}]};
-  window.onboard={calls:[],active:true};
+  window.onboard={calls:[],active:true,failStart:true,state:null};
   document.querySelector('#host').replaceChildren();
   await mountManagedConnections(document.querySelector('#host'),{escape:v=>String(v??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;'),api:async(_route,args)=>{
    if(!args)return snapshot;onboard.calls.push(args);
-   if(args.action==='atlassian-setup-start')return {id:'setup',state:'authorizing',message:'Approve in Atlassian'};
-   if(args.action==='atlassian-setup-status')return {id:'setup',state:'review',account:{id:'discovered-person',name:'Fixture Person'},sites:[{id:'discovered-site',name:'Engineering',url:'https://engineering.atlassian.net'}]};
+   if(args.action==='atlassian-setup-start'){if(onboard.failStart){onboard.state={id:'setup',state:'failed',message:'Registration needs review'};throw Error('Registration needs review');}return {id:'setup',state:'authorizing',message:'Approve in Atlassian'};}
+   if(args.action==='atlassian-setup-status')return onboard.state||{id:'setup',state:'review',account:{id:'discovered-person',name:'Fixture Person'},sites:[{id:'discovered-site',name:'Engineering',url:'https://engineering.atlassian.net'}]};
    if(args.action==='atlassian-setup-confirm')return {connectionId:'confirmed'};
   }},()=>onboard.active);
  });
  await page.getByRole('button',{name:'Add connection',exact:true}).click();
  assert.equal(await page.getByLabel('Expected Atlassian account ID').count(),0);assert.equal(await page.getByLabel('Approved OAuth scopes (one per line)').count(),0);
- await page.getByRole('button',{name:'Connect Atlassian',exact:true}).click();await page.getByRole('heading',{name:'Signed in as Fixture Person'}).waitFor();
+ await page.getByRole('button',{name:'Connect Atlassian',exact:true}).click();await page.getByRole('button',{name:'Try again',exact:true}).waitFor();
+ await page.getByRole('button',{name:'Back to setup',exact:true}).click();assert.equal(await page.getByRole('button',{name:'Try again',exact:true}).evaluate(node=>document.activeElement===node),true);assert.equal(await page.evaluate(()=>onboard.calls.filter(c=>c.action==='atlassian-setup-start').length),1,'Returning to setup must not register or retry');
+ await page.evaluate(()=>{onboard.failStart=false;onboard.state=null;});await page.getByRole('button',{name:'Try again',exact:true}).click();await page.getByRole('heading',{name:'Signed in as Fixture Person'}).waitFor();
+ await page.getByLabel('Connection name',{exact:true}).fill('Retained Jira draft');await page.getByRole('button',{name:'Back to setup',exact:true}).click();assert.equal(await page.getByLabel('Connection name',{exact:true}).inputValue(),'Retained Jira draft');
  assert.equal(await page.getByLabel('Jira site',{exact:true}).inputValue(),'','Never silently select an account site');
  await page.getByLabel('Jira site',{exact:true}).selectOption('discovered-site');await page.getByLabel('Fixture workspace',{exact:true}).check();await page.getByLabel('Optional Jira issue to test').fill('FIXTURE-1');
  await page.getByRole('button',{name:'Confirm account and connect',exact:true}).click();await page.getByRole('button',{name:'Add connection',exact:true}).waitFor();
- const confirmation=await page.evaluate(()=>onboard.calls.at(-1));assert.equal(confirmation.action,'atlassian-setup-confirm');assert.equal(confirmation.siteId,'discovered-site');assert.deepEqual(confirmation.workspaceIds,['workspace']);assert.equal(confirmation.principal,undefined);assert.equal(confirmation.scopes,undefined);assert.equal(await page.evaluate(()=>onboard.calls.filter(c=>c.action==='atlassian-setup-start').length),1);
+ const confirmation=await page.evaluate(()=>onboard.calls.at(-1));assert.equal(confirmation.action,'atlassian-setup-confirm');assert.equal(confirmation.siteId,'discovered-site');assert.deepEqual(confirmation.workspaceIds,['workspace']);assert.equal(confirmation.principal,undefined);assert.equal(confirmation.scopes,undefined);assert.equal(await page.evaluate(()=>onboard.calls.filter(c=>c.action==='atlassian-setup-start').length),2);
  await page.evaluate(()=>onboard.active=false);
  // Restore original form fixture for brand/layout comparison.
  await page.evaluate(ado=>{fixture.snapshot.connections=[{...ado,status:{state:'unchecked'},references:[],active:false}];},ado);

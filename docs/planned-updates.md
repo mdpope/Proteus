@@ -1,3 +1,18 @@
+## Nov 5 Atlassian registration compatibility correction
+
+The operator reproduced `client-registration / CONFIGURATION_MISMATCH` before any approval page.
+A bounded live check found authv2 DCR returns HTTP 201 and `token_endpoint_auth_method: none`
+alongside an unused `client_secret`. Proteus rejected that otherwise valid public client.
+The adapter now retains only public client fields and explicitly keeps auth method none; the
+unused secret is discarded, never persisted or sent during code exchange/refresh. Missing or
+confidential auth methods still fail closed. A subsequent live adapter check passed registration,
+PKCE S256 and the pinned authorization endpoint/resource; no browser, consent or token grant was
+performed by that diagnostic. Full authenticated identity/Jira acceptance remains pending.
+
+While an editor is open, Add connection now reads Back to setup and scrolls/focuses the existing
+controls without resetting drafts or retrying authentication. Startup errors load the saved failed
+setup state with an explicit Try again button. Deployment remains held.
+
 ## Nov 5 — browser-first Atlassian setup
 
 New Atlassian connections start with Connect Atlassian, not manual account/cloud IDs or scope

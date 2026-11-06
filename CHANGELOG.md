@@ -1,3 +1,8 @@
+## Nov 5 Atlassian registration correction
+
+- Accept Atlassian's explicit public-client registration response even when it includes an unused secret; discard that secret and retain PKCE/auth method none.
+- Make Add connection return to an already-open setup without losing drafts; show explicit retry after failed startup.
+
 ## Nov 5 Atlassian setup
 
 - Replace manual IDs/scopes for new Atlassian connections with browser approval, discovered account/site review and explicit workspace confirmation.

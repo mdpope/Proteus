@@ -13,8 +13,11 @@ export const atlassianOAuthProfile=Object.freeze({
 const failure=code=>Object.assign(Error('Managed Atlassian authorization requires review on its owning computer.'),{code});
 const scopes=value=>typeof value==='string'?value.split(' ').filter(Boolean):[];
 function publicClient(value){
- if(!value||typeof value.client_id!=='string'||!value.client_id||value.client_id.length>512||value.client_secret||value.token_endpoint_auth_method!=='none')throw failure('CONFIGURATION_MISMATCH');
- return value;
+ if(!value||typeof value.client_id!=='string'||!value.client_id||value.client_id.length>512||value.token_endpoint_auth_method!=='none')throw failure('CONFIGURATION_MISMATCH');
+ // Atlassian's authv2 DCR returns a client_secret even for an explicitly public
+ // client (auth method none). Never retain it or let SDK fallback select it.
+ // Keep only the public fields required by PKCE/code exchange and renewal.
+ return {client_id:value.client_id,token_endpoint_auth_method:'none',...(Array.isArray(value.redirect_uris)?{redirect_uris:[...value.redirect_uris]}:{})};
 }
 export function validateAtlassianBinding(binding){
  if(binding?.adapter!==atlassianOAuthProfile.adapter||binding.issuer!==atlassianOAuthProfile.issuer||binding.expected?.audience!==atlassianOAuthProfile.endpoint||binding.ownerId!==binding.credentialOwnerId)throw failure('CONFIGURATION_MISMATCH');
@@ -58,7 +61,7 @@ export function atlassianOAuth({fetchFn=fetch,now=()=>Date.now(),timeoutMs=30000
   const granted=tokens.scope===undefined?previous.scopes:scopes(tokens.scope);
   return {accessToken:tokens.token_type?.toLowerCase()==='bearer'?tokens.access_token:null,
    expiresAt:Number.isFinite(tokens.expires_in)?now()+tokens.expires_in*1000:0,
-   credential:{issuer:profile.issuer,resource:profile.endpoint,clientInformation:previous.clientInformation,refreshToken:tokens.refresh_token,scopes:granted}};
+   credential:{issuer:profile.issuer,resource:profile.endpoint,clientInformation:publicClient(previous.clientInformation),refreshToken:tokens.refresh_token,scopes:granted}};
  };
  return {
   qualify,
@@ -81,7 +84,7 @@ export function atlassianOAuth({fetchFn=fetch,now=()=>Date.now(),timeoutMs=30000
   prepare:async({binding,credential:value})=>{credential(binding,value);return qualify();},
   refresh:async({binding,credential:value,prepared})=>guarded(async()=>{
    credential(binding,value);if(!prepared?.metadata)throw failure('CONFIGURATION_MISMATCH');
-   const tokens=await refreshAuthorization(new URL(profile.issuer),{metadata:prepared.metadata,clientInformation:value.clientInformation,refreshToken:value.refreshToken,resource:new URL(profile.endpoint),fetchFn:request});
+   const tokens=await refreshAuthorization(new URL(profile.issuer),{metadata:prepared.metadata,clientInformation:publicClient(value.clientInformation),refreshToken:value.refreshToken,resource:new URL(profile.endpoint),fetchFn:request});
    return result(binding,tokens,value);
   })
  };

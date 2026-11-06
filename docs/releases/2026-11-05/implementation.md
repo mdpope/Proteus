@@ -1,3 +1,15 @@
+## Atlassian public-client registration correction
+
+Reproduced the operator's client-registration failure against live authv2 DCR: successful public
+client response included an unused client_secret. Keep explicit auth method none and only public
+client fields; discard the secret before SDK code exchange, refresh or protected persistence.
+One subsequent adapter check passed live registration, PKCE S256 and pinned resource/authorization
+URL construction without browser launch or consent. Full authenticated acceptance remains pending.
+
+Back to setup now focuses the existing editor and preserves drafts; failure recovery shows an
+explicit Try again button. Validation: 1,659 tests passed/four skipped, static checks and disposable
+Electron interaction tests passed. No deployment or real account authorization was performed.
+
 ## Browser-first Atlassian enrollment
 
 Implemented owner-only OAuth setup with discovered account/site review and explicit workspace
