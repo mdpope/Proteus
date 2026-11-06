@@ -12,7 +12,9 @@ Release ID `0.2.43-darwin-arm64-c791f4cc7610d0670d07e3e6`; manifest digest
 Build Mac signed with the legacy transition publisher key, while the app bundles both trusted
 public keys. The private draft and all four assets were downloaded and hash-verified. No public
 publication or other-platform build occurred. Work Mac installation is dispatched through a separate
-owner coordinator and awaits its local command approval; installed/workflow acceptance is pending.
+owner coordinator. The established isolated GitHub route resolved a default-context 404; Work Mac
+independently verified all four assets and prepared the candidate. Restart now waits for an existing
+digest run awaiting input; no unrelated work was cancelled. Installed/workflow acceptance is pending.
 Private routing and full transfer receipts remain outside Git.
 
 ## Mac candidate source freeze validation
