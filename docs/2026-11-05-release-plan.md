@@ -4,7 +4,7 @@ Migrated from the Nov 4 plan on November 5, 2026. All queued scope and historica
 
 ## Operator hold — November 5, 2026
 
-- **Nov 3 must close first.** Nov 3 / 0.2.42 remains open. Do not build Nov 5 changes or open/reserve the next release until Nov 3 closeout is verified. This migration does not close Nov 3 or authorize its closeout work.
+- **Nov 3 must close first.** Nov 3 / 0.2.42 remains open. Do not build Nov 5 changes or open/reserve the next release until Nov 3 closeout is verified. The November 5 operator follow-up authorizes finishing Nov 3 publication, installation checks and closeout; it does not mark them complete.
 - **Wait for the daily-digest improvement chat.** Hold pending further instructions from that chat; capture any needed Proteus changes here as queued scope when its handoff arrives. The automation audit handoff has been received; its scoped unattended-execution requirement is now explicitly a hard blocker for fully automated synthesis. Only that blocker scope may use the narrow exception after Nov 3 closeout; no build starts while Nov 3 remains open.
 - **Build hold stays in force until the operator explicitly lifts it.** Routine requests, a completed chat, or Nov 3 closeout alone do not lift the hold.
 - **Narrow exception:** if the daily-digest chat explicitly identifies a change as a blocker on its end, record the blocker and exact required scope. The operator permits that blocker-specific exception to the digest hold; it does not lift the hold for other changes or bypass the Nov 3 closeout prerequisite.
@@ -137,7 +137,7 @@ Ten focused schedule-control tests pass. The full suite passes 1,542 tests with 
 using a short canonical temporary root; static checks pass. The initial default-temp run had
 11 path-alias/socket-path failures, all independently reproduced on unchanged Nov 3 source.
 No package was built, no installation changed and no real unattended workflow was tested.
-P7/P8 remain queued; these results apply only to P6 inspection/preview and revision fixes.
+These historical results apply only to P6; the later checkpoint below records implemented P7/P8.
 
 
 ## P7 — Source-aware schedule reconciliation (implemented in isolated source)
@@ -285,3 +285,26 @@ Found during the Nov 3 rollout on November 5. Planning only; scope is recorded, 
   wrapper over SSH and `sudo` (documented in `docs/release-process.md`). Replace the per-release
   retention helper with a reviewed, reusable one in the private deployment workspace, and add the
   Webmin zero-width-tab and Command Shell quirks to the operator runbook.
+
+## November 5 transcript reconciliation and digest-first sequence
+
+Reviewed the complete Nov 3 coordinator transcript through its final rate-limit failure and
+compared it with commit 2519241. The final carry-over list was saved before the failure; it is
+now also retained in the isolated Nov 5 implementation branch. P1–P5 and the update-blocking
+rules already cover the earlier requested follow-ups; the carry-over section preserves the
+later Linux, Windows, publication and server-process findings.
+
+Fresh receiving-owner evidence confirms the second Windows consumer installed 0.2.42 with
+verified health. Its independent post-install check still reported zero visible owner tabs,
+no exposed expected/found preservation receipt, no UI Automation tree and unverified terminal
+rendering. Treat this as an unresolved acceptance discrepancy, not proof of data loss or full
+acceptance. Publication also remains incomplete: the public current descriptor still advertises
+Nov 2 / 0.2.41, and the Nov 3 PR remains open. Finish these before closing Nov 3.
+
+Recommended first Nov 5 package: the already implemented P6–P10 digest controls only, rebased
+onto closed Nov 3 and validated before packaging. P7/P8 block unattended acceptance; P6/P9/P10
+provide configuration visibility, real source refresh and run evidence needed to verify it.
+Publish the accepted Mac artifact once and install it on the digest owner through its update
+coordinator. Then its workflow owner reconciles the prepared canonical exports and verifies
+a prompt-free workflow plus a second no-new-evidence run. Keep unrelated feature work queued
+until this acceptance is complete. No Nov 5 package or installation has started.
