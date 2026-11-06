@@ -1,3 +1,19 @@
+## Nov 6 — physical mobile installation verified
+
+Both physical iPhone and iPad now run 0.2.43 / build 2611.5.1. Cold recovery,
+installation, before-launch protected-file comparison (373 and 194 files respectively),
+launch and four saved destinations per device pass. Two recovery generations remain per device.
+Physical question gestures, reconnect and APNs delivery are still unverified.
+
+Windows normal keyring authentication works; the sandboxed GitHub check was a false failure.
+The frozen build pin remains `88367d6`; later rollout-document commits do not replace it.
+Linux has passed source validation and reached native package acceptance. Neither native artifact
+is yet published. Build Mac requires checkpoint review after new input; Work Mac remains
+prepared after reading-position persistence rejected before restart. A synthetic long-view
+reproduction emits 41 positions to the owner's 32-entry limit. That contract mismatch is confirmed
+in source but the precise offending Work Mac view remains unverified. Preserve the original state;
+do not bypass updater preservation or label the release complete.
+
 ## Nov 6 — current publication and rollout checkpoint
 
 Frozen application source: `88367d6772f5356a28bb8f3882ea9affc4b32f70`.
