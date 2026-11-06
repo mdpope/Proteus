@@ -1,3 +1,27 @@
+## Nov 6 — protected journal capacity and live Slack follow-up
+
+Installed browser correction `578a509` passed native fixture and owner health/preservation checks.
+Live Slack opened Search, but Query fill did not persist according to the workflow snapshots;
+Enter selected a suggestion. A one-item count change has an unverified read-state effect.
+The workflow stopped browser input and unloaded its own tab successfully. Live Search acceptance
+has failed; generic native-input tests do not qualify Slack's actual editor. Current fill calls
+Playwright locator.fill then returns a body ARIA snapshot without target persistence acknowledgment.
+Saved evidence identifies combobox Query; actual DOM tag/contenteditable remains unknown. A second fill used text instead of value, which the shipped code converts to empty content. Missing string value now fails before input. Fill returns sanitized target type and a direct DOM retained boolean after a bounded settling interval; no entered text is copied into the acknowledgment. A real hidden contenteditable fixture retains text omitted from ARIA snapshots, and editor-reverted content reports retained:false. This is DOM evidence, not application-level commit or live Slack acceptance. No additional live browser retries are authorized here.
+
+Supported owner diagnostics measured 5,545 protected receipts / 268,475,508 bytes against a
+268,435,456-byte budget, with zero pending or expired receipts. tabs.mutate accounts for
+268,306,828 bytes across 5,457 entries. These aggregates attribute storage, not the historical
+cause or individual payload sizes. Both workflow follow-up and coordinator diagnostic dispatch
+were rejected as uncertain; preserve their operation IDs and reconcile before any retry.
+
+Source correction lowers lossless completed-receipt compression eligibility from 64 KiB to
+4 KiB. The original threshold excluded ordinary snapshots; a disposable sub-64-KiB fixture
+reproduces admission failure and now recovers capacity on startup. Exact outcomes, unknown
+fields, timestamps, full retention and unresolved claims are unchanged. No limit increase,
+receipt deletion, live-journal edit or forced restart is used. This does not reduce relay payload
+size or explain why tab mutations recur; investigate those independently. Validation passed 1,688 tests, four skips, zero failures; static checks and real hidden native-input/contenteditable UI tests pass, including an editor that discards text. This correction is not built or installed. Old-owner remote mutation admission remains
+blocked until legitimate expiry or a separately authorized supported owner update installs it.
+
 ## Scheduled browser corrections — source validation
 
 Scheduled/manual runs can allocate a stable native owner window without the chat being visible,

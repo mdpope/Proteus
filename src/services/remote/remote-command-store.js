@@ -6,6 +6,9 @@ import { DatabaseSync } from 'node:sqlite';
 import { StringDecoder } from 'node:string_decoder';
 
 export const commandJournalLimits = Object.freeze({ maxRecords: 10_000, maxBytes: 256 * 1024 * 1024, retentionMs: 24 * 3600_000 });
+// Ordinary tab snapshots are often below 64 KiB; compress them too without
+// changing replay, retention or admission limits. Tiny receipts remain inline.
+const compressionThreshold = 4096;
 const expiredMessage = 'Command expired. Refresh before trying again.';
 
 // This synchronous implementation belongs exclusively to the journal worker.
@@ -60,7 +63,7 @@ export class RemoteCommandStore {
   }
   storeCompleted(key,digest,record){
     const encoded=this.encode(key,record),raw=Buffer.from(encoded.payload);
-    if(raw.length>=65536){
+    if(raw.length>=compressionThreshold){
       const compressed=gzipSync(raw);
       // Older SQLite readers see an uncertain claim, never an empty successful
       // outcome or permission to repeat the mutation. New readers restore exact JSON.
@@ -78,7 +81,7 @@ export class RemoteCommandStore {
     // uncertainty and full retention windows remain intact; no effects are replayed.
     let after='';
     while(true){
-      const row=this.db.prepare('SELECT r.key,r.digest,r.payload FROM receipts r LEFT JOIN receipt_encoding e ON e.key=r.key WHERE r.pending=0 AND r.bytes>=65536 AND e.key IS NULL AND r.key>? ORDER BY r.key LIMIT 1').get(after);
+      const row=this.db.prepare('SELECT r.key,r.digest,r.payload FROM receipts r LEFT JOIN receipt_encoding e ON e.key=r.key WHERE r.pending=0 AND r.bytes>=? AND e.key IS NULL AND r.key>? ORDER BY r.key LIMIT 1').get(compressionThreshold,after);
       if(!row)break;after=row.key;
       this.transaction(()=>this.storeCompleted(row.key,row.digest,JSON.parse(row.payload)));
     }

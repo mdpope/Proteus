@@ -1703,3 +1703,14 @@ Hold or right-click Back/Forward to choose an older saved history entry. Logical
 loads that URL again; it is not a frozen snapshot and can run the site's redirect scripts again.
 Repeated entries for the same URL cannot bypass a site access requirement merely by selecting
 an older copy. Native-dialog suppression does not promise to bypass such redirects.
+
+
+### Fill effect evidence
+
+`fill` requires an explicit string `value` (including an intentional empty string). `text` selects
+an element; it is not field content. The response includes `fillResult` with target tag/role,
+contentEditable, and retained (exact DOM value comparison after a bounded settling interval).
+ARIA snapshots can omit editor content. A false retained value is not success: stop and inspect,
+never submit or automatically repeat. A true value establishes only observed DOM retention,
+not application acceptance or a guarantee against later rerender. No field content is echoed in
+this acknowledgment.

@@ -20,7 +20,8 @@ try{
  const initial=await native((main,id)=>{const b=main.getBrowser(),t=b.get(id);return {bounds:t.view.getBounds(),visible:t.view.getVisible(),association:t.associationChatId,windows:[...main.getWindows().contexts.values()].map(ctx=>({id:ctx.id,active:ctx.session.get().active,focused:ctx.window.isFocused()}))};},tab.id);
  assert.equal(initial.association,run);assert.ok(initial.bounds.width>=300&&initial.bounds.height>=200,JSON.stringify(initial.bounds));assert.equal(initial.visible,false);assert.deepEqual(initial.windows,before);
  await act({action:'snapshot',tabId:tab.id});await act({action:'click',tabId:tab.id,role:'button',name:'Search'});
- await act({action:'fill',tabId:tab.id,role:'textbox',name:'Query',value:'Synthetic bounded query'});await act({action:'press',tabId:tab.id,role:'textbox',name:'Query',key:'Enter'});
+ await assert.rejects(act({action:'fill',tabId:tab.id,role:'textbox',name:'Query',text:'Wrong content argument'}),/explicit string value/);
+ assert.equal((await act({action:'fill',tabId:tab.id,role:'textbox',name:'Query',value:'Synthetic bounded query'})).fillResult.retained,true);await act({action:'press',tabId:tab.id,role:'textbox',name:'Query',key:'Enter'});
  assert.match(JSON.stringify(await act({action:'snapshot',tabId:tab.id})),/Synthetic bounded query/);
  // A collapsed layout after first use must not strand a retained background page.
  await native((main,id)=>main.getBrowser().get(id).view.setBounds({x:0,y:0,width:0,height:0}),tab.id);

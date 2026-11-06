@@ -244,3 +244,20 @@ test('existing large receipts compact atomically while unresolved receipts and o
  assert.deepEqual(store.lookup('legacy'),record);assert.equal(store.lookup('pending').pending,true);
  assert.equal(store.diagnostics().pending,1);assert.ok(store.diagnostics().bytes<10000);
 });
+
+
+test('sub-64KiB completed snapshots recover capacity losslessly while pending claims stay protected',t=>{
+ const dir=home(t),at=Date.now(),limits={maxBytes:260000};let store=new RemoteCommandStore(dir,limits);
+ const records=[];
+ for(let i=0;i<8;i++){
+  const record={digest:'d'+i,at:at+i,issuedAt:new Date(at).toISOString(),result:{revision:i,tabs:Array.from({length:100},(_,n)=>({id:'tab-'+n,title:'Synthetic retained descriptor',history:['https://example.invalid/'+n+'/'.repeat(300)]}))},extension:{keep:true}};
+  const encoded=store.encode('saved-'+i,record);assert.ok(encoded.bytes>4096&&encoded.bytes<65536);
+  store.insert.run('saved-'+i,record.digest,0,record.at,encoded.payload,encoded.bytes);records.push(record);
+ }
+ const pending={digest:'p',pending:true,at:at-48*3600000,issuedAt:new Date(at).toISOString()};const encoded=store.encode('pending',pending);store.insert.run('pending','p',1,pending.at,encoded.payload,encoded.bytes);
+ assert.equal(store.diagnostics().overBudget,true);store.close();
+ store=new RemoteCommandStore(dir,limits);closeBeforeRemove(dir,()=>store.close());
+ assert.equal(store.diagnostics().records,9);assert.equal(store.diagnostics().pending,1);assert.equal(store.diagnostics().overBudget,false);
+ records.forEach((record,i)=>assert.deepEqual(store.claim('saved-'+i,record.digest,'expired').previous,record));
+ assert.deepEqual(store.lookup('pending'),pending);assert.equal(store.claim('next','next',new Date(at).toISOString(),at,'chat.send').claimed,true);
+});
