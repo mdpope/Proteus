@@ -51,7 +51,7 @@ export class ManagedAtlassian {
   if(typeof this.openExternal!=='function')throw fail('UNAVAILABLE');
   // Fail before registration/browser launch if protected storage is unavailable.
   await this.vault.requireAvailable();
-  const state=randomBytes(32).toString('hex'),controller=new AbortController();let flow,timer,processing=false;
+  const state=randomBytes(32).toString('hex'),controller=new AbortController();let flow,timer,processing=false,stage='loopback-listen';
   const close=()=>{clearTimeout(timer);controller.abort();server.close();server.closeAllConnections();if(this.flows.get(id)?.state===state)this.flows.delete(id);};
   const server=http.createServer(async(req,res)=>{
    const respond=(status,message)=>{res.writeHead(status,{'content-type':'text/plain; charset=utf-8','cache-control':'no-store','referrer-policy':'no-referrer'});res.end(message);};
@@ -75,12 +75,20 @@ export class ManagedAtlassian {
   try{
    await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(0,'127.0.0.1',resolve);});
    const redirectUri='http://127.0.0.1:'+server.address().port+'/managed-mcp/callback';
-   flow=await this.oauth.begin({redirectUri,state,scopes:definition.expected.scopes});
-   if(controller.signal.aborted||revision(this.definition(id))!==configurationRevision)throw fail('CONFIGURATION_MISMATCH');
+   stage='oauth-start';flow=await this.oauth.begin({redirectUri,state,scopes:definition.expected.scopes});
+   stage='configuration-recheck';if(controller.signal.aborted||revision(this.definition(id))!==configurationRevision)throw fail('CONFIGURATION_MISMATCH');
    timer=setTimeout(()=>{this.setStatus(id,{state:'sign-in-required',nextAction:'The owner sign-in window expired.'});close();},600000);timer.unref();
-   this.setStatus(id,{state:'sign-in-in-progress'});await this.openExternal(flow.authorizationUrl.href);
+   this.setStatus(id,{state:'sign-in-in-progress'});stage='browser-open';await this.openExternal(flow.authorizationUrl.href);
    return {connectionId:id,state:'sign-in-in-progress'};
-  }catch{close();this.setStatus(id,{state:'sign-in-required',nextAction:'Owner sign-in could not start. Review configuration and protected storage.'});throw fail('AUTH_REQUIRED');}
+  }catch(error){
+   close();
+   const failureStage=['discovery','client-registration','authorization-request'].includes(error?.stage)?error.stage:stage;
+   const code=['CONFIGURATION_MISMATCH','UNAVAILABLE','RATE_LIMITED','AUTH_REQUIRED'].includes(error?.code)?error.code:'AUTH_REQUIRED';
+   const httpStatus=Number.isInteger(error?.httpStatus)&&error.httpStatus>=400&&error.httpStatus<=599?error.httpStatus:undefined;
+   const message=`Atlassian sign-in could not start at ${failureStage} (${code}${httpStatus?', HTTP '+httpStatus:''}). Review this connection's setup; no consent completion is recorded.`;
+   this.setStatus(id,{state:'sign-in-required',stage:failureStage,code,...(httpStatus?{httpStatus}:{}),nextAction:message});
+   throw Object.assign(Error(message),{code,stage:failureStage});
+  }
  }
  async close(){this.closed=true;for(const flow of this.flows.values())flow.close();this.tokens.close();this.contexts.clear();}
 }

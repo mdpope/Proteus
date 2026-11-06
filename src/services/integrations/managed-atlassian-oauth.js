@@ -36,9 +36,11 @@ export function atlassianOAuth({fetchFn=fetch,now=()=>Date.now(),timeoutMs=30000
   // Keep SDK error bodies private as well as bounded. Callers receive fixed codes.
   const chunks=[];let bytes=0;
   for await(const chunk of response.body||[]){bytes+=chunk.length;if(bytes>65536)throw failure('CONFIGURATION_MISMATCH');chunks.push(chunk);}
+  if(!response.ok)throw Object.assign(failure(response.status>=500?'UNAVAILABLE':'AUTH_REQUIRED'),{httpStatus:response.status});
   return new Response(chunks.length?Buffer.concat(chunks):null,{status:response.status,headers:response.headers});
  };
- const guarded=async work=>{try{return await work();}catch(error){if(['CONFIGURATION_MISMATCH','UNAVAILABLE','RATE_LIMITED'].includes(error?.code))throw error;throw failure('AUTH_REQUIRED');}};
+ const guarded=async work=>{try{return await work();}catch(error){if(['CONFIGURATION_MISMATCH','UNAVAILABLE','RATE_LIMITED','AUTH_REQUIRED'].includes(error?.code))throw error;throw failure('AUTH_REQUIRED');}};
+ const atStage=async(stage,work)=>{try{return await work();}catch(error){const clean=failure(['CONFIGURATION_MISMATCH','UNAVAILABLE','RATE_LIMITED'].includes(error?.code)?error.code:'AUTH_REQUIRED');clean.stage=stage;if(Number.isInteger(error?.httpStatus)&&error.httpStatus>=400&&error.httpStatus<=599)clean.httpStatus=error.httpStatus;if(Number.isFinite(error?.retryAfterMs))clean.retryAfterMs=error.retryAfterMs;throw clean;}};
  const qualify=async()=>guarded(async()=>{
   const resource=await discoverOAuthProtectedResourceMetadata(new URL(profile.endpoint),{resourceMetadataUrl:new URL(profile.resourceMetadata)},request);
   if(resource.resource!==profile.endpoint||resource.authorization_servers?.length!==1||resource.authorization_servers[0]!==profile.issuer)throw failure('CONFIGURATION_MISMATCH');
@@ -64,9 +66,9 @@ export function atlassianOAuth({fetchFn=fetch,now=()=>Date.now(),timeoutMs=30000
   begin:async({redirectUri,state,scopes:requested=[]})=>guarded(async()=>{
    const redirect=new URL(redirectUri);
    if(redirect.protocol!=='http:'||redirect.hostname!=='127.0.0.1'||!redirect.port||redirect.pathname!=='/managed-mcp/callback'||redirect.search||redirect.hash||redirect.username||redirect.password||typeof state!=='string'||! /^[a-f0-9]{64}$/.test(state)||!Array.isArray(requested)||requested.length>100||requested.some(s=>typeof s!=='string'||!s||s.length>512||/[\s\x00-\x1f]/.test(s)))throw failure('CONFIGURATION_MISMATCH');
-   const {metadata}=await qualify();
-   const clientInformation=publicClient(await registerClient(new URL(profile.issuer),{metadata,clientMetadata:{client_name:'Proteus managed connections',redirect_uris:[redirect.href],token_endpoint_auth_method:'none',grant_types:['authorization_code','refresh_token'],response_types:['code']},scope:requested.join(' '),fetchFn:request}));
-   const started=await startAuthorization(new URL(profile.issuer),{metadata,clientInformation,redirectUrl:new URL(redirectUri),scope:requested.join(' '),state,resource:new URL(profile.endpoint)});
+   const {metadata}=await atStage('discovery',qualify);
+   const clientInformation=await atStage('client-registration',async()=>publicClient(await registerClient(new URL(profile.issuer),{metadata,clientMetadata:{client_name:'Proteus managed connections',redirect_uris:[redirect.href],token_endpoint_auth_method:'none',grant_types:['authorization_code','refresh_token'],response_types:['code']},scope:requested.join(' '),fetchFn:request})));
+   const started=await atStage('authorization-request',()=>startAuthorization(new URL(profile.issuer),{metadata,clientInformation,redirectUrl:new URL(redirectUri),scope:requested.join(' '),state,resource:new URL(profile.endpoint)}));
    return {...started,clientInformation,metadata,redirectUri,scopes:[...requested]};
   }),
   exchange:async(binding,flow,code)=>guarded(async()=>{

@@ -49,3 +49,14 @@ test('OAuth redirects, remote error text and rate limits never escape as secret-
  const denied=fixture({status:401});await assert.rejects(denied.oauth.qualify(),e=>e.code==='AUTH_REQUIRED'&&!e.message.includes('sensitive'));
  const f=fixture();await assert.rejects(f.oauth.begin({redirectUri:'https://other.invalid/managed-mcp/callback',state:'a'.repeat(64)}),{code:'CONFIGURATION_MISMATCH'});assert.equal(f.calls.length,0);
 });
+
+test('begin preserves only sanitized stage and code for discovery and registration failures',async()=>{
+ const args={redirectUri:'http://127.0.0.1:53683/managed-mcp/callback',state:'a'.repeat(64),scopes:['read:jira-work']};
+ await assert.rejects(fixture({status:401}).oauth.begin(args),e=>e.stage==='discovery'&&!e.message.includes('sensitive'));
+ const oauth=atlassianOAuth({fetchFn:async(url,init)=>{
+  if(String(url)===p.resourceMetadata)return Response.json({resource:p.endpoint,authorization_servers:[p.issuer]});
+  if(String(url)===p.metadata)return Response.json(metadata());
+  return new Response('secret registration response',{status:400});
+ }});
+ await assert.rejects(oauth.begin(args),e=>e.stage==='client-registration'&&e.code==='AUTH_REQUIRED'&&e.httpStatus===400&&!e.message.includes('secret'));
+});

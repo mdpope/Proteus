@@ -32,3 +32,14 @@ test('locked store, stale owner revision and duplicate sign-in fail before addit
  const f=fixture(t);await assert.rejects(f.manager.signIn('fixture',{expectedRevision:'old'}),{code:'CONFIGURATION_MISMATCH'});assert.deepEqual(f.calls,[]);
  await f.manager.signIn('fixture',{expectedRevision:'registry-revision'});await assert.rejects(f.manager.signIn('fixture',{expectedRevision:'registry-revision'}),{code:'BUSY'});assert.equal(f.calls.length,1);
 });
+
+test('owner startup diagnostics identify a fixed stage without exposing upstream details or retrying',async t=>{
+ for(const stage of ['discovery','client-registration','authorization-request']){
+  const f=fixture(t);let attempts=0;f.manager.oauth.begin=async()=>{attempts++;throw Object.assign(Error('secret authorization code'),{code:'UNAVAILABLE',stage,httpStatus:503});};
+  await assert.rejects(f.manager.signIn('fixture',{expectedRevision:'registry-revision'}),e=>e.stage===stage&&e.code==='UNAVAILABLE'&&!e.message.includes('secret'));
+  assert.equal(attempts,1);assert.equal(f.opened.length,0);assert.equal(f.manager.flows.size,0);assert.equal(f.manager.status('fixture').stage,stage);assert.equal(f.manager.status('fixture').httpStatus,503);
+ }
+ const f=fixture(t);f.manager.openExternal=async()=>{throw Error('secret browser URL');};
+ await assert.rejects(f.manager.signIn('fixture',{expectedRevision:'registry-revision'}),e=>e.stage==='browser-open'&&!e.message.includes('secret'));
+ assert.equal(f.calls.length,1);assert.equal(f.manager.flows.size,0);
+});

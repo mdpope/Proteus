@@ -1,3 +1,7 @@
+## Nov 5 follow-up
+
+- Report sanitized Atlassian owner sign-in startup stage and HTTP status instead of a misleading generic owner-review message.
+
 ## Nov 5 candidate preparation
 
 - Persist per-job navigation preservation differences without relaxing the acceptance gate.

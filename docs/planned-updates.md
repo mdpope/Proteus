@@ -1,3 +1,17 @@
+## Atlassian sign-in startup diagnostic correction
+
+Installed candidate 1's generic owner-review message is not a human-click restriction. Native
+owner UI routes to the local controller, but its startup catch discarded discovery, registration,
+loopback and browser-opening failures. Work Mac's existing next-action status confirms that catch
+was reached; the original cause remains unknown. Do not repeat sign-in as an owner-routing fix.
+
+Source now preserves fixed stage/error codes and bounded HTTP status in the UI error and owner
+status, excluding OAuth bodies, credentials and authorization URLs. Regression fixtures cover
+discovery/registration/browser failures, released loopback flows and exactly one attempted start.
+No automatic registration retry, changed grants, new credential endpoint or authentication bypass
+is introduced. This diagnostic correction does not yet establish or fix the underlying vendor
+failure; a new accepted Mac candidate and one deliberate owner attempt remain necessary.
+
 ## Current delivery order — Mac digest candidate first
 
 The operator now holds Linux, Windows and iOS builds until the Mac candidate is delivered to
