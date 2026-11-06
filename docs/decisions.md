@@ -1,3 +1,13 @@
+## Nov 5 — discover identity before pinning new Atlassian connections
+
+Keep enrollment outside the runnable registry. A local owner action starts PKCE/state-protected
+OAuth using the existing pinned authv2 route and host browser preference. Only account/resources
+are read before confirmation. The access token stays in owner memory; the refresh grant is saved
+to protected quarantine. The owner explicitly confirms the discovered account and selects one
+returned site and workspaces. The runtime then retains those exact pins and existing verification
+rules. Refresh does not discover/rebind another account. Cancel/expiry clears the memory token and
+never deletes or revokes prior credentials. Quarantined encrypted grants are not runtime-usable.
+
 ## Nov 5 — managed MCP auth belongs to the connection owner
 
 Use explicit owner/workspace/revision bindings, opaque credential references and a host-managed

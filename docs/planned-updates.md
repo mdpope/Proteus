@@ -1,3 +1,11 @@
+## Nov 5 — browser-first Atlassian setup
+
+New Atlassian connections start with Connect Atlassian, not manual account/cloud IDs or scope
+strings. The owner approves read identity/Jira plus offline renewal, reviews the discovered
+account, explicitly chooses a returned Jira site and authorizes workspaces. No registry binding
+exists before confirmation. Existing connections keep their exact account pins and advanced edit
+form; no migration or sign-in is performed automatically. Deployment remains held.
+
 ## ADO alternatives source implementation
 
 The operator requests both explicit CLI and PAT adapters without new app registration.

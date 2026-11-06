@@ -52,6 +52,28 @@ try{
  const patDefinition=await page.evaluate(()=>fixture.calls.at(-1).definition);assert.equal(patDefinition.authentication.clientId,undefined);assert.equal(patDefinition.expected.tenant,guid);assert.deepEqual(patDefinition.expected.scopes,['vso.project','vso.work']);
  await page.getByLabel('Account email',{exact:true}).fill('fixture@example.test');await page.getByLabel('Personal access token',{exact:true}).fill('synthetic-pat');await page.getByRole('button',{name:'Verify and store PAT',exact:true}).click();await page.locator('[data-pat-entry]').waitFor({state:'detached'});
  const stored=await page.evaluate(()=>fixture.calls.at(-1));assert.equal(stored.action,'store-pat');assert.equal(stored.pat,'synthetic-pat');assert.ok(!JSON.stringify(patDefinition).includes('synthetic-pat'));assert.ok(!await page.evaluate(()=>JSON.stringify({...localStorage}).includes('synthetic-pat')));
+ // Browser-first Atlassian owner flow: no manual identity/scope fields, explicit site/workspace confirmation.
+ await page.evaluate(async()=>{
+  fixture.active=false;
+  const {mountManagedConnections}=await import('/public/features/settings/managed-connections.js');
+  const snapshot={...fixture.snapshot,connections:[],atlassianSetup:null,adapters:[{id:'atlassian-oauth-v2',name:'Atlassian / Jira',onboarding:true,endpoint:'https://mcp.atlassian.com/v1/mcp/authv2',capabilities:[]}]};
+  window.onboard={calls:[],active:true};
+  document.querySelector('#host').replaceChildren();
+  await mountManagedConnections(document.querySelector('#host'),{escape:v=>String(v??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;'),api:async(_route,args)=>{
+   if(!args)return snapshot;onboard.calls.push(args);
+   if(args.action==='atlassian-setup-start')return {id:'setup',state:'authorizing',message:'Approve in Atlassian'};
+   if(args.action==='atlassian-setup-status')return {id:'setup',state:'review',account:{id:'discovered-person',name:'Fixture Person'},sites:[{id:'discovered-site',name:'Engineering',url:'https://engineering.atlassian.net'}]};
+   if(args.action==='atlassian-setup-confirm')return {connectionId:'confirmed'};
+  }},()=>onboard.active);
+ });
+ await page.getByRole('button',{name:'Add connection',exact:true}).click();
+ assert.equal(await page.getByLabel('Expected Atlassian account ID').count(),0);assert.equal(await page.getByLabel('Approved OAuth scopes (one per line)').count(),0);
+ await page.getByRole('button',{name:'Connect Atlassian',exact:true}).click();await page.getByRole('heading',{name:'Signed in as Fixture Person'}).waitFor();
+ assert.equal(await page.getByLabel('Jira site',{exact:true}).inputValue(),'','Never silently select an account site');
+ await page.getByLabel('Jira site',{exact:true}).selectOption('discovered-site');await page.getByLabel('Fixture workspace',{exact:true}).check();await page.getByLabel('Optional Jira issue to test').fill('FIXTURE-1');
+ await page.getByRole('button',{name:'Confirm account and connect',exact:true}).click();await page.getByRole('button',{name:'Add connection',exact:true}).waitFor();
+ const confirmation=await page.evaluate(()=>onboard.calls.at(-1));assert.equal(confirmation.action,'atlassian-setup-confirm');assert.equal(confirmation.siteId,'discovered-site');assert.deepEqual(confirmation.workspaceIds,['workspace']);assert.equal(confirmation.principal,undefined);assert.equal(confirmation.scopes,undefined);assert.equal(await page.evaluate(()=>onboard.calls.filter(c=>c.action==='atlassian-setup-start').length),1);
+ await page.evaluate(()=>onboard.active=false);
  // Restore original form fixture for brand/layout comparison.
  await page.evaluate(ado=>{fixture.snapshot.connections=[{...ado,status:{state:'unchecked'},references:[],active:false}];},ado);
  // Exercise the composed page: managed first, legacy inventory lazy, two brands and narrow layout.

@@ -1,3 +1,15 @@
+## Browser-first Atlassian enrollment
+
+Implemented owner-only OAuth setup with discovered account/site review and explicit workspace
+confirmation. New connections no longer require account IDs, cloud IDs or scope strings.
+Initial read profile uses four advertised authv2 scopes and refresh credentials in protected
+storage. Existing runtime account pins, tool permissions and deployment hold are unchanged.
+
+Validation: full suite 1,658 passed / four skipped, static checks and disposable Electron flow
+passed; 22 focused owner/OAuth/probe tests cover cancellation, duplicate starts, storage failure,
+revision conflict, returned-site selection and secret-free status. The final full suite and static
+checks also pass after start-race hardening. No real consent or Jira resource acceptance claimed.
+
 ## Atlassian sign-in startup diagnostic correction
 
 Installed candidate 1's generic owner-review message is not a human-click restriction. Native

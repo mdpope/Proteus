@@ -1,3 +1,31 @@
+## Browser-first Atlassian owner setup
+
+Choose Add connection → Atlassian / Jira → Connect Atlassian. Approve on Atlassian's page, then
+return to Proteus. Review the account, explicitly select a Jira site and authorized workspaces,
+and confirm. Account/cloud IDs are discovered through the actual managed MCP identity/resources
+tools and are not entered manually. Advanced details retain the stable logical name; existing
+connections retain their explicit configuration and cannot be silently retargeted by enrollment.
+
+The built-in read profile requests `read:me`, `read:account`, `read:jira-work`, `offline_access`.
+All four are present in public authv2 protected-resource metadata checked during implementation.
+This establishes advertised support, not live consent or least-privilege acceptance. No email,
+write or Confluence scopes are requested. Refresh credentials use protected storage; automatic
+renewal depends on valid consent/provider policy and is not permanent access.
+
+Optional issue testing approves a single exact Jira issue read and one-result exact-ID search.
+Without an issue, only identity/resources capabilities are configured; this does not claim issue
+read/search readiness. Add an issue later under Configure and Verify now. Empty site discovery is
+shown explicitly and cannot be confirmed. The site is never selected automatically.
+
+Local authenticated owner UI actions: `atlassian-setup-start` with fresh registry `expectedRevision`;
+`atlassian-setup-status`; `atlassian-setup-cancel` with `setupId`; `atlassian-setup-confirm` with
+`setupId`, fresh `expectedRevision`, returned `siteId`, explicit `workspaceIds`, `name`, `label` and
+optional `issue`. No account override, token or scope fields are accepted by this workflow.
+These are owner UI operations, not new agent credential endpoints. Setup expires after ten minutes
+and survives panel navigation through owner-memory status, but requires a new consent attempt after
+host restart. A new connection is registered only on explicit confirmation; a subsequent failed
+verification leaves it visibly unverified with protected quarantine, never accepted as ready.
+
 ## Atlassian sign-in startup diagnostic correction
 
 Installed candidate 1's generic owner-review message is not a human-click restriction. Native

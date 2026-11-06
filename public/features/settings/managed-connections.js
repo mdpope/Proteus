@@ -7,6 +7,7 @@ export async function mountManagedConnections(container,ui,active){
  const error=message=>{if(active()){const target=host.querySelector('[data-managed-error]');if(target)target.textContent=message;}};
  const refresh=async()=>{
   const next=await ui.api('/api/managed-connections');if(!active()||editing)return;snapshot=next;draw();
+  if(next.atlassianSetup&&['starting','authorizing','discovering','review','saving'].includes(next.atlassianSetup.state)){setup(next.atlassianSetup);return;}
   clearTimeout(timer);if(next.connections.some(c=>c.status.ownerSignIn?.state==='sign-in-in-progress'))timer=setTimeout(()=>{if(active()&&!editing)void refresh().catch(e=>error(e.message));},2000);
  };
  const action=async(button,args)=>{
@@ -25,6 +26,25 @@ export async function mountManagedConnections(container,ui,active){
    element.querySelector('[data-managed-toggle]').onclick=event=>void action(event.target,row.enabled?{action:'disable',connectionId:row.id}:{action:'save',definition:{...definitionOf(row),enabled:true}});
   }
  }
+ function setup(state){
+  editing=true;clearTimeout(timer);const editor=host.querySelector('[data-managed-editor]');
+  const cancelled=state&&['cancelled','complete'].includes(state.state);if(cancelled){editing=false;void refresh().catch(e=>error(e.message));return;}
+  const pending=state&&['starting','authorizing','discovering','saving'].includes(state.state);
+  const header='<h3>Connect Atlassian</h3><p>Sign in on Atlassian’s approval page. Proteus will discover your account and Jira sites; you choose what to connect.</p>';
+  const permissions='<p>Requests account identity and Jira read access, plus offline access for automatic renewal. No Jira writes, email scope or Confluence access. Consent can expire or be revoked.</p>';
+  const types=`<label>Connection type<select data-setup-type aria-label="Connection type">${snapshot.adapters.map(a=>`<option value="${esc(a.id)}" ${a.onboarding?'selected':''}>${esc(a.name)}</option>`).join('')}</select></label>`;
+  if(state?.state==='review'){
+   editor.innerHTML=`<form data-setup-confirm>${header}<h4>Signed in as ${esc(state.account.name)}</h4><p>Confirm this is the account you intended to connect.</p><label>Jira site<select name="siteId" aria-label="Jira site" required><option value="">Choose a site…</option>${state.sites.map(site=>`<option value="${esc(site.id)}">${esc(site.name)} — ${esc(site.url)}</option>`).join('')}</select></label>${!state.sites.length?'<p>No Jira sites with read access were returned. Check your Atlassian access before trying again.</p>':''}<fieldset><legend>Authorized workspaces</legend>${snapshot.workspaces.map(w=>`<label><input type="checkbox" name="workspace" value="${esc(w.id)}">${esc(w.name)}</label>`).join('')}</fieldset><label>Connection name<input name="label" value="Atlassian" required maxlength="160"></label><label>Optional Jira issue to test<input name="issue" placeholder="PROJECT-123"></label><p>Providing an issue approves an exact issue read and a search limited to that issue. You can add this later.</p><details><summary>Connection details</summary><p>Account ID: ${esc(state.account.id)}</p><label>Logical name<input name="name" value="hc-atlassian" required pattern="[a-z][a-z0-9-]{0,63}"></label></details><div class="actions"><button type="submit" ${!state.sites.length?'disabled':''}>Confirm account and connect</button><button type="button" data-setup-cancel>Cancel</button></div></form>`;
+   editor.querySelector('form').onsubmit=async event=>{event.preventDefault();const form=event.target,fields=new FormData(form),button=form.querySelector('[type=submit]');button.disabled=true;error('');try{await ui.api('/api/managed-connections',{action:'atlassian-setup-confirm',setupId:state.id,expectedRevision:snapshot.revision,siteId:fields.get('siteId'),workspaceIds:fields.getAll('workspace'),name:fields.get('name'),label:fields.get('label'),issue:fields.get('issue')});editing=false;await refresh();}catch(e){const current=await ui.api('/api/managed-connections',{action:'atlassian-setup-status'}).catch(()=>null);if(current?.connectionId){editing=false;await refresh();error(e.message);}else{error(e.message);button.disabled=false;}}};
+  }else{
+   editor.innerHTML=`${!state?types:''}${header}${permissions}<p role="status">${esc(state?.message||'Your password stays with Atlassian. No account IDs or tokens to copy.')}</p><div class="actions">${pending?'':`<button type="button" data-setup-start>${state?'Try again':'Connect Atlassian'}</button>`}<button type="button" data-setup-cancel>Cancel</button></div>`;
+   const select=editor.querySelector('[data-setup-type]');if(select)select.onchange=event=>edit(undefined,event.target.value);
+   const start=editor.querySelector('[data-setup-start]');if(start)start.onclick=async()=>{start.disabled=true;error('');try{const next=await ui.api('/api/managed-connections',{action:'atlassian-setup-start',expectedRevision:snapshot.revision});if(active())setup(next);}catch(e){error(e.message);start.disabled=false;}};
+  }
+  editor.querySelector('[data-setup-cancel]').onclick=async()=>{clearTimeout(timer);try{if(state?.id)await ui.api('/api/managed-connections',{action:'atlassian-setup-cancel',setupId:state.id});editing=false;await refresh();}catch(e){error(e.message);}};
+  if(!pending)editor.scrollIntoView({block:'start'});
+  if(pending)timer=setTimeout(async()=>{if(!active())return;try{const next=await ui.api('/api/managed-connections',{action:'atlassian-setup-status'});if(active())setup(next);}catch(e){error(e.message);}},1500);
+ }
  function enterPat(row){
   editing=true;clearTimeout(timer);const editor=host.querySelector('[data-managed-editor]');
   editor.innerHTML='<form data-pat-entry autocomplete="off"><h3>Store approved ADO PAT</h3><p>Enter an existing PAT issued under your organization policy with Project and Team read and Work Items read. It will be verified against this connection user/organization and saved in protected OS storage. No PAT is created or rotated automatically.</p><label>Account email<input name="email" type="email" required autocomplete="off"></label><label>Personal access token<input name="pat" type="password" required autocomplete="new-password"></label><div class="actions"><button type="submit">Verify and store PAT</button><button type="button" data-cancel>Cancel</button></div></form>';
@@ -34,7 +54,8 @@ export async function mountManagedConnections(container,ui,active){
   editor.querySelector('form').onsubmit=async event=>{event.preventDefault();const form=event.target,pat=form.elements.pat.value,email=form.elements.email.value;form.reset();form.querySelector('button').disabled=true;try{await ui.api('/api/managed-connections',{action:'store-pat',connectionId:row.id,expectedRevision:snapshot.revision,pat,email});clear();await refresh();}catch(e){error(e.message);form.querySelector('button').disabled=false;}};
  }
  function edit(existing,adapterId){
-  editing=true;clearTimeout(timer);const editor=host.querySelector('[data-managed-editor]'),adapter=snapshot.adapters.find(a=>a.id===(existing?.authentication.adapter||adapterId))||snapshot.adapters[0],ado=adapter.id.startsWith('ado-'),pat=adapter.id==='ado-pat',cli=adapter.id==='ado-azure-cli';
+  editing=true;clearTimeout(timer);const editor=host.querySelector('[data-managed-editor]'),adapter=snapshot.adapters.find(a=>a.id===(existing?.authentication.adapter||adapterId))||snapshot.adapters.find(a=>a.onboarding)||snapshot.adapters[0],ado=adapter.id.startsWith('ado-'),pat=adapter.id==='ado-pat',cli=adapter.id==='ado-azure-cli';
+  if(!existing&&adapter.onboarding)return setup();
   const value=existing||{name:ado?'hc-ado-corporate':'hc-atlassian',label:ado?'Azure DevOps corporate':'Atlassian',workspaceIds:[],authentication:{},expected:{principal:'',tenant:'',resource:'',organizationId:'',scopes:adapter.scopes||[]},capabilities:ado?adapter.capabilities:['jira.issue.read','jira.issue.search'],probes:[]};
   const field=(name,label,current,extra='')=>`<label>${esc(label)}<input name="${name}" ${extra} value="${esc(current||'')}"></label>`;
   const probe=value.probes.find(p=>p.parameters?.projectId)?.parameters||{},team=value.probes.find(p=>p.parameters?.teamId)?.parameters||{},item=value.probes.find(p=>p.parameters?.workItemId)?.parameters||{};

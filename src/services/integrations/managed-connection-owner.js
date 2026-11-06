@@ -1,3 +1,4 @@
+import {AtlassianOnboarding,atlassianSetupScopes} from './managed-atlassian-onboarding.js';
 import {adoAlternativeIds,adoReadScopes} from './managed-ado-alternative-profile.js';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -24,6 +25,7 @@ export class ManagedConnectionOwner {
   this.registry=new ManagedConnectionRegistry(service.home,{ownerId:service.remote.info().hostId,references:id=>this.references(id)});
   this.vault=new ManagedCredentialVault(service.home,storage);
   this.auth=authFactory({registry:this.registry,vault:this.vault,openExternal,now,onChange:()=>service.notify()});
+  this.onboarding=new AtlassianOnboarding(this.auth,{workspaces:()=>service.context.config().workspaces,onChange:()=>service.notify()});
   this.adoAuth=adoAuthFactory({registry:this.registry,vault:this.vault,openExternal,now,onChange:()=>service.notify()});
   this.manager=new ManagedConnections({registry:this.registry,adapters:adapters||{[atlassianOAuthProfile.adapter]:this.auth.adapter(),[adoIdentityProfile.adapter]:this.adoAuth.adapter(),...Object.fromEntries(adoAlternativeIds.map(id=>[id,this.adoAuth.adapter()]))},now,
    onChange:()=>{this.persist();service.notify();},notify:event=>service.activity?.log('warning','managed-connection.attention',event.reason,{connectionId:event.connectionId,code:event.code})});
@@ -61,19 +63,23 @@ export class ManagedConnectionOwner {
   let credentialStore='available';try{this.vault.requireAvailable();}catch{credentialStore='unavailable';}
   return {...definition,status:{...status,credentialStore,ownerSignIn:this.authFor(definition).status(definition.id)},references:this.references(definition.id),active:this.active(definition.id)};
  }
- adapterCatalog(){return [...adoAlternativeIds.map(id=>({id,name:id==='ado-pat'?'Azure DevOps · Personal access token':'Azure DevOps · Corporate Azure CLI',transport:adoServerProfile,audience:id==='ado-pat'?'azure-devops-pat':adoIdentityProfile.audience,scopes:id==='ado-pat'?adoReadScopes:[adoIdentityProfile.scope],capabilities:Object.keys(adoCapabilities),signIn:id==='ado-pat'?'owner-pat-entry':'existing-cli-session',credentialStore:id==='ado-pat'?'platform-protected':'qualified-cli-cache',requires:id==='ado-pat'?'Existing organization-approved PAT: Project and Team read, Work Items read. No automatic rotation.':'Pinned Azure CLI 2.80.0 and explicit corporate profile. Windows DPAPI qualified; macOS/Linux cache isolation currently unqualified. No interactive login or account fallback.'})),{id:atlassianOAuthProfile.adapter,name:'Atlassian / Jira',endpoint:atlassianOAuthProfile.endpoint,capabilities:Object.keys(atlassianCapabilities),signIn:'owner-browser',credentialStore:'platform-protected'},{id:adoIdentityProfile.adapter,name:'Azure DevOps corporate',transport:adoServerProfile,audience:adoIdentityProfile.audience,scopes:[adoIdentityProfile.scope],capabilities:Object.keys(adoCapabilities),signIn:'owner-browser',credentialStore:'platform-protected',requires:'An organization-approved Entra public client with delegated Azure DevOps user_impersonation and native http://localhost redirect.'}];}
+ adapterCatalog(){return [...adoAlternativeIds.map(id=>({id,name:id==='ado-pat'?'Azure DevOps · Personal access token':'Azure DevOps · Corporate Azure CLI',transport:adoServerProfile,audience:id==='ado-pat'?'azure-devops-pat':adoIdentityProfile.audience,scopes:id==='ado-pat'?adoReadScopes:[adoIdentityProfile.scope],capabilities:Object.keys(adoCapabilities),signIn:id==='ado-pat'?'owner-pat-entry':'existing-cli-session',credentialStore:id==='ado-pat'?'platform-protected':'qualified-cli-cache',requires:id==='ado-pat'?'Existing organization-approved PAT: Project and Team read, Work Items read. No automatic rotation.':'Pinned Azure CLI 2.80.0 and explicit corporate profile. Windows DPAPI qualified; macOS/Linux cache isolation currently unqualified. No interactive login or account fallback.'})),{id:atlassianOAuthProfile.adapter,name:'Atlassian / Jira',endpoint:atlassianOAuthProfile.endpoint,onboarding:true,scopes:[...atlassianSetupScopes],capabilities:Object.keys(atlassianCapabilities),signIn:'owner-browser',credentialStore:'platform-protected'},{id:adoIdentityProfile.adapter,name:'Azure DevOps corporate',transport:adoServerProfile,audience:adoIdentityProfile.audience,scopes:[adoIdentityProfile.scope],capabilities:Object.keys(adoCapabilities),signIn:'owner-browser',credentialStore:'platform-protected',requires:'An organization-approved Entra public client with delegated Azure DevOps user_impersonation and native http://localhost redirect.'}];}
  contract(){return {schemaVersion:1,definitionSchema:structuredClone(definitionSchema),adapters:this.adapterCatalog(),portableRequirement:{name:'logical-name',capabilities:['semantic.capability'],required:false},scheduleWorkspaceField:'managedConnectionWorkspaceId',note:'The workspace must be captured explicitly. Supported adapters are listed by the owner. No secret or token fields are accepted.'};}
  snapshot(){
   const registry=this.registry.read();
   return {schemaVersion:1,ownerId:this.registry.ownerId,revision:registry.revision,observedAt:new Date(this.now()).toISOString(),connections:registry.connections.map(c=>this.row(c)),
    workspaces:this.service.context.config().workspaces.map(w=>({id:w.id,name:w.name})),recoveryEvents:this.events,storageError:this.storageError||null,
-   adapters:this.adapterCatalog()};
+   adapters:this.adapterCatalog(),atlassianSetup:this.onboarding.status()};
  }
  async action(args){
   if(this.closed)throw Error('Managed connections are closed.');
   if(args.action==='schema')return this.contract();
   if(args.action==='list')return this.snapshot();
+  if(args.action==='atlassian-setup-status')return this.onboarding.status();
+  if(args.action==='atlassian-setup-cancel'){this.onboarding.cancel(args.setupId);return this.onboarding.status();}
   const current=this.registry.read();if(current.revision!==args.expectedRevision)throw Error('Managed connections changed. Refresh before acting.');
+  if(args.action==='atlassian-setup-start')return this.onboarding.start();
+  if(args.action==='atlassian-setup-confirm'){const result=await this.onboarding.confirm(args);this.service.notify();return result;}
   const definition=current.connections.find(c=>c.id===args.connectionId);
   if(args.action==='save'){
    const input=validateManagedConnection(args.definition);
@@ -139,5 +145,5 @@ export class ManagedConnectionOwner {
    }
   })().catch(()=>{this.storageError='Managed connection maintenance could not inspect the current owner configuration.';}).finally(()=>{this.ticking=null;});return this.ticking;
  }
- async close(){this.closed=true;await this.manager.close();await this.auth.close();await this.adoAuth.close();await this.ticking;}
+ async close(){this.closed=true;this.onboarding.close();await this.manager.close();await this.auth.close();await this.adoAuth.close();await this.ticking;}
 }

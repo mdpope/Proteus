@@ -1,3 +1,8 @@
+## Nov 5 Atlassian setup
+
+- Replace manual IDs/scopes for new Atlassian connections with browser approval, discovered account/site review and explicit workspace confirmation.
+- Retain protected refresh credentials and automatic renewal; expose bounded startup failures without opening repeated consent windows.
+
 ## Nov 5 ADO alternatives
 
 - Add separate corporate Azure CLI and PAT managed adapters, explicit account/resource validation and no automatic auth fallback.

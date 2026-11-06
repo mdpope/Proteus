@@ -29,13 +29,7 @@ export function qualifyAtlassianDefinition(definition){
 // these names. Schema drift fails before sending a probe with guessed arguments.
 export async function verifyAtlassian(definition,{call,listTools,signal,identityOnly=false}){
  qualifyAtlassianDefinition(definition);
- const tools=await listTools({signal}),catalog=new Map(tools.map(t=>[t.name,t])),ajv=new Ajv2020({strict:false,validateFormats:false,logger:false});
- const used=new Set();
- const read=async(name,args)=>{
-  const tool=catalog.get(name);if(!tool||tool.annotations?.destructiveHint===true)throw fail('CAPABILITY_MISMATCH');
-  try{if(!ajv.compile(tool.inputSchema)(args))throw Error();}catch{throw fail('CAPABILITY_MISMATCH');}
-  signal?.throwIfAborted();const result=json(await call(name,args,{signal}));used.add(name);return result;
- };
+ const {read,used,catalog}=await discoveryReader({call,listTools,signal});
  const identity=await read('atlassianUserInfo',{});
  if(identity?.account_id!==definition.expected.principal)throw fail('ACCESS_DENIED');
  const resources=await read('getAccessibleAtlassianResources',{});
@@ -56,4 +50,29 @@ export async function verifyAtlassian(definition,{call,listTools,signal,identity
  return {principal:identity.account_id,tenant:definition.expected.tenant,resource:definition.expected.resource,
   capabilities:identityOnly?[]:definition.capabilities.filter(c=>verified.has(c)),
   catalogEvidence:[...used].map(name=>({name,readOnlyHint:catalog.get(name).annotations?.readOnlyHint===true,idempotentHint:catalog.get(name).annotations?.idempotentHint===true}))};
+}
+
+async function discoveryReader({call,listTools,signal}){
+ const tools=await listTools({signal}),catalog=new Map(tools.map(t=>[t.name,t])),ajv=new Ajv2020({strict:false,validateFormats:false,logger:false});
+ const used=new Set();
+ const read=async(name,args)=>{
+  const tool=catalog.get(name);if(!tool||tool.annotations?.destructiveHint===true)throw fail('CAPABILITY_MISMATCH');
+  try{if(!ajv.compile(tool.inputSchema)(args))throw Error();}catch{throw fail('CAPABILITY_MISMATCH');}
+  signal?.throwIfAborted();const result=json(await call(name,args,{signal}));used.add(name);return result;
+ };
+ return {read,used,catalog};
+}
+// Explicit owner onboarding approves only these two bounded identity/resource reads.
+// No model permission is inferred from tool names or the returned account labels.
+export async function discoverAtlassian(context){
+ const {read}=await discoveryReader(context);
+ const identity=await read('atlassianUserInfo',{}),resources=await read('getAccessibleAtlassianResources',{});
+ const text=(value,max=512)=>typeof value==='string'&&value.length>0&&value.length<=max&&!/[\x00-\x1f\x7f]/.test(value);
+ if(!text(identity?.account_id)||!Array.isArray(resources)||resources.length>100)throw fail('CAPABILITY_MISMATCH');
+ const sites=resources.filter(r=>Array.isArray(r.scopes)&&r.scopes.includes('read:jira-work')).map(r=>{
+  if(!text(r.id)||!text(r.name))throw fail('CAPABILITY_MISMATCH');
+  return {id:r.id,name:r.name,url:siteURL(r.url)};
+ });
+ if(new Set(sites.map(s=>s.id)).size!==sites.length)throw fail('CAPABILITY_MISMATCH');
+ return {account:{id:identity.account_id,name:text(identity.name)?identity.name:'Atlassian account'},sites};
 }
