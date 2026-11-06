@@ -1,3 +1,11 @@
+## Nov 5 platform publication checkpoint
+
+Partial platform staging now retains explicitly supplied verified prior packages with a visible
+pending version; the update UI requires deliberate previous-version selection. Public cleanup
+keeps those payloads until replacement. Source/fixture acceptance is distinct from live publication.
+Mac publisher custody proofs and local protected recovery pass; Windows active key/reference
+retirement is verified. Full source checks and disposable Electron publication selection pass.
+
 ## Nov 5 publisher authority checkpoint
 
 New Mac public trust and unsigned Windows builder handoff pass source validation (1,586/four

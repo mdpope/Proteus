@@ -161,8 +161,14 @@ duplicate targets, and includes only signed public artifacts, catalogs and downl
 
 Deploy through the existing WTB website operations owner: immutable files first, then platform
 catalogs and `downloads/proteus/current.json`, then pages. Verify hashes and actual HTTPS downloads
-before retiring prior release directories. Missing targets get empty catalogs so consumers cannot
-silently select a superseded version. The public current descriptor advertises the release name,
+before retiring prior release directories. For a pending platform, supply its exact previous signed release folder with
+`--retain /absolute/prior-signed-release` (repeat for each pending target). Inventory the currently
+published target catalogs first; every previously available target must be either replaced or
+explicitly retained. Retained inputs are signature/hash/expiry checked and must have an older
+version; the original envelopes/artifacts remain byte-identical. Pending catalogs state the new
+version and the available previous version, and Updates requires an explicit previous-release
+selection. A target with no prior package has a pending empty catalog. Retention keeps each
+pending target's previous generation until its replacement is published. The public current descriptor advertises the release name,
 version and available targets; signed platform manifests remain the installation trust boundary.
 
 Transfer packages with the configured deployment SSH account. Verify its documented identity and

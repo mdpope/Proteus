@@ -131,8 +131,10 @@ export class Updates {
  }
  async releases(channel='stable'){
   if(!this.packaged)throw Error('Install the desktop app to check published releases.');
-  const envelopes=await this.releaseClient.releases({channel,platform:this.platform,arch:process.arch});
-  return {releases:envelopes.map(envelope=>{const release=verifyRelease(envelope,{channel,platform:this.platform});return {...release,manifestDigest:digest(JSON.stringify(envelope))};})};
+  const target={channel,platform:this.platform,arch:process.arch},catalog=this.releaseClient.catalog?await this.releaseClient.catalog(target):{releases:await this.releaseClient.releases(target)};
+  const releases=catalog.releases.map(envelope=>{const release=verifyRelease(envelope,{channel,platform:this.platform});return {...release,manifestDigest:digest(JSON.stringify(envelope))};});
+  if(catalog.publication&&(catalog.publication.availableVersion===null?releases.length!==0:releases.length!==1||releases[0].version!==catalog.publication.availableVersion||releases[0].version===catalog.publication.version))throw Error('The pending publication differs from its signed available package.');
+  return {releases,...(catalog.publication?{publication:catalog.publication}:{})};
  }
  async resolveRelease(value){
   if(!/^\d+\.\d+\.\d+(?:[-+][A-Za-z0-9.-]+)?$/.test(value.version||'')||value.sourceFingerprint!==undefined&&!/^[a-f0-9]{64}$/.test(value.sourceFingerprint)||value.sourceCommit!==undefined&&!/^[a-f0-9]{40,64}$/.test(value.sourceCommit))throw Error('Specify the requested version and, when known, exact source fingerprint or commit.');

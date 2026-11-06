@@ -18,8 +18,9 @@ export function desktopPublicationPlan(publicRoot,receipt){
   if(!canonical.startsWith(root+path.sep)||!stat.isFile()||stat.isSymbolicLink()||stat.size!==row.bytes||packages.fileDigest(file)!==row.sha256)throw Error('Verify every new public file before retiring any older release.');
  }
  const current=JSON.parse(fs.readFileSync(path.join(base,'current.json'),'utf8'));
- const retained=receipt.releases.map(row=>row.updateRelease.releaseId).sort();
- if(current.version!==receipt.version||JSON.stringify(current.targets.map(row=>row.releaseId).sort())!==JSON.stringify(retained))throw Error('The current public release differs from this distribution receipt.');
+ const active=receipt.releases.map(row=>row.updateRelease.releaseId).sort(),pending=(receipt.retainedReleases||[]).map(row=>row.updateRelease.releaseId).sort();
+ const retained=[...active,...pending].sort();
+ if(current.version!==receipt.version||JSON.stringify(current.targets.map(row=>row.releaseId).sort())!==JSON.stringify(active)||JSON.stringify((current.pendingTargets||[]).map(row=>row.releaseId).sort())!==JSON.stringify(pending))throw Error('The current public release differs from this distribution receipt.');
  const retired=[];
  const inventory=folder=>fs.readdirSync(folder,{withFileTypes:true}).sort((a,b)=>a.name.localeCompare(b.name)).flatMap(row=>{
   const file=path.join(folder,row.name);if(row.isSymbolicLink())throw Error('A release contains a link; inspect it before cleanup.');

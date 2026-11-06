@@ -1,3 +1,14 @@
+## Nov 5 publisher custody and pending platforms
+
+Build Mac now holds both the new publisher key and imported legacy transition key, with
+verified signing proofs and local protected Keychain recovery. Windows active key/reference removal
+is verified; its installed old builder fails closed until the unsigned workflow is installed.
+Historical backups were not erased. Keep legacy public trust until transition consumer acceptance.
+Partial platform publication retains explicitly supplied prior signed packages and labels them
+pending; the UI requires explicit old-version selection. Full suite 1,589 pass/four skip, static
+checks and disposable Electron acceptance pass. No Nov5 package/publication/install exists.
+Continue remaining full plan and managed MCP owner/adapter/UI implementation before freezing.
+
 ## Nov 5 sole Mac publisher authority checkpoint
 
 Operator explicitly requires Build Mac source truth and signer for all built software and chose

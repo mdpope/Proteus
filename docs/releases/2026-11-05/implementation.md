@@ -69,3 +69,18 @@ CLIs require Mac; payload signing preserves native target and exact accepted byt
 payloads cannot pass updater signature verification. Full source suite: 1,586 pass / four skip /
 zero fail; static checks pass. Encrypted custody tests bind signer, recipient, checksum, expiry and
 exclusive output and reject tampering. No new package or installed trust rollout is claimed.
+
+
+## P3 partial platform publication
+
+Staging accepts explicit prior signed folders through repeatable `--retain`. Each prior package
+must have an older version and pass the normal signature, expiry, target and artifact checks.
+Its manifest and package bytes remain unchanged. Catalogs/current descriptor/download pages
+separate pending targets from the new version; retirement preserves the verified prior payloads.
+Updates exposes this publication state and leaves the selection blank until the owner explicitly
+chooses the previous version. Catalog hints never alter publisher trust or exact manifest digests.
+Focused source tests and disposable Electron selection/uncertain-dispatch checks pass. Full suite: 1,589 pass/four skip/zero fail; static checks pass. No public catalog has changed and no new package exists.
+
+Mac custody import and signing proofs for both publisher IDs are verified, with local protected,
+non-synchronizing Keychain recovery readback. Windows active key and signing reference retirement are verified after those proofs.
+The old installed builder fails closed; the new source reader accepts the preserved unsigned policy. Private custody details stay in the operator ledger.

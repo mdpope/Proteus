@@ -103,7 +103,7 @@ To resolve:
 
 Operator rule: the Build Mac, not any builder, is the authority for releasing packages. No release may depend on a Windows build, or on a Windows machine being reachable, for signing, staging or publishing.
 
-What is true today: the Ed25519 publisher private key (public key ID `92b49fc0…`) exists only on the Windows builder. The build operation configured there signs at the end of its own build, so a platform build and the release authority are the same chat. On Nov 3 an unanswered approval prompt on that machine, then a Windows build that stopped itself rather than sign, left the already built and accepted Mac package unpublishable for hours, and pushed Work Mac onto a one-off private transfer. The reason the key lives on Windows is not recorded; it appears to be history.
+Nov 3 starting state: the Ed25519 publisher private key (public key ID `92b49fc0…`) exists only on the Windows builder. The build operation configured there signs at the end of its own build, so a platform build and the release authority are the same chat. On Nov 3 an unanswered approval prompt on that machine, then a Windows build that stopped itself rather than sign, left the already built and accepted Mac package unpublishable for hours, and pushed Work Mac onto a one-off private transfer. The reason the key lives on Windows is not recorded; it appears to be history.
 
 How verification works, which constrains the fix: installed apps and the website verify a release manifest against public keys bundled inside them (`resources/desktop-release-keys.json` and the app's own copy). An app only trusts keys it already shipped with, so a new key cannot be used until a release containing it has been installed everywhere that must verify the next one.
 
@@ -118,6 +118,14 @@ Build Mac is source authority and signer for all built software. Builders must n
 signing authorities. Complete a trust-preserving transition with signing on Build Mac; any
 legacy-key transfer is a protected one-time custody operation, never chat text or Git. The older
 options below explain the tradeoff, not an outstanding approval request.
+
+Current source/custody checkpoint: both Mac keys pass signing proofs and protected local recovery
+readback. Windows active legacy key and signing reference are removed with a verified owner receipt;
+its installed old builder fails closed. Unsigned builder exports and Mac-only signing helpers pass
+source tests. Pending platform catalogs retain explicitly supplied prior signed artifacts without
+changing their bytes, and the UI requires an explicit previous-version choice. Full suite: 1,589
+pass/four skip, static checks and disposable Electron acceptance pass. A full signed release and
+consumer transition remain pending; these checks do not establish installation acceptance.
 
 Original options:
 - **Option 1, move the existing key.** A one-time, operator-authorized move of the current private key to this Mac's protected storage (an owner-only file outside every checkout, with a Bitwarden recovery record), then verify it signs a test manifest that the existing trust accepts, then retire the Windows copy and record that it was removed. No release needed and no trust change. The cost is that the key travels once, and copying a signing key is exactly the risk to avoid.

@@ -1,3 +1,8 @@
+## Nov 5 pending-platform publication (source)
+
+- Keep verified prior platform packages available while a new target is pending, with explicit
+  version labels and deliberate selection; preserve those packages during publication cleanup.
+
 ## Nov 5 — managed MCP foundations (not yet connected)
 
 - Nov 5 source: Build Mac owns publisher signing; native builders export unsigned accepted payloads. Adds overlapping public trust for the authorized Mac key rotation and protected custody tooling.
