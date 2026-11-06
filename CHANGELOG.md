@@ -1,3 +1,8 @@
+## Nov 5 — managed MCP foundations (not yet connected)
+
+- Add internal revision-pinned connection bindings, encrypted credential storage and serialized
+  token-renewal foundations. Provider/UI integration and live connector acceptance remain pending.
+
 ## Nov 5 — planning only, build held
 
 - Migrated the Nov 4 queue to [Nov 5](docs/2026-11-05-release-plan.md), retaining all scope. Await Nov 3 closeout, daily-digest instructions and the operator's hold release; the documented digest-blocker exception does not bypass Nov 3 closeout. No version reserved or implementation/build performed.

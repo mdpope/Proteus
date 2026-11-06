@@ -1,3 +1,14 @@
+## Nov 5 — managed MCP auth belongs to the connection owner
+
+Use explicit owner/workspace/revision bindings, opaque credential references and a host-managed
+transport shared by provider adapters. organization workflows retains portable capability requirements and business
+policy. The protected credential store never exposes tokens through model tools. Persist renewal
+uncertainty before contacting a rotating credential issuer, then save its replacement before
+releasing a short-lived token. A crash with uncertain rotation requires reconciliation rather than
+blindly replaying the prior refresh grant. Per-owner grants avoid uncoordinated cross-machine
+rotation. Foundation code is not yet runtime-connected; see managed-mcp-connections.md for
+remaining adapter, UI and installed acceptance.
+
 ## November 5 — source reconciliation and native scoped autonomy
 
 A workflow owns foreign manifest validation. Proteus validates its exported schedule and exact

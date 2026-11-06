@@ -1,3 +1,17 @@
+## Nov 5 managed MCP foundation checkpoint
+
+Full Work Mac handoff is captured in docs/managed-mcp-connections.md. Added internal registry,
+protected encrypted vault and serialized rotation coordinator plus eleven regressions. Full suite
+passes 1,563/four skips and static checks; final adapter isolation passes focused tests. These
+modules are not wired to runtime, providers, schedules or UI. No package exists.
+
+Next: qualify an ADO route without credential fallback (official 2.11.0 azcli uses a default
+credential chain), qualify Atlassian endpoint/OAuth with protected storage, implement shared
+per-run broker and actual Codex/Copilot attachment, health lifecycle, configuration UI/tool schema,
+then safe HC migration/acceptance. Complete other current Nov5 plan items before freezing.
+A signing-key rotation-versus-move choice is pending with the operator; source work can continue.
+No HC credentials or business source data are needed on this builder.
+
 ## Nov 5 build hold lifted — full plan plus digest requirements
 
 The operator authorizes full current Nov5 scope, consolidated Work Mac digest requirements, signed

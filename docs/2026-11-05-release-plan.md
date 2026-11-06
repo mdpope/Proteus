@@ -384,7 +384,6 @@ Expose connection, identity, authentication, capability and resource-access evid
 in visible status. Use bounded/coalesced health work and actionable human sign-in requirements.
 Preserve current working credentials during local adoption or verified new consent. Do not
 retire organization workflows helpers until the managed route passes live acceptance. No credentials or business
-evidence transfer to the release coordinator is needed. The full Work Mac handoff must be reconciled
-before implementation freeze, including its connector-specific, migration and outage/repeat-run
-acceptance criteria. Existing integrations documentation describes older capabilities and does
+evidence transfer to the release coordinator is needed. The full Work Mac handoff is reconciled in [the managed-connection contract](managed-mcp-connections.md),
+including connector-specific, migration and outage/repeat-run acceptance criteria. Existing integrations documentation describes older capabilities and does
 not establish that this manager is already implemented.

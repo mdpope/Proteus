@@ -1,3 +1,11 @@
+## Nov 5 — managed MCP scope accepted; implementation in progress
+
+The build hold is lifted. Full release scope now includes the managed connection contract for
+ADO/Atlassian, shared Codex/Copilot authentication, secure storage, visible status and installed
+digest acceptance. Registry/vault/renewal foundations are implemented but not wired to runtime
+providers or UI. See [the contract](managed-mcp-connections.md) and current release implementation.
+Slack remains browser-only. No managed connection or release installation is claimed.
+
 ## Nov 3 closed — Nov 5 digest-first preparation
 
 Nov 3 / 0.2.42 is merged to main, published for accepted Mac/Windows targets and closed with
