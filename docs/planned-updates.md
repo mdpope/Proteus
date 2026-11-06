@@ -12271,3 +12271,27 @@ password manager connection; Windows/Linux package acceptance remains separate.
 ## October 27 — follow-up publication acceptance
 
 Fresh version-named update coordinators, resilient provider defaults, inline question attachments, provider-supported queued attachment steering and guarded recovery supersession are implemented and tested. Corrected Mac build `abac31955b11+src.25f29d666329` is published and installed through a new unassigned coordinator: full HTTPS archive, publisher trust, official extraction, exact source, live health and preserved chat/configuration/state checks pass. Installed page-specific UI acceptance remains limited by background-only navigation; exact-package UI tests pass. Physical iPhone/iPad 2610.27.2 installation, protected data, launch, destinations and two-generation retention pass. Both Personal and Work Macs' existing Proteus identity verifies as HTTP/HTTPS defaults, including after the Personal update and HC's separate fresh read-only acceptance. Windows installation and actual historical-recovery reconciliation remain unverified. See [the evidence ledger](2026-10-27-release-evidence.md).
+
+## Nov 5 reading-position checkpoint correction (source only)
+
+The renderer now excludes unscrolled overflow-visible layout descendants and includes actual
+vertical/horizontal scrollports and containers with nonzero offsets. Renderer and owner both
+permit at most 256 positions per view, retaining the existing locator, numeric and total-store
+bounds. A long element ID falls back to the structural locator. Oversized/invalid captures fail
+explicitly before replacing saved state; positions are not sliced to satisfy the limit.
+Owner errors distinguish capacity from malformed rows and invalid locators/offsets without
+including view contents. Rollback must use the updater's matching pre-upgrade data snapshot;
+older layout readers still enforce the old 32-position bound.
+
+Validation: 1,682 source tests passed, four skipped; static checks passed. Disposable Electron
+tests exercise normal document navigation/reload/cold restart, then the actual owner
+checkpointForQuit path used by update preflight with forty independent synthetic scrollports
+and sixty overflowing layout nodes. All forty captured offsets restore. This does not prove
+successful live Work Mac checkpoint or full installed update acceptance.
+
+The already-installed renderer fails before binary replacement. No supported automatic repair
+has yet been established on Work Mac. Native tooling rejected the visible developer-menu
+diagnostic request; no expression ran and no state was changed. Keep its prepared job and
+original recovery data. Do not force quit, edit the store, suppress flush failures or claim
+a new binary alone resolves the bootstrap. A supported live diagnosis and preserving recovery
+path remain release blockers; signed corrective delivery follows that qualification.

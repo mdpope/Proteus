@@ -2132,3 +2132,5 @@ Known unfinished work and distribution limitations are tracked in `docs/planned-
 ## Unreleased — quieter extension connection notices
 
 - Show a native-helper connection warning, including iCloud Passwords, only once per extension per app launch across browser profiles and windows. Retries continue without repeating or reviving the banner; restarting Proteus permits one new warning.
+
+- Nov 5 source: preserve up to 256 real reading scrollports, filter non-scrolling visible overflow, validate locators/offsets before replacement, and test the actual owner update checkpoint. Existing-client bootstrap remains unresolved; not yet shipped.

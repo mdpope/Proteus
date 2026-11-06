@@ -743,3 +743,27 @@ separates unknown throttling from provider-reported exhaustion and copies only f
 It does not select another provider. Electron is pinned to patched 44.10.2; the remaining upstream
 ADO/Zod 3 advisory is constrained by the managed adapter's explicit input/collection limits, not
 claimed fixed upstream. Actual managed ADO acceptance still requires approved owner Entra setup.
+
+## Nov 5 reading-position checkpoint correction (source only)
+
+The renderer now excludes unscrolled overflow-visible layout descendants and includes actual
+vertical/horizontal scrollports and containers with nonzero offsets. Renderer and owner both
+permit at most 256 positions per view, retaining the existing locator, numeric and total-store
+bounds. A long element ID falls back to the structural locator. Oversized/invalid captures fail
+explicitly before replacing saved state; positions are not sliced to satisfy the limit.
+Owner errors distinguish capacity from malformed rows and invalid locators/offsets without
+including view contents. Rollback must use the updater's matching pre-upgrade data snapshot;
+older layout readers still enforce the old 32-position bound.
+
+Validation: 1,682 source tests passed, four skipped; static checks passed. Disposable Electron
+tests exercise normal document navigation/reload/cold restart, then the actual owner
+checkpointForQuit path used by update preflight with forty independent synthetic scrollports
+and sixty overflowing layout nodes. All forty captured offsets restore. This does not prove
+successful live Work Mac checkpoint or full installed update acceptance.
+
+The already-installed renderer fails before binary replacement. No supported automatic repair
+has yet been established on Work Mac. Native tooling rejected the visible developer-menu
+diagnostic request; no expression ran and no state was changed. Keep its prepared job and
+original recovery data. Do not force quit, edit the store, suppress flush failures or claim
+a new binary alone resolves the bootstrap. A supported live diagnosis and preserving recovery
+path remain release blockers; signed corrective delivery follows that qualification.

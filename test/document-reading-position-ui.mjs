@@ -16,5 +16,26 @@ try{
  // Pagehide from another feature must not overwrite the document with that feature's offset.
  await page.locator('[data-page="engine"]').click();await page.reload();await page.locator('#topbar-home').waitFor();await openDocument();await restored(expected);
  await app.close();app=null;await launch();await page.locator('#main .markdown-preview h2').first().waitFor();await restored(expected);
+ // Exercise the exact owner checkpoint invoked by update preflight with >32
+ // independent scrollports, plus overflowing layout nodes that are not scrollports.
+ await page.waitForFunction(()=>{const r=document.querySelector('#main');return r.dataset.positionLoading!==r.dataset.viewKey;});
+ const many=await page.evaluate(async()=>{
+  const root=document.querySelector('#main');
+  const box=document.createElement('div');box.id='synthetic-scrollports';
+  for(let i=0;i<40;i++){const n=document.createElement('div');n.id='synthetic-scroll-'+i;n.style.cssText='height:40px;overflow:auto';const content=document.createElement('div');content.style.height='300px';content.textContent='Synthetic nested reading anchor';n.append(content);box.append(n);}
+  for(let i=0;i<60;i++){const n=document.createElement('div');n.style.cssText='height:2px;overflow:visible';const content=document.createElement('div');content.style.height='20px';content.textContent='Synthetic layout overflow';n.append(content);box.append(n);}
+  root.append(box);for(let i=0;i<40;i++)document.querySelector('#synthetic-scroll-'+i).scrollTop=20+i;
+  return {key:root.dataset.viewKey,markup:box.outerHTML};
+ });
+ await app.evaluate(async({app})=>{const main=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs');await main.getWindows().checkpointForQuit();});
+ const captured=await page.evaluate(async key=>(await window.desktop.viewPositions({action:'get'})).find(row=>row[0]===key)[1],many.key);
+ assert.equal(captured.filter(([key])=>key.startsWith('#synthetic-scroll-')).length,40);
+ await page.evaluate(async value=>{
+  const root=document.querySelector('#main');
+  for(let i=0;i<40;i++)document.querySelector('#synthetic-scroll-'+i).scrollTop=0;
+  const positions=await import('./shared/navigation/view-position.js');positions.restoreView(root,value.key);
+ },many);
+ const offsets=await page.evaluate(()=>Array.from({length:40},(_,i)=>document.querySelector('#synthetic-scroll-'+i).scrollTop));
+ assert.deepEqual(offsets,Array.from({length:40},(_,i)=>20+i));
  assert.deepEqual(errors,[]);console.log('PASS actual document reading position through tab/feature switches, selected-page reload, other-feature reload and app restart');
 }catch(error){console.error(error);throw error;}finally{await app?.close();await fixture.cleanup();}
