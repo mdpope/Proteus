@@ -1,3 +1,10 @@
+## Planned Nov 6 — Atlassian write access
+
+The operator requests full supported Atlassian control within the signed-in identity’s access,
+including Jira ticket updates. Nov 5 requested write consent for new connections, but existing
+read-only grants and read/search-only capability reporting need an explicit upgrade and end-to-end
+write acceptance. See [the Nov 6 plan](docs/2026-11-06-release-plan.md). Planned only; Nov 5 remains the active release.
+
 ## Nov 5 Windows publication provenance correction
 
 Release-operation helpers now accept the Windows packager's complete source commit without
