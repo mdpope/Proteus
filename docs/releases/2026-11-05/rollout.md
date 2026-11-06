@@ -1,4 +1,4 @@
-## Nov 6 — scheduled browser correction published
+## Nov 6 — scheduled browser correction installed and healthy
 
 Source `578a5097a3f3a429c53d30bf9e093f4ffce9a30d`, build
 `578a5097a3f3+src.7a524ec90a1a`, is built once, Apple-signed and publisher-signed.
@@ -8,8 +8,8 @@ Archive SHA-256: `690ebaeeeabb359fbd75bbb82a66051d0c4bbbcf88191e12bd6692d1e32758
 The owner catalog independently resolves this exact signed artifact. Guarded publication verified
 29 files and preserved hosting configuration and unrelated files; all 29 files also passed independent HTTPS readback.
 Windows/Linux artifact bytes are unchanged. The official extracted package passes UI, native
-terminal, restart and scheduled background browser acceptance. Work Mac installation and real Slack
-interaction remain pending. The unassigned receiving-device update coordinator accepted the pinned handoff and will enforce normal idle and preservation checks. No credential, PAT expiry or schedule schema change is required.
+terminal, restart and scheduled background browser acceptance. Work Mac installation is verified; real Slack
+interaction remains pending. The unassigned receiving-device coordinator completed installation of this exact build, verified health at 22:56:02 UTC and delivered its continuation. Its separate desktop-access verification awaits local human approval; deeper preservation checks remain with that coordinator. New input and a later context guard reset two handoffs; a fresh checkpoint on the same job succeeded without restaging or bypass. The exact changed context field was not exposed. No credential, PAT expiry or schedule schema change is required.
 
 The preceding ADO correction is live-verified: all four configured probes and actual native workflow
 reads/discovery succeeded with existing credentials. Workflow validators pass, but bounded source
