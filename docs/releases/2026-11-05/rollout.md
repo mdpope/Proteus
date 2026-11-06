@@ -1,3 +1,14 @@
+## Nov 6 — Work Mac normal checkpoint passed
+
+The operator ran the installed owners normal Save Window Session operation for each of
+four open windows with fresh revision guards. All four returned saved:true and created named
+recovery sessions. Window zero also passed the current DOM and 99 saved-position checks.
+This establishes a current successful normal checkpoint, without raw state edits, dropped
+positions or preservation-gate bypass; it does not establish the original failure cause.
+The original update coordinator resumed the existing prepared job. Work Mac is reconnecting;
+installation and post-restart preservation remain unverified at this checkpoint. The later
+reading-position correction aef6edb is source-only and is not in the frozen 88367d6 package.
+
 ## Nov 6 — all native artifacts published; Windows installation underway
 
 All accepted application artifacts remain pinned to frozen source
