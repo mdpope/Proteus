@@ -308,3 +308,13 @@ Publish the accepted Mac artifact once and install it on the digest owner throug
 coordinator. Then its workflow owner reconciles the prepared canonical exports and verifies
 a prompt-free workflow plus a second no-new-evidence run. Keep unrelated feature work queued
 until this acceptance is complete. No Nov 5 package or installation has started.
+
+### P11 — Explain provider allowance failures
+
+The Work Mac verification continuation failed immediately with Claude rate_limit. Source inspection
+confirms this is a native Claude assistant error passed through by Proteus, not a locally imposed
+release throttle. The transcript exposes neither the allowance window nor reset time. Improve
+the displayed cause, account/model context and provider-supplied reset/retry details; distinguish
+subscription exhaustion from temporary request throttling. Preserve retry identity and completed
+external work. Provider fallback must be explicitly selected/authorized, never silent. Keep
+this diagnostic work outside the digest-only first package unless needed for its acceptance.
