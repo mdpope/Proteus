@@ -998,29 +998,37 @@ struct ChatView: View {
                 }
                 HStack { if run["status"].string == "running" { ProgressView().controlSize(.small) }; Text(statusLabel(run["status"].string)).font(.subheadline).foregroundStyle(.secondary); Spacer() }.accessibilityIdentifier("chat-bottom-status")
                 DisclosureGroup("Chat details & loaded context") {
-                    VStack(alignment: .leading, spacing: 8) {
-                        NativeChatUsageView(run: run)
+                    VStack(alignment: .leading, spacing: 16) {
+                        ChatDetailSection("Activity", icon: "chart.bar") { NativeChatUsageView(run: run) }
+                        ChatDetailSection("Loaded context", icon: "text.book.closed") {
                         DisclosureGroup("Proteus core guidance · Required") { Text(run["appCapabilities"]["core"]["text"].string.isEmpty ? "Core guidance is loaded on the next model turn independently of workspace source selections." : run["appCapabilities"]["core"]["text"].string).font(.caption).textSelection(.enabled) }
                         if !run["appCapabilities"]["tools"].array.isEmpty { DisclosureGroup("App tools · registered and on demand") { ForEach(run["appCapabilities"]["tools"].array, id: \.self) { tool in Text(tool["name"].string + " · " + (tool["enabledBySelection"].bool ? tool["loading"].string : "Excluded by selected agent scope")).font(.caption) }; Text(run["appCapabilities"]["permissionNote"].string).font(.caption).foregroundStyle(.secondary) } }
+                        ForEach(run["context"]["entries"].array, id: \.self) { entry in ChatDetailRow(entry["kind"].string, value: entry["name"].string) }
+                        }
                         if lifecycleEnabled {
-                            HStack {
+                        ChatDetailSection("Chat actions", icon: "tray") {
+                            VStack(alignment: .leading, spacing: 10) {
                                 if run["chatType"].string == "internet" { Button("Promote to User Chat") { Task { do { _ = try await store.request("chat.promote", ["id": .string(id), "expectedUpdatedAt": run["updatedAt"]]); await store.openChat(id) } catch { store.error = error.localizedDescription } } } }; Button("Move", systemImage: "arrow.right.square") { showMoveWorkspace = true }; Button(run["archived"].bool ? "Unarchive chat" : "Archive chat") { Task { await archiveChat() } }.disabled(chatHasPendingWork(run))
                                 Button("Delete chat", role: .destructive) { confirmDelete = true }.disabled(chatHasPendingWork(run))
                             }
+                        }.buttonStyle(.bordered).controlSize(.small)
                         }
-
-                        Text("Model: \(run["schedule"]["model"].string)").font(.caption)
-                        Text("Thinking effort: \(run["schedule"]["reasoningEffort"].string.isEmpty ? "Provider default" : run["schedule"]["reasoningEffort"].string) · Context: \(run["schedule"]["contextTier"].string.isEmpty ? "default" : run["schedule"]["contextTier"].string)").font(.caption)
-                        Text("Speed: \(run["schedule"]["serviceTier"].string.isEmpty ? "Provider default" : run["schedule"]["serviceTier"].string)").font(.caption)
-                        if !run["providerSessionId"].string.isEmpty { Text("Provider session: \(run["providerSessionId"].string)").font(.caption.monospaced()).textSelection(.enabled) }
+                        ChatDetailSection("Model & session", icon: "cpu") {
+                        ChatDetailRow("Model", value: run["schedule"]["model"].string)
+                        ChatDetailRow("Thinking effort", value: run["schedule"]["reasoningEffort"].string)
+                        ChatDetailRow("Context", value: run["schedule"]["contextTier"].string)
+                        ChatDetailRow("Speed", value: run["schedule"]["serviceTier"].string)
+                        if !run["providerSessionId"].string.isEmpty { DisclosureGroup("Provider session") { Text(run["providerSessionId"].string).font(.caption.monospaced()).textSelection(.enabled) } }
                         if run["usage"] != .null { DisclosureGroup("Usage reported by provider") { Text(run["usage"].pretty).font(.caption.monospaced()).textSelection(.enabled) } }
                         if !run["modelHistory"].array.isEmpty { DisclosureGroup("Model history") { ForEach(run["modelHistory"].array, id: \.self) { change in Text(change["model"].string + (change["at"].string.isEmpty ? "" : " · " + change["at"].string)).font(.caption) } } }
                         if run["contextUsage"]["modelContextWindow"].int > 0 { Text("Runtime context window: \(modelTokenSize(run["contextUsage"]["modelContextWindow"])) tokens").font(.caption) }
-                        ChatPermissionsView(run: run)
+                        }
+                        ChatDetailSection("Permissions & continuation", icon: "checkmark.shield") { ChatPermissionsView(run: run) }
+                        ChatDetailSection("Files & connections", icon: "folder") {
                         NativeRunFilesView(run: run, hostName: store.displayName)
                         if mcpControlsAvailable { DisclosureGroup("MCP connections") { MCPConnectionsView(runID: id, loginAvailable: mcpLoginAvailable) } }
 
-                        ForEach(run["context"]["entries"].array, id: \.self) { entry in Text("\(entry["kind"].string): \(entry["name"].string)").font(.caption) }
+                        }
                     }.frame(maxWidth: .infinity, alignment: .leading)
                 }
                 Color.clear.frame(height: 1).id("chat-end")

@@ -1,3 +1,12 @@
+## Native chat details presentation
+
+Group chat details into labeled Activity, Loaded context, Model & session, Permissions &
+continuation, Files & connections, and Chat actions sections. Use consistent inset panels,
+compact runtime/token rows, readable label/value pairs, collapsible provider diagnostics and
+bordered actions. Preserve permission behavior, lifecycle guards and provider-reported values.
+Authentication Preview was reopened at the explicit ADO PAT setup; no credentials were entered
+and no ADO connection was saved. Deployment remains held.
+
 ## Nov 5 file views and client fixes
 
 - Add lazy workspace file browsing with scoped remote access and selected-file previews.

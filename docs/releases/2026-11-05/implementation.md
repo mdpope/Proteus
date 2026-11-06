@@ -1,3 +1,17 @@
+## Native chat details presentation
+
+Group chat details into labeled Activity, Loaded context, Model & session, Permissions &
+continuation, Files & connections, and Chat actions sections. Use consistent inset panels,
+compact runtime/token rows, readable label/value pairs, collapsible provider diagnostics and
+bordered actions. Preserve permission behavior, lifecycle guards and provider-reported values.
+Authentication Preview was reopened at the explicit ADO PAT setup; no credentials were entered
+and no ADO connection was saved. Deployment remains held.
+
+Validation: current iPhone simulator build and section visibility/width UI regression pass
+(67 seconds). Rendered Files/permissions panels were visually inspected. The older history
+fixture failed in navigation before this view; the new current-fixture test verifies each section
+and scrolls according to its position. No execution/persistence behavior changed.
+
 ## Nov 5 current checkpoint — site discovery and client features
 
 The operator completed sign-in in the corrected Authentication Preview and confirmed that the

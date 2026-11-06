@@ -3306,3 +3306,23 @@ final class Nov2MobileNavigationUITests: XCTestCase {
         let proof = XCTAttachment(screenshot: app.screenshot()); proof.name = "Chat mode links, no nested tabs, measured composer safe area"; proof.lifetime = .keepAlways; add(proof)
     }
 }
+
+extension RemoteUITests {
+    @MainActor func testChatDetailsUseReadableSections() {
+        let app = openComposerDesignPreview(phone: UIDevice.current.userInterfaceIdiom == .phone)
+        if app.buttons["Dismiss notification"].exists { app.buttons["Dismiss notification"].tap() }
+        let scroll = app.scrollViews["chat-conversation-scroll"]
+        let details = app.buttons["Chat details & loaded context"]
+        for _ in 0..<12 { if details.isHittable { break }; scroll.swipeUp() }
+        XCTAssertTrue(details.isHittable); details.tap()
+        for title in ["Activity", "Loaded context", "Model & session", "Permissions & continuation", "Files & connections"] {
+            let heading = app.staticTexts[title].firstMatch
+            XCTAssertTrue(heading.waitForExistence(timeout: 5))
+            for _ in 0..<24 { if heading.isHittable { break }; if heading.frame.minY < scroll.frame.midY { scroll.swipeDown() } else { scroll.swipeUp() } }
+            XCTAssertTrue(heading.isHittable, title)
+            XCTAssertGreaterThanOrEqual(heading.frame.minX, 0)
+            XCTAssertLessThanOrEqual(heading.frame.maxX, app.frame.width)
+            let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Chat details — " + title; shot.lifetime = .keepAlways; add(shot)
+        }
+    }
+}
