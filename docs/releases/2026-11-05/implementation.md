@@ -12,7 +12,7 @@ The regression reproduced all three failures before their respective corrections
 sharing/revocation/restart and local-origin/mirror/override tests pass. The older origin test's
 sidebar assertion was updated for already-shipped project recents; production navigation was
 not changed to satisfy that assertion. Full validation passed 1,687 tests/four skips/zero failures and static checks. This follow-up is
-not yet packaged or installed. Live Slack recovery remains unverified.
+packaged and publisher-signed as source `578a509`. Both the signed bundle and official updater extraction pass packaged UI/terminal/restart and the real scheduled background-browser regression. Live Slack recovery and Work Mac installation of this correction remain unverified.
 
 ## Nov 6 — focused Mac ADO and reading-position correction
 
