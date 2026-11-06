@@ -1,3 +1,4 @@
+import Ajv from 'ajv';
 import Ajv2020 from 'ajv/dist/2020.js';
 import {qualifyAdoDefinition} from './managed-ado-adapter.js';
 const fail=code=>Object.assign(Error('The required ADO resource or capability is not verified.'),{code});
@@ -29,10 +30,14 @@ function json(result,{prefix}={}){
  try{return JSON.parse(blocks[0]);}catch{throw fail('CAPABILITY_MISMATCH');}
 }
 export async function verifyAdo(definition,{call,listTools,signal}){
- qualifyAdoProbes(definition);const tools=await listTools({signal}),catalog=new Map(tools.map(t=>[t.name,t])),ajv=new Ajv2020({strict:false,validateFormats:false,logger:false}),used=new Set();
+ qualifyAdoProbes(definition);const tools=await listTools({signal}),catalog=new Map(tools.map(t=>[t.name,t])),options={strict:false,validateFormats:false,logger:false},modern=new Ajv2020(options),legacy=new Ajv(options),used=new Set();
  const read=async(name,args,options)=>{
   const tool=catalog.get(name);if(!tool||tool.annotations?.readOnlyHint!==true||tool.annotations?.idempotentHint!==true||tool.annotations?.destructiveHint===true)throw fail('CAPABILITY_MISMATCH');
-  try{if(!ajv.compile(tool.inputSchema)(args))throw Error();}catch{throw fail('CAPABILITY_MISMATCH');}
+  // The pinned official server advertises draft-07. Select its actual dialect;
+  // never remove the declaration or skip argument/annotation validation.
+  const dialect=tool.inputSchema?.$schema;
+  if(dialect&&!['http://json-schema.org/draft-07/schema#','https://json-schema.org/draft-07/schema','https://json-schema.org/draft-07/schema#','https://json-schema.org/draft/2020-12/schema'].includes(dialect))throw fail('CAPABILITY_MISMATCH');
+  try{const schema=structuredClone(tool.inputSchema);if(dialect?.includes('draft-07'))schema.$schema='http://json-schema.org/draft-07/schema#';if(!(dialect?.includes('draft-07')?legacy:modern).compile(schema)(args))throw Error();}catch{throw fail('CAPABILITY_MISMATCH');}
   signal?.throwIfAborted();const result=json(await call(name,args,{signal}),options);used.add(name);return result;
  };
  for(const probe of definition.probes){

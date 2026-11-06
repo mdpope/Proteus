@@ -1,3 +1,18 @@
+## ADO PAT capability verification correction — source only
+
+Installed 88367d6 can report capability-mismatch before its first ADO health read because the
+pinned official 2.11.0 catalog declares JSON Schema draft-07, while the probe validator used only
+2020-12. The configured domains include core/work/work-items/search; all four exact probe tools
+are present with read-only/idempotent annotations. This reproduced with synthetic credentials,
+initialization/tools-list only and zero business calls; it is not evidence of an invalid PAT.
+
+The source correction selects draft-07 or 2020-12 by the declared schema, preserves schema and
+annotation validation, and rejects unsupported dialects. Real pinned PAT-launcher catalog tests
+now validate all four exact probe arguments against synthetic result fixtures. Existing PAT,
+expiry, scopes and connection settings need no mutation for this correction. Live workstation.example.test resource
+acceptance remains pending an accepted corrective package; no rebuild or installation performed.
+The scheduled browser multi-window routing defect remains open and unchanged.
+
 ## Nov 6 planned — complete Atlassian write access
 
 The operator requests full supported Atlassian control within the signed-in identity’s access,
