@@ -1,3 +1,14 @@
+## Nov 6 — all-device build and rollout authorized
+
+The operator explicitly requests building and deploying all current changes to all devices through
+the update process. This lifts earlier build/platform/deployment holds for Nov 5 / 0.2.43.
+Freeze the implemented source, build once per native target, validate and sign on Build Mac,
+publish accepted artifacts, and use fresh unassigned purpose:update coordinators on all included
+desktops. Preserve idle barriers, unrelated work, recovery generations and post-install acceptance.
+iOS uses the established Mac-coordinated preservation workflow; web uses its release workflow.
+Unimplemented guided full-account ADO and standalone Mnemosyne work remain open, not silently
+represented as shipped. Source acceptance: 1,677 pass/four skip, static and desktop/web checks pass.
+
 ## Deployment hold — expanded Nov 5 scope
 
 All new deployments/publication are held by the operator. Build/test and isolated Design Preview
