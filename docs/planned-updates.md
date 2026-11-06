@@ -18,8 +18,8 @@ this same branch. No additional worktrees are needed outside explicitly delegate
 Source now includes manifest/export reconciliation, scoped Codex command execution, true catalog
 rescan, owner-proven unsent-create recapture and newest-first bounded status. See the
 [configuration guide](schedule-tool-configuration.md) and [release plan](2026-11-05-release-plan.md).
-Scoped execution is an explicit hard workflow blocker, but Nov 3 is still open; no build or
-deployment started. Real organization workflows acceptance belongs to the workflow owner after authorized update.
+Scoped execution and source reconciliation are explicit hard workflow blockers. Nov 3 is closed;
+no Nov 5 build or deployment has started. Real organization workflows acceptance belongs to the workflow owner after authorized update.
 Final validation: 1,548 tests pass, four skip, zero fail; npm run check passes. Native Mac
 sandbox and MCP-catalog probes use only synthetic data and start no model turn. The sandbox
 probe verifies scoped writes and denies outside reads/writes, symlink escape, protected metadata
@@ -30,8 +30,8 @@ writes and network access. The catalog probe accepts annotated reads and rejects
 The automation audit requested supported configuration guidance and missing inspection/preview
 capabilities. Its later acceptance handoff confirms scoped execution and source reconciliation as hard workflow blockers. See the
 [Nov 5 plan](2026-11-05-release-plan.md) and [tool configuration guide](schedule-tool-configuration.md).
-Source work is isolated on nov5-schedule-visibility; Nov 3 closeout and the operator build hold
-still gate packaging/deployment. No live workflow schedules, permissions, enabled states or runs
+Source work is consolidated on nov5-release in the primary checkout; the digest-blocker scope
+is the proposed first package after completed Nov 3 closeout. No live workflow schedules, permissions, enabled states or runs
 were changed. P6 passes ten focused tests, the full suite (1,542 pass/four skip) and static checks. P7/P8 are now implemented in the isolated source branch; see the newer checkpoint above. Their installed workflow acceptance remains outstanding.
 
 ## Nov 2 closed — Nov 3 follow-up queue
