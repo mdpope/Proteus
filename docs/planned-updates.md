@@ -34,6 +34,17 @@ Source work is consolidated on nov5-release in the primary checkout; the digest-
 is the proposed first package after completed Nov 3 closeout. No live workflow schedules, permissions, enabled states or runs
 were changed. P6 passes ten focused tests, the full suite (1,542 pass/four skip) and static checks. P7/P8 are now implemented in the isolated source branch; see the newer checkpoint above. Their installed workflow acceptance remains outstanding.
 
+## Nov 5 — Linux document preservation correction
+
+Implemented in source for release integration: prevent saved-window synchronization from stripping
+registry-only document chat associations, hydrate every document alias when restoring, and prefer
+the existing destination when reopening a document with historical aliases in multiple scopes.
+The updater preservation gate stays unchanged; no live stores or recovery generations are edited.
+Regression tests reproduce both reported failures on the previous source. Disposable Linux
+Electron acceptance passes startup, Reload Window and cold restart with stable project descriptors
+and revisions. See [workspace contract and tests](workspaces.md#nov-5--document-origin-survives-window-restore).
+Final release integration, packaging and installed acceptance remain with the release coordinator.
+
 ## Nov 2 closed — Nov 3 follow-up queue
 
 Nov 2 / 0.2.41 is merged to main and deployed to every intended target. See the [closeout record](releases/2026-11-02/closeout.md) for verified outcomes and qualified limits. The [Nov 3 issue list](2026-11-03-issues.md) carries remaining iOS/web performance, composer and connection work, high pushed-state traffic, Desktop Control setup and the permanent tab-restoration fix. Mnemosyne’s design is preserved separately. Earlier checkpoints below are historical.

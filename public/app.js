@@ -27,7 +27,7 @@ import {createWindowRestore,step as restoreStep,failedChildInfo,mergeOpenedTabs}
 import {previewRelativeAge,previewChatActivity} from './shared/navigation/preview-navigation.js';
 import {previewApprovalChoices,previewPermissionNames} from './shared/navigation/preview-permissions.js';
 import {downloadsChanged} from './features/browser/browser-downloads.js';
-import {normalizeContentTabHistory,contentTabMetadata,acknowledgesBrowserNavigation,contentTabOrder,contentTabViews,documentSessionMetadata} from './models/content-tab-descriptor.js';
+import {normalizeContentTabHistory,contentTabMetadata,acknowledgesBrowserNavigation,contentTabOrder,contentTabViews,documentSessionMetadata,documentAssociationMetadata} from './models/content-tab-descriptor.js';
 import {chatLink,parseChatLink} from './features/chats/chat-links.js';
 import {computerName} from './services/remote/computer-identity.js';
 import {initWorkspaces,renderWorkspaces,renderWorkspace,openWorkspace,openWorkspaceChat,openRemoteProject,workspaceOwners,refreshWorkspaceOwners,loadWorkspaceOwnerTabs,recentWorkspaces,sendChatToWorkspace,moveChatToWorkspace,createWorkspace,deleteWorkspace} from './features/workspaces/desktop-workspaces.js';
@@ -1099,6 +1099,12 @@ const contentTabSync=createTabSynchronizer({navigation:true,explicitCloseOnly:tr
             const updated=await window.desktop.browser({action:'sync-metadata',id:tab.browserId||tab.id,openedAt:descriptor.openedAt,lastTouchedAt:descriptor.lastTouchedAt,lastActivityAt:descriptor.lastActivityAt,favicon:descriptor.favicon});
             if(tab.info)tab.info=updated;else Object.assign(tab,{openedAt:updated.openedAt,lastTouchedAt:updated.lastTouchedAt,lastActivityAt:updated.lastActivityAt,favicon:updated.favicon});
           }
+        }
+        if(descriptor.type==='document'){
+          // Hydrate every retained local alias, including a newly materialized view.
+          // Missing window metadata must not be published back as loss of origin.
+          const binding=documentAssociationMetadata(descriptor);
+          for(const view of new Set([tab,...list.filter(view=>view.contentTabId===descriptor.id)]))if(view.type==='markdown'&&!view.associationChatId&&binding.associationChatId){Object.assign(view,binding);changed=true;}
         }
         if(tab.hidden!==!!descriptor.hidden){await setTabVisibility(tab,!!descriptor.hidden);changed=true;}
         for(const field of ['openedAt','lastTouchedAt','lastActivityAt'])if(descriptor[field]&&tab[field]!==descriptor[field]){tab[field]=descriptor[field];changed=true;}

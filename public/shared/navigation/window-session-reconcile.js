@@ -1,4 +1,4 @@
-import {contentTabMetadata,windowContentTabId} from '../../models/content-tab-descriptor.js';
+import {contentTabMetadata,documentAssociationMetadata,windowContentTabId} from '../../models/content-tab-descriptor.js';
 
 function identity(tab,descriptors,documentFile,scope,id){
  if(tab.type==='markdown'&&!tab.contentTabId&&documentFile){
@@ -15,7 +15,7 @@ function newView(descriptor,parentId,scope,id,documentFile){
  if(descriptor.type==='document'){
   let file;try{file=documentFile?.(scope,id,descriptor);}catch{}
   if(!file)return {...common,id:'unavailable:'+descriptor.id,type:'unavailable',unavailableDescriptor:descriptor,unavailableReason:'The document source is unavailable on this owner. Retry after restoring its authorized source.'};
-  return {...common,id:'restored:'+crypto.randomUUID(),type:'markdown',file,...(descriptor.chatId?{associationChatId:descriptor.chatId}:{})};
+  return {...common,id:'restored:'+crypto.randomUUID(),type:'markdown',file};
  }
  throw Error('Unsupported saved-window descriptor. The original session was preserved.');
 }
@@ -30,7 +30,7 @@ export function reconcileWindowSession(value,read,{documentFile}={}){
   return owner.tabs.flatMap(descriptor=>{
    const matches=tabs.filter(tab=>identity(tab,owner.tabs,documentFile,scope,id)===descriptor.id);
    return (matches.length?matches:[newView(descriptor,parentId,scope,id,documentFile)]).map(tab=>({
-    ...tab,...contentTabMetadata(descriptor),contentTabId:descriptor.id,customTitle:descriptor.customTitle,
+    ...tab,...contentTabMetadata(descriptor),...(descriptor.type==='document'?documentAssociationMetadata(descriptor):{}),contentTabId:descriptor.id,customTitle:descriptor.customTitle,
     hidden:!!descriptor.hidden,label:descriptor.title,title:descriptor.title,
     ...(descriptor.type==='browser'?{
      // Pending navigation retains its whole branch for ordinary conflict
