@@ -1,3 +1,4 @@
+import {validateManagedRequirements,managedWorkspace} from './services/integrations/managed-requirements.js';
 import {ScheduleControl} from './services/scheduling/schedule-control.js';
 import {clearQuestionFromQueue} from './services/chats/user-questions.js';
 import {localInputOrigin} from './services/chats/input-origin.js';
@@ -250,6 +251,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
     let requestedMcpServers=value.mcpServers;
     const defaults=settings.get();
     const updateCoordinator=value.purpose==='update',buildCoordinator=value.purpose==='build';
+    if((updateCoordinator||value.chatType==='internet')&&(value.managedConnections?.length||value.managedConnectionWorkspaceId!==undefined))throw Error('Choose an ordinary workspace chat for managed connections.');
     if(updateCoordinator&&value.chatType==='internet')throw Error('Update coordinators require an ordinary unassigned chat.');
     if(updateCoordinator){
       requestedMcpServers={};
@@ -275,8 +277,15 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
     }
     const snapshot=context.capture({workspaceId:value.workspaceId,workspace:value.workspace||(!value.workspaceId?defaults.workspace:undefined),selectedIds:value.selectedIds,agentId:value.agentId,includeDefaults:value.includeDefaults});
     if(updateCoordinator)Object.assign(snapshot,{workspaceId:null,workspaceName:null,workspace:structuredClone(defaults.workspace),baseWorkspace:structuredClone(defaults.workspace),includeDefaults:false,selectedIds:[],agentId:null,entries:[]});
+    const managedConnections=validateManagedRequirements(value.managedConnections);
+    if(value.managedConnectionWorkspaceId!==undefined&&!managedConnections.length)throw Error('Select named connections together with their workspace binding.');
+    if(managedConnections.length){
+      const provider=adapters[value.provider||defaults.provider];
+      if(!provider?.supportsManagedConnections&&!provider?.metadata?.supportsManagedConnections)throw Error('The selected provider does not support managed connections.');
+      managedWorkspace({context:snapshot,managedConnectionWorkspaceId:value.managedConnectionWorkspaceId});
+    }
     const chatTitle=typeof value.name==='string'?value.name.trim():'';
-    const schedule=validateSchedule({schemaVersion:1,id:`chat-${Date.now()}-${randomBytes(4).toString('hex')}`,name:chatTitle||'Workspace chat',chatType:value.chatType==='internet'?'internet':'user',chatTitleManual:!!chatTitle,...(buildCoordinator?{purpose:'build'}:{}),...(updateCoordinator?{purpose:'update',updateAuthorization:{tool:'proteus_update',scopeVersion:2,hostId:remote.info().hostId,grantedAt:new Date().toISOString()}}:{}),enabled:false,cron:'0 9 * * 1-5',timezone:value.timezone||defaults.timezone,provider:value.provider||defaults.provider,model:value.model||defaults.model,reasoningMode:value.reasoningMode,reasoningEffort:value.reasoningEffort??((value.model||defaults.model)===defaults.model&&(value.provider||defaults.provider)===defaults.provider?defaults.reasoningEffort:undefined),contextTier:value.contextTier??((value.model||defaults.model)===defaults.model&&(value.provider||defaults.provider)===defaults.provider?defaults.contextTier:undefined),serviceTier:value.serviceTier??((value.model||defaults.model)===defaults.model&&(value.provider||defaults.provider)===defaults.provider?defaults.serviceTier:undefined),workspace:snapshot.workspace,context:snapshot,skillDirectories:value.skillDirectories||defaults.skillDirectories,mcpServers:requestedMcpServers??(snapshot.includeDefaults===false?{}:value.mcpServers||defaults.mcpServers),editorContext:value.editorContext,misfire:'skip',prompt:attachmentOnly&&!value.prompt?.trim()?attachmentPrompt:value.prompt});
+    const schedule=validateSchedule({schemaVersion:1,id:`chat-${Date.now()}-${randomBytes(4).toString('hex')}`,name:chatTitle||'Workspace chat',chatType:value.chatType==='internet'?'internet':'user',chatTitleManual:!!chatTitle,...(buildCoordinator?{purpose:'build'}:{}),...(updateCoordinator?{purpose:'update',updateAuthorization:{tool:'proteus_update',scopeVersion:2,hostId:remote.info().hostId,grantedAt:new Date().toISOString()}}:{}),enabled:false,cron:'0 9 * * 1-5',timezone:value.timezone||defaults.timezone,provider:value.provider||defaults.provider,model:value.model||defaults.model,reasoningMode:value.reasoningMode,reasoningEffort:value.reasoningEffort??((value.model||defaults.model)===defaults.model&&(value.provider||defaults.provider)===defaults.provider?defaults.reasoningEffort:undefined),contextTier:value.contextTier??((value.model||defaults.model)===defaults.model&&(value.provider||defaults.provider)===defaults.provider?defaults.contextTier:undefined),serviceTier:value.serviceTier??((value.model||defaults.model)===defaults.model&&(value.provider||defaults.provider)===defaults.provider?defaults.serviceTier:undefined),workspace:snapshot.workspace,context:snapshot,skillDirectories:value.skillDirectories||defaults.skillDirectories,mcpServers:requestedMcpServers??(snapshot.includeDefaults===false?{}:value.mcpServers||defaults.mcpServers),...(managedConnections.length?{managedConnections,managedConnectionWorkspaceId:value.managedConnectionWorkspaceId||snapshot.workspaceId}:{}),editorContext:value.editorContext,misfire:'skip',prompt:attachmentOnly&&!value.prompt?.trim()?attachmentPrompt:value.prompt});
     if(attachmentOnly&&!value.prompt?.trim())schedule.prompt='';return schedule;
   }
   const token = randomBytes(32).toString('hex'); let origin; let remote; const schedulerErrors = []; const eventClients = new Set();

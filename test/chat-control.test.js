@@ -384,3 +384,14 @@ test('executing owner revalidates model policy and rechecks the target project a
  owner.workspaceProjects.projects({action:'move-chat',chatId:run.id,projectId:other.id,expectedRevision:owner.workspaceProjects.read().revision,expectedUpdatedAt:run.updatedAt},owner.engine);release();await rejected;assert.equal(run.queuedMessages?.length||0,0);
  catalog.get=original;
 });
+
+test('managed connection create selection survives remote delivery and rejects old owners or running-chat retargeting',async t=>{
+ const f=await fixture(t),{owner,control,caller,command,hostId}=f;f.grant();owner.engine.providers.copilot.supportsManagedConnections=true;
+ const workspaceId=owner.context.config().defaultWorkspaceId,managedConnections=[{name:'fixture-managed',capabilities:['jira.issue.search'],required:false}];
+ const task=await control.handle(command('create',{provider:'copilot',model:'fixture',prompt:'synthetic managed selection capture only',workspaceId,managedConnections,managedConnectionWorkspaceId:workspaceId}),caller.id);
+ assert.equal(task.state,'accepted',JSON.stringify(task));const run=owner.engine.getRun(task.chatId);
+ assert.deepEqual(run.schedule.managedConnections,managedConnections);assert.equal(run.schedule.managedConnectionWorkspaceId,workspaceId);
+ await assert.rejects(control.handle(command('send',{chatId:run.id,prompt:'do not retarget',managedConnections:[]}),caller.id),/new ordinary/);
+ const connection=await control.connection(hostId);connection.capabilities=connection.capabilities.filter(cap=>cap!=='chat.managed-connections.v1');
+ await assert.rejects(control.handle(command('create',{provider:'copilot',model:'fixture',prompt:'unsupported',workspaceId,managedConnections}),caller.id),/selection support/);
+});

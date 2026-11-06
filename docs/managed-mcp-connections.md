@@ -203,8 +203,12 @@ Credentials are not deleted or revoked by removing a definition.
 Portable requirements remain `managedConnections: [{name, capabilities, required}]`. Chats have
 an explicit captured workspace. Standalone schedules additionally set `managedConnectionWorkspaceId`
 to a workspace in their captured `sourceWorkspaces` (declared through `workspaceSources`). Folder
-paths do not establish account identity; no default workspace/account fallback is used. Chat-create
-selection/tool plumbing and ADO adapter qualification remain outstanding.
+paths do not establish account identity; no default workspace/account fallback is used. Chat create
+and schedule read/update/preflight expose these fields. Remote create requires the explicit
+`chat.managed-connections.v1` owner capability; older owners fail before delivery. Existing-run
+send/reply cannot retarget bindings. Source recapture preserves the original connection selection.
+Preflight reports cached readiness without triggering consent or network probes. ADO qualification
+remains outstanding.
 
 The host performs coalesced checks for active leases and near-term enabled schedules, without
 model turns, and wakes maintenance after system resume. Persisted health retains last successful
@@ -212,7 +216,7 @@ read and recovery generations; transport/authentication are rechecked after rest
 connection failure still allows independent work through the existing run bridge. Recovery does
 not create model runs. Corrupt health evidence is not overwritten silently.
 
-Validation: 1,608 tests pass, four skip, zero fail; static checks pass. Disposable Electron acceptance
+Validation: 1,609 tests pass, four skip, zero fail; static checks pass. Disposable Electron acceptance
 covers configuration, explicit account/workspace fields, separate Jira probes, stale-edit draft
 preservation and disable/removal. Actual workstation.example.test consent, native-provider data reads, workflow outputs,
 second no-new-evidence run and outage reconciliation remain required after signed installation.

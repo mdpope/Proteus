@@ -1,3 +1,11 @@
+## Nov 5 managed selection checkpoint
+
+Chat create and schedule tools now carry explicit named connections and captured workspace bindings.
+Older remote owners reject before delivery; send/reply cannot retarget an existing run. Source
+recapture retains original bindings. Cached preflight performs no auth/network work. Full suite:
+1,609 pass/four skip/zero fail; static checks pass. ADO and remaining full plan work continue.
+No package, installation or authenticated HC workflow acceptance is claimed.
+
 ## Nov 5 managed Atlassian owner checkpoint
 
 The selected authv2 route, protected OAuth lifecycle, real account/site and separate Jira probes,

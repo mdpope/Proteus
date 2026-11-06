@@ -1,3 +1,4 @@
+import {managedWorkspace} from '../integrations/managed-requirements.js';
 import {reconciliationPlan} from './source-reconciliation.js';
 import {inspectSchedule,scheduleSources,refreshScheduleCatalog} from './schedule-inspection.js';
 import {scheduleAccessScope} from '../settings/schedule-access-rule.js';
@@ -11,7 +12,7 @@ const active=new Set(['queued','running','awaiting_input']),uuid=/^[a-f0-9]{8}-[
 const canonical=value=>Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,canonical(value[key])])):value;
 const digest=value=>createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex');
 const pick=(value,keys)=>Object.fromEntries(keys.filter(key=>value[key]!==undefined).map(key=>[key,value[key]]));
-const editable=['name','cron','timezone','provider','model','reasoningMode','reasoningEffort','contextTier','serviceTier','prompt','misfire','contextSelection','workspaceSources','executionPermissions','notifications'];
+const editable=['name','cron','timezone','provider','model','reasoningMode','reasoningEffort','contextTier','serviceTier','prompt','misfire','contextSelection','workspaceSources','executionPermissions','managedConnections','managedConnectionWorkspaceId','notifications'];
 
 // This tool owns schedule/test intents only. Native services and their takeover
 // gates remain with their existing owners. No operation resolves tool approvals.
@@ -32,7 +33,7 @@ export class ScheduleControl {
   this.service.chatControl.assertCaller();const grant={id:randomUUID(),actor,contextId,scope,createdAt:new Date().toISOString()};this.access.grants.push(grant);atomicJSON(this.accessFile,this.access);return {granted:true,grant};
  }
  current(args){const schedule=this.service.engine.schedules.get(args.scheduleId);if(!args.expectedRevision||revision(schedule)!==args.expectedRevision)throw Error('Schedule changed. Read the current revision before proceeding.');return schedule;}
- view(schedule){return {executionPermissions:schedule.executionPermissions||null,...pick(schedule,['id','name','enabled','cron','timezone','provider','model','reasoningMode','reasoningEffort','contextTier','serviceTier','prompt','misfire','contextSelection','workspace','workspaceSources','executionPermissions','notifications','source','error']),prompt:String(schedule.prompt||'').slice(0,24000),promptTruncated:String(schedule.prompt||'').length>24000,revision:schedule.revision||revision(schedule),mcpServerNames:Object.keys(schedule.mcpServers||{}),capturedSources:(schedule.context?.entries||[]).map(entry=>pick(entry,['id','name','kind','hash'])),availableMcpServerNames:[...new Set([...Object.keys(this.service.settings.get().mcpServers||{}),...Object.keys(schedule.mcpServers||{})])]};}
+ view(schedule){return {executionPermissions:schedule.executionPermissions||null,...pick(schedule,['id','name','enabled','cron','timezone','provider','model','reasoningMode','reasoningEffort','contextTier','serviceTier','prompt','misfire','contextSelection','workspace','workspaceSources','executionPermissions','managedConnections','managedConnectionWorkspaceId','notifications','source','error']),prompt:String(schedule.prompt||'').slice(0,24000),promptTruncated:String(schedule.prompt||'').length>24000,revision:schedule.revision||revision(schedule),mcpServerNames:Object.keys(schedule.mcpServers||{}),capturedSources:(schedule.context?.entries||[]).map(entry=>pick(entry,['id','name','kind','hash'])),availableMcpServerNames:[...new Set([...Object.keys(this.service.settings.get().mcpServers||{}),...Object.keys(schedule.mcpServers||{})])]};}
  validateChanges(actor,args){
      if(!args.changes||typeof args.changes!=='object'||Array.isArray(args.changes)||Object.keys(args.changes).some(key=>![...editable,'mcpServerNames'].includes(key)))throw Error('Choose supported schedule settings.');
      if(args.changes.executionPermissions!==undefined||args.changes.workspaceSources?.some(ref=>ref.categories?.includes('permissions')))this.check(actor,args,'schedule-configure-permissions');
@@ -59,8 +60,17 @@ export class ScheduleControl {
   if(Object.keys(prepared.mcpServers||{}).some(name=>managed.disabledLegacyMcp?.includes(name)))throw Error('A selected MCP source is disabled on this owner.');
   const definitions={...prepared.mcpServers,...managed.mcpServers};
   for(const definition of Object.values(definitions))if(!definition||typeof definition!=='object'||(!definition.command&&!definition.url))throw Error('A selected MCP tool definition is unavailable.');
+  const managedReadiness=[];
+  if(prepared.managedConnections?.length){
+   const workspaceId=managedWorkspace(prepared),owner=this.service.managedConnections,provider=engine.providers[prepared.provider];
+   if(!owner||!provider?.supportsManagedConnections&&!provider?.metadata?.supportsManagedConnections)throw Error('The selected owner/provider does not support managed connections.');
+   for(const requirement of prepared.managedConnections){
+    try{const [binding]=owner.registry.capture({ownerId:owner.registry.ownerId,workspaceId,names:[requirement.name]}),definition=owner.manager.definition(binding);if(!requirement.capabilities.every(capability=>definition.capabilities.includes(capability)))throw Error();managedReadiness.push(owner.manager.status(binding));}
+    catch{if(requirement.required)throw Error('A required managed connection has no matching configured workspace binding/capability.');managedReadiness.push({name:requirement.name,state:'configuration-mismatch',required:false});}
+   }
+  }
   const profile=engine.permissions.describe(prepared);
-  return {prepared,summary:{configuration:inspectSchedule(this.service,prepared,{prepared:true}),captured:pick(prepared,['provider','model','reasoningMode','reasoningEffort','contextTier','serviceTier']),sourceHashes:(prepared.context?.entries||[]).map(entry=>pick(entry,['id','hash','kind'])),mcpServerNames:Object.keys(definitions),toolConfigurationChecked:true,approvalMode:profile.mode,permissionsRequireHumanWhenNotPreauthorized:true}};
+  return {prepared,summary:{managedReadiness,configuration:inspectSchedule(this.service,prepared,{prepared:true}),captured:pick(prepared,['provider','model','reasoningMode','reasoningEffort','contextTier','serviceTier']),sourceHashes:(prepared.context?.entries||[]).map(entry=>pick(entry,['id','hash','kind'])),mcpServerNames:Object.keys(definitions),toolConfigurationChecked:true,approvalMode:profile.mode,permissionsRequireHumanWhenNotPreauthorized:true}};
  }
  async start(actor,args){
   this.check(actor,args,'schedule-test');if(!uuid.test(args.operationId||''))throw Error('Supply a stable UUID operationId.');

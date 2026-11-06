@@ -1,3 +1,4 @@
+import {managedRequirementsSchema} from '../integrations/managed-requirements.js';
 import {scheduleControlTools} from '../scheduling/schedule-control-tools.js';
 import {delegationTools} from './delegation.js';
 export function chatControlTools(control, runId) {
@@ -19,6 +20,7 @@ export function chatControlTools(control, runId) {
       notify:{type:'boolean',description:'Explicitly continue the originating conversation with permitted task feedback. Defaults false. Feedback uses the initiating connection and requires no reverse pairing; managed computers cannot access other computers.'},
       expectedRevision:{type:'string'},grantId:{type:'string'},
       originChatId:{type:'string',description:'Trusted external callers only: originating local chat for feedback. Internal identity is supplied by Proteus.'},
+      managedConnections:managedRequirementsSchema,managedConnectionWorkspaceId:{type:'string',description:'Create only: explicit account-binding workspace, equal to the captured chat workspace.'},
       selectedIds:{type:'array',items:{type:'string'}}, includeDefaults:{type:'boolean'}, agentId:{type:'string'},
       includeArchived:{type:'boolean'}, query:{type:'string'}, limit:{type:'integer',minimum:1,maximum:100}, cursor:{type:'string'}, beforeEvent:{type:'integer',minimum:0},
       targets:{type:'array',minItems:1,maxItems:8,items:{type:'object',properties:{hostId:{type:'string'},chatId:{type:'string'},taskId:{type:'string'}},additionalProperties:false}},

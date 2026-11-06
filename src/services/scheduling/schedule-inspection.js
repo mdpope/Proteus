@@ -16,6 +16,7 @@ export function inspectSchedule(service,schedule,{prepared=false}={}){
  return {workspace:resolved.workspace,workspaceSources:resolved.context?.sourceWorkspaces||[],
   sources:(resolved.context?.entries||[]).map(sourceMetadata),
   mcpServerNames:[...new Set([...Object.keys(resolved.mcpServers||{}),...Object.keys(managed.mcpServers||{})])],
+  managedConnections:resolved.managedConnections||[],managedConnectionWorkspaceId:resolved.managedConnectionWorkspaceId||resolved.context?.workspaceId||null,
   executionPermissions:resolved.executionPermissions||null,
   effectivePermissions:pick(profile,['id','source','mode','readOnlyTools','workingFolders','readOnlyFolders','folders','rules']),
   permissionEvaluation:'current-owner-policy-for-this-configuration',

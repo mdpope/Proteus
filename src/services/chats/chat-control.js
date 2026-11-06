@@ -1,3 +1,4 @@
+import {validateManagedRequirements} from '../integrations/managed-requirements.js';
 import fs from 'node:fs';
 import {AsyncLocalStorage} from 'node:async_hooks';
 import path from 'node:path';
@@ -210,6 +211,11 @@ export class ChatControl {
     const signature=digest(args),existing=[...this.tasks.values()].find(t=>t.actor===actor&&t.operationId===args.operationId);
     if(existing){if(existing.digest!==signature)throw Error('operationId was already used with different arguments.');return this.perform(existing);}
     if([...this.tasks.values()].filter(t=>t.actor===actor&&!terminal.has(t.status)&&!['rejected'].includes(t.state)).length>=32)throw Error('At most 32 unfinished tasks per originating scope.');
+    if(args.managedConnections!==undefined||args.managedConnectionWorkspaceId!==undefined){
+      if(args.action!=='create'||args.purpose==='update')throw Error('Managed connection selection belongs only to a new ordinary or build chat.');
+      validateManagedRequirements(args.managedConnections);
+      if(args.hostId!==this.localId()&&!(await this.connection(args.hostId)).capabilities.includes('chat.managed-connections.v1'))throw Error('This destination needs managed connection selection support.');
+    }
     if(args.modelScope!==undefined&&args.action!=='send')throw Error('modelScope belongs only to a queued send; future schedules require a separate owner update.');
     if(['reply','cancel'].includes(args.action)&&(['provider',...sendOptionKeys].some(key=>args[key]!==undefined)))throw Error('Replies and cancellation cannot change model settings.');
     let baseline=0,actualProjectId=projectId,sendModelOptions,sendProvider;
@@ -253,7 +259,7 @@ export class ChatControl {
     if(task.state==='accepted'){await this.authorizeTask(task);return this.taskView(task);}
     if(task.action==='send'&&hasSendOptions(task.args)&&!task.sendModelOptions)throw Error('This older task did not capture model settings. Inspect the prior outcome before submitting a new operation.');
     const args=task.args,method={create:'chat.start',send:'chat.send',reply:'chat.reply',cancel:'chat.cancel'}[task.action];
-    const payload=task.action==='create'?{...pick(args,['purpose','name','prompt','provider','model','reasoningEffort','contextTier','serviceTier','workspaceId','projectId','selectedIds','includeDefaults','agentId','updateRelease']),...(args.purpose==='update'?{operationId:args.operationId}:args.purpose==='build'?{}:{reasoningEffort:args.reasoningEffort||'',contextTier:args.contextTier||'default',serviceTier:args.serviceTier||''})}:
+    const payload=task.action==='create'?{...pick(args,['purpose','name','prompt','provider','model','reasoningEffort','contextTier','serviceTier','workspaceId','projectId','selectedIds','includeDefaults','agentId','updateRelease','managedConnections','managedConnectionWorkspaceId']),...(args.purpose==='update'?{operationId:args.operationId}:args.purpose==='build'?{}:{reasoningEffort:args.reasoningEffort||'',contextTier:args.contextTier||'default',serviceTier:args.serviceTier||''})}:
       task.action==='send'?{id:task.chatId,prompt:args.prompt,mode:args.mode||'queue',messageId:task.id,...(task.sendModelOptions?{modelOptions:task.sendModelOptions,modelScope:'next-turn',expectedProvider:task.sendProvider}:{})}:
       task.action==='reply'?{id:task.chatId,answer:args.answer,requestId:args.requestId}:{id:task.chatId};
     if(task.action!=='create'){payload.agentControl=true;payload.expectedProjectId=task.projectId||null;}
@@ -369,7 +375,7 @@ export class ChatControl {
       this.assertAccess(actor,task.hostId,'dispatch',undefined,task.projectId);
       if(task.chatId&&task.state==='accepted')return this.taskView(task);
       if(task.hostId!==this.localId()&&!(await this.connection(task.hostId)).capabilities.includes('chat.recapture.v1'))throw Error('The destination needs source recapture support.');
-      const payload={...pick(task.args,['purpose','name','prompt','provider','model','reasoningEffort','contextTier','serviceTier','workspaceId','projectId','selectedIds','includeDefaults','agentId','updateRelease']),reasoningEffort:task.args.reasoningEffort||'',contextTier:task.args.contextTier||'default',serviceTier:task.args.serviceTier||''};
+      const payload={...pick(task.args,['purpose','name','prompt','provider','model','reasoningEffort','contextTier','serviceTier','workspaceId','projectId','selectedIds','includeDefaults','agentId','updateRelease','managedConnections','managedConnectionWorkspaceId']),reasoningEffort:task.args.reasoningEffort||'',contextTier:task.args.contextTier||'default',serviceTier:task.args.serviceTier||''};
       const result=await this.request(task.hostId,'chat.recapture',{originalTaskId:task.id,originalDigest:task.digest,originalPayload:payload},{id:args.operationId,issuedAt:new Date().toISOString()});
       this.assertAccess(actor,task.hostId,'dispatch',undefined,task.projectId);
       task.recaptureHistory??=[];task.recaptureHistory.push({operationId:args.operationId,priorError:task.error,at:new Date().toISOString(),sourceHashes:result.sourceHashes});

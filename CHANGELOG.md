@@ -1,3 +1,9 @@
+## Nov 5 managed selection (source)
+
+- Expose named connection/workspace selection through chat creation and schedule tools.
+- Reject unsupported remote owners before delivery and preserve bindings through source recapture.
+- Report cached schedule readiness without background sign-in or account fallback.
+
 ## Nov 5 managed Atlassian connections (source)
 
 - Add owner-managed PKCE consent, protected credential renewal and account/site verification.

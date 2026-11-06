@@ -1,3 +1,4 @@
+export const managedRequirementsSchema={type:'array',maxItems:100,items:{type:'object',properties:{name:{type:'string',pattern:'^[a-z][a-z0-9-]{0,63}$'},capabilities:{type:'array',maxItems:100,uniqueItems:true,items:{type:'string',pattern:'^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,127}$'}},required:{type:'boolean'}},required:['name','capabilities','required'],additionalProperties:false}};
 // Portable requirements contain no transport or credentials. The host resolves
 // them in the captured workspace, never through a globally last-used account.
 export function validateManagedRequirements(value=[]){

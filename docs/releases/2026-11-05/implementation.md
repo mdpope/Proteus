@@ -98,3 +98,11 @@ consent through the agent API. Public SDK discovery qualified the selected endpo
 Full suite: 1,608 pass/four skip/zero fail; static checks and disposable Electron UI acceptance pass.
 ADO, complete chat-create/manifest tool selection plumbing and the other full-plan items remain.
 No candidate was built. No HC authentication, schedule, approval fixture or business source changed.
+
+## P12 managed selection checkpoint
+
+Chat create, remote transport and schedule tools carry portable managed connection requirements
+and the explicit captured workspace. Older destinations fail before dispatch; existing runs cannot
+be retargeted by send/reply. Source recapture retains original bindings. Schedule preflight validates
+provider support and capabilities, then reports cached readiness without auth/network operations.
+Full suite: 1,609 pass/four skip/zero fail; static checks pass. Source acceptance only.
