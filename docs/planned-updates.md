@@ -48,8 +48,12 @@ on Work Mac. The earlier idle-blocker question is historical, not new deployment
 | N12 | Restore Proteus Design Preview | Separate data/browser identity, synthetic fixtures for new features, no production changes; validate the actual UI and retain a reviewable preview. |
 | N13 | Accounts & Integrations design | Managed MCP first, generous card spacing, bundled service logos, clear account/health/actions, responsive shared styling and isolated preview verification; no deployment. |
 | N14 | Reliable question navigation | First click waits for existing history loads, reveals the selected question and focuses its answer; later navigation/input cancels stale focus. Desktop and remote shared behavior. |
+| N15 | iOS Answer question navigation failure | Operator reports tapping Answer question does not navigate to the question in its chat. One tap must open the correct chat, load/reveal the exact question (including older paged history), and focus its answer field. Preserve drafts and reading state; cancel stale jumps after another navigation. Verify on iPhone/iPad; desktop/web N14 evidence does not establish native iOS acceptance. |
 
 ### Current source checkpoints
+
+N15 is newly reported and queued: native iOS reproduction, implementation and verification remain
+open. This planning update does not lift the deployment hold.
 
 N13 Connections redesign is implemented and exercised in disposable Electron at desktop/tablet/phone
 widths; local web build and static checks pass. The final regression suite including the question
