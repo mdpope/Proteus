@@ -1,3 +1,19 @@
+## Nov 5 message display and refresh recovery
+
+Accepted composer sends update the chat from the owner receipt before refreshing the overview.
+An overview failure reports that the message was accepted, retaining visible history. Concurrent
+send clicks coalesce; an uncertain response retains the same message ID/payload for retry within
+the current renderer session. A proven pre-delivery rejection releases that attempt for editing;
+a recorded uncertain delivery does not. Reload recovery still uses the owner's durable receipt.
+Same-view state projections wait for the in-flight generation before capturing a newer one;
+renderer refresh callers share one request. Content-free error codes and active queue counts are
+exposed in performance diagnostics, distinguishing cache pressure, churn, worker timeout/exit and
+assembly failure. The historical live cause remains unproven until installed diagnostics observe it.
+Validation: 1,635 pass/four skip/zero fail; static checks pass. Real disposable Electron acceptance
+forces an overview 503 and loses the first accepted send response: the retry retains its ID,
+the message is visible and the owner contains exactly one copy. Two fixture setup issues were
+corrected (invalid synthetic chat ID and startup ordering); no live data was involved.
+
 ## Nov 5 remote journal capacity source work
 
 Owner-wide scoped chat diagnostics expose aggregate receipt bytes/counts by method, pending

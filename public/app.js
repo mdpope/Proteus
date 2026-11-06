@@ -351,7 +351,7 @@ async function api(url, data) {
   const response = await fetch(url, data === undefined ? {} : { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify(data) });
   const result = await response.json(); if (!response.ok) {const error=new Error(result.error || response.statusText);if(typeof result.code==='string')error.code=result.code;throw error;} return result;
 }
-const localHistories=new Map(), historyRequests=new Map(), historyGenerations=new Map();
+const localHistories=new Map(), historyRequests=new Map(), historyGenerations=new Map(), localSendAttempts=new Map();
 function releaseChatView(tab){
  if(!previewEnabled(state)||!['run','remote-run','agent-terminal'].includes(tab.type))return;
  const id=tab.type==='agent-terminal'?agentTerminalRunId(tab):tab.runId||tab.id,host=tab.hostId||'local';
@@ -393,7 +393,7 @@ async function loadRunView(id,before){
   try{return await task;}finally{if(historyRequests.get(id)===task)historyRequests.delete(id);}
 }
 let refreshing=null,lastStateRefresh=0;
-async function refresh(force=false){if(refreshing){if(!force)return refreshing;await refreshing;}refreshing=refreshState(force);try{return await refreshing;}finally{refreshing=null;}}
+async function refresh(force=false){if(refreshing)return refreshing;const task=refreshing=refreshState(force);try{return await task;}finally{if(refreshing===task)refreshing=null;}}
 async function refreshState(force = false) {
   if (!force && window.getSelection()?.isCollapsed === false) return;
   const settingsGeneration=appearanceSaveGeneration;
@@ -779,7 +779,28 @@ function renderRun(id) {
   document.querySelectorAll('[data-permission-answer]').forEach(button=>button.onclick=()=>submit('reply',{answer:button.dataset.permissionAnswer,requestId:pending.id}));
   bindPermissionControls();
   if(previewEnabled(state))bindPreviewPermissionSidebar(run);
-  const sendMessage=async mode=>{const text=$('#followup').value;const modelOptions={model:$('#run-model').value,...modelSelection('run-model')};try{if(mode==='steer'&&selectedAttachments('run:'+id).some(item=>!state.data.providerSteeringMediaTypes?.[run.schedule.provider]?.includes(item.file.type)))throw new Error('This provider cannot steer with these attachment types. Queue this message instead.');const messageId=crypto.randomUUID();const delivery=await prepareLocalAttachments({key:'run:'+id,providerId:run.schedule.provider,destination:computerName(state.data.hostName)+' · '+run.title,chatId:id,messageId,mediaTypes:state.data.attachmentMediaTypes||{},post:api});await api(`/api/runs/${id}/send`,{prompt:text,mode,messageId,...(delivery||{}),...(mode==='queue'&&run.schedule.provider!=='rehearsal'?{modelOptions}:{})});recordChatActivity(id);clearAttachments('run:'+id);if(state.chatDrafts[id]===text)state.chatDrafts[id]='';if($('#main').dataset.runId===id&&$('#followup')?.value===text)$('#followup').value='';updateButtons();if(mode==='queue')delete state.chatModelDrafts[id];await refresh(true);}catch(e){if(e.message!=='Attachment send cancelled.')toast(e.message);}};
+  const sendMessage=async mode=>{
+    const text=$('#followup').value,modelOptions={model:$('#run-model').value,...modelSelection('run-model')};
+    const selection=JSON.stringify([text,mode,modelOptions,selectedAttachments('run:'+id).map(item=>[item.file.name,item.file.size,item.file.lastModified,item.file.type])]);
+    let attempt=localSendAttempts.get(id);
+    if(attempt?.busy)return;
+    try{
+      if(attempt&&attempt.selection!==selection)throw Error('The previous send is unconfirmed. Retry its unchanged message before sending different content.');
+      if(mode==='steer'&&selectedAttachments('run:'+id).some(item=>!state.data.providerSteeringMediaTypes?.[run.schedule.provider]?.includes(item.file.type)))throw Error('This provider cannot steer with these attachment types. Queue this message instead.');
+      if(!attempt){attempt={selection,messageId:crypto.randomUUID()};localSendAttempts.set(id,attempt);}attempt.busy=true;
+      if(!attempt.payload){
+        const delivery=await prepareLocalAttachments({key:'run:'+id,providerId:run.schedule.provider,destination:computerName(state.data.hostName)+' · '+run.title,chatId:id,messageId:attempt.messageId,mediaTypes:state.data.attachmentMediaTypes||{},post:api});
+        attempt.payload={prompt:text,mode,messageId:attempt.messageId,...(delivery||{}),...(mode==='queue'&&run.schedule.provider!=='rehearsal'?{modelOptions}:{})};
+      }
+      const accepted=await api(`/api/runs/${id}/send`,attempt.payload);localSendAttempts.delete(id);
+      historyGenerations.set(id,(historyGenerations.get(id)||0)+1);historyRequests.delete(id);
+      localHistories.set(id,mergeChatHistory(localHistories.get(id),{...accepted,eventStart:0,eventCount:accepted.events.length,historyCursor:undefined}));
+      recordChatActivity(id);clearAttachments('run:'+id);if(state.chatDrafts[id]===text)state.chatDrafts[id]='';if($('#main').dataset.runId===id&&$('#followup')?.value===text)$('#followup').value='';updateButtons();
+      if(mode==='queue')delete state.chatModelDrafts[id];if($('#main').dataset.runId===id)renderRun(id);
+      void refresh(true).catch(()=>toast('Message accepted. The owner overview will refresh when available.'));
+    }catch(e){if(attempt&&(!attempt.payload||e.code==='SEND_REJECTED'))localSendAttempts.delete(id);if(e.message!=='Attachment send cancelled.')toast(e.message);}
+    finally{if(attempt)attempt.busy=false;}
+  };
   $('#continue').onclick=()=>sendMessage('queue');
   $('#steer')?.addEventListener('click',()=>sendMessage('steer'));
   document.querySelectorAll('[data-steer-queued]').forEach(button=>button.onclick=()=>submit('steer-queued',{messageId:button.dataset.steerQueued}));

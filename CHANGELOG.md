@@ -1,3 +1,9 @@
+## Nov 5 message display recovery
+
+- Show accepted messages before the overview refresh completes; preserve message IDs across
+  uncertain-response retries and coalesce concurrent refreshes.
+- Report sanitized state failure causes and queue pressure for installed diagnosis.
+
 ## Nov 5 remote journal capacity
 
 - Expose scoped aggregate journal diagnostics and expiry guidance without command contents.

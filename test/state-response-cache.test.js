@@ -25,10 +25,18 @@ test('repeated mutations and overloaded refreshes terminate with bounded retry, 
   assert.equal(calls, 2); assert.equal(cache.cache.size, 0);
   const gate = deferred(), first = cache.get('one', () => gate.promise);
   revision++;
-  await assert.rejects(cache.get('one', async () => 'new'), /busy/);
+  const newer=cache.get('one', async () => 'new');const newerRejected=assert.rejects(newer,/worker failure/);
   await assert.rejects(cache.get('two', async () => 'new'), /busy/);
-  const rejected = assert.rejects(first, /worker failure/); gate.reject(Error('worker failure')); await rejected;
+  const rejected = assert.rejects(first, /worker failure/); gate.reject(Error('worker failure')); await rejected;await newerRejected;
   assert.equal(cache.active.size, 0); assert.equal(cache.pending.size, 0);
   assert.equal(await cache.get('one', async () => 'recovered'), 'recovered');
   cache.clear(); assert.equal(cache.cache.size, 0);
+});
+
+test('different generations of the same view coalesce before a fresh snapshot',async()=>{
+ let revision=1,calls=0;const cache=new StateResponseCache({stamp:()=>revision,maxPending:1});const gate=deferred();
+ const produce=()=>{calls++;return calls===1?gate.promise:Promise.resolve('current');};
+ const first=cache.get('view',produce);revision++;
+ const followers=Array.from({length:20},()=>cache.get('view',produce));assert.equal(calls,1);
+ gate.resolve('obsolete');assert.deepEqual(await Promise.all([first,...followers]),Array(21).fill('current'));assert.equal(calls,2);
 });

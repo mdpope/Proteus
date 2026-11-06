@@ -139,6 +139,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   if(browser)browser.desktopControl=desktopControl;
   const performanceDiagnostics = new PerformanceDiagnostics({home});
   const stateProjection = new StateProjectionClient();
+  let stateDisplayFailure=null;
   engine.performanceDiagnostics = performanceDiagnostics;
   activity.performanceDiagnostics=performanceDiagnostics;attachments.performanceDiagnostics=performanceDiagnostics;
   for(const adapter of Object.values(adapters)){adapter.questionInputs=(id,requestId)=>engine.readQuestionAttachments(id,requestId);adapter.attachmentInputs=id=>engine.turnAttachments.get(id);}
@@ -334,7 +335,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       }
       if (url.pathname === '/api/project-follow' && req.method === 'POST') return json(200, service.projectFollow.handle(await body(req)));
       // Local authenticated diagnostics expose counters only, never command payloads or keys.
-      if (url.pathname === '/api/performance/diagnostics' && req.method === 'GET') return json(200, { ...performanceDiagnostics.snapshot(), scheduler: engine.schedulerWorker?.diagnostics() || {status:'not-started'}, stateProjection: stateProjection.diagnostics() });
+      if (url.pathname === '/api/performance/diagnostics' && req.method === 'GET') return json(200, { ...performanceDiagnostics.snapshot(), scheduler: engine.schedulerWorker?.diagnostics() || {status:'not-started'}, stateProjection: {...stateProjection.diagnostics(),lastDisplayFailure:stateDisplayFailure} });
       if (url.pathname === '/api/remote/diagnostics' && req.method === 'GET') return json(200, await remote.commandDiagnostics());
       if (url.pathname === '/api/remote' && req.method === 'POST') {
         const value = await body(req);
@@ -459,7 +460,13 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         // paths, hashes permission contexts and serializes the complete response.
         return performanceDiagnostics.measure('http.state.project',()=>performanceDiagnostics.measureSync('http.state.transfer',()=>stateProjection.serialize({...projection,state})));
         }); }
-        catch { return json(503,{error:'State display is temporarily unavailable. Retry the refresh.'}); }
+        catch(error) {
+          const codes=['STATE_PROJECTION_FAILED','STATE_WORKER_UNAVAILABLE','STATE_PROJECTION_BUSY','STATE_PROJECTION_TIMEOUT','STATE_WORKER_ERROR','STATE_WORKER_EXIT','STATE_CACHE_BUSY','STATE_CHANGED'];
+          const code=codes.includes(error.code)?error.code:'STATE_ASSEMBLY_FAILED';
+          stateDisplayFailure={code,at:new Date().toISOString(),activeProjections:stateProjection.pending.size,activeSnapshots:stateCache.active.size};
+          activity.log('warning','state.display-failed','State display projection failed.',stateDisplayFailure);
+          return json(503,{error:'State display is temporarily unavailable. Retry the refresh.',code,retryAfterMs:1000});
+        }
         res.writeHead(200,{'Content-Type':'application/json'});res.end(body);return;
       }
       if (['/api/omi','/api/transcription'].includes(url.pathname) && req.method === 'GET') return json(200, { ...await omi.status(), schedules: engine.schedules.list().filter(isOmiSchedule) });
@@ -700,6 +707,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
           return json(200,await engine.recovery.command(id,value));
         }
         if (action === 'send') {
+          try {
           const run = engine.getRun(id);
           if (value.modelOptions && value.mode !== 'steer') {
             const options = chatModelOptions(value.modelOptions);
@@ -719,6 +727,10 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
             catch(error){await remote.attachmentConsents.releaseProof(prepared.proofId).catch(()=>{});throw error;}
           }
           return json(200, await sendHumanMessage(id, value.prompt, value.mode, value.messageId, value.modelOptions,undefined,undefined,value.inputOrigin));
+          }catch(error){
+            const recorded=engine.getRun(id).events.some(event=>event.data?.delivery?.id===value.messageId);
+            return json(400,{error:error.message,code:recorded?'SEND_UNCONFIRMED':'SEND_REJECTED'});
+          }
         }
         if (action === 'edit-queued') return json(200,engine.editQueued(id,value.messageId,value.prompt,value.expectedPrompt));
         if (action === 'steer-queued') return json(200,await engine.steerQueued(id,value.messageId));
