@@ -37,19 +37,42 @@ export class ManagedTokenCoordinator {
   if(state.phase!=='ready')throw error('ROTATION_UNCERTAIN','A prior credential renewal did not finish durably. Review this connection before signing in again.');
   const adapter=this.adapters[binding.adapter];
   if(!adapter?.refresh)throw error('UNSUPPORTED_ADAPTER','This authentication adapter does not support managed renewal.');
+  // Qualification is non-mutating and happens before rotation is marked uncertain.
+  let prepared;
+  try{prepared=await adapter.prepare?.({binding:structuredClone(binding),credential:structuredClone(state.credential)});}
+  catch{throw error('QUALIFICATION_FAILED','Connection qualification failed before credential renewal.');}
   // Commit uncertainty before the remote operation. A crash after remote rotation
   // must not allow restart to silently reuse the previous refresh credential.
   await this.vault.write(binding.credentialRef,{...state,phase:'refreshing'});
   let result;
-  try{result=await adapter.refresh({binding:structuredClone(binding),credential:structuredClone(state.credential)});}
+  try{result=await adapter.refresh({binding:structuredClone(binding),credential:structuredClone(state.credential),prepared});}
   catch{throw error('RENEWAL_FAILED','Connection renewal failed. Review authentication status before retrying.');}
+  return this.acceptResult(binding,key,result,adapter);
+ }
+ async acceptResult(binding,key,result,adapter){
   // Keep any rotated credential durably quarantined even when identity/token
   // validation fails. It must never be issued, but must not be silently lost.
   if(result?.credential)await this.vault.write(binding.credentialRef,{bindingKey:key,phase:'unverified',credential:result.credential});
+  if(adapter?.verify){
+   try{result={...result,verified:await adapter.verify({binding:structuredClone(binding),result})};}
+   catch{throw error('IDENTITY_MISMATCH','The renewed credential is retained but identity verification did not complete.');}
+  }
   if(!result||typeof result.accessToken!=='string'||!result.accessToken||!Number.isFinite(result.expiresAt)||result.expiresAt<=this.now()+this.marginMs||!result.credential||result.verified?.principal!==binding.expected.principal||result.verified?.tenant!==binding.expected.tenant||result.verified?.audience!==binding.expected.audience||!Array.isArray(result.verified?.scopes)||!binding.expected.scopes.every(s=>result.verified.scopes.includes(s)))throw error('IDENTITY_MISMATCH','Renewal did not verify the expected account, audience and scopes.');
   await this.vault.write(binding.credentialRef,{bindingKey:key,phase:'ready',credential:result.credential});
   if(this.closed)throw error('CLOSED','Connection authentication is closed.');
   const token={accessToken:result.accessToken,expiresAt:result.expiresAt};this.tokens.set(key,token);return token;
+ }
+ // Initial consent/adoption follows the same persist-before-verify contract as renewal.
+ // Only the owner sign-in controller may supply these secret-bearing results.
+ async accept(binding,result){
+  if(this.closed||binding?.ownerId!==this.ownerId)throw error('OWNER_MISMATCH','Use the credential-owning computer.');
+  if(this.pending.has(binding.credentialRef))throw error('BUSY','Wait for the current credential operation.');
+  const key=bindingKey(binding),adapter=this.adapters[binding.adapter];
+  if(!adapter?.verify)throw error('UNSUPPORTED_ADAPTER','This adapter cannot verify owner sign-in.');
+  this.tokens.delete(key);
+  const promise=Promise.resolve().then(()=>this.acceptResult(binding,key,result,adapter));
+  this.pending.set(binding.credentialRef,{key,promise});
+  try{await promise;}finally{if(this.pending.get(binding.credentialRef)?.promise===promise)this.pending.delete(binding.credentialRef);}
  }
  // Only a validated owner sign-in/adoption flow may call this, never an agent tool.
  async adopt(binding,credential){

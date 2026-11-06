@@ -84,3 +84,17 @@ Focused source tests and disposable Electron selection/uncertain-dispatch checks
 Mac custody import and signing proofs for both publisher IDs are verified, with local protected,
 non-synchronizing Keychain recovery readback. Windows active key and signing reference retirement are verified after those proofs.
 The old installed builder fails closed; the new source reader accepts the preserved unsigned policy. Private custody details stay in the operator ledger.
+
+
+## P12 Atlassian owner/runtime checkpoint
+
+Implemented the owner-side Atlassian authv2 OAuth flow, protected persist-before-verify rotation,
+actual account/site and distinct Jira read/search probe qualification, shared runtime composition,
+selected-workspace integration API, explicit standalone-schedule workspace binding, model-free
+near-term preflight and durable health/recovery evidence. The Connections panel uses that same
+owner service and preserves edits on revision conflict. No model can retrieve tokens or invoke
+consent through the agent API. Public SDK discovery qualified the selected endpoint without auth.
+
+Full suite: 1,608 pass/four skip/zero fail; static checks and disposable Electron UI acceptance pass.
+ADO, complete chat-create/manifest tool selection plumbing and the other full-plan items remain.
+No candidate was built. No HC authentication, schedule, approval fixture or business source changed.

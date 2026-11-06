@@ -1,3 +1,14 @@
+## Nov 5 managed Atlassian owner checkpoint
+
+Full suite 1,608 pass/four skip/zero fail; static checks and disposable Electron Connections UI pass.
+Owner composition now supplies the shared native broker, protected OAuth flow, actual identity/site
+and separate Jira probes, scoped integration API and model-free maintenance. Public authv2 discovery
+succeeded without credentials. No actual HC sign-in/data read, package or installation exists.
+Next: finish chat-create and schedule-tool selection plumbing, implement/qualify ADO protected
+identity and pinned server, complete remaining full release plan, then signed candidate delivery.
+Standalone schedules need managedConnectionWorkspaceId in captured sourceWorkspaces; never bind
+by folder/default account. New sources and schema are in services/integrations and schemas.
+
 ## Nov 5 publisher custody and pending platforms
 
 Build Mac now holds both the new publisher key and imported legacy transition key, with

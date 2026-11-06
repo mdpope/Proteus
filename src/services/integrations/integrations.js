@@ -203,8 +203,9 @@ export class IntegrationHealth {
     }finally{this.engine.performanceDiagnostics?.integrationBackground?.(counts);}
   }
   async agent(runId,args) {
+    if(args.connectionId||['schema','repair'].includes(args.action)){if(!this.managed)throw Error('Managed connections are unavailable.');return this.managed.agent(runId,args);}
     const rows=this.consumers(runId);
-    if(args.action==='list')return {consumers:rows,note:'Only integrations already selected for this chat. Labels are expected identities, not verified accounts. Use explicit resource IDs with the named MCP server.'};
+    if(args.action==='list')return {...(this.managed?{managed:await this.managed.agent(runId,args)}:{}),consumers:rows,note:'Only integrations already selected for this chat. Labels are expected identities, not verified accounts. Use explicit resource IDs with the named MCP server.'};
     const row=rows.find(r=>r.id===args.consumerId);if(!row)throw new Error('Choose an integration already selected for this chat.');
     if(args.action==='verify'){await this.check(row.id,{runId});return this.consumers(runId).find(r=>r.id===row.id);}
     if(args.action==='select'){

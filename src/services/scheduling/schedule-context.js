@@ -3,6 +3,7 @@ import {permissionRuleId} from '../settings/permissions.js';
 export const workspaceSourceCategories=['folders','permissions','instructions','agents','skills','mcps'];
 export function validateScheduleSources(schedule){
  if(schedule.workspaceSources!==undefined&&(!Array.isArray(schedule.workspaceSources)||schedule.workspaceSources.some(ref=>typeof ref?.workspaceId!=='string'||!ref.workspaceId||!Array.isArray(ref.categories)||ref.categories.some(category=>!workspaceSourceCategories.includes(category)))))throw Error('Choose valid workspace references and configuration categories.');
+ if(schedule.managedConnectionWorkspaceId!==undefined&&(typeof schedule.managedConnectionWorkspaceId!=='string'||! /^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,127}$/.test(schedule.managedConnectionWorkspaceId)))throw Error('Choose an explicit managed connection workspace ID.');
  validateScopedExecution(schedule);
  const p=schedule.executionPermissions;
  if(p===undefined)return;

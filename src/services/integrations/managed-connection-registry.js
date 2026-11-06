@@ -37,7 +37,7 @@ export function validateManagedConnection(value){
  if(!Array.isArray(value.expected.scopes)||value.expected.scopes.length>100||value.expected.scopes.some(s=>typeof s!=="string"||!s||s.length>512||/[\x00-\x20\x7f]/.test(s))||new Set(value.expected.scopes).size!==value.expected.scopes.length)throw Error("Choose distinct OAuth scopes.");
  strings(value.capabilities);
  if(!Array.isArray(value.probes)||value.probes.length>20)throw Error('Choose bounded named health probes.');
- for(const probe of value.probes){fields(probe,['id','capability']);if(!id(probe.id)||!value.capabilities.includes(probe.capability))throw Error('Bind each approved probe to a required capability.');}
+ for(const probe of value.probes){fields(probe,['id','capability','parameters']);if(probe.parameters!==undefined){fields(probe.parameters,['issueIdOrKey']);if(typeof probe.parameters.issueIdOrKey!=='string'||! /^(?:[A-Z][A-Z0-9_]{0,63}-[1-9][0-9]{0,15}|[1-9][0-9]{0,19})$/.test(probe.parameters.issueIdOrKey))throw Error('Choose an exact issue identity for the approved minimal read probe.');}if(!id(probe.id)||!value.capabilities.includes(probe.capability))throw Error('Bind each approved probe to a required capability.');}
  if(new Set(value.probes.map(p=>p.id)).size!==value.probes.length)throw Error('Probe IDs must be distinct.');
  fields(value.policy,['healthIntervalMs','preflightLeadMs','requestTimeoutMs','maxReadRetries']);
  if(!Number.isInteger(value.policy.healthIntervalMs)||value.policy.healthIntervalMs<60_000||value.policy.healthIntervalMs>86_400_000||!Number.isInteger(value.policy.preflightLeadMs)||value.policy.preflightLeadMs<0||value.policy.preflightLeadMs>3_600_000||!Number.isInteger(value.policy.requestTimeoutMs)||value.policy.requestTimeoutMs<1000||value.policy.requestTimeoutMs>120_000||!Number.isInteger(value.policy.maxReadRetries)||value.policy.maxReadRetries<0||value.policy.maxReadRetries>1)throw Error('Choose bounded connection maintenance and request limits.');
@@ -48,6 +48,7 @@ function validateRegistry(value,ownerId){
  if(value.schemaVersion!==1||!Array.isArray(value.connections)||value.connections.length>500)throw Error('Invalid managed connection registry.');
  for(const connection of value.connections){validateManagedConnection(connection);if(connection.ownerId!==ownerId)throw Error('Connection registry belongs to another owner.');}
  if(new Set(value.connections.map(c=>c.id)).size!==value.connections.length||new Set(value.connections.map(c=>c.name)).size!==value.connections.length)throw Error('Connection identities and logical names must be unique on this owner.');
+ if(new Set(value.connections.map(c=>c.authentication.credentialRef)).size!==value.connections.length)throw Error('Use a distinct owner credential grant for each managed connection.');
  return value;
 }
 export class ManagedConnectionRegistry {

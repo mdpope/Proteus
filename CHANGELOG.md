@@ -1,3 +1,9 @@
+## Nov 5 managed Atlassian connections (source)
+
+- Add owner-managed PKCE consent, protected credential renewal and account/site verification.
+- Add a Connections panel, selected-run status/repair and model-free schedule preflight.
+- Require explicit workspace account binding and prove Jira issue reads separately from search.
+
 ## Nov 5 pending-platform publication (source)
 
 - Keep verified prior platform packages available while a new target is pending, with explicit

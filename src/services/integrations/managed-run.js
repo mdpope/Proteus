@@ -1,6 +1,6 @@
 import {managedMcpBridge} from './managed-mcp-bridge.js';
 
-import {validateManagedRequirements} from './managed-requirements.js';
+import {validateManagedRequirements,managedWorkspace} from './managed-requirements.js';
 export {validateManagedRequirements};
 export function mergeManagedServers(selected,managed={}){
  if(Object.keys(managed).some(name=>Object.hasOwn(selected,name)))throw Error('A selected connection also has a native MCP definition. Remove the competing definition after migration verification.');
@@ -13,8 +13,7 @@ export async function prepareManagedRun(manager,args){
  const {run,ask,signal,update,emit}=args,requirements=validateManagedRequirements(run.schedule.managedConnections);
  if(!requirements.length)return null;
  if(!manager)throw Error('This owner does not provide managed MCP connections.');
- const workspaceId=run.schedule.context?.workspaceId;
- if(!workspaceId)throw Error('Managed connections require an explicit captured workspace.');
+ const workspaceId=managedWorkspace(run.schedule);
  const bindings=[],selected=[],unavailable=[];
  for(const requirement of requirements){
   try{

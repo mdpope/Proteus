@@ -45,3 +45,23 @@ test('changed audience cannot reuse token and closed service cannot release one'
  await assert.rejects(manager.use({...binding(),adapter:'different-adapter'},()=>{}),{code:'SIGN_IN_REQUIRED'});
  manager.close();await assert.rejects(manager.use(binding(),()=>{}),{code:'CLOSED'});
 });
+
+test('rotated credentials persist before live identity checks, including crash or rejection',async()=>{
+ const {manager,writes,rows}=setup();let checks=0;
+ manager.adapters.synthetic.verify=async({result:token})=>{checks++;assert.equal(rows.get('opaque').phase,'unverified');assert.equal(rows.get('opaque').credential.refreshToken,token.credential.refreshToken);throw Error('secret verifier response');};
+ await manager.adopt(binding(),{refreshToken:'original-secret'});
+ await assert.rejects(manager.use(binding(),()=>assert.fail()),e=>e.code==='IDENTITY_MISMATCH'&&!e.message.includes('secret'));
+ assert.equal(checks,1);assert.equal(writes.at(-1).phase,'unverified');
+ await assert.rejects(manager.use(binding(),()=>assert.fail()),{code:'ROTATION_UNCERTAIN'});assert.equal(checks,1);
+});
+test('initial owner consent is durably verified once and reuses its access token without immediate rotation',async()=>{
+ const {manager,rows}=setup(()=>assert.fail('initial consent token should remain cached'));
+ manager.adapters.synthetic.verify=async()=>{assert.equal(rows.get('opaque').phase,'unverified');return binding().expected;};
+ await manager.accept(binding(),result());assert.equal(rows.get('opaque').phase,'ready');
+ assert.equal(await manager.use(binding(),token=>token),'synthetic-access-secret');
+});
+test('failed non-mutating qualification preserves the previous grant for a later bounded attempt',async()=>{
+ const {manager,rows}=setup(()=>assert.fail('qualification failed before refresh'));
+ manager.adapters.synthetic.prepare=async()=>{throw Error('private diagnostic');};await manager.adopt(binding(),{refreshToken:'original-secret'});
+ await assert.rejects(manager.use(binding(),()=>assert.fail()),{code:'QUALIFICATION_FAILED'});assert.equal(rows.get('opaque').phase,'ready');
+});

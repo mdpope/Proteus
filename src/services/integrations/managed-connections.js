@@ -126,7 +126,7 @@ export class ManagedConnections {
     if(!Array.isArray(evidence.capabilities)||!definition.capabilities.every(c=>evidence.capabilities.includes(c)))throw failure('CAPABILITY_MISMATCH');
     const at=new Date(this.now()).toISOString();
     this.observe(binding,{state:'ready',transport:'connected',authentication:'verified',access:'verified',checkedAt:at,lastSuccessfulRead:at,
-     verified:{principal:evidence.principal,tenant:evidence.tenant,resource:evidence.resource},capabilities:[...definition.capabilities],failures:0,nextRetryAt:null,requiredAction:null,reason:null});
+     verified:{principal:evidence.principal,tenant:evidence.tenant,resource:evidence.resource},capabilities:[...definition.capabilities],catalogEvidence:(evidence.catalogEvidence||[]).slice(0,512).map(t=>({name:String(t.name).slice(0,200),readOnlyHint:t.readOnlyHint===true,idempotentHint:t.idempotentHint===true})),failures:0,nextRetryAt:null,requiredAction:null,reason:null});
    }catch(error){if(!error.observed)this.failed(binding,error);}
    return this.status(binding);
   })();

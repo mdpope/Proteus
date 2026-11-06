@@ -1,3 +1,11 @@
+## Nov 5 managed Atlassian owner checkpoint
+
+The selected authv2 route, protected OAuth lifecycle, real account/site and separate Jira probes,
+shared native-provider transport, owner Connections panel and scoped integration tools now have
+source acceptance. Standalone schedules require an explicit captured workspace binding. Full suite
+1,608 pass/four skip and disposable Electron UI checks pass. ADO and remaining plan work continue;
+no installed authenticated/workflow success is claimed.
+
 ## Nov 5 platform publication checkpoint
 
 Partial platform staging now retains explicitly supplied verified prior packages with a visible

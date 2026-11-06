@@ -1,3 +1,12 @@
+## Latest implementation checkpoint
+
+P3 custody/partial-platform publication is committed and pushed. P12 now has a tested Atlassian
+owner OAuth/credential/runtime path, Connections panel, scoped integration inspection/repair,
+explicit schedule workspace account binding and model-free preflight. Public endpoint discovery
+passes; authenticated organization workflows acceptance is still pending. Full suite: 1,608 pass/four skip, static
+checks and disposable Electron UI acceptance pass. ADO and complete chat-create/manifest selection
+plumbing remain, alongside the other outstanding plan items. No build/installation is claimed.
+
 # Nov 5 release plan
 
 Migrated from the Nov 4 plan on November 5, 2026. All queued scope and historical observation dates below are preserved. The operator lifted the build hold on November 5; the current authorization below supersedes historical holds.

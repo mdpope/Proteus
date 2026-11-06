@@ -26,6 +26,7 @@ import { PerformanceDiagnostics } from './services/telemetry/performance-diagnos
 import {BrowserHistory,browserHistorySettings,historyWithSavedIcons} from './services/browser/browser-history.js';
 import {BrowserProfiles} from './services/browser/browser-profiles.js';
 import { SessionProvider } from './providers/session-provider.js';
+import {ManagedConnectionOwner} from './services/integrations/managed-connection-owner.js';
 import { IntegrationHealth } from './services/integrations/integrations.js';
 import { ActivityStore } from './services/telemetry/activity.js';
 import { AppAccount } from './services/remote/app-account.js';
@@ -730,6 +731,10 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         }
         engine.cancel(id); return json(200, { ok: true });
       }
+      if(url.pathname==='/api/managed-connections'){
+        if(req.method==='GET')return json(200,service.managedConnections.snapshot());
+        if(req.method==='POST')return json(200,await service.managedConnections.action(await body(req)));
+      }
       if (url.pathname === '/api/integrations') {
         if(req.method==='GET')return json(200,integrations.snapshot());
         const value=await body(req);
@@ -791,6 +796,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   atomicJSON(path.join(home, 'connection.json'), { origin, token, pid: process.pid });
   const timer = timers ? setInterval(() => { void performanceDiagnostics.measure('scheduler.tick', () => engine.tick()).catch(error => engine.emit('scheduler-error', { error: error.message, at: new Date().toISOString() })); }, 1000) : null;
   const service = { readChatAttachment, desktopControl,workspaceProjects:preview, desktopPreview:desktopPreview?preview:null, performanceDiagnostics, notify, desktopAttention:()=>[...(service.browserAttention?.()||[]),...remote.documents.list().filter(item=>!item.approvedAt).map(item=>({id:'document:'+item.requestId,kind:'document',title:item.deviceName+' requests '+item.title,requestId:item.requestId,path:item.path,at:new Date(Date.parse(item.expiresAt)-600000).toISOString()})),...service.attention()], attention:()=>[...integrations.consumers().filter(item=>['needs-auth','failed'].includes(item.connection)).map(item=>({id:'integration:'+item.id,kind:'connection',title:(item.profile.label||item.server)+' needs attention',section:'integrations',at:item.checkedAt})),...activity.notifications().items.filter(item=>!item.readAt).map(item=>({id:'notification:'+item.id,notificationId:item.id,kind:'notification',title:item.title,body:item.body,chatId:item.chatId,silent:item.silent===true,...(item.browserIssue?{browserIssue:item.browserIssue,silent:item.silent===true}:{}),at:item.createdAt}))], browserProfiles, integrations, engine, settings, context, standup, omi, life, account, activity, workspaceFiles, attachments, buildChatSchedule, usage, catalog, catalogs, origin, token, home, url: `${origin}/?token=${token}`, async close() {
+    clearInterval(managedTimer);lifeOptions.powerMonitor?.removeListener?.('resume',managedWake);await service.managedConnections?.close();
     await stateProjection.close();await service.updates?.close();await service.scheduleControl?.close();await service.chatControl?.close();await desktopControl?.close();
     activity.log('info','app.stopping','Proteus is shutting down.');clearInterval(integrationTimer);await integrations.close(); if(activityTimer)clearInterval(activityTimer); if (timer) clearInterval(timer); if (catalogTimer) clearInterval(catalogTimer); await Promise.all(Object.values(catalogs).map(c => c.pending)); await providerAuth.close(); await service.sharedInference.close(); await remote.close(); let engineCloseError; try { await engine.close(); } catch (error) { engineCloseError=error; } await attachments.close(); await copilot.close(); await codex.close(); await claude.close(); await life.close?.(); await service.browserHistory?.close(); await service.sharedDrafts?.close(); let activityCloseError; try { await activity.close(); } catch (error) { activityCloseError=error; }
     for (const client of eventClients) client.end(); eventClients.clear();
@@ -837,6 +843,10 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   service.previews=new ChatPreviews(service);
   sharedInference=service.sharedInference=new SharedInference(service);
   remote = service.remote = new RemoteHost(service); activity.attach(engine,()=>remote.info().hostId,()=>remote.info().label); activity.log('info','app.started','Proteus started.'); await remote.start();
+  service.managedConnections=new ManagedConnectionOwner(service,{storage:lifeOptions.safeStorage,openExternal});
+  integrations.managed=service.managedConnections;for(const adapter of Object.values(adapters))adapter.managedConnections=service.managedConnections.manager;
+  const managedWake=()=>void service.managedConnections.tick(),managedTimer=timers?setInterval(managedWake,30000):null;
+  lifeOptions.powerMonitor?.on?.('resume',managedWake);
   service.chatControl=new ChatControl(service);
   service.scheduleControl=new ScheduleControl(service);
   for(const adapter of Object.values(adapters))adapter.chatControl=service.chatControl;

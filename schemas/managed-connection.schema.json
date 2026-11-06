@@ -1,0 +1,248 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Proteus managed connection definition v1",
+  "description": "Nonsecret owner configuration. Runtime additionally enforces owner/workspace identity, unique names and credential grants, matching probe capabilities, supported adapter qualification and revision checks.",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,127}$"
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{0,63}$"
+    },
+    "label": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "enabled": {
+      "type": "boolean"
+    },
+    "ownerId": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,127}$"
+    },
+    "workspaceIds": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,127}$"
+      },
+      "maxItems": 100,
+      "uniqueItems": true,
+      "minItems": 1
+    },
+    "transport": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "http"
+            },
+            "endpoint": {
+              "type": "string",
+              "pattern": "^https://[^?#]+$"
+            }
+          },
+          "required": [
+            "type",
+            "endpoint"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "stdio"
+            },
+            "package": {
+              "type": "string",
+              "pattern": "^(@[a-z0-9-]+/)?[a-z0-9-]+$"
+            },
+            "version": {
+              "type": "string",
+              "pattern": "^\\d+\\.\\d+\\.\\d+(-[a-zA-Z0-9.-]+)?$"
+            },
+            "integrity": {
+              "type": "string",
+              "pattern": "^sha512-[a-zA-Z0-9+/]{86}==$"
+            }
+          },
+          "required": [
+            "type",
+            "package",
+            "version",
+            "integrity"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "authentication": {
+      "type": "object",
+      "properties": {
+        "adapter": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,127}$"
+        },
+        "credentialRef": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,127}$"
+        },
+        "credentialOwnerId": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,127}$"
+        }
+      },
+      "required": [
+        "adapter",
+        "credentialRef",
+        "credentialOwnerId"
+      ],
+      "additionalProperties": false
+    },
+    "expected": {
+      "type": "object",
+      "properties": {
+        "principal": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
+        },
+        "tenant": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
+        },
+        "resource": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
+        },
+        "audience": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
+        },
+        "scopes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512,
+            "pattern": "^[^\\u0000-\\u0020\\u007f]+$"
+          },
+          "maxItems": 100,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "principal",
+        "tenant",
+        "resource",
+        "audience",
+        "scopes"
+      ],
+      "additionalProperties": false
+    },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,127}$"
+      },
+      "maxItems": 100,
+      "uniqueItems": true
+    },
+    "probes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,127}$"
+          },
+          "capability": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,127}$"
+          },
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "issueIdOrKey": {
+                "type": "string",
+                "pattern": "^(?:[A-Z][A-Z0-9_]{0,63}-[1-9][0-9]{0,15}|[1-9][0-9]{0,19})$"
+              }
+            },
+            "required": [
+              "issueIdOrKey"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "id",
+          "capability"
+        ],
+        "additionalProperties": false
+      },
+      "maxItems": 20
+    },
+    "policy": {
+      "type": "object",
+      "properties": {
+        "healthIntervalMs": {
+          "type": "integer",
+          "minimum": 60000,
+          "maximum": 86400000
+        },
+        "preflightLeadMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3600000
+        },
+        "requestTimeoutMs": {
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 120000
+        },
+        "maxReadRetries": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "required": [
+        "healthIntervalMs",
+        "preflightLeadMs",
+        "requestTimeoutMs",
+        "maxReadRetries"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "id",
+    "name",
+    "label",
+    "enabled",
+    "ownerId",
+    "workspaceIds",
+    "transport",
+    "authentication",
+    "expected",
+    "capabilities",
+    "probes",
+    "policy"
+  ],
+  "additionalProperties": false
+}

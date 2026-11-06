@@ -3285,3 +3285,13 @@ consent on its own. Safe retries belong to the owner and require explicit idempo
 The operator chose publisher key rotation on Build Mac and reaffirmed its sole source/signing
 authority for all platforms. Native builders must return unsigned tested payloads; key custody,
 trust transition and signing/publication belong to Build Mac.
+
+## Nov 5: host-managed Atlassian identity and explicit workspace binding
+
+Use the separately discovered authv2 resource/issuer with owner-driven public-client PKCE consent;
+never reinterpret the legacy organization workflows credential as equivalent. Persist each rotated grant in protected
+quarantine before remote identity verification, then commit ready state before releasing its token.
+The owner loopback broker serves both native providers, but every run retains its own tool rules.
+Health probes are explicit minimal owner reads and do not manufacture server read-only annotations.
+Standalone schedule folders cannot select an account: the manifest names a captured source workspace.
+This source decision does not establish authenticated organization workflows or installed acceptance.

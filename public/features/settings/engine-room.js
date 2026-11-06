@@ -9,6 +9,7 @@ import {mountLogPanel,pagedAccountLogs} from './log-panel.js';
 import {computerName} from '../../services/remote/computer-identity.js';
 import {mountWebsiteData} from '../browser/browser-site-data.js';
 import {renderBrowserPreferences} from '../browser/browser-preferences.js';
+import {mountManagedConnections} from './managed-connections.js';
 import {renderIntegrations} from './integrations.js';
 import {renderInternetDefaults} from './internet-search.js';
 let ui;
@@ -46,6 +47,7 @@ export function renderEngineRoom(section='resources',force=false){
       } else if(section==='internet-searches'){await renderInternetDefaults(ui,$('#engine-content'),active);
       } else if(section==='integrations'){
         const panel=document.createElement('div');$('#engine-content').replaceChildren(panel);await renderIntegrations(panel,{request:(action,args)=>action==='list'?ui.api('/api/integrations'):ui.api('/api/integrations',{action,...args}),notify:ui.toast,signIn:row=>{const run=ui.state.data.runs.find(r=>r.id===row.runId);if(run)ui.manageMcp(run);}});
+        if(!active())return;await mountManagedConnections(mounted,ui,active);
         if(!active())return;const others=document.createElement('details');others.innerHTML='<summary>Other computers</summary><div data-computers></div>';mounted.append(others);let loaded=false;others.ontoggle=async()=>{if(!others.open||loaded)return;loaded=true;try{const result=await window.desktop?.peers({action:'list'})||[];for(const peer of (Array.isArray(result)?result:result.items||result.peers||[]).filter(peer=>!peer.paused)){const section=document.createElement('details'),summary=document.createElement('summary'),body=document.createElement('div');summary.textContent=peer.name||peer.label||peer.hostId;section.append(summary,body);others.querySelector('[data-computers]').append(section);let shown=false;section.ontoggle=()=>{if(!section.open||shown)return;shown=true;void renderIntegrations(body,{readOnly:true,notify:ui.toast,request:()=>window.desktop.peers({action:'request',hostId:peer.hostId,method:'integrations.list',args:{}})});};}}catch(error){ui.toast(error.message);loaded=false;}};
       } else if(section==='website-data'){
         await mountWebsiteData(mounted,{escape:ui.escape,toast:ui.toast,filter:ui.state.siteDataFilter});

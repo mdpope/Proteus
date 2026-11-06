@@ -9,3 +9,12 @@ export function validateManagedRequirements(value=[]){
  }
  return structuredClone(value);
 }
+
+// A standalone schedule's folder snapshot is not a workspace identity. It must
+// name one of its explicitly captured source workspaces for account binding.
+export function managedWorkspace(schedule,{captured=true}={}){
+ const id=schedule.managedConnectionWorkspaceId||schedule.context?.workspaceId;
+ const allowed=new Set([schedule.context?.workspaceId,...(captured?schedule.context?.sourceWorkspaces||[]:schedule.workspaceSources||[]).map(row=>row.workspaceId)].filter(Boolean));
+ if(typeof id!=='string'||!id||!allowed.has(id))throw Error('Select an explicit captured workspace for managed connection account bindings.');
+ return id;
+}

@@ -164,3 +164,55 @@ Validation: 1,583 Node tests pass, four skip, zero fail; static checks pass. New
 real SDK stdio consumer through the owner bridge, both provider configuration seams, optional
 outages, captured permission changes, cancellation isolation and uncertain-write non-replay.
 These remain synthetic source tests, not native provider/vendor authorization or installed success.
+
+
+## Atlassian owner path implemented (source acceptance)
+
+The first owner adapter is `atlassian-oauth-v2`. It pins the publicly qualified resource
+`https://mcp.atlassian.com/v1/mcp/authv2`, its distinct authorization server and its documented
+public-client PKCE registration/exchange/refresh endpoints. The SDK discovery path succeeded
+against public metadata without credentials or registration. This is endpoint qualification,
+not authenticated Jira acceptance. The legacy `/v1/mcp` credentials are never imported implicitly.
+
+Engine Room → Accounts & Integrations now has Managed connections. Configure the exact account
+ID, cloud/site ID, site URL, authorized workspaces, approved OAuth scopes and minimal health
+probes, then explicitly Sign in. Consent opens through the configured host browser boundary.
+The loopback callback checks the exact local host/path, random state and single code delivery.
+A locked or unsupported protected store fails before registration. Refresh credentials persist
+in protected quarantine before actual account/site verification; tokens remain in memory and
+are issued only after the verified credential is durable. Initial consent tokens are reused
+without an immediate refresh. The installed owner lock and unique per-connection credential
+references prevent concurrent writers inside this owner; grants are never shared across machines.
+
+Supported semantic capabilities are `atlassian.resources.read`, `atlassian.identity.read`,
+`jira.issue.read` and `jira.issue.search`. Jira health probes use an owner-approved exact issue key
+or ID, never an unrestricted business query: `jira-issue` proves a distinct `getJiraIssue` call;
+`jira-search` searches only that issue with one-result maximum. The actual connected input schema
+is validated before sending any probe. Empty search success does not count as item-read proof.
+Server annotations are preserved, not invented; explicit owner health probes do not authorize
+model tool calls. Confluence is not claimed by this adapter.
+
+The concrete owner definition schema is [managed-connection.schema.json](../schemas/managed-connection.schema.json).
+`proteus_integrations schema` returns it; `list` adds only this chat's selected managed connections,
+actual captured revision and effective connection permission. `verify`/`repair` use `connectionId`
+and that `expectedRevision`; neither signs in, broadens authority nor approves pending requests.
+Owner configuration uses the same service through `/api/managed-connections` with registry revision
+checks. Live leases protect edits/disable/removal; dependent references protect names/removal.
+Credentials are not deleted or revoked by removing a definition.
+
+Portable requirements remain `managedConnections: [{name, capabilities, required}]`. Chats have
+an explicit captured workspace. Standalone schedules additionally set `managedConnectionWorkspaceId`
+to a workspace in their captured `sourceWorkspaces` (declared through `workspaceSources`). Folder
+paths do not establish account identity; no default workspace/account fallback is used. Chat-create
+selection/tool plumbing and ADO adapter qualification remain outstanding.
+
+The host performs coalesced checks for active leases and near-term enabled schedules, without
+model turns, and wakes maintenance after system resume. Persisted health retains last successful
+read and recovery generations; transport/authentication are rechecked after restart. Optional
+connection failure still allows independent work through the existing run bridge. Recovery does
+not create model runs. Corrupt health evidence is not overwritten silently.
+
+Validation: 1,608 tests pass, four skip, zero fail; static checks pass. Disposable Electron acceptance
+covers configuration, explicit account/workspace fields, separate Jira probes, stale-edit draft
+preservation and disable/removal. Actual workstation.example.test consent, native-provider data reads, workflow outputs,
+second no-new-evidence run and outage reconciliation remain required after signed installation.

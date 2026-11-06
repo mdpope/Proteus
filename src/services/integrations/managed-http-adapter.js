@@ -60,8 +60,7 @@ export function managedHttpAdapter({qualify,withToken,invalidate,verify,fetchFn=
    try{return await client.callTool({name,arguments:args},undefined,{signal,timeout:definition.policy.requestTimeoutMs});}
    catch(error){throw classify(error);}
   };
-  return {
-   listTools:async({signal}={})=>{
+  const listTools=async({signal}={})=>{
     const tools=[],seen=new Set();let cursor;
     do{
      const result=await client.listTools(cursor?{cursor}:{},{signal,timeout:definition.policy.requestTimeoutMs});tools.push(...result.tools);
@@ -69,8 +68,10 @@ export function managedHttpAdapter({qualify,withToken,invalidate,verify,fetchFn=
      cursor=result.nextCursor;if(cursor&&seen.has(cursor))throw failure('CAPABILITY_MISMATCH');seen.add(cursor);
     }while(cursor);
     return tools;
-   },callTool:call,
-   verify:options=>verify(definition,{...options,call}),
+   };
+  return {
+   listTools,callTool:call,
+   verify:options=>verify(definition,{...options,call,listTools}),
    close:async()=>{controller.abort();await client.close();}
   };
  }};

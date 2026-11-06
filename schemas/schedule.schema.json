@@ -269,6 +269,11 @@
           }
         }
       }
+    },
+    "managedConnectionWorkspaceId": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,127}$",
+      "description": "Account-binding workspace; must belong to the captured context or explicitly referenced workspace sources."
     }
   },
   "additionalProperties": true

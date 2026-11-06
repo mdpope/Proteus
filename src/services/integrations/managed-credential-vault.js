@@ -15,6 +15,7 @@ function unavailable(){
 // encrypted bytes; Linux basic_text is explicitly rejected. No model/UI read API.
 export class ManagedCredentialVault {
  constructor(home,storage){this.root=path.join(home,'managed-mcp-credentials');this.storage=storage;}
+ requireAvailable(){try{requireProtectedStorage(this.storage,'use managed connection credentials');}catch{throw unavailable();}}
  read(reference){
   try{
    requireProtectedStorage(this.storage,'read managed connection credentials');
