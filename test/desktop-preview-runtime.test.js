@@ -51,3 +51,17 @@ test('desktop session keeps project identity, flat child tabs and fixed workspac
   assert.equal(result.tabs.find(t=>t.id==='project:local:p').projectId,'p');
   assert.equal(result.tabs.find(t=>t.id==='chat1').parentId,'project:local:p');assert.equal(result.active,'chat1');assert.equal(result.engineSection,'source-library');
 });
+
+test('protected authentication preview uses a fresh identity and refuses credential-mode changes',t=>{
+ const root=fixture(t),calls=[],app={setName:v=>calls.push(['name',v]),setPath:(k,v)=>calls.push([k,v]),commandLine:{appendSwitch:v=>calls.push(['switch',v])}};
+ const env={PROTEUS_DESKTOP_PREVIEW:'1',PROTEUS_PREVIEW_CREDENTIALS:'protected',PROTEUS_PREVIEW_HOME:path.join(root,'auth-preview')};
+ const options={env,metadata:{},userHome:path.join(root,'user')};
+ const result=configureDesktopPreview(app,options);
+ assert.equal(result.name,'Proteus Authentication Preview');assert.equal(result.protectedCredentials,true);
+ assert.ok(!calls.some(([k])=>k==='switch'));assert.equal(stageCodexAuthentication(result,{env}).disabled,true);
+ configureDesktopPreview(app,options);
+ assert.throws(()=>configureDesktopPreview(app,{...options,env:{...env,PROTEUS_PREVIEW_CREDENTIALS:''}}),/credential mode differs/);
+ const old=initializePreviewRoot(path.join(root,'legacy'),{userHome:options.userHome});fs.writeFileSync(path.join(old.home,'existing'),'retained');
+ assert.throws(()=>configureDesktopPreview(app,{...options,env:{...env,PROTEUS_PREVIEW_HOME:old.root}}),/fresh preview directory/);
+ assert.equal(fs.readFileSync(path.join(old.home,'existing'),'utf8'),'retained');
+});

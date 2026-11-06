@@ -1,3 +1,7 @@
+## Nov 5 local authentication testing
+
+- Add a separate protected-storage authentication preview for owner login testing without packaging or deployment; reject reuse across mock/protected credential modes.
+
 ## Nov 5 question navigation
 
 - Keep a question jump active through an in-flight history load so one click reaches its answer box. New input cancels old jumps; desktop and web use the same focus controller.

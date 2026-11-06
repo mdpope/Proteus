@@ -1,3 +1,11 @@
+## Local login testing authorization
+
+The operator now authorizes testing ADO/Jira login locally before another package or Work Mac delivery.
+Use the separate protected-storage Authentication Preview, not the mock-keychain Design Preview.
+The fresh Atlassian setup form is open; no connection definition, consent or credential has yet
+been supplied. ADO CLI/PAT alternatives still require implementation. Local testing does not lift
+the deployment hold or authorize modifying workstation.example.test schedules/authentication.
+
 ## Current operator scope — feature expansion; build/test only
 
 The operator authorizes the additions below and explicitly holds ALL further deployments. This
