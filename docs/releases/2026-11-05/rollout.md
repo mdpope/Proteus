@@ -1,3 +1,18 @@
+## Nov 6 — fill acknowledgment and protected journal correction
+
+Source `6f6243dee279191257c53d58fd6f66e0a0d4589f`, build
+`6f6243dee279+src.1a063675c55e`, is Apple/publisher-signed after 1,688 source tests
+passed (four skips), static checks and exact bundle/extracted UI, editor, terminal and restart
+acceptance. Release `0.2.43-darwin-arm64-7f9dc8f142f6d0ed76c4633e`, manifest digest
+`6c2c439a59a6bda332eb1de3c22855e0e12aa29ed5201d856586b0b32280bad4`, archive SHA-256
+`0570fc9de324c59668082b83c80630717801e9a3910c75c144887737da9fbb6e`.
+The receiving owner resolves this exact signed catalog entry; all 29 current public files passed independent HTTPS readback.
+It is not installed. The protected remote journal rejects coordination mutations; no uncertain
+send was retried. The supported local Updates UI can create the normal owner coordinator without
+remote mutation admission, preserving idle/recovery rules. Existing live credentials, schedules,
+protected receipts and uncertain operation IDs remain intact. No broad grant or limit increase.
+Live Slack exact-query retention and post-update capacity/replay remain unverified.
+
 ## Nov 6 — scheduled browser correction installed and healthy
 
 Source `578a5097a3f3a429c53d30bf9e093f4ffce9a30d`, build
