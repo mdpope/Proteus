@@ -1,3 +1,7 @@
+## Nov 5 site picker correction
+
+- Keep validated Atlassian sites when optional scope metadata lacks a classic Jira scope label; report discovery separately from verified Jira access.
+
 ## Nov 5 Jira access and callback handling
 
 - Add explicit Jira read/write enrollment with a read-only option; sample health reads do not restrict access to other tickets.

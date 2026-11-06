@@ -77,10 +77,18 @@ export async function discoverAtlassian(context){
  const text=(value,max=512)=>typeof value==='string'&&value.length>0&&value.length<=max&&!/[\x00-\x1f\x7f]/.test(value);
  if(!text(identity?.account_id))throw fail('CAPABILITY_MISMATCH','IDENTITY_MISSING');
  if(!Array.isArray(resources)||resources.length>100)throw fail('CAPABILITY_MISMATCH','RESOURCES_MALFORMED');
- const sites=resources.filter(r=>Array.isArray(r.scopes)&&r.scopes.includes('read:jira-work')).map(r=>{
-  if(!text(r.id)||!text(r.name))throw fail('CAPABILITY_MISMATCH');
-  return {id:r.id,name:r.name,url:siteURL(r.url)};
- });
- if(new Set(sites.map(s=>s.id)).size!==sites.length)throw fail('CAPABILITY_MISMATCH');
- return {account:{id:identity.account_id,name:text(identity.name)?identity.name:'Atlassian account'},sites};
+ // Resource scope metadata differs between Atlassian OAuth/MCP routes. A missing
+ // classic scope string is not proof that a returned site is inaccessible.
+ // Discover candidates here; verify identity/site and actual Jira reads separately.
+ const byId=new Map();
+ for(const resource of resources){
+  if(!text(resource?.id)||!text(resource?.name))throw fail('CAPABILITY_MISMATCH','RESOURCES_MALFORMED');
+  const site={id:resource.id,name:resource.name,url:siteURL(resource.url)};
+  const previous=byId.get(site.id);
+  if(previous&&previous.url!==site.url)throw fail('CAPABILITY_MISMATCH','RESOURCES_MALFORMED');
+  if(!previous)byId.set(site.id,site);
+ }
+ const sites=[...byId.values()];
+ return {account:{id:identity.account_id,name:text(identity.name)?identity.name:'Atlassian account'},sites,
+  discovery:{resourceCount:resources.length,siteCount:sites.length,jiraAccess:'unchecked'}};
 }

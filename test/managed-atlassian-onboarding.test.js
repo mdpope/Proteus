@@ -49,3 +49,21 @@ test('callback denial and discovery failure show sanitized stage/code on the pag
  const denied=fixture(t);await denied.setup.start();const url=new URL(denied.callback());url.searchParams.delete('code');url.searchParams.set('error','access_denied');url.searchParams.set('error_description','private provider data');const response=await fetch(url);assert.equal(response.status,400);const text=await response.text();assert.match(text,/consent-response.*CONSENT_DENIED/);assert.ok(!text.includes('private'));assert.equal(denied.calls.includes('exchange'),false);
  const failed=fixture(t);failed.auth.transport=()=>({connect:async()=>{throw Object.assign(Error('private transport response'),{code:'CAPABILITY_MISMATCH'});}});await failed.setup.start();const bad=await fetch(failed.callback());assert.match(await bad.text(),/account-discovery.*CAPABILITY_MISMATCH/);assert.equal(failed.setup.status().code,'CAPABILITY_MISMATCH');assert.equal(failed.setup.status().state,'failed');assert.equal(failed.registry.read().connections.length,0);
 });
+
+test('site discovery retains resources without classic Jira scope metadata and deduplicates only identical site identities',async()=>{
+ const listTools=async()=>['atlassianUserInfo','getAccessibleAtlassianResources'].map(name=>({name,inputSchema:{type:'object',additionalProperties:false}}));
+ const discover=resources=>discoverAtlassian({listTools,call:async name=>({structuredContent:name==='atlassianUserInfo'?{account_id:'person',name:'Person'}:resources})});
+ const rows=[
+  {id:'missing',name:'No scope metadata',url:'https://missing.atlassian.net'},
+  {id:'granular',name:'Granular scope',url:'https://granular.atlassian.net',scopes:['read:issue-details:jira']},
+  {id:'other',name:'Other product',url:'https://other.atlassian.net',scopes:['read:confluence-content.all']}
+ ];
+ const found=await discover([...rows,rows[0]]);
+ assert.deepEqual(found.sites.map(s=>s.id),['missing','granular','other']);
+ assert.deepEqual(found.discovery,{resourceCount:4,siteCount:3,jiraAccess:'unchecked'});
+ assert.equal(found.capabilities,undefined);
+ assert.equal(JSON.stringify(found).includes('read:confluence'),false);
+ const empty=await discover([]);assert.deepEqual(empty.discovery,{resourceCount:0,siteCount:0,jiraAccess:'unchecked'});
+ await assert.rejects(discover([rows[0],{...rows[0],url:'https://different.atlassian.net'}]),e=>e.detail==='RESOURCES_MALFORMED');
+ await assert.rejects(discover([null]),e=>e.detail==='RESOURCES_MALFORMED');
+});

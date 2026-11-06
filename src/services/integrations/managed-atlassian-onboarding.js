@@ -12,7 +12,7 @@ const failure=message=>Error(message);
 // credentials survive a crash; the access token and browser flow remain in memory.
 export class AtlassianOnboarding {
  constructor(auth,{workspaces,onChange=()=>{}}){this.auth=auth;this.workspaces=workspaces;this.onChange=onChange;this.session=null;}
- status(){const s=this.session;return s?{id:s.id,state:s.state,stage:s.stage,message:s.message,expiresAt:s.expiresAt,accessMode:s.accessMode,...(s.code?{code:s.code}:{}),...(s.detail?{detail:s.detail}:{}),...(s.httpStatus?{httpStatus:s.httpStatus}:{}),...(s.discovery?{account:s.discovery.account,sites:s.discovery.sites}:{}),...(s.connectionId?{connectionId:s.connectionId}:{})}:null;}
+ status(){const s=this.session;return s?{id:s.id,state:s.state,stage:s.stage,message:s.message,expiresAt:s.expiresAt,accessMode:s.accessMode,...(s.code?{code:s.code}:{}),...(s.detail?{detail:s.detail}:{}),...(s.httpStatus?{httpStatus:s.httpStatus}:{}),...(s.discovery?{account:s.discovery.account,sites:s.discovery.sites,discovery:s.discovery.discovery}:{}),...(s.connectionId?{connectionId:s.connectionId}:{})}:null;}
  update(s,value){Object.assign(s,value);this.onChange();}
  async start({accessMode='read-write'}={}){
   if(!['read-write','read-only'].includes(accessMode))throw failure('Choose Jira read-only or read/write access.');

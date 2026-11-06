@@ -1,3 +1,21 @@
+## Nov 5 Atlassian site discovery
+
+The local Authentication Preview reached authenticated account review but displayed no sites.
+Discovery incorrectly filtered every resource without the exact classic `read:jira-work` scope
+label. Retain bounded, validated resource candidates regardless of optional scope metadata;
+deduplicate repeated IDs only when their origin agrees and reject conflicting origins. Resource
+discovery does not establish Jira capability or grant mutation authority. Exact identity/site
+verification and distinct Jira probes remain required.
+
+Owner setup status exposes only resource/site counts and unchecked Jira access alongside the
+existing account/site projection. Empty-list guidance now distinguishes successful account
+authentication from missing resource discovery. Regression tests cover absent/granular/other-product
+scope metadata, duplicate identities, empty results and conflicting sites. The original live
+response was not retained, so filtering is a confirmed code defect, not yet a proven explanation
+of that specific empty list. After restarting the corrected local preview, the operator confirmed
+that the site appears. All 23 Atlassian tests and the disposable Electron connection UI test pass.
+Connection confirmation and actual Jira read/write acceptance remain separate; deployment remains held.
+
 ## Nov 5 Jira ticket read/write and callback diagnostics
 
 The operator explicitly requests read/write access to any Jira ticket the selected account can
