@@ -2,6 +2,10 @@ import {randomUUID} from 'node:crypto';
 import {revision} from '../scheduling/schedules.js';
 
 const messages={
+ CLI_STORAGE_UNQUALIFIED:'Azure CLI protected cache and profile isolation are unqualified on this platform; existing caches are unchanged.',
+ CLI_UNAVAILABLE:'The pinned corporate Azure CLI is unavailable.',
+ PAT_REQUIRED:'Enter the approved PAT in the owner connection UI.',
+ PAT_EXPIRED:'Replace the expired PAT in the owner connection UI.',
  CONFIGURATION_MISMATCH:'The captured connection configuration changed.',
  CONNECTION_CLOSED:'The managed connection is closed.',
  UNAVAILABLE:'The connection is temporarily unavailable.',
@@ -64,7 +68,7 @@ export class ManagedConnections {
  failed(binding,error){
   const safe=classified(error),prior=this.observations.get(key(binding))||{},attempts=(prior.failures||0)+1;
   const cooldown=safe.retryAfterMs??Math.min(900000,1000*2**Math.min(attempts,10));
-  const action=['AUTH_REQUIRED','STORE_LOCKED','ACCESS_DENIED'].includes(safe.code);
+  const action=['AUTH_REQUIRED','STORE_LOCKED','ACCESS_DENIED','CLI_STORAGE_UNQUALIFIED','CLI_UNAVAILABLE','PAT_REQUIRED','PAT_EXPIRED'].includes(safe.code);
   const next=this.observe(binding,{state:safe.code.toLowerCase().replaceAll('_','-'),reason:safe.message,
    transport:'unverified',authentication:'unverified',access:'unverified',failures:attempts,
    nextRetryAt:new Date(this.now()+cooldown).toISOString(),requiredAction:action?safe.code:null});

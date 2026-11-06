@@ -33,3 +33,11 @@ test('locked or Linux plaintext storage never falls back and never creates a cre
  }
  assert.equal(fs.existsSync(path.join(home,'managed-mcp-credentials')),false);
 });
+
+test('desktop mock Keychain never persists managed auth even when Electron reports encryption available',async t=>{
+ const {createRequire}=await import('node:module');const {managedCredentialStorage}=createRequire(import.meta.url)('../desktop/services/managed-credential-storage.cjs');const {home,storage}=setup(t);
+ const mocked=managedCredentialStorage({commandLine:{hasSwitch:name=>name==='use-mock-keychain'}},storage);
+ assert.throws(()=>new ManagedCredentialVault(home,mocked).write('opaque',{secret:'synthetic'}),{code:'CREDENTIAL_STORE_UNAVAILABLE'});
+ assert.equal(fs.existsSync(path.join(home,'managed-mcp-credentials')),false);
+ const protectedStorage=managedCredentialStorage({commandLine:{hasSwitch:()=>false}},storage);const vault=new ManagedCredentialVault(home,protectedStorage);vault.write('opaque',{secret:'synthetic'});assert.deepEqual(vault.read('opaque'),{secret:'synthetic'});
+});

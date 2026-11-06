@@ -1,3 +1,10 @@
+## Implementation update
+
+The separate CLI and PAT adapters are now implemented in Nov 5 source; see
+[the exact schema and migration contract](managed-ado-alternatives.md). CLI on macOS/Linux remains
+explicitly unqualified for protected profile isolation; PAT is the local testing alternative.
+The original source qualification below records the evidence that led to those limits.
+
 # ADO authentication without a new app registration
 
 Nov 5 source/design qualification. The operator states that a new organization-approved Entra
@@ -53,7 +60,7 @@ matching fetch authorization to Basic for its allowed HTTPS hosts. This is a sep
 `ADO_MCP_AUTH_TOKEN`; a PAT is never an Entra Bearer token. An in-memory synthetic check confirmed
 the separate variable, Basic conversion, and rejection of an untrusted host with zero network calls.
 
-Proteus does not yet expose this as an accepted managed adapter. Implementation needs an opaque
+The original implementation checklist required an opaque
 OS-store reference, owner-only secret entry, explicit organization/user validation, the narrowest
 qualified project/team/work-item read/search scopes, expiry and revocation handling, and preservation
 of the existing organization/redirect guards. PATs cannot silently renew themselves. Rotation is an

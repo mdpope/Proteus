@@ -13,23 +13,24 @@ export function connectionBadge(row){
  return {label:words(state),tone:state==='ready'?'ready':['connecting','refreshing'].includes(state)?'working':['unchecked','stale','unconfigured'].includes(state)?'muted':'attention'};
 }
 export function connectionLogo(adapter){
- const brand=brands[adapter];
+ const brand=brands[adapter]||(adapter.startsWith('ado-')?brands['ado-entra-public-client']:null);
  return `<span class="connection-logo" aria-hidden="true">${brand?`<svg viewBox="0 0 24 24" width="28" height="28" fill="${brand.color}"><path d="${brand.path}"/></svg>`:'<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M8 3v5m8-5v5M6 8h12v3a6 6 0 0 1-12 0zM12 17v4"/></svg>'}</span>`;
 }
 export function managedConnectionCard(row,snapshot,esc,expanded=false){
- const status=row.status,badge=connectionBadge(row),brand=brands[row.authentication.adapter];
+ const status=row.status,badge=connectionBadge(row),brand=brands[row.authentication.adapter]||(row.authentication.adapter.startsWith('ado-')?brands['ado-entra-public-client']:null);
  const signing=status.ownerSignIn?.state==='sign-in-in-progress';
- const note=[status.ownerSignIn?.nextAction,status.reason,signing?'Sign-in is open in the configured browser.':''].filter((v,i,a)=>v&&a.indexOf(v)===i).join(' ');
+ const note=[status.ownerSignIn?.nextAction,status.reason,signing?(row.authentication.adapter==='ado-azure-cli'?'Checking the explicit CLI session.':'Sign-in is open in the configured browser.'):''].filter((v,i,a)=>v&&a.indexOf(v)===i).join(' ');
  const workspaces=row.workspaceIds.map(id=>snapshot.workspaces.find(w=>w.id===id)?.name||id);
  const fact=(label,value)=>`<div><dt>${label}</dt><dd>${esc(value||'Not verified')}</dd></div>`;
  return `<article class="card managed-connection-card" data-connection="${esc(row.id)}">
   <header class="connection-card-heading">${connectionLogo(row.authentication.adapter)}<div class="connection-title"><p class="connection-service">${esc(brand?.name||'MCP connection')}</p><h3>${esc(row.label)}</h3><code>${esc(row.name)}</code></div><span class="connection-status" data-tone="${badge.tone}">${esc(badge.label)}</span></header>
   <dl class="connection-account">${fact('Expected account',row.expected.principal)}${fact('Site / organization',row.expected.resource)}${status.verified?fact('Verified account',status.verified.principal):''}</dl>
   <dl class="connection-health">${[['Credential store',status.credentialStore],['Authentication',status.authentication||'unverified'],['Transport',status.transport||'unchecked'],['Resource access',status.access||'unverified']].map(([label,value])=>`<div><dt>${label}</dt><dd>${esc(words(value))}</dd></div>`).join('')}</dl>
+  ${row.authentication.adapter==='ado-pat'?`<p class="connection-guidance">PAT expires ${esc(date(row.authentication.expiresAt))}${Date.parse(row.authentication.expiresAt)-Date.now()<=row.authentication.reminderDays*86400000?' · Owner replacement is due.':''}. Expiry is owner supplied.</p>`:''}
   ${note?`<p class="connection-guidance" role="status">${esc(note)}</p>`:''}
   <p class="connection-freshness">Last successful read <strong>${esc(date(status.lastSuccessfulRead))}</strong>${status.nextRetryAt?`<br>Next retry ${esc(date(status.nextRetryAt))}`:''}</p>
   <div class="connection-workspaces"><span>Workspaces</span>${workspaces.map(w=>`<span class="connection-chip">${esc(w)}</span>`).join('')||'<span>None assigned</span>'}<span>${row.references.length} references${row.active?' · In use':''}</span></div>
-  <div class="actions connection-primary-actions"><button class="${badge.tone==='ready'?'primary':''}" data-managed-verify ${!row.enabled?'disabled':''}>Verify now</button><button class="${badge.tone!=='ready'?'primary':''}" data-managed-sign-in ${!row.enabled||row.active||signing?'disabled':''}>Sign in</button><button data-managed-edit ${row.active?'disabled':''}>Configure</button></div>
+  <div class="actions connection-primary-actions"><button class="${badge.tone==='ready'?'primary':''}" data-managed-verify ${!row.enabled?'disabled':''}>Verify now</button><button class="${badge.tone!=='ready'?'primary':''}" data-managed-sign-in ${!row.enabled||row.active||signing?'disabled':''}>${row.authentication.adapter==='ado-pat'?'Enter / replace PAT':row.authentication.adapter==='ado-azure-cli'?'Check CLI session':'Sign in'}</button><button data-managed-edit ${row.active?'disabled':''}>Configure</button></div>
   <details class="connection-details" ${expanded?'open':''}><summary>Connection details &amp; more actions</summary><dl class="connection-account">${fact('Server',row.transport.endpoint||row.transport.package)}${fact('Expected site / tenant',row.expected.tenant)}${fact('Verified resource',status.verified?.resource)}${fact('Verified capabilities',(status.capabilities||[]).join(', ')||'Not yet verified')}${fact('Connection ID',row.id)}${fact('Owner',row.ownerId)}</dl><div class="actions"><button data-managed-repair ${!row.enabled?'disabled':''}>Reconnect</button><button data-managed-toggle ${row.active?'disabled':''}>${row.enabled?'Disable':'Enable'}</button><button class="danger" data-managed-remove ${row.active||row.references.length?'disabled':''}>Remove connection</button></div>${row.references.length?'<p class="note">Update dependent chat/schedule references before removing this connection.</p>':''}${row.active?'<p class="note">Running sessions must finish before configuration changes.</p>':''}<p class="note">Removing a connection does not delete or revoke its saved credentials.</p></details>
  </article>`;
 }

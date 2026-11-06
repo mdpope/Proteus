@@ -864,7 +864,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   service.previews=new ChatPreviews(service);
   sharedInference=service.sharedInference=new SharedInference(service);
   remote = service.remote = new RemoteHost(service); activity.attach(engine,()=>remote.info().hostId,()=>remote.info().label); activity.log('info','app.started','Proteus started.'); await remote.start();
-  service.managedConnections=new ManagedConnectionOwner(service,{storage:lifeOptions.safeStorage,openExternal});
+  service.managedConnections=new ManagedConnectionOwner(service,{storage:lifeOptions.managedSafeStorage??lifeOptions.safeStorage,openExternal});
   integrations.managed=service.managedConnections;for(const adapter of Object.values(adapters))adapter.managedConnections=service.managedConnections.manager;
   const managedWake=()=>void service.managedConnections.tick(),managedTimer=timers?setInterval(managedWake,30000):null;
   lifeOptions.powerMonitor?.on?.('resume',managedWake);

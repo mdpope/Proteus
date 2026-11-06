@@ -19,7 +19,7 @@ function setup(t){
 async function save(owner,value=definition()){return owner.action({action:'save',definition:value,expectedRevision:owner.registry.read().revision});}
 test('owner edits are revision checked, protect active runs and preserve referenced identities',async t=>{
  const f=setup(t),initial=f.owner.registry.read().revision;await save(f.owner);
- assert.deepEqual(f.owner.contract().adapters.map(a=>a.id),['atlassian-oauth-v2','ado-entra-public-client']);assert.equal(f.owner.contract().definitionSchema.properties.authentication.properties.clientId.type,'string');
+ assert.deepEqual(f.owner.contract().adapters.map(a=>a.id),['ado-azure-cli','ado-pat','atlassian-oauth-v2','ado-entra-public-client']);assert.equal(f.owner.contract().definitionSchema.properties.authentication.properties.clientId.type,'string');
  await assert.rejects(f.owner.action({action:'save',definition:definition(),expectedRevision:initial}),/changed/);
  const binding=f.owner.binding(definition()),lease=f.owner.manager.lease({runId:'running',bindings:[binding],authorize:async()=>true,isActive:()=>true});
  await assert.rejects(save(f.owner,{...definition(),label:'Changed'}),/captured/);lease.close();

@@ -1,3 +1,8 @@
+## Nov 5 ADO alternatives
+
+- Add separate corporate Azure CLI and PAT managed adapters, explicit account/resource validation and no automatic auth fallback.
+- Expose protected owner PAT entry/expiry guidance and concrete CLI cache-isolation qualification limits; preserve native run permissions and optional gaps.
+
 ## Nov 5 local authentication testing
 
 - Add a separate protected-storage authentication preview for owner login testing without packaging or deployment; reject reuse across mock/protected credential modes.

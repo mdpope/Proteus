@@ -1,10 +1,10 @@
 import {fileURLToPath} from 'node:url';
 import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';
-import {qualifyAdoIdentity} from './managed-ado-identity.js';
+import {qualifyAdoAuthentication} from './managed-ado-alternative-profile.js';
 export const adoServerProfile=Object.freeze({type:'stdio',package:'@azure-devops/mcp',version:'2.11.0',integrity:'sha512-sxc62at/r5ur7rvFDsqNC4IP52EqVelY1c0+7kBp+H+I5rrz4Fd8ovnrbmi+lvKfG3Vv9bqdsLGfo+/EejXf7g=='});
 const fail=code=>Object.assign(Error('The managed ADO server could not complete this request.'),{code});
-export function qualifyAdoDefinition(definition){qualifyAdoIdentity(definition);if(Object.keys(adoServerProfile).some(k=>definition.transport?.[k]!==adoServerProfile[k]))throw fail('CONFIGURATION_MISMATCH');return definition;}
+export function qualifyAdoDefinition(definition){qualifyAdoAuthentication(definition);if(Object.keys(adoServerProfile).some(k=>definition.transport?.[k]!==adoServerProfile[k]))throw fail('CONFIGURATION_MISMATCH');return definition;}
 export function boundedAdoArguments(value,depth=0){
  if(depth>24)throw fail('CAPABILITY_MISMATCH');
  if(typeof value==='string'&&value.length>64000)throw fail('CAPABILITY_MISMATCH');
@@ -16,7 +16,7 @@ export function managedAdoAdapter({identity,verify,now=()=>Date.now()}){
   await identity.use(definition,async(token,expiry)=>{
    signal?.throwIfAborted();expiresAt=expiry;
    transport=new StdioClientTransport({command:process.execPath,args:[fileURLToPath(new URL('../../managed-ado-launcher.mjs',import.meta.url))],stderr:'ignore',maxBufferSize:16000000,
-    env:{ELECTRON_RUN_AS_NODE:'1',ADO_MCP_AUTH_TOKEN:token,PROTEUS_ADO_ORGANIZATION:new URL(definition.expected.resource).pathname.slice(1),PROTEUS_ADO_TENANT:definition.expected.tenant,LOG_LEVEL:'error'}});
+    env:{ELECTRON_RUN_AS_NODE:'1',...(definition.authentication.adapter==='ado-pat'?{PERSONAL_ACCESS_TOKEN:token,PROTEUS_ADO_AUTH_MODE:'pat'}:{ADO_MCP_AUTH_TOKEN:token,PROTEUS_ADO_AUTH_MODE:'envvar'}),PROTEUS_ADO_ORGANIZATION:new URL(definition.expected.resource).pathname.slice(1),PROTEUS_ADO_TENANT:definition.expected.tenant,LOG_LEVEL:'error'}});
    // Intercept only the fixed owner's health notification before the SDK sees it.
    const start=transport.start.bind(transport);transport.start=async()=>{const receive=transport.onmessage;transport.onmessage=message=>{if(message.method==='notifications/proteus/ado-health'){
     const code=message.params?.code;if(['AUTH_EXPIRED','ACCESS_DENIED','RATE_LIMITED'].includes(code)){health=code;generation++;if(code==='AUTH_EXPIRED'){dead=true;identity.invalidate(definition);}}return;

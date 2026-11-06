@@ -6,6 +6,7 @@ This uses a separate **Proteus Authentication Preview** profile, real platform p
 and no copied provider credentials. Initial OS access and service consent remain owner actions.
 Credential mode is pinned per preview directory; mock/protected reuse and populated legacy
 auth-preview roots are rejected. The ordinary design preview keeps its mock keychain.
+Managed credential storage explicitly rejects a mock-keychain desktop launch.
 No production installation or remote delivery is needed. Local Jira setup can be tested; ADO
 CLI/PAT alternatives remain implementation work. Do not enter real credentials in Design Preview.
 

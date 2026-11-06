@@ -1,9 +1,18 @@
+## ADO alternatives source implementation
+
+The operator requests both explicit CLI and PAT adapters without new app registration.
+[Schema, migration and qualification limits](managed-ado-alternatives.md) are recorded.
+CLI performs pinned process acquisition, signed token and exact resource validation, but rejects
+macOS/Linux before acquisition because cache isolation is unqualified. PAT uses the distinct
+pinned Basic path, protected owner entry, exact user/organization verification and expiry guidance.
+No live credentials, consent, PAT issuance or workstation.example.test schedules changed. Deployment remains held.
+
 ## Local login testing authorization
 
 The operator now authorizes testing ADO/Jira login locally before another package or Work Mac delivery.
 Use the separate protected-storage Authentication Preview, not the mock-keychain Design Preview.
 The fresh Atlassian setup form is open; no connection definition, consent or credential has yet
-been supplied. ADO CLI/PAT alternatives still require implementation. Local testing does not lift
+been supplied. ADO alternatives now have source implementation; live qualification remains pending. Local testing does not lift
 the deployment hold or authorize modifying workstation.example.test schedules/authentication.
 
 ## Current operator scope — feature expansion; build/test only

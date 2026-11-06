@@ -30,10 +30,11 @@ export function validateManagedConnection(value){
   fields(transport,['type','package','version','integrity']);
   if(!/^(@[a-z0-9-]+\/)?[a-z0-9-]+$/.test(transport.package||'')||!/^\d+\.\d+\.\d+(-[a-zA-Z0-9.-]+)?$/.test(transport.version||'')||!/^sha512-[a-zA-Z0-9+/]{86}==$/.test(transport.integrity||''))throw Error('Pin the connector package, exact version and SHA-512 integrity.');
  }else throw Error('Unsupported managed transport.');
- fields(value.authentication,['adapter','credentialRef','credentialOwnerId','clientId']);
+ fields(value.authentication,['adapter','credentialRef','credentialOwnerId','clientId','cli','expiresAt','reminderDays']);
+ if(value.authentication.cli!==undefined){fields(value.authentication.cli,['executable','profileDirectory','sha256','version']);for(const key of ['executable','profileDirectory','sha256','version'])if(typeof value.authentication.cli[key]!=='string'||value.authentication.cli[key].length>4096||/[\x00-\x1f\x7f]/.test(value.authentication.cli[key]))throw Error('Choose explicit nonsecret CLI paths and version pins.');}
  if(value.authentication.clientId!==undefined&&!/^[a-f0-9-]{36}$/i.test(value.authentication.clientId))throw Error('Choose an explicit public application client ID.');
  if(!id(value.authentication.adapter)||!id(value.authentication.credentialRef)||value.authentication.credentialOwnerId!==value.ownerId)throw Error('Use an opaque credential reference owned by this connection host.');
- fields(value.expected,['principal','tenant','resource','audience','scopes','organizationId']);
+ fields(value.expected,['principal','tenant','resource','audience','scopes','organizationId','adoUserId']);
  if(value.expected.organizationId!==undefined&&!/^[a-f0-9-]{36}$/i.test(value.expected.organizationId))throw Error('Pin the expected organization ID.');
  for(const key of ['principal','tenant','resource','audience'])if(typeof value.expected[key]!=='string'||!value.expected[key]||value.expected[key].length>512||/[\x00-\x1f\x7f]/.test(value.expected[key]))throw Error('Pin expected account and resource identity.');
  if(!Array.isArray(value.expected.scopes)||value.expected.scopes.length>100||value.expected.scopes.some(s=>typeof s!=="string"||!s||s.length>512||/[\x00-\x20\x7f]/.test(s))||new Set(value.expected.scopes).size!==value.expected.scopes.length)throw Error("Choose distinct OAuth scopes.");

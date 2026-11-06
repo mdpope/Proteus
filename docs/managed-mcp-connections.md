@@ -367,3 +367,5 @@ The operator cannot obtain a new ADO public-client registration for this workflo
 [alternative qualification](ado-authentication-alternatives.md) for explicit corporate CLI and
 separate PAT paths. They require additional adapters and qualification; no account fallback
 or plaintext cache adoption is authorized.
+
+See [ADO alternatives](managed-ado-alternatives.md) for explicit CLI/PAT schema, local owner setup, storage gates and migration limits.

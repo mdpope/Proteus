@@ -1,3 +1,4 @@
+import {adoAlternativeIds,adoReadScopes} from './managed-ado-alternative-profile.js';
 import path from 'node:path';
 import fs from 'node:fs';
 const definitionSchema=JSON.parse(fs.readFileSync(new URL('../../../schemas/managed-connection.schema.json',import.meta.url),'utf8'));
@@ -24,7 +25,7 @@ export class ManagedConnectionOwner {
   this.vault=new ManagedCredentialVault(service.home,storage);
   this.auth=authFactory({registry:this.registry,vault:this.vault,openExternal,now,onChange:()=>service.notify()});
   this.adoAuth=adoAuthFactory({registry:this.registry,vault:this.vault,openExternal,now,onChange:()=>service.notify()});
-  this.manager=new ManagedConnections({registry:this.registry,adapters:adapters||{[atlassianOAuthProfile.adapter]:this.auth.adapter(),[adoIdentityProfile.adapter]:this.adoAuth.adapter()},now,
+  this.manager=new ManagedConnections({registry:this.registry,adapters:adapters||{[atlassianOAuthProfile.adapter]:this.auth.adapter(),[adoIdentityProfile.adapter]:this.adoAuth.adapter(),...Object.fromEntries(adoAlternativeIds.map(id=>[id,this.adoAuth.adapter()]))},now,
    onChange:()=>{this.persist();service.notify();},notify:event=>service.activity?.log('warning','managed-connection.attention',event.reason,{connectionId:event.connectionId,code:event.code})});
   this.events=[];
   try{
@@ -51,7 +52,7 @@ export class ManagedConnectionOwner {
   for(const run of this.service.engine.listRuns())if(run.schedule?.managedConnections?.some(c=>c.name===definition.name))rows.push({kind:'chat',id:run.id,workspaceId:run.schedule.context?.workspaceId||null,active:['running','awaiting_input','queued'].includes(run.status)});
   return rows;
  }
- authFor(definition){return definition.authentication.adapter===adoIdentityProfile.adapter?this.adoAuth:this.auth;}
+ authFor(definition){return [adoIdentityProfile.adapter,...adoAlternativeIds].includes(definition.authentication.adapter)?this.adoAuth:this.auth;}
  active(id){return this.auth.flows?.has(id)||this.adoAuth.flows?.has(id)||[...this.manager.leases.values()].some(lease=>lease.bindings.some(binding=>binding.connectionId===id));}
  binding(definition,workspaceId=definition.workspaceIds[0]){return this.registry.capture({ownerId:this.registry.ownerId,workspaceId,names:[definition.name]})[0];}
  row(definition){
@@ -60,7 +61,7 @@ export class ManagedConnectionOwner {
   let credentialStore='available';try{this.vault.requireAvailable();}catch{credentialStore='unavailable';}
   return {...definition,status:{...status,credentialStore,ownerSignIn:this.authFor(definition).status(definition.id)},references:this.references(definition.id),active:this.active(definition.id)};
  }
- adapterCatalog(){return [{id:atlassianOAuthProfile.adapter,name:'Atlassian / Jira',endpoint:atlassianOAuthProfile.endpoint,capabilities:Object.keys(atlassianCapabilities),signIn:'owner-browser',credentialStore:'platform-protected'},{id:adoIdentityProfile.adapter,name:'Azure DevOps corporate',transport:adoServerProfile,audience:adoIdentityProfile.audience,scopes:[adoIdentityProfile.scope],capabilities:Object.keys(adoCapabilities),signIn:'owner-browser',credentialStore:'platform-protected',requires:'An organization-approved Entra public client with delegated Azure DevOps user_impersonation and native http://localhost redirect.'}];}
+ adapterCatalog(){return [...adoAlternativeIds.map(id=>({id,name:id==='ado-pat'?'Azure DevOps · Personal access token':'Azure DevOps · Corporate Azure CLI',transport:adoServerProfile,audience:id==='ado-pat'?'azure-devops-pat':adoIdentityProfile.audience,scopes:id==='ado-pat'?adoReadScopes:[adoIdentityProfile.scope],capabilities:Object.keys(adoCapabilities),signIn:id==='ado-pat'?'owner-pat-entry':'existing-cli-session',credentialStore:id==='ado-pat'?'platform-protected':'qualified-cli-cache',requires:id==='ado-pat'?'Existing organization-approved PAT: Project and Team read, Work Items read. No automatic rotation.':'Pinned Azure CLI 2.80.0 and explicit corporate profile. Windows DPAPI qualified; macOS/Linux cache isolation currently unqualified. No interactive login or account fallback.'})),{id:atlassianOAuthProfile.adapter,name:'Atlassian / Jira',endpoint:atlassianOAuthProfile.endpoint,capabilities:Object.keys(atlassianCapabilities),signIn:'owner-browser',credentialStore:'platform-protected'},{id:adoIdentityProfile.adapter,name:'Azure DevOps corporate',transport:adoServerProfile,audience:adoIdentityProfile.audience,scopes:[adoIdentityProfile.scope],capabilities:Object.keys(adoCapabilities),signIn:'owner-browser',credentialStore:'platform-protected',requires:'An organization-approved Entra public client with delegated Azure DevOps user_impersonation and native http://localhost redirect.'}];}
  contract(){return {schemaVersion:1,definitionSchema:structuredClone(definitionSchema),adapters:this.adapterCatalog(),portableRequirement:{name:'logical-name',capabilities:['semantic.capability'],required:false},scheduleWorkspaceField:'managedConnectionWorkspaceId',note:'The workspace must be captured explicitly. Supported adapters are listed by the owner. No secret or token fields are accepted.'};}
  snapshot(){
   const registry=this.registry.read();
@@ -77,7 +78,7 @@ export class ManagedConnectionOwner {
   if(args.action==='save'){
    const input=validateManagedConnection(args.definition);
    if(input?.id&&this.active(input.id))throw Error('Wait for captured connection runs to finish before editing.');
-   if(input.authentication.adapter===adoIdentityProfile.adapter)qualifyAdoProbes(input);else qualifyAtlassianDefinition(input);
+   if([adoIdentityProfile.adapter,...adoAlternativeIds].includes(input.authentication.adapter))qualifyAdoProbes(input);else qualifyAtlassianDefinition(input);
    const workspaceIds=new Set(this.service.context.config().workspaces.map(w=>w.id));if(input.workspaceIds.some(id=>!workspaceIds.has(id)))throw Error('Choose current workspaces on this owner.');
    const prior=current.connections.find(c=>c.id===input.id);if(prior?.enabled)await this.manager.disconnect(this.binding(prior));
    this.registry.save(input,{expectedRevision:args.expectedRevision});this.service.notify();return this.snapshot();
@@ -89,6 +90,10 @@ export class ManagedConnectionOwner {
    if(args.action==='remove')this.registry.remove(definition.id,{expectedRevision:args.expectedRevision});
    else this.registry.save({...definition,enabled:false},{expectedRevision:args.expectedRevision});
    this.service.notify();return this.snapshot();
+  }
+  if(args.action==='store-pat'){
+   if(this.active(definition.id))throw Error('Wait for captured connection runs to finish before changing authentication.');
+   return this.adoAuth.storePat(definition.id,{pat:args.pat,email:args.email});
   }
   if(args.action==='sign-in'){
    if(this.active(definition.id))throw Error('Wait for captured connection runs to finish before changing authentication.');

@@ -32,3 +32,11 @@ sync timer/status, preserving the phone transcript and unsent text. Desktop, aut
 relay, attachment/uncertain-answer and 2,507-event history fixtures pass. Full source suite:
 1,641 passed, four skipped, zero failures; static checks and local web asset build pass.
 No new package was published or installed; existing deployment hold remains in force.
+
+## Held source checkpoint — ADO CLI/PAT alternatives
+
+Both no-registration alternatives have separate source adapters and owner UI. The CLI path refuses
+macOS/Linux cache protection/isolation assumptions; PAT uses the qualified official Basic launch
+path and owner-protected entry. Source validation and remaining live boundaries are recorded in
+`docs/managed-ado-alternatives.md`. Local protected Authentication Preview is available for explicit
+operator testing; no remote delivery/installation or workstation.example.test auth/schedule change occurred.
