@@ -518,3 +518,15 @@ in source; measurements on installed devices and deployment of the relay are sep
 Owners advertise `chat.subagents.v1`. Chat summaries include parent-owned child summaries only; selecting a child uses `chat.get` with the parent's `id`, `agentId` and optional `beforeEvent`. It returns a read-only child page without changing the parent watch or selection. An unknown/foreign child is rejected. Older owners lacking this response show an explicit unavailable transcript state; existing chats and protocol/data version 1 remain compatible without a relay migration.
 
 Native chat refresh tasks stop while their area/scene is inactive, and cancelled responses cannot launch the next preview fetch. Stable selection, durable draft/session state and already loaded history survive. Out-of-order responses can extend history but cannot replace newer metadata/content or choose a different chat. Useful notification text comes from authenticated decrypted event fields, bounded to 500 characters, with a generic fallback and normal OS privacy controls.
+
+## Nov 5 remote journal capacity source work
+
+Owner-wide scoped chat diagnostics expose aggregate receipt bytes/counts by method, pending
+counts, capacity warning and next expiry without keys or payloads. Older owners report unsupported;
+no credential extraction or private-file inspection is required. Legacy methods remain unknown.
+Completed large receipts now use integrity-checked lossless compression in the journal transaction,
+including existing completed records at startup. Exact outcomes and unknown fields replay; unresolved
+claims and retention windows remain intact. Older SQLite readers see an uncertain receipt and cannot
+repeat its effect. Downgrade therefore limits replay of compacted results; retain the current reader
+or use the normal verified recovery snapshot. Compaction is not secure erasure or disk-space recovery.
+Work Mac live measurements and candidate installation remain pending.

@@ -28,6 +28,14 @@ must be inspected before submitting a new operation; the fix does not retrofit t
 This is source-only for Nov 2. Do not claim changes through the currently installed send path took
 effect, and do not relabel prior runs with newly saved future schedule settings.
 
+## Owner diagnostics
+
+`diagnostics` with explicit `hostId` requires whole-owner read scope, checked before and after
+collection; a chat/project-limited grant is insufficient. It returns aggregate journal counters,
+method byte attribution, capacity warning and next expiry, never receipt keys or payloads. Older
+owners without `remote.diagnostics.v1` fail explicitly. This is read-only and cannot prune records
+or approve requests. Historic receipts without method attribution are labeled unknown-legacy.
+
 ## Discovery and authorization
 
 Use `computers`, then `projects`, `models`, `list` and `read`. Select an explicit

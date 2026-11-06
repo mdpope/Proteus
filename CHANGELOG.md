@@ -1,3 +1,9 @@
+## Nov 5 remote journal capacity
+
+- Expose scoped aggregate journal diagnostics and expiry guidance without command contents.
+- Compress large completed outcomes losslessly while preserving exact retry results, integrity,
+  unresolved claims and retention. Older readers fail closed for compacted outcomes.
+
 ## Nov 5 optional connection compatibility
 
 - Keep independent workflow work runnable when an optional connection readiness check fails or

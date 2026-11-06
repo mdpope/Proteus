@@ -395,3 +395,11 @@ test('managed connection create selection survives remote delivery and rejects o
  const connection=await control.connection(hostId);connection.capabilities=connection.capabilities.filter(cap=>cap!=='chat.managed-connections.v1');
  await assert.rejects(control.handle(command('create',{provider:'copilot',model:'fixture',prompt:'unsupported',workspaceId,managedConnections}),caller.id),/selection support/);
 });
+
+test('owner diagnostics require whole-owner read authority and return counters without receipt contents',async t=>{
+ const f=await fixture(t);
+ f.grant(['read'],{chatIds:[f.caller.id]});
+ await assert.rejects(f.control.handle(f.command('diagnostics',{chatId:f.caller.id}),f.caller.id),/not authorized/);
+ f.grant(['read']);const d=await f.control.handle(f.command('diagnostics'),f.caller.id);
+ assert.equal(typeof d.records,'number');assert.ok(Array.isArray(d.byMethod));assert.ok(!JSON.stringify(d).includes('hold origin'));
+});

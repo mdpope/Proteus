@@ -389,6 +389,11 @@ export class ChatControl {
       const page=await this.page(args.hostId,args);this.assertAccess(actor,args.hostId,'read',args.chatId,args.projectId);
       return {...page,hostId:args.hostId,items:page.items.filter(r=>this.permitted(actor,args.hostId,'read',r.id,r.projectId))};
     }
+    if(args.action==='diagnostics'){
+      this.assertAccess(actor,args.hostId,'read');
+      if(args.hostId!==this.localId()&&!(await this.connection(args.hostId)).capabilities.includes('remote.diagnostics.v1'))throw Error('This owner needs remote diagnostics support.');
+      const result=await this.request(args.hostId,'remote.diagnostics');this.assertAccess(actor,args.hostId,'read');return result;
+    }
     if(args.action==='update-releases'){
       if(args.hostId!==this.localId()&&!(await this.connection(args.hostId)).capabilities.includes('chat.update-release.v1'))throw Error('This computer needs pinned update-release support.');
       const result=await this.request(args.hostId,'updates.releases',{channel:args.channel||'stable'});this.assertAccess(actor,args.hostId,'read');return result;

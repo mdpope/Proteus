@@ -214,3 +214,33 @@ test('revocation during asynchronous replay prevents a protected saved result', 
   const replay = remote.command(peer, message); await entered.promise; peer.device.resourceAccess = false; gate.resolve();
   await assert.rejects(replay, /not enabled/);
 });
+
+test('journal diagnostics attribute bytes without returning keys or result contents',async t=>{
+ const dir=home(t),store=new RemoteCommandStore(dir);closeBeforeRemove(dir,()=>store.close());
+ const at=Date.now();store.claim('private-key','digest',new Date(at).toISOString(),at,'tabs.mutate');
+ store.complete('private-key','digest',{result:{secret:'private-result'}},at);
+ const d=store.diagnostics();assert.equal(d.byMethod[0].method,'tabs.mutate');assert.equal(d.byMethod[0].bytes,d.bytes);
+ assert.equal(d.nextExpiryAt,new Date(at+store.limits.retentionMs).toISOString());
+ assert.ok(!JSON.stringify(d).includes('private-key'));assert.ok(!JSON.stringify(d).includes('private-result'));
+});
+
+test('large outcomes compact without losing replay and older readers fail closed',async t=>{
+ const dir=home(t),store=new RemoteCommandStore(dir,{maxBytes:200000});
+ const at=Date.now(),result={tabs:[{history:'saved-history'.repeat(30000)}],unknown:{extension:true}};
+ store.claim('large','d',new Date(at).toISOString(),at,'tabs.mutate');store.complete('large','d',{result},at);
+ assert.deepEqual(store.claim('large','d','expired').previous.result,result);assert.deepEqual(store.lookup('large').result,result);
+ assert.ok(store.diagnostics().bytes<10000);
+ const stub=JSON.parse(store.db.prepare('SELECT payload FROM receipts WHERE key=?').get('large').payload);assert.equal(stub.pending,true);
+ store.close();const reopened=new RemoteCommandStore(dir);closeBeforeRemove(dir,()=>reopened.close());assert.deepEqual(reopened.lookup('large').result,result);
+ reopened.db.prepare('UPDATE receipt_encoding SET hash=?').run('wrong');assert.throws(()=>reopened.lookup('large'),/integrity/);
+});
+
+test('existing large receipts compact atomically while unresolved receipts and original fields remain intact',async t=>{
+ const dir=home(t),at=Date.now(),record={digest:'d',at,result:{text:'original'.repeat(20000)},extension:{future:true}};
+ let store=new RemoteCommandStore(dir);
+ const bytes=store.encode('legacy',record);store.insert.run('legacy','d',0,at,bytes.payload,bytes.bytes);
+ store.claim('pending','p',new Date(at).toISOString(),at);store.close();
+ store=new RemoteCommandStore(dir);closeBeforeRemove(dir,()=>store.close());
+ assert.deepEqual(store.lookup('legacy'),record);assert.equal(store.lookup('pending').pending,true);
+ assert.equal(store.diagnostics().pending,1);assert.ok(store.diagnostics().bytes<10000);
+});

@@ -1,3 +1,5 @@
+import {gzipSync,gunzipSync} from 'node:zlib';
+import {createHash} from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -20,18 +22,23 @@ export class RemoteCommandStore {
       this.db.exec(`PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA busy_timeout=5000; PRAGMA cache_size=-4096;
         CREATE TABLE IF NOT EXISTS receipts (key TEXT PRIMARY KEY, digest TEXT NOT NULL, pending INTEGER NOT NULL, at REAL NOT NULL, payload TEXT NOT NULL, bytes INTEGER NOT NULL);
         CREATE INDEX IF NOT EXISTS receipt_expiry ON receipts(pending, at);
+        CREATE TABLE IF NOT EXISTS receipt_encoding (key TEXT PRIMARY KEY, compressed BLOB NOT NULL, hash TEXT NOT NULL, rawBytes INTEGER NOT NULL);
+        CREATE TRIGGER IF NOT EXISTS receipt_encoding_delete AFTER DELETE ON receipts BEGIN DELETE FROM receipt_encoding WHERE key=old.key; END;
+        CREATE TABLE IF NOT EXISTS receipt_methods (key TEXT PRIMARY KEY, method TEXT NOT NULL);
+        CREATE TRIGGER IF NOT EXISTS receipt_method_delete AFTER DELETE ON receipts BEGIN DELETE FROM receipt_methods WHERE key=old.key; END;
         CREATE TABLE IF NOT EXISTS metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS totals (id INTEGER PRIMARY KEY CHECK(id=1), records INTEGER NOT NULL, bytes INTEGER NOT NULL, pending INTEGER NOT NULL);
         INSERT OR IGNORE INTO totals VALUES(1,0,0,0);
         CREATE TRIGGER IF NOT EXISTS receipt_insert AFTER INSERT ON receipts BEGIN UPDATE totals SET records=records+1, bytes=bytes+new.bytes, pending=pending+new.pending WHERE id=1; END;
         CREATE TRIGGER IF NOT EXISTS receipt_delete AFTER DELETE ON receipts BEGIN UPDATE totals SET records=records-1, bytes=bytes-old.bytes, pending=pending-old.pending WHERE id=1; END;
         CREATE TRIGGER IF NOT EXISTS receipt_update AFTER UPDATE ON receipts BEGIN UPDATE totals SET bytes=bytes+new.bytes-old.bytes, pending=pending+new.pending-old.pending WHERE id=1; END;`);
-      this.get = this.db.prepare('SELECT digest,payload FROM receipts WHERE key=?');
+      this.get = this.db.prepare('SELECT r.digest,r.payload,e.compressed,e.hash,e.rawBytes FROM receipts r LEFT JOIN receipt_encoding e ON e.key=r.key WHERE r.key=?');
       this.insert = this.db.prepare('INSERT INTO receipts VALUES(?,?,?,?,?,?)');
       this.replace = this.db.prepare('UPDATE receipts SET pending=?,at=?,payload=?,bytes=? WHERE key=? AND digest=?');
       this.prune = this.db.prepare('DELETE FROM receipts WHERE pending=0 AND at<?');
       this.total = this.db.prepare('SELECT records,bytes,pending FROM totals WHERE id=1');
       this.migrate(path.join(home, 'remote-commands.json'));
+      this.compact();
       this.privateFiles();
     } catch (error) { this.db.close(); throw error; }
   }
@@ -44,6 +51,37 @@ export class RemoteCommandStore {
   encode(key, record) {
     const payload = JSON.stringify(record);
     return { payload, bytes: Buffer.byteLength(key) + Buffer.byteLength(payload) };
+  }
+  decode(row){
+    if(!row.compressed)return JSON.parse(row.payload);
+    const bytes=gunzipSync(row.compressed,{maxOutputLength:row.rawBytes});
+    if(bytes.length!==row.rawBytes||createHash('sha256').update(bytes).digest('hex')!==row.hash)throw Error('Remote command receipt integrity check failed.');
+    return JSON.parse(bytes.toString('utf8'));
+  }
+  storeCompleted(key,digest,record){
+    const encoded=this.encode(key,record),raw=Buffer.from(encoded.payload);
+    if(raw.length>=65536){
+      const compressed=gzipSync(raw);
+      // Older SQLite readers see an uncertain claim, never an empty successful
+      // outcome or permission to repeat the mutation. New readers restore exact JSON.
+      const stub=this.encode(key,{digest,pending:true,at:record.at,issuedAt:record.issuedAt});
+      if(compressed.length+stub.bytes+128<encoded.bytes){
+        this.db.prepare('INSERT OR REPLACE INTO receipt_encoding VALUES(?,?,?,?)').run(key,compressed,createHash('sha256').update(raw).digest('hex'),raw.length);
+        this.replace.run(0,record.at,stub.payload,stub.bytes+compressed.length+128,key,digest);
+        return stub.bytes+compressed.length+128;
+      }
+    }
+    this.replace.run(0,record.at,encoded.payload,encoded.bytes,key,digest);return encoded.bytes;
+  }
+  compact(){
+    // One bounded receipt at a time, atomically with its encoding. Existing
+    // uncertainty and full retention windows remain intact; no effects are replayed.
+    let after='';
+    while(true){
+      const row=this.db.prepare('SELECT r.key,r.digest,r.payload FROM receipts r LEFT JOIN receipt_encoding e ON e.key=r.key WHERE r.pending=0 AND r.bytes>=65536 AND e.key IS NULL AND r.key>? ORDER BY r.key LIMIT 1').get(after);
+      if(!row)break;after=row.key;
+      this.transaction(()=>this.storeCompleted(row.key,row.digest,JSON.parse(row.payload)));
+    }
   }
   migrate(legacyFile) {
     if (this.db.prepare("SELECT value FROM metadata WHERE key='legacy-import'").get()) return;
@@ -63,15 +101,15 @@ export class RemoteCommandStore {
     });
     this.metrics.migrationRecords = migrationRecords; this.metrics.migrationBytes = migrationBytes;
   }
-  lookup(key) { const row=this.get.get(key);return row?JSON.parse(row.payload):null; }
-  claim(key, digest, issuedAt, now = Date.now()) {
+  lookup(key) { const row=this.get.get(key);return row?this.decode(row):null; }
+  claim(key, digest, issuedAt, now = Date.now(), method) {
     let prunedAt;
     const result = this.transaction(() => {
       // Lookup precedes issue-time validation: retries can retrieve full 24h receipts.
       const previous = this.get.get(key);
       if (previous) {
         if (previous.digest !== digest) throw new Error('Request ID was already used for another command.');
-        return { previous: JSON.parse(previous.payload) };
+        return { previous: this.decode(previous) };
       }
       if (!Number.isFinite(Date.parse(issuedAt)) || Math.abs(now - Date.parse(issuedAt)) > 300_000) throw new Error(expiredMessage);
       // Never expire an unresolved claim. Completed results retain the full retry window.
@@ -81,11 +119,14 @@ export class RemoteCommandStore {
       if (totals.records >= this.limits.maxRecords || totals.bytes + bytes > this.limits.maxBytes) {
         const error = new Error('Remote command history is busy. Retry later; recent and uncertain actions are protected.');
         error.code = 'JOURNAL_BUSY';
+        const next=this.db.prepare('SELECT MIN(at) AS at FROM receipts WHERE pending=0').get().at;
+        const retryAfterMs=next===null?null:Math.max(0,next+this.limits.retentionMs-now);
         error.details = { records: totals.records, bytes: totals.bytes, pending: totals.pending, maxRecords: this.limits.maxRecords, maxBytes: this.limits.maxBytes,
-          limitingCounter: totals.records >= this.limits.maxRecords ? 'records' : 'bytes', retryAfterMs: 60_000 };
+          limitingCounter: totals.records >= this.limits.maxRecords ? 'records' : 'bytes', retryAfterMs, nextExpiryAt:next===null?null:new Date(next+this.limits.retentionMs).toISOString() };
         throw error;
       }
       this.insert.run(key, digest, 1, now, payload, bytes);
+      if(typeof method==='string'&&/^[a-z][a-z.-]{0,63}$/.test(method))this.db.prepare('INSERT INTO receipt_methods VALUES(?,?)').run(key,method);
       return { claimed: true, bytesWritten: bytes };
     });
     if (prunedAt !== undefined) this.lastPrune = prunedAt;
@@ -96,13 +137,12 @@ export class RemoteCommandStore {
     const result = this.transaction(() => {
       const old = this.get.get(key);
       if (!old || old.digest !== digest) throw new Error('Remote command claim is unavailable.');
-      const claim = JSON.parse(old.payload);
+      const claim = this.decode(old);
       if (!claim.pending) throw new Error('Remote command already completed.');
       const record = { digest, ...outcome, at: now, issuedAt: claim.issuedAt };
-      const { payload, bytes } = this.encode(key, record);
       // Existing claims must always be allowed to finish, even if a large result exceeds
       // the admission budget. Subsequent new claims are refused; no valid receipt is lost.
-      this.replace.run(0, now, payload, bytes, key, digest);
+      const bytes=this.storeCompleted(key,digest,record);
       return { stored: true, bytesWritten: bytes };
     });
     this.metrics.resultWrites++; this.metrics.payloadBytesWritten += result.bytesWritten;
@@ -111,8 +151,11 @@ export class RemoteCommandStore {
   diagnostics() {
     const totals = this.total.get();
     const protectedTotals = this.db.prepare('SELECT COUNT(*) AS protectedRecords, COALESCE(SUM(bytes),0) AS protectedBytes FROM receipts WHERE pending=1 OR at>=?').get(Date.now() - this.limits.retentionMs);
+    const nextExpiry=this.db.prepare('SELECT MIN(at) AS at FROM receipts WHERE pending=0').get().at;
+    const byMethod=this.db.prepare("SELECT COALESCE(m.method,'unknown-legacy') AS method,COUNT(*) AS records,SUM(r.bytes) AS bytes,SUM(r.pending) AS pending FROM receipts r LEFT JOIN receipt_methods m ON m.key=r.key GROUP BY m.method ORDER BY bytes DESC LIMIT 100").all();
+    const nextExpiryAt=nextExpiry===null?null:new Date(nextExpiry+this.limits.retentionMs).toISOString();
     const fileBytes = file => { try { return fs.statSync(file).size; } catch { return 0; } };
-    return { ...totals, ...this.metrics, ...protectedTotals, expiredRecords: totals.records - protectedTotals.protectedRecords, workerHeapBytes: process.memoryUsage().heapUsed, maxRecords: this.limits.maxRecords, maxBytes: this.limits.maxBytes, retentionMs: this.limits.retentionMs,
+    return { ...totals, ...this.metrics, ...protectedTotals, byMethod, nextExpiryAt, capacityWarning:totals.records>=this.limits.maxRecords*0.8||totals.bytes>=this.limits.maxBytes*0.8, expiredRecords: totals.records - protectedTotals.protectedRecords, workerHeapBytes: process.memoryUsage().heapUsed, maxRecords: this.limits.maxRecords, maxBytes: this.limits.maxBytes, retentionMs: this.limits.retentionMs,
       overBudget: totals.records >= this.limits.maxRecords || totals.bytes >= this.limits.maxBytes,
       storageBytes: fileBytes(this.file) + fileBytes(this.file + '-wal') + fileBytes(this.file + '-shm') };
   }

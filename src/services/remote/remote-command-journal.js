@@ -43,7 +43,7 @@ export class RemoteCommandJournal {
     });
   }
   lookup(key) { return this.request('lookup',key); }
-  claim(key, digest, issuedAt) { return this.request('claim', key, digest, issuedAt); }
+  claim(key, digest, issuedAt, method) { return this.request('claim', key, digest, issuedAt, undefined, method); }
   complete(key, digest, outcome) { return this.request('complete', key, digest, outcome); }
   async diagnostics() { return { ...await this.request('diagnostics'), ...this.metrics, activeRequests: this.requests.size, worker: 'ready' }; }
   async close() {

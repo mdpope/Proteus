@@ -1,3 +1,15 @@
+## Nov 5 remote journal capacity source work
+
+Owner-wide scoped chat diagnostics expose aggregate receipt bytes/counts by method, pending
+counts, capacity warning and next expiry without keys or payloads. Older owners report unsupported;
+no credential extraction or private-file inspection is required. Legacy methods remain unknown.
+Completed large receipts now use integrity-checked lossless compression in the journal transaction,
+including existing completed records at startup. Exact outcomes and unknown fields replay; unresolved
+claims and retention windows remain intact. Older SQLite readers see an uncertain receipt and cannot
+repeat its effect. Downgrade therefore limits replay of compacted results; retain the current reader
+or use the normal verified recovery snapshot. Compaction is not secure erasure or disk-space recovery.
+Work Mac live measurements and candidate installation remain pending.
+
 ## Nov 5 optional connection compatibility
 
 Source fixes persist optional readiness exceptions and denied/missing selections as sanitized
