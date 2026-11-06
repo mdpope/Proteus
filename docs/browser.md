@@ -1,3 +1,28 @@
+## Nov 5 corrective follow-up — scheduled background interaction
+
+Scheduled/manual workflows can allocate a stable existing owner window when their chat is not
+shown in any window. Explicit window choice and a valid local submitting window retain priority.
+Allocation does not select a chat, focus a window, adopt unrelated tabs or change canonical
+chat/project placement, browser profiles or page-sharing decisions. A missing native window still
+reports availability failure. The per-run allocation is released when the run releases its browser.
+
+A hidden pane may report zero native browser bounds, and a never-visible WebContents can retain
+zero CSS dimensions even after nonzero native bounds. Use bounded owner content geometry and
+Electron's supported desktop viewport sizing while hidden. Native selection restores native
+metrics. Input uses real Playwright actions; it never forces clicks, reveals the page or invokes
+page event handlers directly. Scoped CDP screenshots retain geometry and return CSS-sized images;
+viewport/scroll changes reject old coordinate captures.
+
+Explicit serialized unload can release its caller's idle automation lease. Another run, an active
+action/download, Persisted, pop-out, audio and unsaved page work still block unloading. Ordinary
+human/retention unload does not acquire this exception. URL/history, logical identity, profile,
+association and sharing survive reload. No browser/schedule tool schema changed.
+
+The isolated native regression first reproduced missing-window, zero-CSS viewport/outside-viewport
+and own-turn unload failures. The corrected regression covers multiwindow scheduled allocation,
+actual background click/fill/Enter, screenshots, native metric restoration, unchanged selection/focus,
+other-run protection and retained identity. Live Slack acceptance remains separate.
+
 ## Nov 2 extension tab creation
 
 Extension-created active and background browser tabs carry explicit creation intent into their shared owner registry. The marker survives an older in-flight read and settles after owner acceptance. Existing-tab selection/restoration does not acquire that intent, and confirmed owner closes or moves still remove stale views. Inactive extension creation uses the background focus guard and retains the selected tab. Its adapter reflects the current native selection, or an unchanged blank-page selection; a newer renderer selection prevents restoring an older one. Replacement native package acceptance remains separate from the source correction.

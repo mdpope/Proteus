@@ -1,3 +1,4 @@
+const {agentViewport,ensureAgentViewport,releaseAgentViewport}=require('./agent-viewport.cjs');
 const {BrowserStateBatch}=require('./browser-state-batch.cjs');
 const {browserErrorDocument,errorColors}=require('./browser-error.cjs');
 const {BrowserCertificates}=require('./browser-certificates.cjs');
@@ -325,8 +326,7 @@ class BrowserTabs {
     tab.view.setVisible(false);this.window.contentView.addChildView(tab.view);
     // Agent-created tabs may never have been selected. Give them a real viewport
     // so Playwright can interact while the user keeps the conversation visible.
-    const { width, height } = this.window.getContentBounds();
-    tab.view.setBounds(this.bounds || { x: 0, y: 0, width, height });
+    tab.view.setBounds(agentViewport(this.bounds,this.window.getContentBounds()));
     tab.view.setVisible(false);
     backgroundFocus.restore();
     for(const event of ['media-started-playing','media-paused'])tab.view.webContents.on(event,()=>this.updateThrottling());
@@ -478,6 +478,7 @@ class BrowserTabs {
       if(!tab.view||tab.videoPopout||tab.websiteFullscreen)continue;
       if(tab.id===id&&this.bounds){const current=tab.view.getBounds();if(['x','y','width','height'].some(key=>current[key]!==this.bounds[key]))tab.view.setBounds(this.bounds);}
       const visible=tab.id===id&&!!this.bounds&&!!tab.view.webContents.getURL();
+      if(visible)releaseAgentViewport(tab);
       if(tab.view.getVisible()!==visible)tab.view.setVisible(visible);
     }
     // A hidden WebContentsView can retain native keyboard focus. Restore the
@@ -498,18 +499,21 @@ class BrowserTabs {
       this.tabs.delete(id);if(this.active===id)this.active=null;this.changed();
     })().finally(()=>{if(this.tabs.get(id)===tab)tab.closePromise=null;});return tab.closePromise;
   }
-  async unload(id, {hiding=false}={}) {
-    const owner=this.tabs.get(id)?.windowId;if(this.windowRegistry&&owner&&owner!==this.windowId())return this.windowRegistry.run(owner,()=>this.unload(id,{hiding}));
+  async unload(id, {hiding=false,requesterRunId=null}={}) {
+    const owner=this.tabs.get(id)?.windowId;if(this.windowRegistry&&owner&&owner!==this.windowId())return this.windowRegistry.run(owner,()=>this.unload(id,{hiding,requesterRunId}));
     // A restored view exists before its history/navigation promise completes.
     // Wait for that exact restore before taking a snapshot or closing the view.
     await this.reloading.get(id);
     const tab=this.get(id);if(tab.persist)throw new Error('Turn off Persisted before unloading this tab.');if(!tab.view)return this.state(tab,true);if(tab.videoPopout)throw new Error('Close the video pop-out before unloading this tab.');
-    if(tab.agentActions||tab.automationRuns?.size&&!this.agentStatus(tab).agentPaused||tab.downloads?.size)throw new Error('Wait for the active browser turn or download before unloading this tab.');
+    // Explicit cleanup is serialized behind this run's page calls. It may release
+    // its own idle lease, but never an in-flight action, another run or a download.
+    const otherRuns=[...(tab.automationRuns||[])].some(id=>id!==requesterRunId);
+    if(tab.agentActions||otherRuns&&!this.agentStatus(tab).agentPaused||tab.downloads?.size)throw new Error('Wait for the active browser turn or download before unloading this tab.');
     const wc=tab.view.webContents;if(wc.isCurrentlyAudible())throw new Error('Stop audio before unloading this tab.');
     tab.snapshot=this.state(tab,true);this.transition?.cancel();await this.disconnect(tab);
     const closed=await new Promise(resolve=>{let done=false;const finish=value=>{if(done)return;done=true;clearTimeout(timer);wc.removeListener('will-prevent-unload',blocked);resolve(value);};const blocked=()=>finish(false);const timer=setTimeout(()=>finish(wc.isDestroyed()),3000);wc.once('destroyed',()=>finish(true));wc.once('will-prevent-unload',blocked);wc.close({waitForBeforeUnload:true});});
     if(!closed)throw new Error('This page has unsaved work. Finish or close it before unloading.');
-    tab.faviconResolver?.close();
+    tab.faviconResolver?.close();tab.automationRuns?.delete(requesterRunId);tab.agentViewport=null;
     try{this.window.contentView.removeChildView(tab.view);}catch{}tab.view=null;tab.shared=false;tab.owner=null;this.changed();return this.state(tab,true);
   }
   async reload(id, restore=true, {background=false}={}) {
@@ -835,7 +839,7 @@ class BrowserTabs {
     if(value.action==='destinations')return {...(this.options.agentDestinations?.(runId)||{destinations:[{type:'chat',id:runId}]}),defaultProfileId:'default',profiles:(this.options.profiles?.list().items||[{id:'default',name:'Default'}]).map(({id,name})=>({id,name,available:this.profileAvailable({profileId:id})}))};
     if (value.action === 'open') {
       const destination=await this.options.agentDestination?.(runId,value.destination)||{parentId:runId};
-      const created=await this.create(this.address(value.url),runId,null,{...destination,...(value.profileId?{profileId:value.profileId}:{}),hidden:value.hidden===true,unloaded:value.unloaded===true,title:String(value.title||'').trim().slice(0,200)});
+      const created=await this.create(this.address(value.url),runId,null,{...destination,...(value.profileId?{profileId:value.profileId}:{}),hidden:value.hidden===true,unloaded:value.unloaded===true,background:true,title:String(value.title||'').trim().slice(0,200)});
       // Return the current placement even if project deletion occurred while the
       // page loaded. Preserve unrelated route metadata and the public response shape.
       return {...created,destination:this.options.projects?{...this.resolvePreviewRoute(destination),parentId:created.parentId,destination:created.destination}:destination};
@@ -844,7 +848,7 @@ class BrowserTabs {
     if (!this.profileAvailable(tab)) throw new Error('This tab’s browser profile is unavailable. Reconnect the owning account or restore its profile.');
     if(value.action==='close'){await this.close(tab.id);return {closed:true};}
     if(value.action==='hide'||value.action==='restore')return this.command({action:'visibility',id:tab.id,hidden:value.action==='hide'});
-    if(value.action==='unload')return this.unload(tab.id);
+    if(value.action==='unload')return this.unload(tab.id,{requesterRunId:runId});
     if(value.action==='request-access'){
       if(!this.agentStatus(tab).agentPaused)return {shared:true,tabId:tab.id};
       if(tab.accessRequest)return tab.accessRequest;
@@ -859,6 +863,8 @@ class BrowserTabs {
     if(this.agentStatus(tab).agentPaused)throw new Error('This browser tab is not shared with agents. Ask the human to use its robot button, or use request-access for explicit approval. Do not bypass this setting.');
     if(!tab.view)await this.reload(tab.id,true,{background:true});
     const current=this.get(tab.id);if(current!==tab)return this.performAgent(value,runId);
+    if(tab.view.webContents.isDevToolsOpened()&&!['load','refresh'].includes(value.action))throw new Error('The human inspector is using this tab. Close it to resume agent control.');
+    if(!tab.view.webContents.isDevToolsOpened())await ensureAgentViewport(this,tab);
     if(value.action==='load')return this.state(tab,true);
     if(value.action==='refresh')return this.command({action:'reload',id:tab.id});
     if(tab.view.webContents.isDevToolsOpened())throw new Error('The human inspector is using this tab. Close it to resume agent control.');
@@ -885,11 +891,12 @@ class BrowserTabs {
       const result=await mcpCommand(tab.mcpPlaywright,value,()=>this.touch(tab,['browser_navigate','browser_navigate_back','navigate_page'].includes(value.tool)));if(!allowed(tab))throw new Error('Agent access was revoked.');return result;
     }
     if(['screenshot','coordinate-click','drag','wheel'].includes(value.action)){
-      const viewport=await page.evaluate(()=>({width:innerWidth,height:innerHeight,dpr:devicePixelRatio,url:location.href}));
+      const viewport=await page.evaluate(()=>({width:innerWidth,height:innerHeight,dpr:devicePixelRatio,url:location.href,scrollX,scrollY}));
       if(value.action==='screenshot'){
-        const revision=tab.captureRevision||0,bytes=await page.screenshot({type:'png',scale:'css',fullPage:false});
+        const revision=tab.captureRevision||0,lease=acquireDebugger(tab.view.webContents);let bytes;
+        try{const capture=await lease.debug.sendCommand('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:false,clip:{x:viewport.scrollX,y:viewport.scrollY,width:viewport.width,height:viewport.height,scale:1}});bytes=nativeImage.createFromBuffer(Buffer.from(capture.data,'base64')).resize({width:Math.round(viewport.width),height:Math.round(viewport.height)}).toPNG();}finally{lease.release();}
         if(!allowed(tab)||revision!==(tab.captureRevision||0)||bytes.length>8*1024*1024)throw new Error('Screenshot changed or exceeds 8 MiB. Retry a viewport capture.');
-        const after=await page.evaluate(()=>({width:innerWidth,height:innerHeight,dpr:devicePixelRatio,url:location.href}));if(JSON.stringify(after)!==JSON.stringify(viewport)||revision!==(tab.captureRevision||0))throw new Error('The browser viewport changed during capture. Take a fresh screenshot.');
+        const after=await page.evaluate(()=>({width:innerWidth,height:innerHeight,dpr:devicePixelRatio,url:location.href,scrollX,scrollY}));if(JSON.stringify(after)!==JSON.stringify(viewport)||revision!==(tab.captureRevision||0))throw new Error('The browser viewport changed during capture. Take a fresh screenshot.');
         const capture=tab.visualCapture={id:randomUUID(),at:Date.now(),revision,...after};
         return {content:[{type:'text',text:JSON.stringify({tabId:tab.id,captureId:capture.id,width:capture.width,height:capture.height,devicePixelRatio:capture.dpr,coordinateSpace:'CSS viewport pixels; screenshot scale 1. Coordinates target the captured embedded page including cross-origin frames.',expiresInMs:60000})},{type:'image',mimeType:'image/png',data:bytes.toString('base64')}]};
       }

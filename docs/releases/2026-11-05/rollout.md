@@ -15,7 +15,8 @@ coordinator completed the corrective installation with verified health at 22:29:
 owner navigation receipt reports three workspaces, 13 projects, 75 scopes, 281 tabs and four
 windows with no differences. Fresh maintenance retained two verified recovery generations.
 Full browser history, source selections, individual reading anchors and pairings remain separately
-unverified. Desktop observation could not proceed because another chat held its control lease.
+unverified. Desktop permission/catalog/window observation subsequently passed after the other chat released
+its lease; control was released afterward. No input was tested.
 No credentials, operator PAT expiry or schedules were changed by this update.
 
 organization workflows has received the exact artifact handoff and retains ownership of live ADO qualification

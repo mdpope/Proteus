@@ -253,16 +253,20 @@ else {
     };
     const {chatResourcePlacement}=await import('../public/features/chats/chat-resource-placement.js');
     const {agentWindow}=require('./windows/agent-origin.cjs');
+    const scheduledBrowserWindows=new Map();
     const agentWindowFor=(runId,explicitWindowId)=>{
       const run=service.engine.getRun(runId),destination=browserDestination(service,runId,undefined,{preview:!!projects});
-      return agentWindow({contexts:[...windows.contexts.values()],origin:run.turnOrigin,currentId:windows.current()?.id,runId,parentId:destination.parentId,explicitWindowId});
+      const scheduled=['scheduled','manual','schedule'].includes(run.trigger);
+      const result=agentWindow({contexts:[...windows.contexts.values()],origin:run.turnOrigin,currentId:windows.current()?.id,runId,parentId:destination.parentId,explicitWindowId,scheduled,allocatedWindowId:scheduledBrowserWindows.get(runId)});
+      if(scheduled)scheduledBrowserWindows.set(runId,result.id);
+      return result;
     };
     browser.options.agentWindow=agentWindowFor;
     service.windowForChat=runId=>windows.contexts.get(agentWindowFor(runId).id);
     service.agentTabInventory=runId=>{const target=agentWindowFor(runId);return {window:target,tabs:service.tabInventory().filter(tab=>tab.windowId===target.id)};};
     service.chatResourcePlacement=run=>{const ctx=service.windowForChat(run.id),saved=ctx?.session.get();return {...(projects?previewChatResourcePlacement(service,run,saved):chatResourcePlacement(run.id,saved,{workspaceId:Object.hasOwn(run,'workspaceId')?run.workspaceId:run.schedule.context?.workspaceId})),windowId:ctx?.id};};
     service.onDocumentOpened=value=>{const ctx=windows.contexts.get(value.placement?.windowId)||service.windowForChat(value.runId);if(ctx&&!ctx.window.isDestroyed())ctx.window.webContents.send('proteus:open-document',value);};
-    service.engine.releaseBrowser=runId=>browser.releaseRun(runId).catch(()=>{});
+    service.engine.releaseBrowser=runId=>browser.releaseRun(runId).catch(()=>{}).finally(()=>scheduledBrowserWindows.delete(runId));
     const sampleProcesses=createProcessSampler();
     service.resources={
       list:async()=>{

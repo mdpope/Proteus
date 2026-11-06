@@ -1,3 +1,19 @@
+## Scheduled browser corrections — source validation
+
+Scheduled/manual runs can allocate a stable native owner window without the chat being visible,
+while keeping canonical own-chat placement, sharing/profile checks and human focus/selection.
+Hidden browser pages receive usable native and CSS viewports, and native selection restores
+ordinary metrics. Real background click/fill/Enter and CSS-sized screenshots pass the isolated
+multiwindow regression; stale coordinates remain rejected. Explicit unload releases only the
+caller's idle lease and still refuses other active runs/actions, downloads, Persisted/audio/pop-out
+or unsaved work. No schedule/tool schema or credential change is required.
+
+The regression reproduced all three failures before their respective corrections. Existing
+sharing/revocation/restart and local-origin/mirror/override tests pass. The older origin test's
+sidebar assertion was updated for already-shipped project recents; production navigation was
+not changed to satisfy that assertion. Full validation passed 1,687 tests/four skips/zero failures and static checks. This follow-up is
+not yet packaged or installed. Live Slack recovery remains unverified.
+
 ## Nov 6 — focused Mac ADO and reading-position correction
 
 Corrective source `6181b45be346108be5cee4270ff174d1f56642fb` fixes validation of

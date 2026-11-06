@@ -1,4 +1,20 @@
-## ADO PAT capability verification correction — source only
+## Scheduled browser corrections — source validation
+
+Scheduled/manual runs can allocate a stable native owner window without the chat being visible,
+while keeping canonical own-chat placement, sharing/profile checks and human focus/selection.
+Hidden browser pages receive usable native and CSS viewports, and native selection restores
+ordinary metrics. Real background click/fill/Enter and CSS-sized screenshots pass the isolated
+multiwindow regression; stale coordinates remain rejected. Explicit unload releases only the
+caller's idle lease and still refuses other active runs/actions, downloads, Persisted/audio/pop-out
+or unsaved work. No schedule/tool schema or credential change is required.
+
+The regression reproduced all three failures before their respective corrections. Existing
+sharing/revocation/restart and local-origin/mirror/override tests pass. The older origin test's
+sidebar assertion was updated for already-shipped project recents; production navigation was
+not changed to satisfy that assertion. Full validation passed 1,687 tests/four skips/zero failures and static checks. This follow-up is
+not yet packaged or installed. Live Slack recovery remains unverified.
+
+## ADO PAT capability verification correction — installed live probes passed
 
 Installed 88367d6 can report capability-mismatch before its first ADO health read because the
 pinned official 2.11.0 catalog declares JSON Schema draft-07, while the probe validator used only
@@ -9,9 +25,10 @@ initialization/tools-list only and zero business calls; it is not evidence of an
 The source correction selects draft-07 or 2020-12 by the declared schema, preserves schema and
 annotation validation, and rejects unsupported dialects. Real pinned PAT-launcher catalog tests
 now validate all four exact probe arguments against synthetic result fixtures. Existing PAT,
-expiry, scopes and connection settings need no mutation for this correction. Live workstation.example.test resource
-acceptance remains pending an accepted corrective package; no rebuild or installation performed.
-The scheduled browser multi-window routing defect remains open and unchanged.
+expiry, scopes and connection settings need no mutation for this correction. Work Mac now runs the accepted signed `6181b45` correction. Its existing PAT passed all four
+live configured read probes, with ready/connected state, verified authentication/access and zero
+failures. A real scheduled digest started without connection prompts; complete native workflow
+and Slack acceptance remain pending. No credential, expiry or scope changes were needed.
 
 ## Nov 6 planned — complete Atlassian write access
 

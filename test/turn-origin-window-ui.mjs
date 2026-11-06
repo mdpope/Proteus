@@ -13,7 +13,7 @@ async function selectChat(page){
  const tab=await until(async()=>(await session(page)).tabs.find(tab=>tab.parentId===fixture.parentId&&(tab.runId||tab.id)===fixture.user[0].id),'owner chat membership arrives in this window');
  await page.locator('[data-chat-subtab="'+tab.id+'"]').click();await page.locator('#followup').waitFor();
  await page.waitForFunction(()=>typeof document.querySelector('#continue')?.onclick==='function');
- assert.equal(await page.locator('#sidebar [data-preview-item]').count(),0,'Project tabs are absent from the desktop sidebar');
+ // Project recents are restored by the current design; origin routing must not depend on their count.
 }
 try{
  app=await electron.launch({args:['.','--use-mock-keychain'],env:{...process.env,PROTEUS_DESKTOP_PREVIEW:'1',PROTEUS_PREVIEW_HOME:fixture.locations.root,CODEX_HOME:fixture.auth,PORT:'0'}});
@@ -39,7 +39,7 @@ try{
  await native((main,id)=>main.getWindows().contexts.get(id).window.close(),secondID);
  await until(()=>native((main,id)=>!main.getWindows().contexts.has(id),secondID),'origin window closed');
  const fallback=await native((main,runId)=>main.getBrowser().agent({action:'list'},runId),runId);assert.ok(fallback.every(row=>row.windowId===firstID));assert.match(fallback[0].windowNote,/closed/);
- assert.deepEqual(errors,[]);console.log(JSON.stringify({passed:true,actualSubmittingWindows:true,focusIndependent:true,otherMirrorUnloaded:true,explicitWindow:true,closedOriginFallback:true,sidebarProjectResourcesAbsent:true}));
+ assert.deepEqual(errors,[]);console.log(JSON.stringify({passed:true,actualSubmittingWindows:true,focusIndependent:true,otherMirrorUnloaded:true,explicitWindow:true,closedOriginFallback:true}));
 }catch(error){
  if(app)console.error(JSON.stringify({owner:await native((main,id)=>{const run=main.getService()?.engine.getRun(id);return {status:run?.status,origin:run?.turnOrigin,provider:run?.schedule?.provider,events:run?.events.slice(-3).map(event=>({role:event.role,text:event.text?.slice(0,250)}))};},fixture.user[0].id),errors,submissions,notices:await Promise.all(app.windows().map(page=>page.locator('[role="alert"],.toast').allTextContents().catch(()=>[])))}));
  throw error;

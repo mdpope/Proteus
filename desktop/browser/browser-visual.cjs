@@ -4,7 +4,7 @@ function visualPoint(value,viewport){
  return {x,y};
 }
 function validateCapture(capture,value,viewport,{revision,now=Date.now()}={}){
- if(!capture||value.captureId!==capture.id||now-capture.at>60000||capture.revision!==revision||capture.url!==viewport.url||capture.width!==viewport.width||capture.height!==viewport.height||capture.dpr!==viewport.dpr)throw new Error('Browser observation is stale. Take a fresh screenshot before coordinate input.');
+ if(!capture||value.captureId!==capture.id||now-capture.at>60000||capture.revision!==revision||capture.url!==viewport.url||capture.width!==viewport.width||capture.height!==viewport.height||capture.dpr!==viewport.dpr||capture.scrollX!==viewport.scrollX||capture.scrollY!==viewport.scrollY)throw new Error('Browser observation is stale. Take a fresh screenshot before coordinate input.');
  return visualPoint(value,viewport);
 }
 module.exports={visualPoint,validateCapture};
