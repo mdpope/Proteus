@@ -1,3 +1,18 @@
+## Nov 6 — Linux publication accepted
+
+Linux x64 from frozen `88367d6` passed 1,677 source tests/four skips, static checks,
+official extraction, native package UI/restart, document preservation, terminal rehearsal and
+disposable update/rollback. Build Mac independently verified all four private transfer hashes
+and signed the exact unsigned payload. Release `0.2.43-linux-x64-1512bcd5566c895676d20003` is
+published; all 29 current distribution files pass HTTPS byte/hash verification. Mac bytes and
+prior Windows availability remain unchanged. A fresh Linux owner updater is dispatched;
+installation and live workflow acceptance remain unverified.
+
+The direct Linux packaging command produces a wrapper directory incompatible with the updater;
+the delivered archive was corrected from the identical built bundle and passed official extraction.
+Retain that packaging defect and the reading-position contract mismatch as source follow-up work.
+Do not rebuild an accepted target merely because later commits update this rollout document.
+
 ## Nov 6 — physical mobile installation verified
 
 Both physical iPhone and iPad now run 0.2.43 / build 2611.5.1. Cold recovery,
