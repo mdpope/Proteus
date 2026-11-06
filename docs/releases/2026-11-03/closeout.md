@@ -26,12 +26,13 @@ additional audit hit the native Claude provider rate limit; its earlier verified
 signature, health and recovery evidence stands. Signed-in web acceptance, physical-device feel
 and sustained relay stability remain qualified. These are not claimed as successful tests.
 
-The release branch and both merged implementation branches were retired; the clean, unused web
-worktree was removed. The release and iOS worktrees are detached and retained under an active-use
-hold because three live Xcode service helpers still use their directories. The isolated Nov 5
-branch also references the release worktree's dependencies. Retire these source worktrees only
-after the helpers exit and dependent folders are relocated or their consumers repointed. Existing
-Nov 2 and unrelated worktree holds remain untouched. No process was killed for cleanup.
+The release branch and both merged implementation branches were retired. On the operator's
+follow-up cleanup request, the three day-old orphaned Xcode profiling helpers were identified
+by executable, parent, working directory and inactive state, then stopped. Current Xcode indexing
+and simulators were preserved. All Nov 3 worktrees are removed. Tested dependencies moved into
+the primary checkout; the temporary Nov 5 worktree is also removed. Only main and the single
+nov5-release branch remain. Pre-existing unrelated detached worktrees remain outside this scope.
+The previous primary dependency set is retained in stable dependency storage for review.
 
 The private transfer draft is deleted (GitHub confirms 404); its never-created tag needed no
 deletion. Accepted package/source copies and minimal asset receipts remain. Verified duplicate
