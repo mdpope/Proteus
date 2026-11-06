@@ -1,3 +1,13 @@
+## Guided ADO scope expansion
+
+The operator requests guided authentication and discovery with all account-accessible ADO
+capabilities across projects: repositories, pipelines, work items, wikis and related features.
+This supersedes the work-item-only setup target. Explicit work-item read/write PAT scopes are
+supported in source without upgrading existing read-only definitions. Full-account guided setup
+and CLI-assisted optional PAT issuance remain open; no successful authentication is claimed.
+See docs/managed-ado-guided-setup.md for the qualified Microsoft API constraints and acceptance.
+Deployment remains held.
+
 ## Native chat details presentation
 
 Group chat details into labeled Activity, Loaded context, Model & session, Permissions &

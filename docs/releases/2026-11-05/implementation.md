@@ -1,3 +1,19 @@
+## Guided ADO scope expansion
+
+The operator requests guided authentication and discovery with all account-accessible ADO
+capabilities across projects: repositories, pipelines, work items, wikis and related features.
+This supersedes the work-item-only setup target. Explicit work-item read/write PAT scopes are
+supported in source without upgrading existing read-only definitions. Full-account guided setup
+and CLI-assisted optional PAT issuance remain open; no successful authentication is claimed.
+See docs/managed-ado-guided-setup.md for the qualified Microsoft API constraints and acceptance.
+Deployment remains held.
+
+Validation for this intermediate scope change: 12 adapter tests and disposable Connections UI
+pass; static checks pass. Canonical-temp full suite had 1,671 passing/four skipped and one
+notification test teardown failure. Fixed the fixture to close its worker before deleting its
+directory; all 15 parity tests then pass. The first full run used the noncanonical temp alias
+and is not acceptance evidence. Full-account guided authentication remains unfinished.
+
 ## Native chat details presentation
 
 Group chat details into labeled Activity, Loaded context, Model & session, Permissions &

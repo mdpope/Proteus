@@ -4,7 +4,7 @@ import {generateKeyPairSync,sign} from 'node:crypto';
 import {ManagedAdoCli,qualifyCliStorage} from '../src/services/integrations/managed-ado-cli.js';
 import {ManagedAdoPat} from '../src/services/integrations/managed-ado-pat.js';
 import {adoIdentityProfile} from '../src/services/integrations/managed-ado-identity.js';
-import {adoReadScopes} from '../src/services/integrations/managed-ado-alternative-profile.js';
+import {adoReadScopes,adoWriteScopes,qualifyAdoAuthentication} from '../src/services/integrations/managed-ado-alternative-profile.js';
 import {managedAdoAdapter,adoServerProfile} from '../src/services/integrations/managed-ado-adapter.js';
 const guid=n=>`${n.repeat(8)}-${n.repeat(4)}-${n.repeat(4)}-${n.repeat(4)}-${n.repeat(12)}`;
 const tenant=guid('1'),principal=guid('2'),organizationId=guid('3'),adoUserId=guid('4');
@@ -53,4 +53,10 @@ test('PAT redirects, transport errors and failed persistence never expose or pub
  f.adapter.fetchFn=async()=>new Response(null,{status:302,headers:{location:'https://other.test'}});await assert.rejects(f.adapter.store(f.d,values),{code:'CONFIGURATION_MISMATCH'});assert.equal(f.rows.size,0);
  f.adapter.fetchFn=async()=>{throw Error('secret-token-header');};await assert.rejects(f.adapter.store(f.d,values),e=>e.code==='UNAVAILABLE'&&!e.message.includes('secret'));assert.equal(f.rows.size,0);
  f.adapter.fetchFn=async()=>Response.json({instanceId:organizationId,authenticatedUser:{id:principal,isActive:true}});f.adapter.vault.write=async()=>{throw Object.assign(Error('private-secret-disk'),{code:'CREDENTIAL_STORE_UNAVAILABLE'});};await assert.rejects(f.adapter.store(f.d,values),e=>e.code==='CREDENTIAL_STORE_UNAVAILABLE'&&!e.message.includes('private'));assert.equal(f.rows.size,0);
+});
+
+test('PAT read/write is explicit and preserves existing read-only profiles',()=>{
+ const read=definition('ado-pat');assert.doesNotThrow(()=>qualifyAdoAuthentication(read));
+ const write=structuredClone(read);write.expected.scopes=[...adoWriteScopes];assert.doesNotThrow(()=>qualifyAdoAuthentication(write));assert.deepEqual(read.expected.scopes,adoReadScopes);
+ for(const scope of ['vso.code_write','vso.build_execute','app_token']){const bad=structuredClone(write);bad.expected.scopes.push(scope);assert.throws(()=>qualifyAdoAuthentication(bad));}
 });
