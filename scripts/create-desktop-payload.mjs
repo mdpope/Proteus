@@ -19,7 +19,8 @@ export function exportDesktopPayload({bundle,archive,installer,sourceCommit,chan
  for(const file of [bundle,archive,output])if(!path.isAbsolute(file||''))throw Error('Use absolute package/archive/output paths.');
  const checkout=fs.realpathSync(fileURLToPath(new URL('..',import.meta.url))),candidate=packages.inspectPackage(bundle);
  const source=JSON.parse(fs.readFileSync(path.join(packages.packagePaths(candidate.bundle).root,'build-source.json'),'utf8'));
- const pin=releaseSourceCommit(source,{commit:sourceCommit,checkout});
+ const windowsProof=source.platform==='win32'&&process.platform==='win32'?{windowsTerminalBuild:JSON.parse(fs.readFileSync(path.join(path.dirname(candidate.bundle),'windows-terminal-build.json'),'utf8')),compilerHash:packages.fileDigest(path.join(process.env.SystemRoot||'C:/Windows','Microsoft.NET/Framework64/v4.0.30319/csc.exe'))}:{};
+ const pin=releaseSourceCommit(source,{commit:sourceCommit,checkout,...windowsProof});
  const artifact={filename:path.basename(archive),bytes:fs.statSync(archive).size,sha256:packages.fileDigest(archive)};
  let setup;if(process.platform==='win32'){
   if(!path.isAbsolute(installer||'')||packages.fileDigest(installer)!==candidate.installer?.sha256)throw Error('Use the exact accepted installer.');

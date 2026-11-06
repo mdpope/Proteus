@@ -69,7 +69,7 @@ export async function buildWindowsDistribution(argv){
   const payload=path.join(output,'package','publisher-payload.json');
   await run('publisher-payload',process.execPath,['scripts/create-desktop-payload.mjs','--bundle',bundle,'--archive',archive,'--installer',setup,'--source-commit',sourceCommit,'--channel',values.channel,'--out',payload]);
   const companion=path.join(output,'package','Proteus-'+metadata.version+'-source.tar.gz');
-  await run('source-companion','git',['archive','--format=tar.gz','--output',companion,sourceCommit]);
+  await run('source-companion',process.execPath,['scripts/package-source.mjs','--root',root,'--output',path.join(output,'package'),'--provenance',path.join(bundle,'resources','app','build-source.json')]);
   receipt.publisher={state:'unsigned-awaiting-authority',payload,payloadSHA256:packages.fileDigest(payload),sourceCommit};
   receipt.artifacts.sourceCompanion={file:companion,sha256:packages.fileDigest(companion),bytes:fs.statSync(companion).size};
   fs.rmSync(extracted,{recursive:true});record('complete',{completedAt:new Date().toISOString(),published:false,installed:false});return receipt;

@@ -1,3 +1,14 @@
+## Nov 5 Windows publication provenance correction
+
+Release-operation helpers now accept the Windows packager's complete source commit without
+inventing missing gitHead/dirty fields. Every tracked runtime/build input still must match the
+pinned Git tree, allowing only exact UTF-8 LF/CRLF representations on Windows. The sole generated
+terminal helper additionally requires its existing compiler/source/output receipt and matching
+local compiler hash; unknown generated inputs and content differences still fail. Accepted app,
+archive, installer and embedded provenance stay unchanged. Corresponding-source export uses the
+accepted provenance and retains generated runtime bytes and their manifest. A maintenance helper
+commit may differ from the frozen application pin; it never authorizes rebuilding a different tip.
+
 ## Mnemosyne operations — implemented in Nov 5 source
 
 The operator lifted the Mnemosyne implementation deferral for this release. Desktop/web now
