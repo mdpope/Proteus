@@ -20,6 +20,7 @@ export async function findPublishedWindows({version,sourceCommit,channel='stable
 }
 export async function buildWindowsDistribution(argv){
  const {values}=parseArgs({args:argv,options:{'source-commit':{type:'string'},output:{type:'string'},channel:{type:'string',default:'stable'},'build-if-missing':{type:'boolean'},key:{type:'string'},'npm-cli':{type:'string'},'dependencies-ready':{type:'boolean'}}});
+ if(values.key)throw Error('Builders cannot sign. Return accepted unsigned payloads to Build Mac.');
  if(process.platform!=='win32'||process.arch!=='x64')throw Error('Run native distribution on the designated Windows x64 build machine.');
  const root=fs.realpathSync(fileURLToPath(new URL('..',import.meta.url))),metadata=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
  const git=(...args)=>execFileSync('git',args,{cwd:root,encoding:'utf8',windowsHide:true}).trim();
@@ -64,12 +65,13 @@ export async function buildWindowsDistribution(argv){
   if(packages.inspectPackage(bundle).installationHash!==candidate.installationHash)throw Error('Frozen application changed during acceptance.');
   receipt.artifacts={bundle,archive,installer:setup,sourceFingerprint:candidate.sourceFingerprint,packageHash:candidate.hash,archiveSha256:artifact.sha256,installerSha256:candidate.installer.sha256};
   receipt.qualification='Source suite and exact extracted package acceptance. Installer/update/rollback behavior requires separate release qualification when its recipe or transition behavior changes; no live registration was touched.';
-  if(values.key){
-   await run('publisher-signature',process.execPath,['scripts/sign-desktop-release.mjs','--bundle',bundle,'--archive',archive,'--installer',setup,'--key',values.key,'--channel',values.channel,'--out',path.join(output,'package','release.json')]);
-   const signed=verifyRelease(JSON.parse(fs.readFileSync(path.join(output,'package','release.json'),'utf8')),{platform:'win32',arch:'x64',channel:values.channel});
-   if(signed.sourceCommit!==sourceCommit||signed.packageHash!==candidate.hash)throw Error('Signed release differs from accepted source/package.');
-   receipt.release=signed;
-  }
+  // A native builder exports exact accepted bytes; only Build Mac signs them.
+  const payload=path.join(output,'package','publisher-payload.json');
+  await run('publisher-payload',process.execPath,['scripts/create-desktop-payload.mjs','--bundle',bundle,'--archive',archive,'--installer',setup,'--source-commit',sourceCommit,'--channel',values.channel,'--out',payload]);
+  const companion=path.join(output,'package','Proteus-'+metadata.version+'-source.tar.gz');
+  await run('source-companion','git',['archive','--format=tar.gz','--output',companion,sourceCommit]);
+  receipt.publisher={state:'unsigned-awaiting-authority',payload,payloadSHA256:packages.fileDigest(payload),sourceCommit};
+  receipt.artifacts.sourceCompanion={file:companion,sha256:packages.fileDigest(companion),bytes:fs.statSync(companion).size};
   fs.rmSync(extracted,{recursive:true});record('complete',{completedAt:new Date().toISOString(),published:false,installed:false});return receipt;
  }catch(error){record('failed',{error:error.message});throw error;}
 }

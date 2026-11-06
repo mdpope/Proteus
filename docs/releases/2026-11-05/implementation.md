@@ -53,3 +53,19 @@ The operator selected a new Build Mac publisher key and then reaffirmed that Bui
 must be source authority and signer for all built software. Native builders supply unsigned
 accepted artifacts. Complete the trust transition without retaining builder signing authority;
 no key has yet been generated, moved or retired at this checkpoint.
+
+
+## P3 signing authority source checkpoint
+
+New publisher public key 705abc96f9f4d01b07488fac is bundled beside the legacy key for a verified
+rotation transition. The new private key was generated only on Build Mac outside all checkouts.
+Windows custody metadata confirms the old key ID and no active signing/build job; encrypted
+one-time transfer is in progress, and Windows key retirement has not happened yet.
+
+Native Windows builds no longer receive a publisher key. Legacy policies remain readable while
+the new worker discards their signing reference; new policies require only source/toolchain paths.
+Windows distribution exports exact unsigned payload and source companion. All production signing
+CLIs require Mac; payload signing preserves native target and exact accepted bytes. Unsigned
+payloads cannot pass updater signature verification. Full source suite: 1,586 pass / four skip /
+zero fail; static checks pass. Encrypted custody tests bind signer, recipient, checksum, expiry and
+exclusive output and reject tampering. No new package or installed trust rollout is claimed.

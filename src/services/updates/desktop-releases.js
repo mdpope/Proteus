@@ -12,7 +12,13 @@ export function verifyRelease(envelope,{platform=process.platform,arch=process.a
  const key=keys.find(key=>key.id===envelope.keyId);if(!key)throw Error('This release publisher key is not trusted by the installed app.');
  const bytes=Buffer.from(envelope.payload,'base64url');
  if(!verify(null,bytes,createPublicKey(key.publicKey),Buffer.from(envelope.signature,'base64url')))throw Error('The release signature is invalid.');
- const value=JSON.parse(bytes.toString('utf8'));
+ const value=validateReleasePayload(JSON.parse(bytes.toString('utf8')),{platform,arch,channel,now});
+ return {...value,verification:{keyId:key.id,signatureVerified:true}};
+}
+
+// Shared structural validation does not establish publisher trust. Consumers
+// must still call verifyRelease on a signed envelope before staging/installing.
+export function validateReleasePayload(value,{platform=process.platform,arch=process.arch,channel='stable',now=Date.now()}={}){
  if(value.schemaVersion!==1||value.product!=='org.proteusapp.proteus.desktop'||value.platform!==platform||value.arch!==arch||value.channel!==channel||!['stable','preview'].includes(channel))throw Error('This release targets a different product, platform, architecture or channel.');
  if(!/^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$/.test(value.id||'')||!/^\d+\.\d+\.\d+(?:[-+][A-Za-z0-9.-]+)?$/.test(value.version||'')||!value.buildRevision||!/^[a-f0-9]{64}$/.test(value.sourceFingerprint||'')||!/^[a-f0-9]{64}$/.test(value.packageHash||''))throw Error('The signed release identity is incomplete.');
  if(value.sourceCommit!==undefined&&!/^[a-f0-9]{40,64}$/.test(value.sourceCommit))throw Error('The signed release source commit is invalid.');
@@ -25,7 +31,7 @@ export function verifyRelease(envelope,{platform=process.platform,arch=process.a
  if(!a||a.format!=='tar.gz'||!/^[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.tar\.gz$/.test(a.filename||'')||!Number.isSafeInteger(a.bytes)||a.bytes<1||a.bytes>releaseLimits.archiveBytes||!Number.isSafeInteger(a.unpackedBytes)||a.unpackedBytes<1||a.unpackedBytes>releaseLimits.unpackedBytes||!/^[a-f0-9]{64}$/.test(a.sha256||'')||a.path!==releasePath+(hosted?a.filename:'artifact'))throw Error('The signed release artifact is invalid.');
  const installer=value.installer;
  if(platform==='win32'&&(!installer||!/^[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.exe$/.test(installer.filename||'')||!Number.isSafeInteger(installer.bytes)||installer.bytes<1||installer.bytes>releaseLimits.archiveBytes||!/^[a-f0-9]{64}$/.test(installer.sha256||'')||installer.path!==releasePath+(hosted?installer.filename:'installer')))throw Error('The signed Windows installer is invalid.');
- return {...value,verification:{keyId:key.id,signatureVerified:true}};
+ return value;
 }
 
 export async function extractRelease(file,destination,release){

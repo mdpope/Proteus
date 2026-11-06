@@ -1,11 +1,20 @@
 # Named releases and distribution
 
+Build Mac is the source of truth, release authority and publisher signer for **all** platforms.
+Windows/Linux builders return immutable tested artifacts, matching source companions and unsigned
+payloads. They hold no publisher key and never sign or publish. Signing/publication must not depend
+on a builder being online. The operator chose a new Mac-generated key for Nov 5; transition
+signatures use the legacy key only after protected one-time custody transfer to Build Mac.
+Both public keys remain bundled during verified rollout; retire legacy trust only when compatible
+consumers have installed the transition. Private key paths and receipts stay in the private ledger.
+
+
 ## Signing an accepted payload on the publisher host
 
 When a native builder and publisher use different platforms, preserve the exact accepted payload
 bytes, including its target and dates. `scripts/sign-desktop-payload.mjs` accepts absolute
 `--payload`, `--key` and new `--out` paths, the payload's `--sha256` and full `--source-commit`.
-It checks the byte hash and source pin, uses the existing private Ed25519 key outside the source
+It checks the byte hash and source pin, uses the authority’s private Ed25519 key outside the source
 checkout, and runs the normal updater verifier with the native target and bundled publisher trust
 before writing an exclusive envelope. The CLI cannot select another trust store. Do not use this
 helper as evidence of native acceptance: retain the builder's package/source receipts separately.
@@ -115,8 +124,9 @@ and resumed coordinator after restart rather than treating a pre-restart task re
    in their authorized source environment. Configure only the actual source/build access needed;
    consumer installations need no source checkout, compiler, Node/npm or build toolchain.
 4. Run source/static checks, native packaging, official extraction and exact-package acceptance.
-   Check migrations and rollback compatibility. Sign the accepted immutable package with the
-   existing publisher key and preserve matching source provenance. Source tests and model completion
+   Check migrations and rollback compatibility. Export the accepted unsigned payload with
+   `scripts/create-desktop-payload.mjs`, record its SHA-256 and preserve matching source provenance.
+   Build Mac signs those exact bytes with `scripts/sign-desktop-payload.mjs` after receipt review. Source tests and model completion
    do not prove that a package was installed or that its live workflow passed.
 5. Return exact package/manifest hashes and accepted native artifacts to the command center.
    Publish them once. Subsequent machines download those bytes rather than rebuilding. A late

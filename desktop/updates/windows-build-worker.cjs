@@ -14,6 +14,6 @@ try{
  run(policy.git,['clone','--shared','--no-checkout',policy.source,source]);run(policy.git,['-C',source,'checkout','--detach',job.sourceCommit]);
  if(JSON.parse(fs.readFileSync(path.join(source,'package.json'),'utf8')).version!==job.version)throw Error('Requested version differs from the exact source commit.');
  run(policy.node,[policy.npmCli,'ci','--prefix',source]);
- const result=run(policy.node,[path.join(source,'scripts','windows-distribution.mjs'),'--source-commit',job.sourceCommit,'--output',output,'--channel',job.channel,'--build-if-missing','--npm-cli',policy.npmCli,'--key',policy.publisherKey,'--dependencies-ready']);
+ const result=run(policy.node,[path.join(source,'scripts','windows-distribution.mjs'),'--source-commit',job.sourceCommit,'--output',output,'--channel',job.channel,'--build-if-missing','--npm-cli',policy.npmCli,'--dependencies-ready']);
  const receipt=JSON.parse(result);atomic(file,{...job,phase:'complete',completedAt:new Date().toISOString(),result:receipt,published:receipt.resolution==='published',installed:false});
 }catch(error){if(job)atomic(file,{...job,phase:'attention',error:error.message});console.error(error.message);process.exitCode=1;}

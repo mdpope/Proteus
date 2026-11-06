@@ -1,3 +1,9 @@
+## Nov 5 publisher authority checkpoint
+
+New Mac public trust and unsigned Windows builder handoff pass source validation (1,586/four
+skips). Production signing CLIs require Mac. Legacy key custody transfer/retirement, signed
+transition rollout and independent platform pending-publication acceptance remain outstanding.
+
 ## Nov 5 managed MCP execution checkpoint
 
 Shared runtime/health, owner HTTP transport and Codex/Copilot bridge source tests pass (1,583/four

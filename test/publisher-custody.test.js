@@ -1,0 +1,27 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import {generateKeyPairSync,createHash} from 'node:crypto';
+import {privateTemporaryDirectory,hasPrivatePermissions} from '../src/shared/private-paths.cjs';
+import {initializePublisher,exportLegacyPublisher,importLegacyPublisher,publisherPublic} from '../scripts/publisher-custody.mjs';
+const sha=b=>createHash('sha256').update(b).digest('hex');
+test('encrypted custody binds old trusted signer and exact recipient, with no plaintext handoff',t=>{
+ const root=privateTemporaryDirectory(path.join(os.tmpdir(),'publisher-custody-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+ const initialized=initializePublisher(path.join(root,'authority'));assert.ok(hasPrivatePermissions(initialized.keyFile));
+ assert.throws(()=>initializePublisher(path.join(root,'authority')),/already exists/);
+ const old=generateKeyPairSync('ed25519'),identity=publisherPublic(old.privateKey),keys=[identity],keyFile=path.join(root,'legacy.pem');
+ const pem=old.privateKey.export({type:'pkcs8',format:'pem'});fs.writeFileSync(keyFile,pem,{mode:0o600});
+ const exportArgs={keyFile,recipientFile:initialized.recipient,recipientSHA256:initialized.recipientSHA256,expectedKeyId:identity.id,keys,output:path.join(root,'ciphertext.json')};
+ assert.throws(()=>exportLegacyPublisher({...exportArgs,recipientSHA256:'0'.repeat(64)}),/checksum/);
+ const receipt=exportLegacyPublisher(exportArgs),ciphertext=fs.readFileSync(receipt.output,'utf8');
+ assert.ok(!ciphertext.includes(pem.trim()));assert.equal(receipt.sha256,sha(Buffer.from(ciphertext)));
+ const args={envelopeFile:receipt.output,expectedSHA256:receipt.sha256,receiverFile:initialized.receiver,recipientSHA256:initialized.recipientSHA256,expectedKeyId:identity.id,transferId:receipt.transferId,output:path.join(root,'imported.pem'),keys};
+ assert.throws(()=>importLegacyPublisher({...args,transferId:'different'}),/identity/);
+ assert.throws(()=>importLegacyPublisher({...args,now:Date.now()+86400001}),/time/);
+ const accepted=importLegacyPublisher(args);assert.equal(accepted.proofVerified,true);assert.equal(accepted.protected,true);assert.equal(fs.readFileSync(args.output,'utf8'),pem);
+ assert.throws(()=>importLegacyPublisher(args),/EEXIST/);
+ const modified=JSON.parse(ciphertext);modified.signature='a'.repeat(86);fs.writeFileSync(receipt.output,JSON.stringify(modified));
+ assert.throws(()=>importLegacyPublisher({...args,expectedSHA256:sha(fs.readFileSync(receipt.output))}),/signature/);
+});

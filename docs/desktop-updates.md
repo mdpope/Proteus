@@ -1,3 +1,17 @@
+## Publisher custody — Nov 5
+
+Build Mac owns source/release authority and signs every platform's accepted manifest. Builders
+export unsigned accepted payloads and source companions; their policies no longer require a key.
+Legacy Windows policy files remain readable, but the new worker discards their key reference and
+cannot sign. The builder CLI explicitly rejects --key. Owner updater installation still requires a
+trusted signed envelope; an unsigned payload cannot be staged as a release.
+
+The operator chose rotation to a new Mac-generated key. A bounded one-time RSA-OAEP/SHA-256
+handoff, signed by the old publisher and pinned to the Mac recipient, can transfer the old key for
+transition signing on Mac. Private bytes never travel in chat, source, release packages or plaintext
+transfer assets. Verify protected import and signing proof before removing the Windows copy/reference.
+Do not retire old public trust until rollout verifies that clients have learned the new public key.
+
 ## November 1 — automatic navigation preservation and coordinated targets
 
 The private device-role register chooses builders and consumers. Build once per OS/architecture,

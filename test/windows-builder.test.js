@@ -85,3 +85,12 @@ test('a launched worker that exits before its first update is reconciled without
  const cancelled=builder.cancelBuild(root,{operationId,buildRequestHash:requestHash});assert.equal(cancelled.job.phase,'cancelled');assert.equal(cancelled.job.priorFailure,stopped.job.error);
  assert.equal(JSON.parse(fs.readFileSync(path.join(directory,'launch.json'),'utf8')).pid,exited.pid);
 });
+
+test('legacy Windows policies remain readable but no signing reference reaches a new worker',t=>{
+ const root=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-builder-keyless-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+ const value={schemaVersion:1,root,repository:builder.repository,publisherKey:path.join(root,'never-read.pem'),...Object.fromEntries(['source','node','npmCli','git'].map(k=>[k,path.join(root,k)]))};
+ packages.atomic(path.join(root,'windows-builder.json'),value);
+ const policy=builder.readPolicy(root);assert.equal(policy.signingAuthority,'external');assert.equal(Object.hasOwn(policy,'publisherKey'),false);
+ assert.equal(JSON.parse(fs.readFileSync(path.join(root,'windows-builder.json'))).publisherKey,value.publisherKey,'inspection does not mutate existing policy or key');
+ packages.atomic(path.join(root,'windows-builder.json'),{...policy,schemaVersion:2});assert.equal(builder.readPolicy(root).signingAuthority,'external');
+});

@@ -1,3 +1,12 @@
+## Nov 5 sole Mac publisher authority checkpoint
+
+Operator explicitly requires Build Mac source truth and signer for all built software and chose
+new-key rotation. New public key 705abc96f9f4d01b07488fac is bundled alongside the legacy trust.
+Windows builds now export unsigned accepted payloads/source companions and receive no signing key;
+signing CLIs run only on Mac. Protected encrypted legacy custody transfer is in progress, with no
+Windows key deletion yet. Full tests 1,586 pass/four skip; static checks pass. Private custody/draft
+receipts are outside Git. Do not build before remaining full plan/digest implementation is ready.
+
 ## Nov 5 managed broker checkpoint
 
 Managed runtime/HTTP transport, per-run native MCP bridge and Codex/Copilot attachment pass the
