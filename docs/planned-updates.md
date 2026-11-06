@@ -1,3 +1,13 @@
+## Mnemosyne operations — implemented in Nov 5 source
+
+The operator lifted the Mnemosyne implementation deferral for this release. Desktop/web now
+share Overview, Activity and execution detail, Schedules, Services, Logs and Configuration views.
+Core runtime setup remains desktop-only; web receives sanitized read-only status and retains its
+existing schedule controls. Native owners and working schedules are unchanged. Bounded receipt
+projection preserves claim/event lineage and applied/not-applicable/delegated outcomes.
+See [scope, contract and acceptance](mnemosyne-operations.md). Independent native-core extraction,
+additional source/watchers and iOS-library expansion remain explicitly open. Deployment is held.
+
 ## Guided ADO scope expansion
 
 The operator requests guided authentication and discovery with all account-accessible ADO

@@ -1,3 +1,13 @@
+## November 6 — shared Mnemosyne observer, desktop configuration
+
+One renderer and stylesheet implement the desktop/web operations design. Paired web clients get
+sanitized, bounded on-demand observations rather than private runtime settings or raw native logs.
+No native service lifecycle is transferred into Proteus. Existing native receipts supply distinct
+outcomes and opaque event/claim lineage; missing records cannot imply failure or successful filing.
+Core configuration remains on the owner desktop. Legacy IDs and stored settings are retained for
+compatibility. See [the implementation contract](mnemosyne-operations.md) for the independent native
+product work that is still required. The operator authorized source/build/test, not deployment.
+
 ## Nov 5: workspace file browsing and viewer residency
 
 Extend document viewing for supported raster images rather than inventing a separate authorization
