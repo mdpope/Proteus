@@ -1,3 +1,26 @@
+## Nov 6 — focused Mac ADO and reading-position correction
+
+Corrective source `6181b45be346108be5cee4270ff174d1f56642fb` fixes validation of
+recognized draft-07 input schemas from the pinned official ADO 2.11.0 catalog. The prior
+2020-only validator rejected those probes before a business read. Exact probe names and
+read-only annotations remain enforced; unknown dialects and invalid arguments still fail.
+The regression uses the real server catalog with synthetic authentication, not a live account.
+No PAT, expiry, scope, connection definition or schedule schema changes are required.
+
+This Mac package also includes the bounded reading-position producer/owner correction and
+passes an actual packaged update checkpoint with 40 meaningful scroll anchors. It does not
+claim the cause of the earlier live reading-position failure was established.
+
+Validation: 1,684 source tests passed, four skipped, zero failed; static checks pass. Signed
+bundle and officially extracted bundle both pass packaged UI, terminal and restart acceptance.
+Packaged reading-position reload/cold-restart/checkpoint acceptance passes. Source provenance
+is clean. Build: `6181b45be346+src.a031869a5213`; fingerprint:
+`a031869a5213a1700d6cee34ea0b7e6df255ada475127660eed3fb1946d27ae2`.
+
+Unattended scheduled-browser window allocation, background viewport interaction and the reported
+active-browser-turn unload refusal remain separate open corrections. They are not in this package.
+Actual authenticated ADO probes and full organization workflows recovery/repetition acceptance remain installed tests.
+
 ## Mnemosyne operations — implemented in Nov 5 source
 
 The operator lifted the Mnemosyne implementation deferral for this release. Desktop/web now

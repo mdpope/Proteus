@@ -1,3 +1,29 @@
+## Nov 6 — corrective Mac installed and healthy
+
+The focused ADO/reading-position Mac correction is signed and published from source
+`6181b45be346108be5cee4270ff174d1f56642fb`, build `6181b45be346+src.a031869a5213`.
+Release: `0.2.43-darwin-arm64-41c563583c7f5ed2eaaba91a`.
+Manifest digest: `8c83780925e1c18f2d1d314a4d0b988bce9c9e57ab3e2860ffd82829455f4165`.
+Archive SHA-256: `e45fb9fc81aa48de4c178ef4bdd3ee7d0445ad27b4458a932c128fca2021924c`.
+All 29 current public files passed independent HTTPS hash checks. Existing Windows/Linux
+artifacts remain unchanged. Work Mac independently resolved the exact signed catalog entry.
+
+The previous Work Mac update is verified complete/healthy on the earlier `88367d6` package,
+with three workspaces, 13 projects, 73 scopes, 270 tabs and four windows preserved without
+reported navigation differences. Its planning run has completed. A new unassigned owner update
+coordinator completed the corrective installation with verified health at 22:29:52 UTC. The
+owner navigation receipt reports three workspaces, 13 projects, 75 scopes, 281 tabs and four
+windows with no differences. Fresh maintenance retained two verified recovery generations.
+Full browser history, source selections, individual reading anchors and pairings remain separately
+unverified. Desktop observation could not proceed because another chat held its control lease.
+No credentials, operator PAT expiry or schedules were changed by this update.
+
+organization workflows has received the exact artifact handoff and retains ownership of live ADO qualification
+and synthesis replay. Current-only public retention removed the superseded Mac payload after
+all current hashes verified, recovering 270,053,376 observed bytes; its manifest receipt remains.
+The browser defects remain explicitly separate, so successful ADO delivery
+will not by itself establish complete Slack or digest acceptance. The release remains open.
+
 ## Nov 6 — Work Mac normal checkpoint passed
 
 The operator ran the installed owners normal Save Window Session operation for each of
