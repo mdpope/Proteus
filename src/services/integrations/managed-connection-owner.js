@@ -112,7 +112,7 @@ export class ManagedConnectionOwner {
     selected.push({binding,definition,status:this.manager.status(binding),effectiveRunPermission:{connectionAllowed:permission.allowed,reason:permission.reason}});
    }catch{selected.push({name:requirement.name,state:'configuration-mismatch'});}
   }
-  if(args.action==='list')return {connections:selected.map(row=>row.binding?{connectionId:row.binding.connectionId,name:row.binding.name,configurationRevision:row.binding.configurationRevision,expected:row.definition.expected,status:row.status,effectiveRunPermission:row.effectiveRunPermission}:row),recoveryEvents:this.events.filter(e=>selected.some(row=>row.binding&&e.key===row.binding.connectionId+':'+row.binding.configurationRevision))};
+  if(args.action==='list')return {runReadiness:structuredClone((run.managedConnectionReadiness||[]).filter(row=>requirements.some(requirement=>requirement.name===row.name))),connections:selected.map(row=>row.binding?{connectionId:row.binding.connectionId,name:row.binding.name,configurationRevision:row.binding.configurationRevision,expected:row.definition.expected,status:row.status,effectiveRunPermission:row.effectiveRunPermission}:row),recoveryEvents:this.events.filter(e=>selected.some(row=>row.binding&&e.key===row.binding.connectionId+':'+row.binding.configurationRevision))};
   const row=selected.find(row=>row.binding?.connectionId===args.connectionId);if(!row||args.expectedRevision!==row.binding.configurationRevision)throw Error('Choose a selected managed connection and its exact captured revision.');
   if(!row.effectiveRunPermission.connectionAllowed)throw Error('This run has not granted connection access. Review its own permission profile.');
   if(args.action==='repair')await this.manager.disconnect(row.binding);

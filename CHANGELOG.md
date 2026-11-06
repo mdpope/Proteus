@@ -1,3 +1,9 @@
+## Nov 5 optional connection compatibility
+
+- Keep independent workflow work runnable when an optional connection readiness check fails or
+  times out; expose its persisted coverage gap through selected-run status.
+- Capture an empty-category workspace reference without resolving unrelated defaults.
+
 ## Nov 5 agent communication guidance
 
 - Guide agents to steer relevant updates to active, capable chats and queue messages that should

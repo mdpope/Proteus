@@ -1,3 +1,16 @@
+## Nov 5 optional connection compatibility
+
+Source fixes persist optional readiness exceptions and denied/missing selections as sanitized
+coverage gaps exposed in selected-run integration status. Empty workspace categories capture
+identity/revision without evaluating unrelated defaults. organization workflows reports 105 source tests passing;
+live schedules/authentication remain untouched. Signed candidate and installed two-run acceptance
+remain pending. See the managed connection contract for the unchanged export schema.
+
+Validation: full bounded-concurrency suite passes 1,630 tests with four skips; static checks
+and 18 focused checks pass. The initial default-concurrency run failed one unrelated heartbeat
+timing assertion; its ten-test suite and the full bounded rerun pass. No runtime heartbeat code
+was changed.
+
 ## Agent communication guidance
 
 Updated shared orientation, chat-tool description/mode help and agent-control documentation to

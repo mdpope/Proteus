@@ -61,3 +61,21 @@ test('ambiguous native definitions and malformed portable requirements fail clos
  assert.throws(()=>validateManagedRequirements([{name:'example',required:true,capabilities:[],endpoint:'https://unrelated.test'}]));
  assert.throws(()=>validateManagedRequirements([{name:'example',required:'yes',capabilities:[]}]));
 });
+
+test('optional thrown readiness, absent binding and declined access persist gaps without exposing errors',async t=>{
+ const f=fixture(t);f.run.schedule.managedConnections[0].required=false;
+ let saved;f.args.update=()=>{saved=structuredClone(f.run.managedConnectionReadiness);};
+ f.manager.ensureReady=async()=>{throw Error('private endpoint and secret');};
+ let bridge=await prepareManagedRun(f.manager,f.args);await bridge.close();
+ assert.equal(saved[0].state,'temporarily-unavailable');assert.deepEqual(saved[0].capabilities,['issue.read']);assert.equal(saved[0].required,false);
+ assert.ok(!JSON.stringify(f.run).includes('private endpoint'));
+ f.args.ask=async()=> 'decline';bridge=await prepareManagedRun(f.manager,f.args);await bridge.close();assert.equal(saved[0].state,'permission-denied');
+ f.run.schedule.managedConnections[0].name='missing';bridge=await prepareManagedRun(f.manager,f.args);await bridge.close();assert.equal(saved[0].state,'configuration-mismatch');
+});
+test('required thrown readiness and cancellation still stop provider preparation',async t=>{
+ const f=fixture(t);f.manager.ensureReady=async()=>{throw Error('timeout');};
+ await assert.rejects(prepareManagedRun(f.manager,f.args),/timeout/);
+ f.run.schedule.managedConnections[0].required=false;
+ f.manager.ensureReady=async()=>{f.controller.abort();throw Error('Cancelled');};
+ await assert.rejects(prepareManagedRun(f.manager,f.args),/Cancelled/);
+});

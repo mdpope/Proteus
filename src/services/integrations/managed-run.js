@@ -23,7 +23,7 @@ export async function prepareManagedRun(manager,args){
    bindings.push(binding);selected.push(requirement);
   }catch{
    if(requirement.required)throw Error(`Required managed connection ${requirement.name} has no matching workspace binding or capabilities.`);
-   unavailable.push({name:requirement.name,state:'configuration-mismatch'});
+   unavailable.push({...requirement,state:'configuration-mismatch'});
    emit('system',`Optional managed connection ${requirement.name} has no matching workspace binding. Continue independent work and retain the missing evidence scope.`);
   }
  }
@@ -33,18 +33,26 @@ export async function prepareManagedRun(manager,args){
  if(prior&&JSON.stringify(prior)!==JSON.stringify(bindings)){
   run.managedConnectionHistory??=[];run.managedConnectionHistory.push({bindings:structuredClone(prior),endedAt:new Date().toISOString()});
  }
- run.schedule.managedConnectionBindings=structuredClone(bindings);update();
- const ready=[];run.managedConnectionReadiness=unavailable;
+ run.schedule.managedConnectionBindings=structuredClone(bindings);
+ const ready=[];run.managedConnectionReadiness=unavailable;update();
  for(const [index,binding]of bindings.entries()){
   if(signal.aborted)throw Error('Cancelled');
   const answer=await ask({type:'permission',question:`Connect managed ${binding.name} for this turn?`,details:{kind:'mcp-connect',serverName:binding.name,toolName:'*',readOnly:false,intention:'Connect the captured managed binding. Each tool retains its own permission check.'}},signal);
   if(!['approve','approve-auto'].includes(answer)){
    if(selected[index].required)throw Error('A required managed connection was declined.');
-   run.managedConnectionReadiness.push({name:binding.name,state:'permission-denied'});continue;
+   run.managedConnectionReadiness.push({...selected[index],state:'permission-denied'});update();
+   emit('system',`Optional managed connection ${binding.name} was declined. Continue independent work and retain the missing evidence scope.`);continue;
   }
-  const status=await manager.ensureReady(binding,{signal});
+  let status;
+  try{status=await manager.ensureReady(binding,{signal});}
+  catch(error){
+   if(signal.aborted||selected[index].required)throw error;
+   // Transport exceptions may contain private endpoint/error text. Persist only
+   // a fixed gap state; optional readiness cannot stop unrelated evidence work.
+   status={name:binding.name,state:'temporarily-unavailable',reason:'Readiness check failed or timed out.'};
+  }
   if(signal.aborted)throw Error('Cancelled');
-  run.managedConnectionReadiness.push(status);update();
+  run.managedConnectionReadiness.push({...status,name:binding.name,capabilities:[...selected[index].capabilities],required:selected[index].required});update();
   if(status.state==='ready')ready.push(binding);
   else if(selected[index].required)throw Error(`Required managed connection ${binding.name} is not ready: ${status.state}.`);
   else emit('system',`Optional managed connection ${binding.name} is unavailable (${status.state}). Continue independent work and retain the missing evidence scope.`);

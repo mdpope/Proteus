@@ -42,3 +42,16 @@ test('themed error pages use observed browser categories, preserve fragment dest
 test('browser event bursts coalesce only projections and disposal prevents stale window sends',()=>{
  let callback,flushes=0,timers=0,cancelled=0;const batch=new BrowserStateBatch(()=>flushes++,{setTimer:fn=>{callback=fn;timers++;return 1;},clearTimer:()=>cancelled++});for(let i=0;i<1000;i++)batch.request();assert.equal(timers,1);assert.equal(flushes,0);callback();assert.equal(flushes,1);batch.request();batch.close();callback();assert.equal(flushes,1);assert.equal(cancelled,1);
 });
+
+test('empty workspace categories capture identity without evaluating unrelated defaults',()=>{
+ const base={workspaceId:null,workspace:{cwd:'/synthetic/base',additionalDirectories:[]},entries:[{id:'core',kind:'instruction'}]};
+ const profile={id:'binding',name:'Binding',defaults:{selectedIds:['stale-unrelated']}};
+ const context={capture:args=>{assert.equal(args.workspaceId,undefined);return structuredClone(base);},scope:id=>{assert.equal(id,'binding');return profile;}};
+ const schedule={workspace:base.workspace,workspaceSources:[{workspaceId:'binding',categories:[]}],executionPermissions:{mode:'ask'}};
+ const result=resolveScheduleContext(schedule,context,{});
+ assert.deepEqual(result.context.entries,base.entries);assert.deepEqual(result.context.workspace,base.workspace);
+ assert.equal(result.executionPermissions.mode,'ask');assert.deepEqual(result.context.sourceWorkspaces[0].categories,[]);
+ const first=result.context.sourceWorkspaces[0].configurationRevision;profile.name='Renamed';
+ assert.notEqual(resolveScheduleContext(schedule,context,{}).context.sourceWorkspaces[0].configurationRevision,first);
+ context.scope=()=>{throw Error('Workspace not found.');};assert.throws(()=>resolveScheduleContext(schedule,context,{}),/not found/);
+});

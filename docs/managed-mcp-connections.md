@@ -302,3 +302,18 @@ bounds argument trees before its parser, but that is a mitigation, not an upstre
 Review the remaining advisory before freeze; do not silently substitute an incompatible major
 parser or claim a clean audit. The existing Electron 44.5.1 certificate advisory
 GHSA-jr5w-w6x2-84p9 also remains a release dependency task. No broad automatic audit fix was run.
+
+## Optional connections and identity-only capture
+
+An exported `workspaceSources:[{workspaceId:"OWNER_LOCAL_WORKSPACE_ID",categories:[]}]`
+captures only the existing workspace identity, name and configuration revision. It does not
+resolve that workspace's default source selections or import folders, permissions or MCPs.
+Base source selections and explicit execution permissions remain independently effective.
+
+`required:false` permits missing bindings/capabilities, declined connection access and unready
+or thrown/timed-out readiness checks to leave a persisted gap while independent work proceeds.
+It does not waive connection permissions, explicit workspace validity, cancellation or provider
+compatibility. Only ready connections enter the native catalog. Integration `list` returns
+`runReadiness` for selected requirements, including name, requested capabilities, required flag
+and captured state; distinguish this run evidence from current connection health. Required
+failures still stop preparation. No live workflow acceptance is implied.

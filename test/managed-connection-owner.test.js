@@ -37,6 +37,10 @@ test('model-free preflight coalesces near-term checks, caches fresh evidence and
 test('agent discovery is selected-workspace scoped and verify requires the captured revision and own grant',async t=>{
  const f=setup(t);await save(f.owner);f.runs.push({id:'selected',schedule:{context:{workspaceId:'workspace'},managedConnections:[{name:definition().name}]}},{id:'other',schedule:{context:{workspaceId:'other'},managedConnections:[{name:definition().name}]}});
  const selected=await f.owner.agent('selected',{action:'list'}),other=await f.owner.agent('other',{action:'list'});assert.equal(selected.connections[0].connectionId,'connection');assert.equal(other.connections[0].state,'configuration-mismatch');assert.equal(other.connections[0].expected,undefined);
+ const gap={name:definition().name,state:'temporarily-unavailable',capabilities:['jira.issue.read'],required:false};
+ f.runs[0].managedConnectionReadiness=[gap,{name:'unselected',state:'ready'}];
+ assert.deepEqual((await f.owner.agent('selected',{action:'list'})).runReadiness,[gap]);
+ assert.deepEqual((await f.owner.agent('other',{action:'list'})).runReadiness,[]);
  const expectedRevision=selected.connections[0].configurationRevision;
  await assert.rejects(f.owner.agent('selected',{action:'verify',connectionId:'connection',expectedRevision:'old'}),/captured revision/);
  f.deny();await assert.rejects(f.owner.agent('selected',{action:'verify',connectionId:'connection',expectedRevision}),/not granted/);assert.equal(f.checks(),0);
