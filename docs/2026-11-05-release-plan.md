@@ -4,7 +4,7 @@ Migrated from the Nov 4 plan on November 5, 2026. All queued scope and historica
 
 ## Operator hold — November 5, 2026
 
-- **Nov 3 must close first.** Nov 3 / 0.2.42 remains open. Do not build Nov 5 changes or open/reserve the next release until Nov 3 closeout is verified. This migration does not close Nov 3 or authorize its closeout work.
+- **Nov 3 must close first.** Nov 3 / 0.2.42 remains open. Do not build Nov 5 changes or open/reserve the next release until Nov 3 closeout is verified. The November 5 operator follow-up authorizes finishing Nov 3 publication, installation checks and closeout; it does not mark them complete.
 - **Wait for the daily-digest improvement chat.** Hold pending further instructions from that chat; capture any needed Proteus changes here as queued scope when its handoff arrives. The automation audit handoff has been received; its scoped unattended-execution requirement is now explicitly a hard blocker for fully automated synthesis. Only that blocker scope may use the narrow exception after Nov 3 closeout; no build starts while Nov 3 remains open.
 - **Build hold stays in force until the operator explicitly lifts it.** Routine requests, a completed chat, or Nov 3 closeout alone do not lift the hold.
 - **Narrow exception:** if the daily-digest chat explicitly identifies a change as a blocker on its end, record the blocker and exact required scope. The operator permits that blocker-specific exception to the digest hold; it does not lift the hold for other changes or bypass the Nov 3 closeout prerequisite.
@@ -137,7 +137,7 @@ Ten focused schedule-control tests pass. The full suite passes 1,542 tests with 
 using a short canonical temporary root; static checks pass. The initial default-temp run had
 11 path-alias/socket-path failures, all independently reproduced on unchanged Nov 3 source.
 No package was built, no installation changed and no real unattended workflow was tested.
-P7/P8 remain queued; these results apply only to P6 inspection/preview and revision fixes.
+These historical results apply only to P6; the later checkpoint below records implemented P7/P8.
 
 
 ## P7 — Source-aware schedule reconciliation (implemented in isolated source)
@@ -240,3 +240,71 @@ no-new-evidence run. Verify workflow outputs independently of model-turn complet
 Final isolated-source validation: 1,548 tests pass, four skip, zero fail; static checks pass.
 Native synthetic Mac sandbox and MCP-catalog probes pass without a model turn. No installed
 workflow success, cross-platform acceptance, build, publication or deployment is claimed.
+
+## Carried over from the Nov 3 closeout
+
+Found during the Nov 3 rollout on November 5. Planning only; scope is recorded, nothing is authorized.
+
+- **Linux 0.2.42 install rolled back (needs a product fix first).** The preservation check timed out
+  twice on "Saved tab membership, order, descriptors or closed identities changed during upgrade".
+  The local diagnosis: a document tab's registry entry carried `chatId` and `associationChatId`, the
+  saved window descriptors did not, and restore rewrote the registry entry without them (revision
+  33 to 34). Required: (1) restore must not strip registry-only descriptor fields from document
+  tabs, with a regression that restores a window whose saved markdown descriptors lack them;
+  (2) the update preservation receipt records the found inventory and the specific difference, not
+  only expected scopes and a generic error; (3) a rolled-back job left in `attention` needs a
+  supported review-and-clear path (the owner currently refuses reconciliation and maintenance
+  reports `canApply:false`); (4) reopening a document should re-associate an existing tab instead of
+  failing with "Destination already contains this tab or is full."; (5) explain the unattributed
+  closure of a window on that computer (three closed tombstones, no actor in any log). The Linux
+  package built at `568705c` stays deferred until a fixed build ships.
+- **Mac and Linux are not published to downloads.proteus.example.** Their publisher signatures can only come from the
+  Windows builder; only the Windows 0.2.42 release is published. This is the same authority problem
+  as the Build Mac authority item above, and it blocks `current.json` from advertising one
+  consistent release.
+- **Windows owner single-flight.** The owner rejects an update call while another (for example a
+  maintenance inspection of 25 to 60 seconds or more) is running with "Another update operation is
+  running", `status` does not expose the busy flag, and the Codex provider shows only "dynamic tool
+  request failed". Expose the busy operation in `status`, make a rejected call return the real
+  message, and give maintenance a progress or wait handle instead of a yielded cell.
+- **Windows owner builds cannot override TEMP.** The default TEMP carries extra access grants that
+  the private-storage check rejects, which hung the source suite when a fixture created its home with
+  a plain temp directory. Add a private-temp override to the owner build request, and a source-suite
+  per-test timeout so a rejected start fails fast instead of hanging. Audit remaining fixtures that
+  create homes without the private temporary directory helper.
+- **`desktop-package-ui` fails on the Windows extraction.** The terminal canvas was not visible
+  (second run, line 108; the Nov 2 baseline fails earlier at line 91, so the comparison is
+  incomplete). Both Windows computers reported health verified, but terminal rendering in the
+  installed app was not confirmed. Investigate whether the terminal renders in the installed app.
+- **Desktop Control Verify on a remote Windows session.** On one computer Verify passed discovery,
+  permissions and window listing but the observation returned no UI Automation tree; on another the
+  update chat's tab inventory returned zero tabs for the owner window. Determine whether these are
+  session or scope effects and make the update coordinator's post-install receipt include the
+  preservation counts it needs.
+- **Server access.** The release identity now reaches root-only work through an audited, hash-bound
+  wrapper over SSH and `sudo` (documented in `docs/release-process.md`). Replace the per-release
+  retention helper with a reviewed, reusable one in the private deployment workspace, and add the
+  Webmin zero-width-tab and Command Shell quirks to the operator runbook.
+
+## November 5 transcript reconciliation and digest-first sequence
+
+Reviewed the complete Nov 3 coordinator transcript through its final rate-limit failure and
+compared it with commit 2519241. The final carry-over list was saved before the failure; it is
+now also retained in the isolated Nov 5 implementation branch. P1–P5 and the update-blocking
+rules already cover the earlier requested follow-ups; the carry-over section preserves the
+later Linux, Windows, publication and server-process findings.
+
+Fresh receiving-owner evidence confirms the second Windows consumer installed 0.2.42 with
+verified health. Its independent post-install check still reported zero visible owner tabs,
+no exposed expected/found preservation receipt, no UI Automation tree and unverified terminal
+rendering. Treat this as an unresolved acceptance discrepancy, not proof of data loss or full
+acceptance. Publication also remains incomplete: the public current descriptor still advertises
+Nov 2 / 0.2.41, and the Nov 3 PR remains open. Finish these before closing Nov 3.
+
+Recommended first Nov 5 package: the already implemented P6–P10 digest controls only, rebased
+onto closed Nov 3 and validated before packaging. P7/P8 block unattended acceptance; P6/P9/P10
+provide configuration visibility, real source refresh and run evidence needed to verify it.
+Publish the accepted Mac artifact once and install it on the digest owner through its update
+coordinator. Then its workflow owner reconciles the prepared canonical exports and verifies
+a prompt-free workflow plus a second no-new-evidence run. Keep unrelated feature work queued
+until this acceptance is complete. No Nov 5 package or installation has started.
