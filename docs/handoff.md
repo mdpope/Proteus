@@ -1,3 +1,22 @@
+## Nov 5 current checkpoint — site discovery and client features
+
+The operator completed sign-in in the corrected Authentication Preview and confirmed that the
+site appears. This establishes live site discovery in that preview; connection confirmation,
+managed Jira reads/writes, silent renewal and organization workflows acceptance remain separate checks. Preserve
+the open Authentication Preview. No real Jira ticket was modified by these tests.
+
+The file-browser, image-viewer, Markdown properties/wiki links, larger overview, web navigation
+and completion-notification corrections are implemented and validated as described in
+[the client acceptance matrix](nov5-client-feature-acceptance.md). Full source suite: 1,671 passed, four skipped, zero failed;
+static checks pass. Electron file/Connections tests, Chromium and WebKit phone/tablet fixtures,
+authenticated Laravel/WebCrypto/two-owner web acceptance and one-tap answer focus on iPhone/iPad
+simulators pass. Web assets were rebuilt. Design Preview is open separately.
+
+Deployment remains held. No new packaged Mac candidate was produced by this feature checkpoint;
+Linux/Windows/iOS production builds remain deferred. Native workspace-file navigation, physical
+APNs delivery, production-network performance and full managed-auth workflow acceptance remain
+open; do not label the release fully verified. Earlier checkpoints below are historical.
+
 ## Nov 5 managed ADO source checkpoint
 
 Both initial adapters now have owner controls and scoped runtime paths. ADO uses protected MSAL

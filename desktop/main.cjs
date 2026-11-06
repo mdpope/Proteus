@@ -243,11 +243,12 @@ else {
       let result;for(const ctx of matches){const answer=await windows.run(ctx.id,()=>windowRuntime(value));if(answer!==undefined)result=answer;}return result;
     };
     try{service.contentTabs.seedWorkspace(workspaceSession.get());}catch(error){service.activity.log('warning','tabs.restore-failed',error.message);}
+    const {readFilePreview}=await import('../src/services/workspaces/workspace-preview.js');
     service.contentTabDocument = value => {
       if(!['chat','workspace','project','main','team'].includes(value.scope)||!/^[a-f0-9]{64}$/.test(value.documentId||''))throw new Error('Choose a host-bound chat document.');
       if(value.scope==='chat')service.engine.getRun(value.id);else if(value.scope==='workspace')service.context.scope(value.id);else if(value.scope==='project')projects.projectFor({projectId:value.id});
       const file=service.contentTabs.documentSource(value.id,value.documentId,value.scope),descriptor=service.contentTabs.get(value.scope,value.id).tabs.find(tab=>tab.documentId===value.documentId);
-      for(const root of service.workspaceFiles.roots().roots.filter(root=>root.available)){const relative=path.relative(root.path,file);if(relative&&!relative.startsWith('..'+path.sep)&&relative!=='..'&&!path.isAbsolute(relative)){const document=value.metadataOnly===true?{file:service.workspaceFiles.resolve(root.id,relative).resolved}:service.workspaceFiles.read({rootId:root.id,file:relative});return {...document,title:descriptor.title,mediaType:'text/markdown'};}}
+      for(const root of service.workspaceFiles.roots().roots.filter(root=>root.available)){const relative=path.relative(root.path,file);if(relative&&!relative.startsWith('..'+path.sep)&&relative!=='..'&&!path.isAbsolute(relative)){const document=value.metadataOnly===true?{file:service.workspaceFiles.resolve(root.id,relative).resolved}:readFilePreview(file,[root.path]);return {...document,title:descriptor.title,mediaType:document.mediaType||descriptor.mediaType};}}
       throw new Error('Document is outside a currently authorized workspace.');
     };
     const {chatResourcePlacement}=await import('../public/features/chats/chat-resource-placement.js');

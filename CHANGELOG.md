@@ -1,3 +1,10 @@
+## Nov 5 file views and client fixes
+
+- Add lazy workspace file browsing with scoped remote access and selected-file previews.
+- Extend document tabs to raster images and render Markdown Properties and relative wiki links.
+- Enlarge desktop/web tab overviews; avoid stale workspace navigation and unnecessary project-history reads.
+- Focus native question answers after one selection; retain one soundless completion alert in quiet mode.
+
 ## Nov 5 site picker correction
 
 - Keep validated Atlassian sites when optional scope metadata lacks a classic Jira scope label; report discovery separately from verified Jira access.

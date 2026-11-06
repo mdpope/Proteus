@@ -1,3 +1,22 @@
+## Nov 5 current checkpoint — site discovery and client features
+
+The operator completed sign-in in the corrected Authentication Preview and confirmed that the
+site appears. This establishes live site discovery in that preview; connection confirmation,
+managed Jira reads/writes, silent renewal and organization workflows acceptance remain separate checks. Preserve
+the open Authentication Preview. No real Jira ticket was modified by these tests.
+
+The file-browser, image-viewer, Markdown properties/wiki links, larger overview, web navigation
+and completion-notification corrections are implemented and validated as described in
+[the client acceptance matrix](nov5-client-feature-acceptance.md). Full source suite: 1,671 passed, four skipped, zero failed;
+static checks pass. Electron file/Connections tests, Chromium and WebKit phone/tablet fixtures,
+authenticated Laravel/WebCrypto/two-owner web acceptance and one-tap answer focus on iPhone/iPad
+simulators pass. Web assets were rebuilt. Design Preview is open separately.
+
+Deployment remains held. No new packaged Mac candidate was produced by this feature checkpoint;
+Linux/Windows/iOS production builds remain deferred. Native workspace-file navigation, physical
+APNs delivery, production-network performance and full managed-auth workflow acceptance remain
+open; do not label the release fully verified. Earlier checkpoints below are historical.
+
 ## Nov 5 Jira ticket read/write and callback diagnostics
 
 The operator explicitly requests read/write access to any Jira ticket the selected account can
@@ -85,15 +104,23 @@ on Work Mac. The earlier idle-blocker question is historical, not new deployment
 
 ### Current source checkpoints
 
-N15 is newly reported and queued: native iOS reproduction, implementation and verification remain
-open. This planning update does not lift the deployment hold.
+See [the client feature matrix and evidence](nov5-client-feature-acceptance.md) for the new
+file browser, image viewer, Properties/wiki links, larger overviews, completion notification
+correction and native question focus. WebKit phone/tablet engine checks and native iPhone/iPad
+question tests pass. Physical push and native workspace-file parity remain explicitly open.
+
+
+N15 is implemented and passes one-tap answer-focus tests on the existing iPhone and iPad
+simulators. Older-history/cancellation source paths preserve the exact request identity.
+Physical-device acceptance remains separate. Deployment remains held.
 
 N13 Connections redesign is implemented and exercised in disposable Electron at desktop/tablet/phone
 widths; local web build and static checks pass. The final regression suite including the question
 fix passed 1,641 tests with four skips using a short canonical temporary root. A default Mac temporary path
 run exposed fixture alias/socket-length assumptions; no production guard was weakened.
 Design Preview is open independently on Accounts & Integrations. Populated cards were tested
-with synthetic accounts; no live connection or authentication changed. N1–N11 remain open.
+with synthetic accounts; no live connection or authentication changed. This is the earlier
+checkpoint; the current N1–N12 source and acceptance distinctions are in the matrix above.
 
 The operator confirms no new Entra public-client registration will be available. It is no longer a
 waiting prerequisite for this workflow. [ADO alternative qualification](ado-authentication-alternatives.md)

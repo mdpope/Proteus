@@ -1,3 +1,11 @@
+## Nov 5: workspace file browsing and viewer residency
+
+Extend document viewing for supported raster images rather than inventing a separate authorization
+model. File browsing has an explicit per-device, per-workspace owner grant independent of chat
+document access. Web file views persist only root/path metadata and re-read through that grant.
+Bounded directory traversal replaces background indexing; hidden previews release file bytes.
+See [the implementation and client limits](nov5-client-feature-acceptance.md).
+
 ## Nov 5 — discover identity before pinning new Atlassian connections
 
 Keep enrollment outside the runnable registry. A local owner action starts PKCE/state-protected

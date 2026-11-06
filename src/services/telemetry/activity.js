@@ -119,13 +119,16 @@ export class ActivityStore extends EventEmitter {
     const offlineSeconds = Math.max(0, Math.floor(Number(detail.offlineSeconds) || 0));
     // Useful text: the chat's title, what happened, and which computer it came from.
     const chatTitle = notificationText(detail.chatTitle, 120), preview = notificationText(detail.preview, 360), hostName = notificationText(detail.hostName, 80);
-    const requestKey=type==='review.required'&&detail.requestId?[detail.hostId,detail.chatId,detail.requestId].join(':'):null;
+    const completion=['chat.completed','schedule.completed'].includes(type);
+    const requestKey=type==='review.required'&&detail.requestId?[detail.hostId,detail.chatId,detail.requestId].join(':'):completion&&detail.turnId?[type,detail.hostId,detail.chatId,detail.turnId].join(':'):null;
     if(requestKey){const previous=this.data.notifications.find(item=>item.requestKey===requestKey);if(previous)return previous;}
     const title = chatTitle ? (type === 'review.required' ? (detail.requestKind==='permission'?'Approval required · ':detail.requestKind==='question'?'Question · ':'Needs attention · ') : type === 'schedule.completed' ? 'Schedule done · ' : '') + chatTitle : generic;
     const body = type === 'device.reconnected' ? `Connected to the relay after approximately ${offlineSeconds < 60 ? offlineSeconds + ' seconds' : Math.round(offlineSeconds / 60) + ' minutes'} offline.` : preview || (chatTitle ? generic + '.' : 'Open Proteus to view the details.');
     const item = { id: randomUUID(), type, title, body, ...(hostName ? { hostName } : {}), createdAt: this.clock().toISOString(), ...Object.fromEntries(['hostId', 'chatId', 'scheduleId', 'deviceId'].filter(key => typeof detail[key] === 'string').map(key => [key, detail[key].slice(0, 128)])), ...(type === 'device.reconnected' ? { offlineSeconds } : {}) };
-    if(requestKey)Object.assign(item,{requestKey,requestId:detail.requestId,requestKind:detail.requestKind});
-    item.silent=this.data.preferences.inAppEnabled===false||this.data.preferences[type]===false||(this.data.preferences.quietMode!==false&&['chat.completed','schedule.completed','device.added','device.reconnected'].includes(type));
+    if(requestKey)item.requestKey=requestKey;
+    if(type==='review.required'&&detail.requestId)Object.assign(item,{requestId:detail.requestId,requestKind:detail.requestKind});
+    if(completion&&this.data.preferences.quietMode!==false)item.sound=false;
+    item.silent=this.data.preferences.inAppEnabled===false||this.data.preferences[type]===false||(this.data.preferences.quietMode!==false&&['device.added','device.reconnected'].includes(type));
     this.data.notifications.push(item); this.data.notifications = this.data.notifications.slice(-limits.notifications);
     this.save(); this.emit('notification', item);this.queue('notifications',item);return item;
   }
@@ -153,7 +156,7 @@ export class ActivityStore extends EventEmitter {
       for(const request of reviewRequests(run))if(before?.pending!==request.id&&!before?.questions?.includes(request.id))this.add('review.required',{...describe(run),requestId:request.id,requestKind:request.kind,preview:request.preview});
       if (run.status === 'completed' && before?.status !== 'completed') {
         const scheduled = run.trigger !== 'chat';
-        if (!scheduled || run.schedule.notifications?.onCompletion === true) this.add(scheduled ? 'schedule.completed' : 'chat.completed', { ...describe(run), preview: lastReply(run), ...(scheduled ? { scheduleId: run.schedule.id } : {}) });
+        if (!scheduled || run.schedule.notifications?.onCompletion === true) this.add(scheduled ? 'schedule.completed' : 'chat.completed', { ...describe(run), turnId:run.turns?.at(-1)?.id||run.finishedAt||run.updatedAt, preview: lastReply(run), ...(scheduled ? { scheduleId: run.schedule.id } : {}) });
       }
       if (before?.status !== run.status) this.log(['failed', 'interrupted'].includes(run.status) ? 'warning' : 'info', 'chat.' + run.status, `Chat ${run.id}: ${run.status}.`, { hostId: hostId() });
     };

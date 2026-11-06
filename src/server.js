@@ -49,6 +49,8 @@ import { CodexProvider } from './providers/codex.js';
 import { ClaudeProvider } from './providers/claude.js';
 import { OmiIntegration, isOmiSchedule } from './services/tools/omi.js';
 import { LifeStore } from './services/life/life.js';
+import {WorkspaceExplorer} from './services/workspaces/workspace-explorer.js';
+import {readFilePreview} from './services/workspaces/workspace-preview.js';
 import { WorkspaceFiles } from './services/workspaces/workspace-files.js';
 import { SettingsStore } from './services/settings/settings.js';
 import { ContextStore } from './services/workspaces/context.js';
@@ -125,6 +127,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   const browserProfiles=new BrowserProfiles(home,account);
   const activity = new ActivityStore(home, { identity: () => life.api.identity(), publish: (item, identity, kind='notifications') => account.request({ path:'/'+kind, method:'POST', body:item, identity }) });
   const workspaceFiles = new WorkspaceFiles(() => context.config());
+  const workspaceExplorer = new WorkspaceExplorer(() => context.config());
   const attachments = new ChatAttachmentStore(home);
   // MTPLX is a local Apple-silicon model server. The Mac app registers it so it is
   // available when the server is running; status reports it unavailable otherwise.
@@ -345,6 +348,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         if (value.action === 'revoke') return json(200, remote.revoke(value.id));
         if (value.action === 'resource-access') return json(200, remote.setResourceAccess(value.id, value.enabled));
         if (value.action === 'browser-access') return json(200, remote.setBrowserAccess(value.id, value.enabled));
+        if (value.action === 'workspace-file-access') return json(200, remote.setWorkspaceFileAccess(value.id,value.workspaceIds));
         if (value.action === 'document-access') return json(200, remote.setDocumentAccess(value.id, value.enabled));
         if (value.action === 'document-review') return json(200, remote.reviewDocument(value.requestId,value.approved));
         throw new Error('Unknown remote action.');
@@ -484,6 +488,12 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       if (url.pathname === '/api/life/data' && req.method === 'POST') { const value = await body(req); return json(200, await life.data(value.section, value.query || {})); }
       if (url.pathname === '/api/life/action' && req.method === 'POST') { const value = await body(req, 30 * 1024 * 1024); const result = await life.action(value.action, value.input || {}, value.idempotencyKey, value.identity); notify(); return json(200, result); }
       if (url.pathname === '/api/life/evidence' && req.method === 'POST') { const value=await body(req); return json(200, await life.evidence(value.attachmentId, value.identity)); }
+      if (url.pathname.startsWith('/api/workspace-explorer/') && req.method === 'POST') {
+        const value=await body(req),action=url.pathname.split('/').at(-1);
+        if(!['roots','browse','preview'].includes(action))throw Error('Unknown file browser action.');
+        const controller=new AbortController();res.once('close',()=>controller.abort());
+        return json(200,await workspaceExplorer[action](value,{signal:controller.signal}));
+      }
       if (url.pathname === '/api/workspace-files/roots' && req.method === 'GET') return json(200, workspaceFiles.roots());
       if (url.pathname === '/api/workspace-files/list' && req.method === 'POST') return json(200, workspaceFiles.list(await body(req)));
       if (url.pathname === '/api/workspace-files/folder' && req.method === 'POST') return json(200, workspaceFiles.createFolder(await body(req)));
@@ -795,8 +805,8 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       if (url.pathname === '/api/markdown' && req.method === 'POST') {
         const { file, image } = await body(req);
         const roots = [...context.roots(), ...context.config().documents.map(doc => path.dirname(doc.path)), settings.get().workspace.cwd, ...settings.get().workspace.additionalDirectories, ...engine.schedules.list().filter(s => !s.error).flatMap(s => [s.workspace.cwd, ...s.workspace.additionalDirectories])];
-        if (typeof file !== 'string' || !/\.md$/i.test(file) || !isWithin(file, roots)) throw new Error('Choose a Markdown file inside a configured workspace.');
-        const document=readMarkdownFile(file);
+        if (typeof file !== 'string' || !/\.(md|png|jpe?g|gif|webp)$/i.test(file) || !isWithin(file, roots)) throw new Error('Choose a Markdown file inside a configured workspace.');
+        const document=readFilePreview(file,roots);
         return json(200, image ? readImage({ source: image, texts: [document.content], cwd: path.dirname(file), roots }) : document);
       }
       if (req.method === 'GET' && assets[url.pathname]) {
@@ -816,7 +826,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   origin = `http://127.0.0.1:${server.address().port}`;
   atomicJSON(path.join(home, 'connection.json'), { origin, token, pid: process.pid });
   const timer = timers ? setInterval(() => { void performanceDiagnostics.measure('scheduler.tick', () => engine.tick()).catch(error => engine.emit('scheduler-error', { error: error.message, at: new Date().toISOString() })); }, 1000) : null;
-  const service = { readChatAttachment, desktopControl,workspaceProjects:preview, desktopPreview:desktopPreview?preview:null, performanceDiagnostics, notify, desktopAttention:()=>[...(service.browserAttention?.()||[]),...remote.documents.list().filter(item=>!item.approvedAt).map(item=>({id:'document:'+item.requestId,kind:'document',title:item.deviceName+' requests '+item.title,requestId:item.requestId,path:item.path,at:new Date(Date.parse(item.expiresAt)-600000).toISOString()})),...service.attention()], attention:()=>[...integrations.consumers().filter(item=>['needs-auth','failed'].includes(item.connection)).map(item=>({id:'integration:'+item.id,kind:'connection',title:(item.profile.label||item.server)+' needs attention',section:'integrations',at:item.checkedAt})),...activity.notifications().items.filter(item=>!item.readAt).map(item=>({id:'notification:'+item.id,notificationId:item.id,kind:'notification',title:item.title,body:item.body,chatId:item.chatId,silent:item.silent===true,...(item.browserIssue?{browserIssue:item.browserIssue,silent:item.silent===true}:{}),at:item.createdAt}))], browserProfiles, integrations, engine, settings, context, standup, omi, life, account, activity, workspaceFiles, attachments, buildChatSchedule, usage, catalog, catalogs, origin, token, home, url: `${origin}/?token=${token}`, async close() {
+  const service = { readChatAttachment, desktopControl,workspaceProjects:preview, desktopPreview:desktopPreview?preview:null, performanceDiagnostics, notify, desktopAttention:()=>[...(service.browserAttention?.()||[]),...remote.documents.list().filter(item=>!item.approvedAt).map(item=>({id:'document:'+item.requestId,kind:'document',title:item.deviceName+' requests '+item.title,requestId:item.requestId,path:item.path,at:new Date(Date.parse(item.expiresAt)-600000).toISOString()})),...service.attention()], attention:()=>[...integrations.consumers().filter(item=>['needs-auth','failed'].includes(item.connection)).map(item=>({id:'integration:'+item.id,kind:'connection',title:(item.profile.label||item.server)+' needs attention',section:'integrations',at:item.checkedAt})),...activity.notifications().items.filter(item=>!item.readAt).map(item=>({id:'notification:'+item.id,notificationId:item.id,kind:'notification',title:item.title,body:item.body,chatId:item.chatId,silent:item.silent===true,...(item.browserIssue?{browserIssue:item.browserIssue,silent:item.silent===true}:{}),at:item.createdAt}))], browserProfiles, integrations, engine, settings, context, standup, omi, life, account, activity, workspaceFiles, workspaceExplorer, attachments, buildChatSchedule, usage, catalog, catalogs, origin, token, home, url: `${origin}/?token=${token}`, async close() {
     clearInterval(managedTimer);lifeOptions.powerMonitor?.removeListener?.('resume',managedWake);await service.managedConnections?.close();
     await stateProjection.close();await service.updates?.close();await service.scheduleControl?.close();await service.chatControl?.close();await desktopControl?.close();
     activity.log('info','app.stopping','Proteus is shutting down.');clearInterval(integrationTimer);await integrations.close(); if(activityTimer)clearInterval(activityTimer); if (timer) clearInterval(timer); if (catalogTimer) clearInterval(catalogTimer); await Promise.all(Object.values(catalogs).map(c => c.pending)); await providerAuth.close(); await service.sharedInference.close(); await remote.close(); let engineCloseError; try { await engine.close(); } catch (error) { engineCloseError=error; } await attachments.close(); await copilot.close(); await codex.close(); await claude.close(); await life.close?.(); await service.browserHistory?.close(); await service.sharedDrafts?.close(); let activityCloseError; try { await activity.close(); } catch (error) { activityCloseError=error; }

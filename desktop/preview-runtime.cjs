@@ -93,6 +93,8 @@ function preparePreviewFixtures(locations) {
     fs.mkdirSync(path.join(folder.path,'docs'),{recursive:true,mode:0o700});
     write(path.join(folder.path,'README.md'),`# ${folder.name} — synthetic workspace\n\nDisposable design-preview files. Changes here do not affect production projects.\n`);
     write(path.join(folder.path,'docs/design-notes.md'),'# Design review\n\nExplore projects, chats, sources and approvals in this separate preview.\n');
+    write(path.join(folder.path,'docs/properties-demo.md'),'---\ntitle: Workspace file preview\nstatus: Rehearsal\ntags: [design, navigation]\n---\n# Properties and links\n\nThis is synthetic preview content. Open [[design-notes|Design notes]], or [the sample image](preview-image.png).\n');
+    write(path.join(folder.path,'docs/preview-image.png'),fs.readFileSync(path.join(__dirname,'icon.png')));
   }
   const studio=workFolders[0].path;
   write(path.join(studio,'package.json'),JSON.stringify({name:'proteus-synthetic-studio',private:true,type:'module',scripts:{test:'node --test example.test.js'}},null,2)+'\n');

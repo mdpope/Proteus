@@ -43,7 +43,7 @@ export function mount(element, text, options = {}) {
   element._images ??= new Map();
   element.onclick = async event => {
     const target = event.target.closest('button,a'); if (!target || !element.contains(target)) return;
-    if (target.matches('[data-link]')) { event.preventDefault(); options.link?.(target.dataset.link); }
+    if (target.matches('[data-link]')) { event.preventDefault(); const source=target.dataset.link; if(source.startsWith('#')){const name=decodeURIComponent(source.slice(1)).toLowerCase();[...element.querySelectorAll('h1,h2,h3,h4,h5,h6')].find(node=>node.textContent.toLowerCase()===name)?.scrollIntoView({block:'start'});}else options.link?.(source); }
     if (target.matches('.md-copy')) {
       try { await options.copy?.(target.closest('.md-code').querySelector('code').textContent); target.textContent = 'Copied'; } catch { target.textContent = 'Copy failed'; }
     }

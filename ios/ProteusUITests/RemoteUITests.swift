@@ -2787,7 +2787,9 @@ final class PhoneSidebarPreviewUITests: XCTestCase {
     XCTAssertTrue(custom.waitForExistence(timeout: 5)); custom.tap()
     XCTAssertEqual(app.buttons["chat-question-queue-toggle"].value as? String, "Collapsed")
     let input = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", "question-answer-")).firstMatch
-    XCTAssertTrue(input.waitForExistence(timeout: 5)); input.tap(); input.typeText("Keep the same session")
+    XCTAssertTrue(input.waitForExistence(timeout: 5))
+    XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5), "One question selection focuses its answer editor")
+    app.typeText("Keep the same session")
     XCTAssertEqual(input.value as? String, "Keep the same session")
     let clear = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "question-clear-")).firstMatch
     XCTAssertTrue(clear.isHittable)

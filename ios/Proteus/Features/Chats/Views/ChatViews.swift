@@ -583,6 +583,8 @@ struct ChatView: View {
     @State private var attachmentSendMode = "queue"
     @State private var questionAttachmentSubmission: JSON = .null
     @State private var questionRevealTask: Task<Void, Never>?
+    @State private var questionRevealID: UUID?
+    @State private var questionFocus: (id: String, request: UUID)?
     @State private var confirmDelete = false
     @State private var renameChildID: String?
     @State private var renameChildTitle = ""
@@ -920,7 +922,7 @@ struct ChatView: View {
                             if !event["data"]["delivery"]["state"].string.isEmpty { Text(event["data"]["delivery"]["state"].string.capitalized).font(.caption2).foregroundStyle(.teal) }
                             MessageView(role: event["role"].string == "assistant" ? assistantName(event) : event["role"].string, text: NativeUserQuestion.presentationText(event["text"].string, questions: eventQuestions), runID: id, timestamp: event["timestamp"].string.isEmpty ? event["at"].string : event["timestamp"].string, turn: firstAssistant[event["data"]["turnId"].string] == index ? turns[event["data"]["turnId"].string] ?? .null : .null, actionID: MessageActions.eligible(event) ? "\(store.connection?.hostId ?? "local"):\(id):\(absoluteIndex):\(event["at"].string)" : nil, sentAttachments: event["data"]["attachments"].array, onDocumentLink: event["role"].string == "assistant" ? { source in openDocument(source) } : nil, search: pageSearch, searchKey: absoluteIndex, renderViewport: scrollMeasurements.renderViewport, questionContent: eventQuestions.isEmpty ? nil : AnyView(VStack(alignment: .leading, spacing: 0) {
                             ForEach(eventQuestions) { question in
-                                NativeUserQuestionCard(question: question, showHeading: !question.promptVisible(in: event["text"].string, among: eventQuestions.count), chatID: id) { value, messageID, delivery in
+                                NativeUserQuestionCard(question: question, showHeading: !question.promptVisible(in: event["text"].string, among: eventQuestions.count), chatID: id, focusRequest: questionFocus?.id == question.id ? questionFocus?.request : nil) { value, messageID, delivery in
                                     var args = delivery; args["id"] = .string(id); args["answer"] = .string(value); args["messageId"] = .string(messageID); args[question.blocking ? "requestId" : "questionId"] = .string(question.id)
                                     _ = try await store.request(question.blocking ? "chat.reply" : "chat.answer-question", args)
                                     await store.openChat(id)
@@ -1072,6 +1074,7 @@ struct ChatView: View {
                 userReadingGesture = reading
                 lastReaderInteractionAt = Date().timeIntervalSince1970
                 if reading {
+                    questionRevealTask?.cancel(); questionRevealID = nil; questionFocus = nil
                     composerHasFocus = false; composerExpanded = false
                     followLatest = false; historyGestureAvailable = true; conversationReady = true
                     cancelReadingRestore()
@@ -1137,7 +1140,8 @@ struct ChatView: View {
             }
             .safeAreaInset(edge: .top) {
                 NativeUserQuestionQueue(questions: questions, chatKey: chatBrowserScope) { question in
-                    questionRevealTask?.cancel(); questionRevealTask = Task { await revealQuestion(question, with: proxy) }
+                    questionRevealTask?.cancel(); let request = UUID(); questionRevealID = request
+                    questionRevealTask = Task { await revealQuestion(question, request: request, with: proxy) }
                 }
             }
         }
@@ -1514,25 +1518,34 @@ struct ChatView: View {
         if let image = UIPasteboard.general.image, let data = image.pngData() { addAttachment(data, name: "Pasted image.png", mediaType: "image/png"); return }
         store.error = "Copy an image or a file supported by this provider, then paste it here."
     }
-    private func revealQuestion(_ question: NativeUserQuestion, with proxy: ScrollViewProxy) async {
-        guard question.eventIndex >= 0 else { return }
-        defer { questionRevealTask = nil }
-        cancelReadingRestore(); restoreID = nil; scrollCommand = nil
+    private func revealQuestion(_ question: NativeUserQuestion, request: UUID, with proxy: ScrollViewProxy) async {
+        defer { if questionRevealID == request { questionRevealTask = nil } }
+        cancelReadingRestore(); restoreID = nil; scrollCommand = nil; questionFocus = nil
         followLatest = false; pendingHistoryRestore = nil; pendingInitialRestore = nil; pendingAnchorRestore = nil; restoringConversation = false
         do {
-            while run["eventStart"].int > question.eventIndex {
+            var target = question
+            // Blocking requests can predate the loaded page and have no index yet.
+            // Find their recorded question instead of silently ignoring the tap.
+            while target.eventIndex < 0 || run["eventStart"].int > target.eventIndex {
                 try Task.checkCancellation()
                 let before = run["eventStart"].int
+                guard before > 0 else { break }
                 let value = try await store.readChat(["id": .string(id), "beforeEvent": .number(Double(before))])
+                try Task.checkCancellation()
+                guard questionRevealID == request else { return }
                 guard value["eventStart"].int < before else { throw RemoteError(message: "Earlier messages are unavailable.") }
                 store.mergeChat(value)
+                target = NativeUserQuestion.read(run).first(where: { $0.id == question.id }) ?? target
             }
-            oldestVisibleEvent = max(run["eventStart"].int, question.eventIndex - 4)
-            await Task.yield()
+            guard target.eventIndex >= 0 else { composerHasFocus = true; proxy.scrollTo("chat-end", anchor: .bottom); return }
+            oldestVisibleEvent = max(run["eventStart"].int, target.eventIndex - 4)
+            // Wait for the new history window and the collapsed queue inset to
+            // lay out before asking SwiftUI to find the nested question anchor.
+            try await Task.sleep(for: .milliseconds(100))
             try Task.checkCancellation()
-            // Several questions can share one event. Reveal the selected card
-            // itself so later answer controls do not remain below the composer.
+            guard questionRevealID == request else { return }
             proxy.scrollTo("user-question-" + question.id, anchor: .top)
+            questionFocus = (question.id, request)
         } catch is CancellationError { } catch { store.error = error.localizedDescription }
     }
     private func answer(_ value: String) { act("chat.reply", ["answer": .string(value), "requestId": pending["id"]]) }

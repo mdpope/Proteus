@@ -1,3 +1,22 @@
+## Nov 5 current checkpoint — site discovery and client features
+
+The operator completed sign-in in the corrected Authentication Preview and confirmed that the
+site appears. This establishes live site discovery in that preview; connection confirmation,
+managed Jira reads/writes, silent renewal and organization workflows acceptance remain separate checks. Preserve
+the open Authentication Preview. No real Jira ticket was modified by these tests.
+
+The file-browser, image-viewer, Markdown properties/wiki links, larger overview, web navigation
+and completion-notification corrections are implemented and validated as described in
+[the client acceptance matrix](../../nov5-client-feature-acceptance.md). Full source suite: 1,671 passed, four skipped, zero failed;
+static checks pass. Electron file/Connections tests, Chromium and WebKit phone/tablet fixtures,
+authenticated Laravel/WebCrypto/two-owner web acceptance and one-tap answer focus on iPhone/iPad
+simulators pass. Web assets were rebuilt. Design Preview is open separately.
+
+Deployment remains held. No new packaged Mac candidate was produced by this feature checkpoint;
+Linux/Windows/iOS production builds remain deferred. Native workspace-file navigation, physical
+APNs delivery, production-network performance and full managed-auth workflow acceptance remain
+open; do not label the release fully verified. Earlier checkpoints below are historical.
+
 ## Jira read/write and discovery follow-up
 
 Operator-authorized read/write enrollment requests write:jira-work, with read-only still selectable;
@@ -319,3 +338,9 @@ response was not retained, so filtering is a confirmed code defect, not yet a pr
 of that specific empty list. After restarting the corrected local preview, the operator confirmed
 that the site appears. All 23 Atlassian tests and the disposable Electron connection UI test pass.
 Connection confirmation and actual Jira read/write acceptance remain separate; deployment remains held.
+
+## Client feature expansion checkpoint
+
+See [the client feature acceptance matrix](../../nov5-client-feature-acceptance.md). Source and
+isolated UI/build work is implemented; live rollout and physical notifications remain held.
+Native workspace-file parity is recorded as an outstanding gap, not silently marked complete.

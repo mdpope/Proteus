@@ -1,4 +1,5 @@
 import MarkdownIt from 'markdown-it';
+import {installObsidianMarkdown} from './obsidian-markdown.js';
 
 export function linkKind(value) {
   if (typeof value !== 'string' || /[\u0000-\u0020\u007f]/.test(value)) return null;
@@ -11,6 +12,7 @@ export function linkKind(value) {
 export function parser() {
   const md = new MarkdownIt({ html: false, linkify: true, breaks: true });
   md.validateLink = value => !!linkKind(value);
+  installObsidianMarkdown(md);
   return md;
 }
 const md = parser();

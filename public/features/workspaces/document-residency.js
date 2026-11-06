@@ -4,5 +4,5 @@ import {viewResidency} from '../../models/view-residency.js';
 export function retainDocument(tab,active){
  if(typeof tab?.markdown?.content!=='string')return;
  const document=tab.markdown;
- viewResidency.retain('document:'+tab.id,'document','markdown',{active,dispose:()=>{if(tab.markdown===document)delete document.content;}});
+ viewResidency.retain('document:'+tab.id,'document','markdown',{active,dispose:()=>{if(tab.markdown===document){delete document.content;delete document.dataURL;}}});
 }

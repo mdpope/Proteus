@@ -96,7 +96,7 @@ export function remoteState(service) {
     runningChatCount: countRunningChats(visibleRuns),
     attentionCount: visibleRuns.filter(needsAttention).length,
     context: { ...pick(context, ['revision', 'refreshedAt', 'rootStatus', 'defaultWorkspaceId', 'workspaces', 'universalFolders', 'libraryFolders', 'documents','modes','favorites', 'errors']), entries: context.entries.map(remoteEntry) },
-    defaults: pick(defaults, ['provider', 'model', 'reasoningMode', 'reasoningEffort', 'contextTier', 'serviceTier', 'timezone', 'internetSearches']), providerStatus: service.catalog?.value || null, providerStatuses: Object.fromEntries(Object.entries(service.catalogs || {}).map(([id, catalog]) => [id, catalog.value])),questionAttachmentMediaTypes:Object.fromEntries(Object.keys(service.engine.providers).map(id=>[id,questionAttachmentMediaTypes.filter(type=>service.engine.providers[id]?.acceptedMediaTypes?.includes(type))])),attachmentMediaTypes:Object.fromEntries(Object.keys(service.engine.providers).map(id=>[id,service.engine.providers[id]?.acceptedMediaTypes||[]])),mcpStatusProviders:Object.keys(service.engine.providers).filter(id=>typeof service.engine.providers[id]?.mcpStatus==='function'),mcpLoginProviders:Object.keys(service.engine.providers).filter(id=>typeof service.engine.providers[id]?.mcpLogin==='function'),capabilities:[...(service.sharedInference?['inference.shared.v1']:[]),...(service.computerAccess?['computer.access.v1']:[]),...(service.projectFollow?['tabs.follow.v1']:[]),'chat.subagents.v1','chat.agent-control.v1','remote.diagnostics.v1','chat.recapture.v1','chat.send-model-options.v1',...(service.managedConnections?['chat.managed-connections.v1']:[]),'chat.build-coordinator.v1','chat.update-coordinator.v1','chat.update-release.v1','attention.ack.v1','chat.pages.v1','chat.watch.v1','chat.delta.v1','draft.text.v1','host.platform.v1',...(service.workspaceProjects?['projects.v1','projects.move.v1','source-library.v1']:[]),'chat.paths.v1','chat.export.v1','chat.previews.v1','content-tabs.v1','chat.index.v1','chat.queue-edit.v1','integrations.health.v1','chat.review.v1','chat.lifecycle.v1','chat.rename.v1','chat.retry-without-agents.v1','chat.attachments.view.v1','chat.internet.v1','workspaces.v1',...(service.engine.permissions?.preserveInheritedDefaults?['chat.permissions.shared.v1']:[]),'chat.permissions.folders.v1','chat.permissions.chat.v1','chat.permissions.pending.v1','chat.documents.v1','chat.attachments.v1','chat.question-attachments.v1','chat.questions.clear.v1','notifications.v1',...(service.openWebsiteNotification?['website.notifications.v1']:[]),'authenticated-revocation.v1','connection-self-revoke.v1',...(service.browserHistory?['browser.history.v1','browser.navigation.v1']:[]),...(service.liveBrowser?['browser.live.v1']:[]),...(service.resources?['resources.v1']:[])],protocol: 1 };
+    defaults: pick(defaults, ['provider', 'model', 'reasoningMode', 'reasoningEffort', 'contextTier', 'serviceTier', 'timezone', 'internetSearches']), providerStatus: service.catalog?.value || null, providerStatuses: Object.fromEntries(Object.entries(service.catalogs || {}).map(([id, catalog]) => [id, catalog.value])),questionAttachmentMediaTypes:Object.fromEntries(Object.keys(service.engine.providers).map(id=>[id,questionAttachmentMediaTypes.filter(type=>service.engine.providers[id]?.acceptedMediaTypes?.includes(type))])),attachmentMediaTypes:Object.fromEntries(Object.keys(service.engine.providers).map(id=>[id,service.engine.providers[id]?.acceptedMediaTypes||[]])),mcpStatusProviders:Object.keys(service.engine.providers).filter(id=>typeof service.engine.providers[id]?.mcpStatus==='function'),mcpLoginProviders:Object.keys(service.engine.providers).filter(id=>typeof service.engine.providers[id]?.mcpLogin==='function'),capabilities:[...(service.sharedInference?['inference.shared.v1']:[]),...(service.computerAccess?['computer.access.v1']:[]),...(service.projectFollow?['tabs.follow.v1']:[]),...(service.workspaceExplorer?['workspace.files.v1']:[]),'chat.subagents.v1','chat.agent-control.v1','remote.diagnostics.v1','chat.recapture.v1','chat.send-model-options.v1',...(service.managedConnections?['chat.managed-connections.v1']:[]),'chat.build-coordinator.v1','chat.update-coordinator.v1','chat.update-release.v1','attention.ack.v1','chat.pages.v1','chat.watch.v1','chat.delta.v1','draft.text.v1','host.platform.v1',...(service.workspaceProjects?['projects.v1','projects.move.v1','source-library.v1']:[]),'chat.paths.v1','chat.export.v1','chat.previews.v1','content-tabs.v1','chat.index.v1','chat.queue-edit.v1','integrations.health.v1','chat.review.v1','chat.lifecycle.v1','chat.rename.v1','chat.retry-without-agents.v1','chat.attachments.view.v1','chat.internet.v1','workspaces.v1',...(service.engine.permissions?.preserveInheritedDefaults?['chat.permissions.shared.v1']:[]),'chat.permissions.folders.v1','chat.permissions.chat.v1','chat.permissions.pending.v1','chat.documents.v1','chat.attachments.v1','chat.question-attachments.v1','chat.questions.clear.v1','notifications.v1',...(service.openWebsiteNotification?['website.notifications.v1']:[]),'authenticated-revocation.v1','connection-self-revoke.v1',...(service.browserHistory?['browser.history.v1','browser.navigation.v1']:[]),...(service.liveBrowser?['browser.live.v1']:[]),...(service.resources?['resources.v1']:[])],protocol: 1 };
   service.performanceDiagnostics?.stateShape?.(state);return state;
   });
 }
@@ -139,7 +139,7 @@ export class RemoteHost {
   }
   info() { return { enabled: this.config.enabled, mode: this.config.mode, status: this.status, error: this.error || null, hostId: this.config.hostId, label: this.config.label || os.hostname(), ...hostPlatformMetadata(),...(this.service.computerAccess?{computerAccess:this.service.computerAccess.get()}:{}),
     relayURL: this.config.relayURL || '', publicURL: this.config.publicURL || '', addresses: this.addresses(), port: this.config.port,
-    devices: this.config.devices.map(d => ({ id: d.id, name: d.name, pairedAt: d.pairedAt, resourceAccess: d.resourceAccess === true, documentAccess:d.documentAccess===true,browserAccess:d.browserAccess===true, online: [...this.peers.values()].some(p => p.device?.id === d.id) })),documentRequests:this.documents.list() }; }
+    workspaces:this.service.context.config().workspaces.map(w=>({id:w.id,name:w.name})),devices: this.config.devices.map(d => ({ id: d.id, name: d.name, pairedAt: d.pairedAt, resourceAccess: d.resourceAccess === true, documentAccess:d.documentAccess===true,workspaceFileAccess:d.workspaceFileAccess||[],browserAccess:d.browserAccess===true, online: [...this.peers.values()].some(p => p.device?.id === d.id) })),documentRequests:this.documents.list() }; }
   deviceStatus(id){const checkedAt=new Date().toISOString(),device=this.info().devices.find(device=>device.id===id);if(!device)throw new Error('Unknown paired device.');return {device:{...device,checkedAt},checkedAt};}
   async configure(value) {
     if (typeof value.enabled !== 'boolean') throw new Error('Choose whether remote access is enabled.');
@@ -250,6 +250,17 @@ export class RemoteHost {
     if(!enabled)this.documents.revokeDevice(id);
     return this.info();
   }
+  setWorkspaceFileAccess(id,workspaceIds){
+    if(!Array.isArray(workspaceIds)||workspaceIds.length>100||new Set(workspaceIds).size!==workspaceIds.length)throw Error('Choose explicit workspaces for file viewing.');
+    const known=this.service.context.config().workspaces;
+    if(workspaceIds.some(id=>!known.some(w=>w.id===id)))throw Error('Choose existing workspaces.');
+    if(!this.config.devices.some(d=>d.id===id))throw Error('Paired device not found.');
+    const previous=this.config.devices;this.config.devices=previous.map(d=>d.id===id?{...d,workspaceFileAccess:[...workspaceIds]}:d);
+    try{this.save();}catch(error){this.config.devices=previous;throw error;}return this.info();
+  }
+  requireWorkspaceFiles(peer,workspaceId){
+    if(!this.config.devices.find(d=>d.id===peer.device?.id)?.workspaceFileAccess?.includes(workspaceId))throw Error('Workspace file viewing is not enabled for this device and workspace on the owning computer.');
+  }
   requireDocumentAccess(peer){const device=this.config.devices.find(device=>device.id===peer.device?.id);if(device?.documentAccess!==true)throw new Error('View chat documents is not enabled for this device on the computer.');}
   reviewDocument(requestId,approved){return this.documents.review(requestId,approved,this.service.engine);}
   requireResourceAccess(peer) {
@@ -283,6 +294,7 @@ export class RemoteHost {
   }
   requireCommandGrants(peer, method, args) {
     if (!this.config.devices.some(device => device.id === peer.device?.id)) throw new Error('Unknown paired device.');
+    if(method.startsWith('files.'))this.requireWorkspaceFiles(peer,args.workspaceId);
     if(method.startsWith('inference.')&&method!=='inference.catalog'){if(!this.service.sharedInference)throw Error('Shared inference is unavailable.');this.service.sharedInference.authorize(peer.device.id,args.providerId);}
     if (method === 'resources.list' || method === 'resources.action') this.requireResourceAccess(peer);
     if(method==='computer.access.update')this.requireResourceAccess(peer);
@@ -498,6 +510,11 @@ export class RemoteHost {
     if (method === 'provider.status') return this.api('/api/provider', pick(args, ['force', 'provider']));
     if (method === 'projects.get'||method === 'sources.get') return remoteProjects(this.service);
     if (method === 'projects.update'||method === 'sources.update') { await this.api('/api/workspace-projects/'+(method==='projects.update'?'projects':'sources'),args);this.changed();return remoteProjects(this.service); }
+    if(['files.roots','files.browse','files.preview'].includes(method)){
+      this.requireWorkspaceFiles(peer,args.workspaceId);
+      const result=await this.service.workspaceExplorer[method.slice(6)](args);
+      this.requireWorkspaceFiles(peer,args.workspaceId);return result;
+    }
     if (method === 'context.get') {const catalog=this.service.context.get(args.workspaceId);return this.service.integrations?.decorateCatalog(catalog)||catalog;}
     if (method === 'context.update') { const result = await this.api('/api/context', args); this.changed(); return result; }
     if (method === 'context.refresh') { const result = await this.service.context.refreshAsync({workspaceId:args.workspaceId,root:args.root}); this.changed(); return result; }

@@ -65,7 +65,7 @@ export function normalizeContentTabDescriptor(value){
   else if(tab.type==='document'){
     tab.documentId=value.documentId;tab.id='document:'+value.documentId;
     if(/^[a-zA-Z0-9_:.\-]{1,256}$/.test(value.chatId||''))tab.chatId=value.chatId;
-    tab.mediaType=value.mediaType==='text/html'?'text/html':'text/markdown';
+    tab.mediaType=['text/html','image/png','image/jpeg','image/gif','image/webp'].includes(value.mediaType)?value.mediaType:'text/markdown';
   }
   return tab;
 }

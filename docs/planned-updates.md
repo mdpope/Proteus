@@ -1,3 +1,10 @@
+## Nov 5 client features and local validation
+
+Workspace files, scoped remote file browsing, image tabs, Properties/wiki links, larger overviews,
+completion-event deduplication and native answer focus are implemented in source.
+[Acceptance matrix and limits](nov5-client-feature-acceptance.md) distinguishes local tests from
+physical push, native file-browser parity and installed acceptance. Deployment remains held.
+
 ## Nov 5 Atlassian site discovery
 
 The local Authentication Preview reached authenticated account review but displayed no sites.
