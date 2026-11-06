@@ -1,6 +1,29 @@
 # Nov 5 release plan
 
-Migrated from the Nov 4 plan on November 5, 2026. All queued scope and historical observation dates below are preserved. Planning only; no version is reserved and no build is authorized.
+Migrated from the Nov 4 plan on November 5, 2026. All queued scope and historical observation dates below are preserved. The operator lifted the build hold on November 5; the current authorization below supersedes historical holds.
+
+## Current operator authorization — build and digest acceptance iterations
+
+The operator explicitly lifts the Nov 5 build hold. Include every item already in this plan plus
+the consolidated additional requirements from the Work Mac digest workflow. Nov 3 is closed.
+Coordinate directly with that workflow owner, complete implementation and required checks, build
+and publish accepted signed artifacts, deliver the Mac release through a separate receiving-owner
+update coordinator, and iterate on defects or missing capabilities until the workflow passes.
+Further unrelated feature additions wait until this digest acceptance cycle is complete.
+
+Use the single nov5-release branch in the primary checkout. No additional worktree is needed
+unless delegated work requires one. Existing privacy, signing, source/test, preservation and
+receiving-owner installation requirements remain in force. The digest workflow owns its manifests,
+schedules and business data; this coordinator owns product changes and release delivery.
+
+Before freezing the package, reconcile Work Mac's consolidated handoff with this full plan. P6–P10
+and document-origin preservation have source acceptance; the other planned items are not thereby
+complete. Installation and model completion alone do not establish workflow success. Require
+actual source refresh, revision-preserving source reconcile, unchanged enabled state/history,
+captured scoped permissions, a complete prompt-free workflow, independent output checks and a
+second no-new-evidence run. Keep one version for this release and distinguish each immutable
+candidate hash and acceptance outcome. Historical holds and digest-only recommendations below
+are superseded by this authorization; Mnemosyne remains deferred.
 
 ## Source integration and checkout cleanup — November 5
 
@@ -22,8 +45,8 @@ installed acceptance and the existing attention/rollback receipt remain outstand
 ## Current release prerequisite — November 5 closeout
 
 Nov 3 is now closed; see [its closeout](releases/2026-11-03/closeout.md). Its release prerequisite
-is satisfied. The following hold text records earlier instructions; the digest blocker exception
-remains the first proposed build scope. No unrelated feature build is authorized by closure.
+is satisfied. The following hold text records earlier instructions and is superseded by the
+explicit build/iteration authorization above.
 
 ## Historical operator hold — November 5, 2026
 
@@ -341,3 +364,27 @@ the displayed cause, account/model context and provider-supplied reset/retry det
 subscription exhaustion from temporary request throttling. Preserve retry identity and completed
 external work. Provider fallback must be explicitly selected/authorized, never silent. Keep
 this diagnostic work outside the digest-only first package unless needed for its acceptance.
+
+## P12 — Managed MCP connections and authentication
+
+The digest workflow handoff adds a provider-neutral connection manager. Proteus owns versioned
+connection definitions, credential adapters, auth renewal, bounded reconnection and health;
+organization workflows declares portable logical names, required semantic capabilities and expected account/resource
+bindings. Initial connections are ADO and Atlassian; Slack remains browser-only.
+
+Required product boundaries: immutable connection IDs separate from labels; explicit owner/workspace/
+account binding; captured configuration revisions; pinned connector launches; a host-managed
+authenticated transport actually used by both Codex and Copilot; per-chat tool policy isolation;
+no token tools or secrets in prompts, logs, argv or ordinary configuration; no replay of uncertain
+writes; OS-protected storage by default with optional Bitwarden, failing closed when unavailable;
+serialized rotation and durable rotated-token save before publishing a new access token;
+separate per-owner grants or an explicit single writer for cross-machine refresh credentials.
+
+Expose connection, identity, authentication, capability and resource-access evidence separately
+in visible status. Use bounded/coalesced health work and actionable human sign-in requirements.
+Preserve current working credentials during local adoption or verified new consent. Do not
+retire organization workflows helpers until the managed route passes live acceptance. No credentials or business
+evidence transfer to the release coordinator is needed. The full Work Mac handoff must be reconciled
+before implementation freeze, including its connector-specific, migration and outage/repeat-run
+acceptance criteria. Existing integrations documentation describes older capabilities and does
+not establish that this manager is already implemented.

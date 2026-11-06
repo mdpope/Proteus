@@ -1,3 +1,12 @@
+## Nov 5 build hold lifted — full plan plus digest requirements
+
+The operator authorizes full current Nov5 scope, consolidated Work Mac digest requirements, signed
+release delivery and two-way fix/update/test iterations until workflow acceptance. Additional
+unrelated features wait. Nov3 is closed. Contacted the active digest workflow owner for its
+consolidated handoff. Source is on the single nov5-release branch; no package has been built.
+See the current authorization in [the plan](2026-11-05-release-plan.md). Older hold text below
+is historical.
+
 ## Nov 3 closed — Nov 5 digest-first preparation
 
 Nov 3 / 0.2.42 is merged to main, published for accepted Mac/Windows targets and closed with
