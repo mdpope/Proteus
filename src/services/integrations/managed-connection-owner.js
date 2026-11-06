@@ -8,18 +8,23 @@ import {ManagedConnectionRegistry,validateManagedConnection} from './managed-con
 import {ManagedCredentialVault} from './managed-credential-vault.js';
 import {ManagedConnections} from './managed-connections.js';
 import {ManagedAtlassian} from './managed-atlassian.js';
+import {ManagedAdo} from './managed-ado.js';
+import {adoIdentityProfile} from './managed-ado-identity.js';
+import {adoServerProfile} from './managed-ado-adapter.js';
+import {adoCapabilities,qualifyAdoProbes} from './managed-ado-probes.js';
 import {atlassianOAuthProfile} from './managed-atlassian-oauth.js';
 import {atlassianCapabilities,qualifyAtlassianDefinition} from './managed-atlassian-probes.js';
 
 // One host composition boundary supplies UI, tools, schedule preflight and native
 // providers. No path here approves pending run permissions or starts model turns.
 export class ManagedConnectionOwner {
- constructor(service,{storage,openExternal,adapters,now=()=>Date.now(),authFactory=options=>new ManagedAtlassian(options)}={}){
+ constructor(service,{storage,openExternal,adapters,now=()=>Date.now(),authFactory=options=>new ManagedAtlassian(options),adoAuthFactory=options=>new ManagedAdo(options)}={}){
   this.service=service;this.now=now;this.closed=false;this.file=path.join(service.home,'managed-mcp-health.json');
   this.registry=new ManagedConnectionRegistry(service.home,{ownerId:service.remote.info().hostId,references:id=>this.references(id)});
   this.vault=new ManagedCredentialVault(service.home,storage);
   this.auth=authFactory({registry:this.registry,vault:this.vault,openExternal,now,onChange:()=>service.notify()});
-  this.manager=new ManagedConnections({registry:this.registry,adapters:adapters||{[atlassianOAuthProfile.adapter]:this.auth.adapter()},now,
+  this.adoAuth=adoAuthFactory({registry:this.registry,vault:this.vault,openExternal,now,onChange:()=>service.notify()});
+  this.manager=new ManagedConnections({registry:this.registry,adapters:adapters||{[atlassianOAuthProfile.adapter]:this.auth.adapter(),[adoIdentityProfile.adapter]:this.adoAuth.adapter()},now,
    onChange:()=>{this.persist();service.notify();},notify:event=>service.activity?.log('warning','managed-connection.attention',event.reason,{connectionId:event.connectionId,code:event.code})});
   this.events=[];
   try{
@@ -46,20 +51,22 @@ export class ManagedConnectionOwner {
   for(const run of this.service.engine.listRuns())if(run.schedule?.managedConnections?.some(c=>c.name===definition.name))rows.push({kind:'chat',id:run.id,workspaceId:run.schedule.context?.workspaceId||null,active:['running','awaiting_input','queued'].includes(run.status)});
   return rows;
  }
- active(id){return [...this.manager.leases.values()].some(lease=>lease.bindings.some(binding=>binding.connectionId===id));}
+ authFor(definition){return definition.authentication.adapter===adoIdentityProfile.adapter?this.adoAuth:this.auth;}
+ active(id){return this.auth.flows?.has(id)||this.adoAuth.flows?.has(id)||[...this.manager.leases.values()].some(lease=>lease.bindings.some(binding=>binding.connectionId===id));}
  binding(definition,workspaceId=definition.workspaceIds[0]){return this.registry.capture({ownerId:this.registry.ownerId,workspaceId,names:[definition.name]})[0];}
  row(definition){
   let status={state:definition.enabled?'unchecked':'disabled',configured:true};
   if(definition.enabled)status=this.manager.status(this.binding(definition));
   let credentialStore='available';try{this.vault.requireAvailable();}catch{credentialStore='unavailable';}
-  return {...definition,status:{...status,credentialStore,ownerSignIn:this.auth.status(definition.id)},references:this.references(definition.id),active:this.active(definition.id)};
+  return {...definition,status:{...status,credentialStore,ownerSignIn:this.authFor(definition).status(definition.id)},references:this.references(definition.id),active:this.active(definition.id)};
  }
- contract(){return {schemaVersion:1,definitionSchema:structuredClone(definitionSchema),portableRequirement:{name:'logical-name',capabilities:['semantic.capability'],required:false},scheduleWorkspaceField:'managedConnectionWorkspaceId',note:'The workspace must be captured explicitly. Supported adapters are listed by the owner. No secret or token fields are accepted.'};}
+ adapterCatalog(){return [{id:atlassianOAuthProfile.adapter,name:'Atlassian / Jira',endpoint:atlassianOAuthProfile.endpoint,capabilities:Object.keys(atlassianCapabilities),signIn:'owner-browser',credentialStore:'platform-protected'},{id:adoIdentityProfile.adapter,name:'Azure DevOps corporate',transport:adoServerProfile,audience:adoIdentityProfile.audience,scopes:[adoIdentityProfile.scope],capabilities:Object.keys(adoCapabilities),signIn:'owner-browser',credentialStore:'platform-protected',requires:'An organization-approved Entra public client with delegated Azure DevOps user_impersonation and native http://localhost redirect.'}];}
+ contract(){return {schemaVersion:1,definitionSchema:structuredClone(definitionSchema),adapters:this.adapterCatalog(),portableRequirement:{name:'logical-name',capabilities:['semantic.capability'],required:false},scheduleWorkspaceField:'managedConnectionWorkspaceId',note:'The workspace must be captured explicitly. Supported adapters are listed by the owner. No secret or token fields are accepted.'};}
  snapshot(){
   const registry=this.registry.read();
   return {schemaVersion:1,ownerId:this.registry.ownerId,revision:registry.revision,observedAt:new Date(this.now()).toISOString(),connections:registry.connections.map(c=>this.row(c)),
    workspaces:this.service.context.config().workspaces.map(w=>({id:w.id,name:w.name})),recoveryEvents:this.events,storageError:this.storageError||null,
-   adapters:[{id:atlassianOAuthProfile.adapter,name:'Atlassian / Jira',endpoint:atlassianOAuthProfile.endpoint,capabilities:Object.keys(atlassianCapabilities),signIn:'owner-browser',credentialStore:'platform-protected'}]};
+   adapters:this.adapterCatalog()};
  }
  async action(args){
   if(this.closed)throw Error('Managed connections are closed.');
@@ -70,7 +77,7 @@ export class ManagedConnectionOwner {
   if(args.action==='save'){
    const input=validateManagedConnection(args.definition);
    if(input?.id&&this.active(input.id))throw Error('Wait for captured connection runs to finish before editing.');
-   qualifyAtlassianDefinition(input);
+   if(input.authentication.adapter===adoIdentityProfile.adapter)qualifyAdoProbes(input);else qualifyAtlassianDefinition(input);
    const workspaceIds=new Set(this.service.context.config().workspaces.map(w=>w.id));if(input.workspaceIds.some(id=>!workspaceIds.has(id)))throw Error('Choose current workspaces on this owner.');
    const prior=current.connections.find(c=>c.id===input.id);if(prior?.enabled)await this.manager.disconnect(this.binding(prior));
    this.registry.save(input,{expectedRevision:args.expectedRevision});this.service.notify();return this.snapshot();
@@ -85,7 +92,7 @@ export class ManagedConnectionOwner {
   }
   if(args.action==='sign-in'){
    if(this.active(definition.id))throw Error('Wait for captured connection runs to finish before changing authentication.');
-   return this.auth.signIn(definition.id,{expectedRevision:args.expectedRevision});
+   return this.authFor(definition).signIn(definition.id,{expectedRevision:args.expectedRevision});
   }
   if(['verify','repair'].includes(args.action)){
    const binding=this.binding(definition);
@@ -127,5 +134,5 @@ export class ManagedConnectionOwner {
    }
   })().catch(()=>{this.storageError='Managed connection maintenance could not inspect the current owner configuration.';}).finally(()=>{this.ticking=null;});return this.ticking;
  }
- async close(){this.closed=true;await this.manager.close();await this.auth.close();await this.ticking;}
+ async close(){this.closed=true;await this.manager.close();await this.auth.close();await this.adoAuth.close();await this.ticking;}
 }

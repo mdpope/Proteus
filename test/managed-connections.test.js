@@ -92,3 +92,9 @@ test('canceling a coalesced readiness waiter does not cancel another scheduled c
  const second=f.service.ensureReady(binding);controller.abort();release();
  await rejected;assert.equal((await second).state,'ready');assert.equal(f.connections(),1);
 });
+
+test('expired upstream evidence is stale and a new session is acquired before the next operation',async t=>{
+ let expired=false;const f=fixture(t,{isExpired:()=>expired});await f.service.ensureReady(binding);assert.equal(f.service.status(binding).stale,false);expired=true;assert.equal(f.service.status(binding).stale,true);
+ const connect=f.service.adapters.test.connect;f.service.adapters.test.connect=async(...args)=>{expired=false;return connect(...args);};
+ const lease=f.service.lease({runId:'a',bindings:[binding],isActive:()=>true,authorize:async()=>true});await lease.call('example','read',{});assert.equal(f.connections(),2);assert.equal(f.closeCount(),1);
+});

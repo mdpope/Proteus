@@ -30,14 +30,26 @@ export function validateManagedConnection(value){
   fields(transport,['type','package','version','integrity']);
   if(!/^(@[a-z0-9-]+\/)?[a-z0-9-]+$/.test(transport.package||'')||!/^\d+\.\d+\.\d+(-[a-zA-Z0-9.-]+)?$/.test(transport.version||'')||!/^sha512-[a-zA-Z0-9+/]{86}==$/.test(transport.integrity||''))throw Error('Pin the connector package, exact version and SHA-512 integrity.');
  }else throw Error('Unsupported managed transport.');
- fields(value.authentication,['adapter','credentialRef','credentialOwnerId']);
+ fields(value.authentication,['adapter','credentialRef','credentialOwnerId','clientId']);
+ if(value.authentication.clientId!==undefined&&!/^[a-f0-9-]{36}$/i.test(value.authentication.clientId))throw Error('Choose an explicit public application client ID.');
  if(!id(value.authentication.adapter)||!id(value.authentication.credentialRef)||value.authentication.credentialOwnerId!==value.ownerId)throw Error('Use an opaque credential reference owned by this connection host.');
- fields(value.expected,['principal','tenant','resource','audience','scopes']);
+ fields(value.expected,['principal','tenant','resource','audience','scopes','organizationId']);
+ if(value.expected.organizationId!==undefined&&!/^[a-f0-9-]{36}$/i.test(value.expected.organizationId))throw Error('Pin the expected organization ID.');
  for(const key of ['principal','tenant','resource','audience'])if(typeof value.expected[key]!=='string'||!value.expected[key]||value.expected[key].length>512||/[\x00-\x1f\x7f]/.test(value.expected[key]))throw Error('Pin expected account and resource identity.');
  if(!Array.isArray(value.expected.scopes)||value.expected.scopes.length>100||value.expected.scopes.some(s=>typeof s!=="string"||!s||s.length>512||/[\x00-\x20\x7f]/.test(s))||new Set(value.expected.scopes).size!==value.expected.scopes.length)throw Error("Choose distinct OAuth scopes.");
  strings(value.capabilities);
  if(!Array.isArray(value.probes)||value.probes.length>20)throw Error('Choose bounded named health probes.');
- for(const probe of value.probes){fields(probe,['id','capability','parameters']);if(probe.parameters!==undefined){fields(probe.parameters,['issueIdOrKey']);if(typeof probe.parameters.issueIdOrKey!=='string'||! /^(?:[A-Z][A-Z0-9_]{0,63}-[1-9][0-9]{0,15}|[1-9][0-9]{0,19})$/.test(probe.parameters.issueIdOrKey))throw Error('Choose an exact issue identity for the approved minimal read probe.');}if(!id(probe.id)||!value.capabilities.includes(probe.capability))throw Error('Bind each approved probe to a required capability.');}
+ for(const probe of value.probes){
+  fields(probe,['id','capability','parameters']);
+  if(probe.parameters!==undefined){
+   fields(probe.parameters,['issueIdOrKey','projectId','teamId','workItemId']);
+   for(const [key,parameter]of Object.entries(probe.parameters)){
+    const valid=key==='issueIdOrKey'?typeof parameter==='string'&&/^(?:[A-Z][A-Z0-9_]{0,63}-[1-9][0-9]{0,15}|[1-9][0-9]{0,19})$/.test(parameter):key==='workItemId'?Number.isSafeInteger(parameter)&&parameter>0:typeof parameter==='string'&&/^[a-f0-9-]{36}$/i.test(parameter);
+    if(!valid)throw Error('Choose exact resource identities for the approved minimal read probe.');
+   }
+  }
+  if(!id(probe.id)||!value.capabilities.includes(probe.capability))throw Error('Bind each approved probe to a required capability.');
+ }
  if(new Set(value.probes.map(p=>p.id)).size!==value.probes.length)throw Error('Probe IDs must be distinct.');
  fields(value.policy,['healthIntervalMs','preflightLeadMs','requestTimeoutMs','maxReadRetries']);
  if(!Number.isInteger(value.policy.healthIntervalMs)||value.policy.healthIntervalMs<60_000||value.policy.healthIntervalMs>86_400_000||!Number.isInteger(value.policy.preflightLeadMs)||value.policy.preflightLeadMs<0||value.policy.preflightLeadMs>3_600_000||!Number.isInteger(value.policy.requestTimeoutMs)||value.policy.requestTimeoutMs<1000||value.policy.requestTimeoutMs>120_000||!Number.isInteger(value.policy.maxReadRetries)||value.policy.maxReadRetries<0||value.policy.maxReadRetries>1)throw Error('Choose bounded connection maintenance and request limits.');

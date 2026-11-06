@@ -1,0 +1,14 @@
+import {createRequire} from 'node:module';
+import fs from 'node:fs';
+import path from 'node:path';
+import {pathToFileURL} from 'node:url';
+import {installAdoNetworkGuard} from './services/integrations/managed-ado-network-guard.js';
+const require=createRequire(import.meta.url),organization=process.env.PROTEUS_ADO_ORGANIZATION,tenant=process.env.PROTEUS_ADO_TENANT;
+if(!/^[a-zA-Z0-9][a-zA-Z0-9-]{0,49}$/.test(organization||'')||! /^[a-f0-9-]{36}$/i.test(tenant||'')||!process.env.ADO_MCP_AUTH_TOKEN)throw Error('Invalid managed ADO owner launch.');
+const manifest=require.resolve('@azure-devops/mcp/package.json'),pkg=JSON.parse(fs.readFileSync(manifest,'utf8'));
+if(pkg.version!=='2.11.0')throw Error('Managed ADO server package does not match the qualified version.');
+installAdoNetworkGuard(organization,params=>process.stdout.write(JSON.stringify({jsonrpc:'2.0',method:'notifications/proteus/ado-health',params})+'\n'));
+const entry=path.join(path.dirname(manifest),'dist/index.js');
+process.argv=[process.execPath,entry,organization,'--authentication','envvar','--tenant',tenant,'--domains','core','work','work-items','search'];
+process.env.LOG_LEVEL='error';delete process.env.AZURE_LOG_LEVEL;
+await import(pathToFileURL(entry).href);

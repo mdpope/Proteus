@@ -208,7 +208,7 @@ and schedule read/update/preflight expose these fields. Remote create requires t
 `chat.managed-connections.v1` owner capability; older owners fail before delivery. Existing-run
 send/reply cannot retarget bindings. Source recapture preserves the original connection selection.
 Preflight reports cached readiness without triggering consent or network probes. ADO qualification
-remains outstanding.
+against the corporate account remains outstanding; the ADO source contract is documented below.
 
 The host performs coalesced checks for active leases and near-term enabled schedules, without
 model turns, and wakes maintenance after system resume. Persisted health retains last successful
@@ -220,3 +220,85 @@ Validation: 1,609 tests pass, four skip, zero fail; static checks pass. Disposab
 covers configuration, explicit account/workspace fields, separate Jira probes, stale-edit draft
 preservation and disable/removal. Actual workstation.example.test consent, native-provider data reads, workflow outputs,
 second no-new-evidence run and outage reconciliation remain required after signed installation.
+
+## ADO owner implementation and migration contract
+
+The logical names `hc-atlassian` and `hc-ado-corporate` are the initial HC contract names, resolved
+only inside the explicit owning computer/workspace. They are not preinstalled connection IDs.
+Each local configuration receives an immutable ID and its own opaque credential reference.
+
+ADO uses `ado-entra-public-client`, MSAL Node 7.2.0 and the pinned `@azure-devops/mcp` 2.11.0
+server in its supported `--authentication envvar` mode. The package's `azcli` mode includes a
+fallback credential chain and is not used. There is no PAT, hosting-account or developer-client
+fallback. Native Codex/Copilot receive the existing per-run managed broker, not this upstream
+process or its credential. The owner injects the short-lived bearer token only into the dedicated
+child environment, with no secret argv, logs, prompt fields or model token tool.
+
+The definition schema adds these nonsecret ADO fields:
+
+- `authentication.clientId`: organization-approved Entra public application ID.
+- `expected.principal`: corporate Entra object ID; `expected.tenant`: corporate tenant ID.
+- `expected.organizationId`: the Azure DevOps organization instance ID.
+- `expected.resource`: exact `https://dev.azure.com/ORGANIZATION` without a trailing slash.
+- `expected.audience`: `d5fd9cb2-1853-528c-aa4c-2dd4a86fb2a1`.
+- `expected.scopes`: exactly `['d5fd9cb2-1853-528c-aa4c-2dd4a86fb2a1/.default']`.
+- `transport`: the exact package/version/SHA-512 tuple returned by the owner adapter catalog.
+
+The application registration needs delegated Azure DevOps `user_impersonation`, an approved
+native `http://localhost` redirect, and any required owner/admin consent. The SDK's default
+Azure development client is deliberately not selected. The workflow owner's current records do
+not establish an approved registration, so identifying/approving one remains a live-acceptance
+prerequisite. No application registration or service scope was changed by source implementation.
+Existing Azure CLI sessions and old organization workflows authentication remain untouched.
+
+MSAL performs PKCE/token protocol operations through its supported interfaces. The bounded owner
+loopback receiver uses the configured browser-opening boundary, exact state/nonce and a ten-minute
+limit. The SDK cache is encrypted through the platform protected store. Writes mark refresh intent,
+then persist the replacement cache before verifying account/organization and releasing a token.
+Uncertain rotation is quarantined; a definitive token-service 429 preserves the prior grant and
+reports Retry-After. Twenty concurrent consumers share one renewal. One owner is the only writer;
+these credentials are neither exported nor shared between Macs. A locked/unsupported store fails
+closed. Initial consent, OS authorization and corporate application approval remain human boundaries.
+
+Supported ADO health capabilities and exact probe inputs are:
+
+| Capability / probe ID | Actual MCP operation | `parameters` |
+| --- | --- | --- |
+| `ado.projects.read` | `core_list_projects`, one entry maximum | `{}` |
+| `ado.teams.read` | `work`, `get_team_settings` for the exact team | `{projectId, teamId}` (GUIDs) |
+| `ado.work-items.read` | `wit_work_item`, `get`, ID field only | `{projectId, workItemId}` (GUID / positive integer) |
+| `ado.work-items.query` | `wit_query`, WIQL restricted to that item, top one | `{projectId, workItemId}` |
+
+Every required capability has its matching approved probe. These are explicit owner health reads;
+they do not authorize model tool calls. A valid empty query proves query access, not item-read
+success. Full-text `search_workitem` remains in the actual server catalog but is not claimed by the
+WIQL health capability. Actual tool input schemas and read-only/idempotent annotations are checked
+before probes. Versioned server text delimiters are parsed as data, never instructions.
+
+The upstream child confines credential-bearing HTTP to the configured organization on
+`dev.azure.com`, `vssps.dev.azure.com` and `almsearch.dev.azure.com`; unrelated/legacy hosts fail
+closed. Arguments have byte, depth, string and collection bounds before upstream validation.
+Expired sessions are retired before new calls without closing other in-flight requests. An actual
+401 invalidates the cached token; only the existing bounded annotated-idempotent read retry may
+reconnect. Unknown or mutating calls are never automatically replayed. Upstream error bodies and
+stderr do not reach model feedback.
+
+The Connections panel exposes both adapters and preserves draft edits on revision conflicts.
+Owner APIs, schedule selection and agent inspection use the same registry/runtime. Configuration
+and removal are blocked while a captured run or owner consent flow is using the connection.
+
+Source validation: 1,627 tests pass, four skip, zero fail; static checks pass. The real pinned MSAL
+SDK passes synthetic PKCE/cache/renewal protocol tests. The real ADO package initializes in a
+separate process and returns its annotated catalog with a synthetic token and no account/data
+calls. Disposable Electron acceptance covers both configuration forms. These are source/native
+fixture results, not authenticated corporate reads, a signed package or organization workflows workflow acceptance.
+
+### Dependency qualification still required before release freeze
+
+The lockfile pins patched MSAL 7.2.0, MCP SDK 1.32.2, compatible Zod 4.6.7 consumers and the
+Undici 7.30.1 download dependency. The actual ADO package passes catalog qualification with those
+overrides. Its separate Zod 3 compatibility dependency still has GHSA-mrhx-c7xc-m3w5; the owner
+bounds argument trees before its parser, but that is a mitigation, not an upstream package fix.
+Review the remaining advisory before freeze; do not silently substitute an incompatible major
+parser or claim a clean audit. The existing Electron 44.5.1 certificate advisory
+GHSA-jr5w-w6x2-84p9 also remains a release dependency task. No broad automatic audit fix was run.

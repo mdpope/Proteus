@@ -1,3 +1,10 @@
+## Nov 5 managed Azure DevOps connections (source)
+
+- Add explicit corporate public-client sign-in with protected SDK caching and serialized renewal.
+- Route the pinned ADO server through the existing per-run broker for Codex and Copilot.
+- Add bounded project/team/item/query probes, organization-restricted transport and ADO owner controls.
+- Preserve uncertain refreshes and writes; report expiration, cooldown and initial-consent boundaries.
+
 ## Nov 5 managed selection (source)
 
 - Expose named connection/workspace selection through chat creation and schedule tools.

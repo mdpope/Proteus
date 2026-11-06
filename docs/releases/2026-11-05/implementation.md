@@ -106,3 +106,16 @@ and the explicit captured workspace. Older destinations fail before dispatch; ex
 be retargeted by send/reply. Source recapture retains original bindings. Schedule preflight validates
 provider support and capabilities, then reports cached readiness without auth/network operations.
 Full suite: 1,609 pass/four skip/zero fail; static checks pass. Source acceptance only.
+
+## Nov 5 managed ADO source checkpoint
+
+Both initial adapters now have owner controls and scoped runtime paths. ADO uses protected MSAL
+public-client credentials and the pinned server envvar mode, never a CLI/developer-account fallback.
+Exact corporate identity/organization and bounded capability probes are required. Full suite:
+1,627 pass/four skip/zero fail; static checks and disposable Electron UI acceptance pass. Real SDK
+protocol and server catalog fixtures pass without corporate credentials or business data.
+Remaining: dependency advisory qualification, complete remaining release plan, signed candidate,
+then actual organization workflows acceptance. Work Mac has no documented approved Entra public-client registration;
+owner/admin approval is a live setup prerequisite. No package or installation exists.
+
+See [the connection contract](../../managed-mcp-connections.md) for schemas, qualification and remaining advisory/installed acceptance limits.

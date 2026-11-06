@@ -52,7 +52,7 @@ export class ManagedConnections {
   return {connectionId:binding.connectionId,name:definition.name,configurationRevision:binding.configurationRevision,
    configured:true,ownerId:binding.ownerId,workspaceId:binding.workspaceId,
    ...(observation||{state:'unchecked',transport:'unchecked',authentication:'unverified',access:'unverified',generation:0}),
-   stale:!observation?.checkedAt||this.now()-Date.parse(observation.checkedAt)>definition.policy.healthIntervalMs};
+   stale:this.slots.get(key(binding))?.client?.isExpired?.()===true||!observation?.checkedAt||this.now()-Date.parse(observation.checkedAt)>definition.policy.healthIntervalMs};
  }
  observe(binding,patch){
   const identity=key(binding),prior=this.observations.get(identity)||{generation:0};
@@ -74,7 +74,9 @@ export class ManagedConnections {
  async connection(binding,{signal,repair=false}={}){
   const definition=this.definition(binding),identity=key(binding),observation=this.observations.get(identity);
   if(!repair&&observation?.nextRetryAt&&Date.parse(observation.nextRetryAt)>this.now())throw failure('UNAVAILABLE',{retryAfterMs:Date.parse(observation.nextRetryAt)-this.now()});
-  let slot=this.slots.get(identity);if(slot)return bounded(()=>slot.promise,definition.policy.requestTimeoutMs,signal);
+  let slot=this.slots.get(identity);
+  if(slot?.client?.isExpired?.()){await this.disconnect(binding);slot=null;}
+  if(slot)return bounded(()=>slot.promise,definition.policy.requestTimeoutMs,signal);
   const adapter=this.adapters[definition.authentication.adapter];
   if(!adapter?.connect)throw failure('CAPABILITY_MISMATCH');
   slot={controller:new AbortController(),client:null,catalog:null,active:0,retired:false};this.slots.set(identity,slot);

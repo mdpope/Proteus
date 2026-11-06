@@ -1,12 +1,14 @@
-## Latest implementation checkpoint
+## Nov 5 managed ADO source checkpoint
 
-P3 custody/partial-platform publication is committed and pushed. P12 now has a tested Atlassian
-owner OAuth/credential/runtime path, Connections panel, scoped integration inspection/repair,
-explicit schedule workspace account binding and model-free preflight. Public endpoint discovery
-passes; authenticated organization workflows acceptance is still pending. Full suite: 1,609 pass/four skip, static
-checks and disposable Electron UI acceptance pass. Chat-create/schedule selection plumbing is
-complete, including remote compatibility rejection and preserved recapture bindings. ADO and
-other outstanding plan items remain. No build/installation is claimed.
+Both initial adapters now have owner controls and scoped runtime paths. ADO uses protected MSAL
+public-client credentials and the pinned server envvar mode, never a CLI/developer-account fallback.
+Exact corporate identity/organization and bounded capability probes are required. Full suite:
+1,627 pass/four skip/zero fail; static checks and disposable Electron UI acceptance pass. Real SDK
+protocol and server catalog fixtures pass without corporate credentials or business data.
+Remaining: dependency advisory qualification, complete remaining release plan, signed candidate,
+then actual organization workflows acceptance. Work Mac has no documented approved Entra public-client registration;
+owner/admin approval is a live setup prerequisite. No package or installation exists.
+
 
 # Nov 5 release plan
 

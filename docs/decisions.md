@@ -3295,3 +3295,12 @@ The owner loopback broker serves both native providers, but every run retains it
 Health probes are explicit minimal owner reads and do not manufacture server read-only annotations.
 Standalone schedule folders cannot select an account: the manifest names a captured source workspace.
 This source decision does not establish authenticated organization workflows or installed acceptance.
+
+## Nov 5 — ADO authentication ownership
+
+Use a separately approved Entra public client and MSAL's supported cache/network interfaces with
+platform-encrypted persistence. Do not adopt an unverified CLI token cache, use the SDK's production-
+inappropriate development client, or accept the ADO server's azcli fallback chain. The pinned server
+uses supported envvar bearer injection only inside its dedicated owner child. Native providers use
+the same per-run managed broker as Atlassian. Initial corporate application approval remains an
+explicit local setup prerequisite. Source tests do not establish corporate authorization or access.
