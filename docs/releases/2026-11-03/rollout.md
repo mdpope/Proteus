@@ -2,6 +2,40 @@
 
 Version: 0.2.42
 
+## Final publication and installation audit — November 5
+
+This checkpoint supersedes earlier pending-publication and in-progress consumer rows below.
+
+- Mac and Windows 0.2.42 are published together. The public current descriptor now advertises
+  Nov 3 / 0.2.42; all 27 signed artifacts, catalogs and pages passed actual HTTPS hash checks.
+  Mac publisher manifest digest: f4417adbdf1be4c3bbca5275692404344bd05343bbf88764bc556c2fc03855c0.
+  Windows retains its previously accepted manifest and bytes. No package was rebuilt.
+- Linux remains deferred after the recorded preservation rollback. Its catalog is empty under
+  the current release policy; the failed candidate is not advertised as accepted.
+- Three superseded public package directories were retired after a digest-bound preview and
+  survivor verification: 1,153,565,627 logical bytes removed; observed server free space increased
+  by 1,153,646,592 bytes. Current Apache error/warning categories were zero; hosting configuration
+  and unrelated public files were unchanged. The central publication metadata recovery was
+  verified and rotated according to the two-generation policy.
+- Both Windows owners report complete/updated, packageVerified and verified health at the expected
+  fingerprint. Ian's owner receipt matches expected/found counts: 1 workspace, 1 project, 2 scopes,
+  2 tabs and 1 window. Its zero current-window tab count matched the pre-update layout; another
+  preserved project tab is present, and the second belongs to an already closed window. A real
+  screenshot showed the resumed app. Desktop Control screenshot worked, but UI Automation did not.
+- The Windows builder's installed owner exposes 8 project-scoped tab descriptors and two distinct
+  General projects. Its empty chat-level browser list is a scope difference, not evidence of loss.
+  Desktop Control's full read-only Verify passed; recovery integrity inspection reported no issues.
+  OS-denied receipt reads were not bypassed.
+- Build Mac owner evidence reconfirms the complete/updated job and saved-window comparison
+  recorded below. Work Mac's earlier verified build/signature/health and two recoveries stand;
+  the additional read-only audit could not run because its native Claude provider returned
+  rate_limit immediately. No settings or provider were changed.
+- Full independent descriptor/history/draft/source/pairing comparisons remain qualified where
+  inaccessible; no installed terminal was available to observe on either Windows consumer.
+  Signed-in web acceptance, physical iOS gestures/push/reconnect, sustained relay stability and
+  Linux renderer recovery remain the documented limitations and Nov 5 follow-ups. Model completion
+  is not substituted for those checks.
+
 | Machine or target | Platform | Requested version | Stage | Evidence and remaining work |
 | --- | --- | --- | --- | --- |
 | Coordinating Mac | darwin-arm64 | 0.2.42 | installed | Installed through the owner updater at `568705c`: owner health verified, strict signature passes, preservation covers 148 chats, 8 workspaces, 18 projects, 239 tabs and 3 windows. Each window kept its logical tab order and hidden flags (73, 100 and 102 tabs); many runtime tab IDs were remapped, and one tab was closed deliberately beforehand. Window `95d4f6ed` logged one startup `state` failure and recovered on its second attempt, the new retry path working. Not verified: that every saved tab is visibly represented, full Back/Forward history, reading state. |
