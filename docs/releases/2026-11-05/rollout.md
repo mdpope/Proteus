@@ -1,3 +1,35 @@
+## Nov 6 — all native artifacts published; Windows installation underway
+
+All accepted application artifacts remain pinned to frozen source
+`88367d6772f5356a28bb8f3882ea9affc4b32f70`. Build Mac signed the independently
+qualified Windows payload. Mac, Linux and Windows 0.2.43 are now published; all 29 public
+files pass HTTPS byte/hash verification. The superseded Windows 0.2.42 public generation was
+retired after verification, freeing 582,234,112 observed bytes. Current catalogs, unrelated hosting
+files and hosting configuration were preserved; publication logged no new Apache errors.
+
+Windows release: `0.2.43-win32-x64-00c3b5f5911e3510ecc82aca`; manifest digest
+`d2675fab0e1b06a988387591ef2709bfabcc10b9e769ae672469fccd017c0d72`.
+Native validation passed 1,675 tests/six skips, static checks, official extraction, packaged
+PTY/restart and post-startup integrity. Independent guardian compilation differs only in the
+verified PE timestamp and uniquely identified assembly MVID; every other byte matches.
+The reviewed release-helper commit `f4aa69e` exported the original accepted package without
+rebuilding or changing it. The provenance-bound native source companion includes the generated
+guardian. Separate owner update coordinators are staging this exact signed package on both
+Windows machines; installation remains unverified.
+
+Linux now runs the accepted `88367d6772f5+src.8f3c432640b0` build. Its owner reports
+complete/updated and verified health, with all 14 tabs across 10 scopes, two workspaces,
+two projects and one window preserved without differences. Additional history, pairing,
+document-association and visual-terminal checks remain unverified. The prior attention job and
+unregistered recovery remain preserved; maintenance cannot yet apply.
+
+Physical iPhone/iPad installation and web deployment remain verified within their recorded
+limits. Build Mac needs a reviewed idle handoff after coordination ends. Work Mac still runs
+candidate 1 because its reading-position flush rejects before restart. Its precise offending
+view is not exposed by installed diagnostic tools; ordinary reversible UI inspection is underway.
+Do not claim final Mac installation, managed Jira/ADO workflow acceptance, or release closeout.
+Earlier sections below are historical checkpoints.
+
 ## Nov 6 — Linux publication accepted
 
 Linux x64 from frozen `88367d6` passed 1,677 source tests/four skips, static checks,
