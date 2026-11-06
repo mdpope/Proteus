@@ -380,3 +380,9 @@ test('confirmed owner closes override late creation intent and delayed selection
   await sync.all();assert.equal(local.length,0);assert.equal(host.get(scope.scope,scope.id).tabs.length,0);assert.ok(host.get(scope.scope,scope.id).closed[fresh.id]);assert.deepEqual(errors,[]);
  }
 });
+test('activity timestamps publish at minute granularity, so reading a page does not write to the owner',()=>{
+ const base={id:'browser',type:'browser',title:'Page',url:'https://example.test/',lastTouchedAt:'2026-11-03T12:00:00.000Z',lastActivityAt:'2026-11-03T12:00:00.000Z'};
+ assert.deepEqual(tabChanges([base],[{...base,lastTouchedAt:'2026-11-03T12:00:30.000Z',lastActivityAt:'2026-11-03T12:00:59.000Z'}]),[],'scroll ticks are coalesced');
+ const later=tabChanges([base],[{...base,lastTouchedAt:'2026-11-03T12:01:00.000Z'}]);assert.equal(later.length,1);assert.equal(later[0].tab.lastTouchedAt,'2026-11-03T12:01:00.000Z');
+ assert.equal(tabChanges([base],[{...base,title:'Changed',lastTouchedAt:'2026-11-03T12:00:30.000Z'}]).length,1,'a real change is never held back');
+});

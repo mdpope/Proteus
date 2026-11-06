@@ -1,3 +1,7 @@
+## Nov 5 planning — build hold active
+
+The [Nov 5 release plan](2026-11-05-release-plan.md) replaces the Nov 4 plan and preserves its queued scope. Nov 3 / 0.2.42 remains open: no Nov 5 build or version reservation until its closeout is verified. Await the daily-digest improvement chat's instructions and the operator's explicit hold release. An explicitly reported blocker from that chat is a narrow exception for that required change only; it never bypasses Nov 3 closeout. The automation audit handoff is recorded under P6; it explicitly is not a hard blocker requiring a build. Source changes remain isolated on nov5-schedule-visibility. Planning migration only; no implementation or build started.
+
 ## Nov 2 closed — Nov 3 follow-up queue
 
 Nov 2 / 0.2.41 is merged to main and deployed to every intended target. See the [closeout record](releases/2026-11-02/closeout.md) for verified outcomes and qualified limits. The [Nov 3 issue list](2026-11-03-issues.md) carries remaining iOS/web performance, composer and connection work, high pushed-state traffic, Desktop Control setup and the permanent tab-restoration fix. Mnemosyne’s design is preserved separately. Earlier checkpoints below are historical.

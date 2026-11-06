@@ -1,7 +1,23 @@
 import Foundation
+import CoreFoundation
 
 enum JSON: Codable, Hashable, Sendable {
     case object([String: JSON]), array([JSON]), string(String), number(Double), bool(Bool), null
+    /// Foundation parses heterogeneous owner snapshots once, avoiding repeated
+    /// failed Codable scalar/container attempts for every object and array node.
+    static func decode(_ data: Data) throws -> JSON {
+        try convert(JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed]))
+    }
+    private static func convert(_ value: Any) throws -> JSON {
+        if value is NSNull { return .null }
+        if let number = value as? NSNumber {
+            return CFGetTypeID(number) == CFBooleanGetTypeID() ? .bool(number.boolValue) : .number(number.doubleValue)
+        }
+        if let text = value as? String { return .string(text) }
+        if let array = value as? [Any] { return .array(try array.map(convert)) }
+        if let object = value as? [String: Any] { return .object(try object.mapValues(convert)) }
+        throw RemoteError(message: "Unsupported JSON value.")
+    }
     init(from decoder: Decoder) throws {
         let c = try decoder.singleValueContainer()
         if c.decodeNil() { self = .null }

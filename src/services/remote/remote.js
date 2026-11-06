@@ -1,4 +1,5 @@
 import {publishChatStreams,setChatWatch,clearChatWatch} from './chat-streams.js';
+import {RemoteStateStream} from './state-stream.js';
 import {RemoteOutbound} from './remote-outbound.js';
 import {validateAgentSendModelOptions} from '../chats/send-model-options.js';
 import {clearQuestionFromQueue} from '../chats/user-questions.js';
@@ -42,7 +43,9 @@ const runContext = run => ({...run.context,...run.schedule?.context});
 const runWorkspace = run => chatMembership(run);
 import {chatActivityAt} from '../chats/run-activity.js';
 export {chatActivityAt} from '../chats/run-activity.js';
-export const runSummary = r => ({lastActivityAt:chatActivityAt(r),...pick(r,['id','title','titleKind','titleRevision','trigger','chatType','status','queueReason','createdAt','updatedAt','failureReviewedAt','progress']),archivedAt:r.archivedAt||null,archived:!!r.archivedAt,failureEventAt:['failed','interrupted'].includes(r.status)?r.failureEventAt||r.updatedAt:null,unansweredQuestionCount:(r.userQuestions||[]).filter(q=>q.status==='pending').length,attentionRequired:needsAttention(r),provider:r.schedule.provider,...runWorkspace(r),scheduleName:r.trigger==='chat'?'':r.schedule.name});
+// The tool signature is the owner's private stall detector and changes constantly.
+const summaryProgress=progress=>{if(!progress)return undefined;const {toolSignature,...rest}=progress;return rest;};
+export const runSummary = r => ({lastActivityAt:chatActivityAt(r),...pick(r,['id','title','titleKind','titleRevision','trigger','chatType','status','queueReason','createdAt','updatedAt','failureReviewedAt']),...(r.progress?{progress:summaryProgress(r.progress)}:{}),archivedAt:r.archivedAt||null,archived:!!r.archivedAt,failureEventAt:['failed','interrupted'].includes(r.status)?r.failureEventAt||r.updatedAt:null,unansweredQuestionCount:(r.userQuestions||[]).filter(q=>q.status==='pending').length,attentionRequired:needsAttention(r),provider:r.schedule.provider,...runWorkspace(r),scheduleName:r.trigger==='chat'?'':r.schedule.name});
 const entryKeys = ['id', 'name', 'description', 'kind', 'path', 'sources', 'roots', 'mode', 'scope', 'warnings', 'unsupportedAgentFields', 'error', 'missing', 'characters', 'transport', 'integrationStatus'];
 const remoteEntry = entry => ({ ...pick(entry, entryKeys), ...(entry.agent ? { userInvocable: entry.agent.userInvocable } : {}) });
 const remoteProjects = service => { const value=service.workspaceProjects.get(service.engine);return {...value,sourceEntries:value.sourceEntries.map(remoteEntry)}; };
@@ -109,7 +112,7 @@ export class RemoteHost {
     // History operation receipts use this owner even while remote access is off.
     // Persist first-run identity without enabling a listener or pairing a device.
     if(!fs.existsSync(this.file))this.save();
-    this.peers = new Map(); this.journal = []; this.epoch = randomUUID(); this.sequence = 0; this.closed = false; this.status = 'disabled'; this.inflight = new Map();this.documents=new ChatDocumentApprovals({documentSource:(chatId,documentId)=>service.contentTabs.documentSource(chatId,documentId),currentRoots:run=>{const catalog=service.context.get(),id=run.schedule?.context?.workspaceId;const workspace=id?catalog.workspaces.find(item=>item.id===id):null;return workspace?[workspace.cwd,...(workspace.additionalDirectories||[]),...(workspace.universalFolders||[])]:[];}});this.attachmentConsents=new ChatAttachmentConsents(service.attachments);service.engine.attachmentConsents=this.attachmentConsents;
+    this.peers = new Map(); this.journal = []; this.epoch = randomUUID(); this.sequence = 0; this.stateStream = new RemoteStateStream(this); this.closed = false; this.status = 'disabled'; this.inflight = new Map();this.documents=new ChatDocumentApprovals({documentSource:(chatId,documentId)=>service.contentTabs.documentSource(chatId,documentId),currentRoots:run=>{const catalog=service.context.get(),id=run.schedule?.context?.workspaceId;const workspace=id?catalog.workspaces.find(item=>item.id===id):null;return workspace?[workspace.cwd,...(workspace.additionalDirectories||[]),...(workspace.universalFolders||[])]:[];}});this.attachmentConsents=new ChatAttachmentConsents(service.attachments);service.engine.attachmentConsents=this.attachmentConsents;
     this.commandJournal = new RemoteCommandJournal(service.home);
     this.runVersions=new Map();
     // Streaming text matters only to devices watching that chat, and then at a
@@ -125,7 +128,9 @@ export class RemoteHost {
     this.lifecycleChanged = result => { if (result.deleted) { for (const peer of this.peers.values()) if (peer.runId === result.id) peer.runId = null; this.documents.revokeChat?.(result.id); service.contentTabs?.removeChat(result.id); this.attachmentConsents.revokeChat(result.id); void service.attachments?.revokeChat?.(result.id); } this.broadcast('chat.lifecycle', result); this.changed(); };
     service.engine.on('lifecycle', this.lifecycleChanged);
     // Also detect editor/AI changes to plain files; no filesystem secrets leave the projection.
-    this.scan = setInterval(() => { if (this.config.enabled && [...this.peers.values()].some(p => p.device)) this.publish(); }, 2000);
+    // Engine changes publish on their own. Assembling state costs about 70 ms on the main
+    // process, so this fallback also carries batched progress at a slower pace.
+    this.scan = setInterval(() => { if (this.config.enabled && [...this.peers.values()].some(p => p.device)) this.publish(); }, 5000);
   }
   save() { atomicJSON(this.file, this.config); fs.chmodSync(this.file, 0o600); }
   addresses() {
@@ -382,7 +387,8 @@ export class RemoteHost {
       return timed(this.service.performanceDiagnostics, 'remote.sync', () => {
       const index = this.journal.findIndex(event => event.cursor === args.cursor);
       if (index >= 0) for (const event of this.journal.slice(index + 1)) if (event.event !== 'state' && !(event.event === 'run' && (peer.summaryOnly || peer.deltaOnly)) && !(event.event === 'run.changed' && !peer.summaryOnly) && (!event.runId || event.runId === peer.runId)) this.send(peer, event);
-      return { state: remoteState(this.service), cursor: `${this.epoch}:${this.sequence}` };
+      const state=this.stateStream.sync(peer,args,remoteState(this.service));
+      return { ...state, cursor: `${this.epoch}:${this.sequence}` };
       });
     }
     if (method === 'runs.page') return chatPage(this.service,args);
@@ -440,7 +446,7 @@ export class RemoteHost {
       return {...result,tabs:result.tabs.filter(tab=>tab.type!=='document'||canDocuments)};
     }
     if (method === 'chat.watch') { if(args.watch!=='none'||typeof args.id!=='string')throw Error('Choose a chat to stop watching.');return {cleared:clearChatWatch(peer,args.id,args.watchToken)}; }
-    if (method === 'chat.get') { const run = engine.getRun(args.id); if(args.agentId)return run.subagents?.some(row=>row.id===args.agentId)?subagentPage(run,args.agentId,args.beforeEvent):engine.delegation.page(run.id,args.agentId,args.beforeEvent); if(args.watchToken!==undefined&&(typeof args.watchToken!=='string'||!/^[a-f0-9-]{36}$/i.test(args.watchToken)))throw Error('Invalid chat watch token.');if(args.watch!=='none')setChatWatch(peer,run.id,args.watch,args.watchToken); const view={...remoteRun(run, Math.max(0, Math.floor(Number(args.offset) || 0)), engine.permissions, args.beforeEvent,ownerChatControls(run,engine)),...this.service.workspaceProjects?.membership(run),...(run.schedule.purpose==='update'?{update:updateObservation(this.service,run)}:{})};const result=args.historyCursor?chatDelta(run,view,args.historyCursor):{...view,...(!args.offset&&args.beforeEvent===undefined?chatDelta(run,view):{})};if(peer.deltaOnly&&peer.runId===run.id&&args.watch!=='none'&&result.historyCursor)peer.historyCursor=result.historyCursor;return result; }
+    if (method === 'chat.get') { const run = engine.getRun(args.id); if(args.agentId)return run.subagents?.some(row=>row.id===args.agentId)?subagentPage(run,args.agentId,args.beforeEvent):engine.delegation.page(run.id,args.agentId,args.beforeEvent); if(args.watchToken!==undefined&&(typeof args.watchToken!=='string'||!/^[a-f0-9-]{36}$/i.test(args.watchToken)))throw Error('Invalid chat watch token.');if(args.watch!=='none'){setChatWatch(peer,run.id,args.watch,args.watchToken);peer.fieldDelta=args.fieldDelta==='v1';} const view={...remoteRun(run, Math.max(0, Math.floor(Number(args.offset) || 0)), engine.permissions, args.beforeEvent,ownerChatControls(run,engine)),...this.service.workspaceProjects?.membership(run),...(run.schedule.purpose==='update'?{update:updateObservation(this.service,run)}:{})};const result=args.historyCursor?chatDelta(run,view,args.historyCursor):{...view,...(!args.offset&&args.beforeEvent===undefined?chatDelta(run,view):{})};if(peer.deltaOnly&&peer.runId===run.id&&args.watch!=='none'&&result.historyCursor)peer.historyCursor=result.historyCursor;return result; }
     if(method==='chat.previews.list'||method==='chat.previews.read'){
       this.requireDocumentAccess(peer);const run=engine.getRun(args.id);
       const result=await(method.endsWith('.list')?this.service.previews.list(run):this.service.previews.read(run,args.documentId));
@@ -586,8 +592,7 @@ export class RemoteHost {
   publish() {
     if (!this.config.enabled) return;
     return timedSync(this.service.performanceDiagnostics, 'remote.publish', () => {
-    const state = remoteState(this.service); const signature = timedSync(this.service.performanceDiagnostics, 'remote.publish.serialize', () => JSON.stringify(state));
-    if (signature !== this.signature) { this.signature = signature; this.broadcast('state', state); }
+    const state = remoteState(this.service); timedSync(this.service.performanceDiagnostics, 'remote.publish.serialize', () => this.stateStream.observe(state));
     publishChatStreams(this,{summary:runSummary,page:source=>timedSync(this.service.performanceDiagnostics,'remote.run.assemble',()=>({...remoteRun(source,0,this.service.engine.permissions,undefined,ownerChatControls(source,this.service.engine)),...this.service.workspaceProjects?.membership(source)}))});
     });
   }

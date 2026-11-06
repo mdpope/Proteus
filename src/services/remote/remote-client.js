@@ -1,6 +1,7 @@
 // Wire-compatible with src/services/remote/remote-crypto.js and Apple CryptoKit AES.GCM.combined.
 // Conversation payloads stay on this encrypted wire. Account credential custody is a separate adapter.
 import {remoteTransportLimits as limits} from './remote-transport.js';
+import {applyStatePatch} from './state-patch.js';
 const encoder = new TextEncoder();
 const decoder = new TextDecoder('utf-8', { fatal: true });
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
@@ -106,12 +107,57 @@ export class BrowserRemoteClient extends EventTarget {
             const value = await unseal(this.host.key, packet.box, `${this.prefix}:host:${packet.seq}`); this.incoming = packet.seq;
             if (value.type === 'result') { const pending = this.waiting.get(value.id); if (pending) { clearTimeout(pending.timer); this.waiting.delete(value.id); value.error ? pending.reject(Object.assign(new Error(value.error),value.code==='JOURNAL_BUSY'?{code:value.code,details:value.details}:{})) : pending.resolve(value.result); } }
             else if(value.type === 'revoked' && value.deviceId === this.host.deviceId){this.event('revoked',{authenticated:true,deviceId:value.deviceId});this.fail('This device was revoked by the computer.');}
-            else if (value.type === 'event') this.event('change', value);
+            else if (value.type === 'event') this.acceptEvent(value);
             else throw new Error('Invalid message.');
         } else if (packet.type === 'revoked' || packet.type === 'rejected') { this.event('recovery-blocked',{reason:'authentication'}); this.event('rejected', {authenticated:false,type:packet.type}); this.fail(this.stage==='pairing'?'Computer rejected the invitation. It may be expired or already consumed. Create a fresh invitation.':'Computer rejected authentication. Saved pairing was preserved; review Connections on the computer.'); }
         else throw new Error('Unexpected message.');
     }
-    request(method, args = {}, { id = crypto.randomUUID(), issuedAt = new Date().toISOString(), timeoutMs = 60_000 } = {}) {
+    // Incremental state stays private to this client: consumers receive the same
+    // whole `state` change and `sync` result, whichever form crossed the wire.
+    // They get their own root and runs array, so a local merge of older run pages
+    // or a chat removal cannot corrupt the baseline the next patch applies to.
+    presentedState(state) { return state&&typeof state==='object'?{...state,...(Array.isArray(state.runs)?{runs:[...state.runs]}:{})}:state; }
+    acceptEvent(value) {
+        if (value.event === 'state.patch') { this.acceptStatePatch(value); return; }
+        if (value.event === 'state') {
+            this.stateBaseline = typeof value.stateVersion === 'string' ? value.data : null;
+            this.stateVersion = this.stateBaseline ? value.stateVersion : null;
+            value = { ...value, data: this.presentedState(value.data) };
+        }
+        this.event('change', value);
+    }
+    acceptStatePatch(value) {
+        const { base, version, patch } = value.data || {};
+        if (this.stateResync || version === this.stateVersion) return;
+        let next;
+        try { if (base !== this.stateVersion || !this.stateBaseline) throw new Error('Missed state patch.'); next = applyStatePatch(this.stateBaseline, patch); }
+        catch { this.resynchronizeState(value.cursor); return; }
+        this.stateBaseline = next; this.stateVersion = version;
+        this.event('change', { type: 'event', event: 'state', data: this.presentedState(next), cursor: value.cursor });
+    }
+    resynchronizeState(cursor) {
+        this.stateBaseline = null; this.stateVersion = null; this.stateResync = true;
+        this.request('sync', { cursor: cursor || '' })
+            .then(result => { if (result?.state) this.event('change', { type: 'event', event: 'state', data: result.state, cursor: result.cursor }); })
+            .catch(() => {})
+            .finally(() => { this.stateResync = false; });
+    }
+    acceptSync(result) {
+        if (result?.unchanged === true) {
+            if (this.stateBaseline && result.stateVersion === this.stateVersion) return { ...result, state: this.presentedState(this.stateBaseline) };
+            // The owner believes this client is current and it is not: never present an empty state.
+            this.stateBaseline = null; this.stateVersion = null;
+            return this.request('sync', { cursor: '' });
+        }
+        this.stateBaseline = typeof result?.stateVersion === 'string' ? result.state : null;
+        this.stateVersion = this.stateBaseline ? result.stateVersion : null;
+        return this.stateBaseline ? { ...result, state: this.presentedState(result.state) } : result;
+    }
+    request(method, args = {}, options = {}) {
+        if (method !== 'sync') return this.send(method, args, options);
+        return this.send('sync', { ...args, statePatch: 'v1', ...(this.stateBaseline && this.stateVersion ? { ifStateVersion: this.stateVersion } : {}) }, options).then(result => this.acceptSync(result));
+    }
+    send(method, args = {}, { id = crypto.randomUUID(), issuedAt = new Date().toISOString(), timeoutMs = 60_000 } = {}) {
         if (this.status !== 'online') return Promise.reject(new Error('Connect this computer first.'));
         if (this.waiting.has(id)) return Promise.reject(new Error('This action is already waiting for a response.'));
         if(this.waiting.size>=limits.pendingRequests)return Promise.reject(Object.assign(new Error('Too many remote actions are pending. Wait for the current responses before retrying.'),{code:'REMOTE_BUSY'}));

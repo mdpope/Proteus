@@ -277,6 +277,15 @@ export class BrowserHistoryStore {
     });
   }
   batchNavigation(value={}) {if(!Array.isArray(value.operations)||!value.operations.length||value.operations.length>20)throw new Error('Send between 1 and 20 navigation operations.');return this.transaction(()=>({results:value.operations.map(op=>this.navigation(op))}));}
+  // A page title settling on another client cannot invalidate a navigation or traversal
+  // based on the revision before it: the selected entry and stack are unchanged. A URL
+  // change always appends an entry above, so only title-only redirects are metadata.
+  // Competing redirects keep their strict check and the client's existing recovery.
+  onlyMetadataSince(tabId,base,revision){
+   if(!Number.isSafeInteger(base)||base<0||base>=revision)return false;
+   const rows=this.db.prepare('SELECT payload FROM nav_changes WHERE tab_id=? AND revision>? AND revision<=?').all(tabId,base,revision);
+   return rows.length===revision-base&&rows.every(row=>JSON.parse(row.payload).metadata===true);
+  }
   navigation(value={}) {
     if(value.private===true || String(value.profileId || '').startsWith('private:'))throw new Error('Private browsing is excluded from shared navigation.');
     if(value.action==='seed')return this.seed(value);
@@ -284,7 +293,7 @@ export class BrowserHistoryStore {
     return this.transaction(()=>{
       const receipt=this.db.prepare('SELECT digest,payload FROM nav_receipts WHERE operation_id=?').get(operationId);if(receipt){if(receipt.digest!==digest){const error=new Error('Navigation operation ID was already used.');error.code='NAVIGATION_OPERATION_CONFLICT';throw error;}return {...JSON.parse(receipt.payload),replayed:true};}
       const tabId=identity(value.tabId,'tab'),tab=this.db.prepare('SELECT revision,selected_entry_id AS selectedEntryId FROM nav_tabs WHERE tab_id=?').get(tabId) || {revision:0,selectedEntryId:null};
-      if(value.baseRevision!==tab.revision){const error=new Error('Navigation changed on the owning computer. Preserve this pending action and refresh.');error.code='NAVIGATION_CONFLICT';throw error;}
+      if(value.baseRevision!==tab.revision&&(value.action==='redirect'||!this.onlyMetadataSince(tabId,value.baseRevision,tab.revision))){const error=new Error('Navigation changed on the owning computer. Preserve this pending action and refresh.');error.code='NAVIGATION_CONFLICT';throw error;}
       if(value.action==='redirect'){
         const previousId=identity(value.selectedEntryId || value.entryId,'entry'),row=this.db.prepare('SELECT payload FROM nav_entries WHERE tab_id=? AND entry_id=?').get(tabId,previousId);
         if(!row || previousId!==tab.selectedEntryId)throw new Error('Redirect belongs to a navigation entry that is no longer selected.');
@@ -310,7 +319,7 @@ export class BrowserHistoryStore {
         else if(value.eventId && JSON.parse(this.meta('settings')).enabled){this.insert(this.normalize({...value,...entry,eventId:value.eventId,visitedAt:value.visitedAt || new Date().toISOString()}));entry={...entry,eventId:value.eventId};this.db.prepare('UPDATE nav_entries SET payload=? WHERE tab_id=? AND entry_id=?').run(JSON.stringify(entry),tabId,entryId);}
       } else throw new Error('Unknown navigation operation.');
       tab.revision++;this.db.prepare('INSERT INTO nav_tabs VALUES(?,?,?) ON CONFLICT(tab_id) DO UPDATE SET revision=excluded.revision,selected_entry_id=excluded.selected_entry_id').run(tabId,tab.revision,tab.selectedEntryId);
-      this.db.prepare('INSERT INTO nav_changes VALUES(?,?,?)').run(tabId,tab.revision,JSON.stringify({revision:tab.revision,position:changePosition,truncate:value.action==='navigate',entry:{...entry,id:entry.entryId}}));
+      this.db.prepare('INSERT INTO nav_changes VALUES(?,?,?)').run(tabId,tab.revision,JSON.stringify({revision:tab.revision,position:changePosition,truncate:value.action==='navigate',...(value.action==='redirect'?{metadata:true}:{}),entry:{...entry,id:entry.entryId}}));
       // This is a transport accelerator, not retained history. Older clients or
       // longer gaps receive a verified paged snapshot of the complete stack.
       this.db.prepare('DELETE FROM nav_changes WHERE tab_id=? AND revision<=?').run(tabId,tab.revision-256);

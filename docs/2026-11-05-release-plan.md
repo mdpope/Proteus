@@ -1,0 +1,320 @@
+# Nov 5 release plan
+
+Migrated from the Nov 4 plan on November 5, 2026. All queued scope and historical observation dates below are preserved. Planning only; no version is reserved and no build is authorized.
+
+## Operator hold — November 5, 2026
+
+- **Nov 3 must close first.** Nov 3 / 0.2.42 remains open. Do not build Nov 5 changes or open/reserve the next release until Nov 3 closeout is verified. The November 5 operator follow-up authorizes finishing Nov 3 publication, installation checks and closeout; it does not mark them complete.
+- **Wait for the daily-digest improvement chat.** Hold pending further instructions from that chat; capture any needed Proteus changes here as queued scope when its handoff arrives. The automation audit handoff has been received; its scoped unattended-execution requirement is now explicitly a hard blocker for fully automated synthesis. Only that blocker scope may use the narrow exception after Nov 3 closeout; no build starts while Nov 3 remains open.
+- **Build hold stays in force until the operator explicitly lifts it.** Routine requests, a completed chat, or Nov 3 closeout alone do not lift the hold.
+- **Narrow exception:** if the daily-digest chat explicitly identifies a change as a blocker on its end, record the blocker and exact required scope. The operator permits that blocker-specific exception to the digest hold; it does not lift the hold for other changes or bypass the Nov 3 closeout prerequisite.
+- No implementation, packaging, publication, installation or build dispatch is authorized by this plan migration. Continue collecting planning updates while held.
+
+Once Nov 3 is closed and the applicable hold is lifted or its explicit blocker exception applies, open Nov 5 once through `scripts/release.mjs open` to reserve the next version. Do not reserve a version during this hold.
+
+## Update-blocking rules
+
+The operator's rule: only a download that is actively transferring data blocks an update. A paused or interrupted download must not.
+
+Today `desktop/main.cjs` reports "A browser operation or download is active." whenever any tab has an agent action in flight (`tab.agentActions`) or any entry in `tab.downloads`. The `downloads` set is only emptied when Electron fires a download's `done` event. A paused or interrupted download that never fires `done` therefore blocks forever.
+
+Change, with tests:
+
+1. Count a download as blocking only while its state is `progressing` and it is not paused (`item.getState()` and `item.isPaused()`). A download that is paused, interrupted, cancelled or completed does not block, and its file and row are left alone.
+2. A hung agent operation can block just as indefinitely: on Nov 4 one Zoho Assist tab held `agentActions` for about 16 hours until a tab was closed. Add a stall timeout: an agent operation with no progress for a bounded time (propose 5 minutes) stops blocking idle and is reported as stalled rather than active.
+3. Name the blocker. The idle report should say which tab, whether it is a download or an agent action, and whether it is progressing, so nobody has to hunt through windows.
+4. A running chat or terminal and any other existing idle rule are unchanged. Updates still never cancel unrelated work.
+
+Acceptance: regressions for a progressing, paused, interrupted, completed and cancelled download, and for a hung and a progressing agent operation, in a real Electron window; the blocker text names the tab and kind.
+
+## Process issues to resolve
+
+### P1 — Web release has no signed-in acceptance
+
+What happened on Nov 3: the website deployed with its own audit passing, but nothing exercised the new remote web client as a signed-in person would. The new client runs its transport in a Web Worker, and the page's Content-Security-Policy and the worker file's own headers were checked only by reading them. Ordinary isolated restore also failed, as on Nov 2, and activation used the captured-state verifier instead, so what the audit proves about a restored site is limited.
+
+Why it matters: a worker blocked by policy, or a client that fails to connect after login, would look healthy to every automated check we run and fail for you first.
+
+To resolve:
+1. A repeatable authenticated acceptance step the deploy runs or a person runs in minutes: sign in with a disposable test account or the operator's own session, load the remote page, confirm the worker starts, the client pairs with a synthetic owner, state arrives, a message round trip works, and the browser console shows no policy errors. It must not read or print credentials.
+2. Run the same check against the local build before deploying, so a policy or asset problem is caught before production.
+3. Find out why ordinary isolated restore fails (the recorded ValueError) and fix it, or decide in writing that captured-state verification is the permanent standard and say what it does and does not prove.
+4. Record the result in the website release record, separately from "deployed".
+
+### P2 — Server cleanup is manual and tied to one release's exact files
+
+What happened on Nov 3: the deploy added a server code generation and a server recovery, so the server probably holds more than the policy allows (one verified backup, current code and one previous). Retiring the older ones needs the server's root shell with hashes pinned for specific releases. The Nov 2 retirement script names Nov 2's exact generations, so it cannot be reused, and the deploy client only cleans local recoveries. The local build tool also refuses to build when more than two code archives exist, which forced a manual deletion of an archive on Nov 3.
+
+Why it matters: server disk was exhausted once before (October 23, causing an HTTP 500), retention is policy, and a manual root-shell step after every release is where mistakes happen.
+
+To resolve:
+1. First, inventory the server now (code generations, recovery directories and transports, free space) and record it without deleting anything, so the cleanup is reviewed against facts.
+2. Make server retention a reviewed, repeatable step: it takes the live and previous release from the receipt rather than hard-coded names, verifies each retained item's hash first, retires only older ones, writes a receipt, and refuses to run if any check fails. Dry-run output first, then an apply step bound to the exact plan, the same shape as `desktop-publication.mjs`.
+3. Do the same for local code archives and build folders: retire on acceptance as part of the deploy, so the next build is never blocked and nobody deletes files by hand.
+4. Report actual free-space change separately from logical bytes.
+
+### P3 — The Build Mac must be the release authority, not a Windows builder
+
+Operator rule: the Build Mac, not any builder, is the authority for releasing packages. No release may depend on a Windows build, or on a Windows machine being reachable, for signing, staging or publishing.
+
+What is true today: the Ed25519 publisher private key (public key ID `92b49fc0…`) exists only on the Windows builder. The build operation configured there signs at the end of its own build, so a platform build and the release authority are the same chat. On Nov 3 an unanswered approval prompt on that machine, then a Windows build that stopped itself rather than sign, left the already built and accepted Mac package unpublishable for hours, and pushed Work Mac onto a one-off private transfer. The reason the key lives on Windows is not recorded; it appears to be history.
+
+How verification works, which constrains the fix: installed apps and the website verify a release manifest against public keys bundled inside them (`resources/desktop-release-keys.json` and the app's own copy). An app only trusts keys it already shipped with, so a new key cannot be used until a release containing it has been installed everywhere that must verify the next one.
+
+Target design:
+1. **Builders only build.** A native builder produces the package, its source companion and an unsigned manifest payload, runs acceptance, and hands the exact bytes over. It never holds the key and never signs or publishes. The Windows build operation's signing step is removed or disabled by default.
+2. **The Build Mac signs, verifies, stages and publishes.** It holds the key, runs `sign-desktop-payload.mjs` and `stage-desktop-distribution.mjs`, verifies the result against the bundled trust, and deploys to downloads.proteus.example. It also keeps the release ledger.
+3. **Hand-over is a private draft with hash checks,** as the Nov 3 HC transfer did, not text in a chat. Chat-returned base64 corrupted a signed envelope on Nov 2.
+4. **Platforms publish independently.** Today staging a subset gives every other platform an empty catalog, so one late builder blanks everyone else's updates. Replace that with an explicit "pending" state per platform that keeps the previous valid entry, so consumers can neither select a superseded version silently nor lose updates entirely.
+
+Key custody, a decision for the operator before any change:
+- **Option 1, move the existing key.** A one-time, operator-authorized move of the current private key to this Mac's protected storage (an owner-only file outside every checkout, with a Bitwarden recovery record), then verify it signs a test manifest that the existing trust accepts, then retire the Windows copy and record that it was removed. No release needed and no trust change. The cost is that the key travels once, and copying a signing key is exactly the risk to avoid.
+- **Option 2, rotate to a new key generated on this Mac.** The private key never leaves it. Ship the new public key in a release signed by the old key (one last use of Windows or of Option 1), wait until every target runs that release, sign with the new key from then on, and retire the old one. Nothing is copied, but there is a transition period and a release to ship first.
+- Recommendation: Option 2 if the old key can be used once more under supervision, because it ends with a key that has only ever existed on the authority machine. Choose Option 1 only if rotation cannot wait.
+
+Acceptance:
+1. A full release (Mac, Linux, Windows) signed on the Build Mac with the Windows builder powered off.
+2. Staging and verification pass against the bundled trust, and a consumer completes a real update from the published release.
+3. A subset publish, such as Mac only, leaves the other platforms' catalogs valid.
+4. The private key's location, permissions and backup are documented without its value or path details in Git.
+5. Nothing in the release process names a builder as an authority; `docs/release-process.md` is updated to say so.
+
+### P4 — A remote computer's command history fills up and blocks dispatch
+
+On Nov 5 Work Mac refused every command, including an authorized update, with "Remote command history is busy: 268,496,545 / 268,435,456 bytes; 0 unresolved". It keeps every received command's receipt for 24 hours and caps the total at 256 MiB. Receipts of large results, such as tab-list replies with long browser histories, evidently fill it, and nothing drains until entries age past 24 hours. This blocks dispatch and probably also tab sync to that computer.
+
+To resolve: find what dominates the bytes, using the diagnostics the journal already exposes, and measure it on a real owner rather than guessing. Keep retry protection but do not store full large results in each receipt (store a digest and size, since a retry needs the outcome, not the whole tab list). Warn before the cap is reached, so it shows in the owner's status and in a dispatch error that names the cause and the time until space frees. Test that existing claims still complete and retries still return the original outcome. Also confirm the activity-write change in 0.2.42 actually reduced this on a live owner.
+
+### P5 — Sending a message shows "State display is temporarily unavailable", and the message is missing for a while
+
+Reported by the operator on Nov 5, on the Build Mac running 0.2.42: every time a message is submitted in a chat, a toast reads "State display is temporarily unavailable. Retry the refresh." and the submitted message does not appear in the history for some time. It happens on every submit, not occasionally. Whether it began with 0.2.42 or earlier is unknown.
+
+What the code shows: the text comes from one place, the `/api/state` endpoint in `src/server.js`, which returns HTTP 503 from a catch-all around building and serializing the whole app state. That state is assembled by a projection worker (`src/services/state/state-projection-client.js`) that has a 15-second timeout, a bounded number of pending snapshots and deliberately no synchronous fallback. So any error, timeout or overflow in that path becomes this same message.
+
+Two facts that make it hard to diagnose today:
+1. The catch discards the underlying error. No log entry records it. A search of this owner's log found no related entry, so the cause cannot be read back from it.
+2. After a send, the app asks for the full state again. If that refresh fails, the chat is not updated from the send's own result, so the user's message stays invisible until a later refresh succeeds. The message was presumably sent; that has not been checked.
+
+Not yet established: whether the worker is timing out, refusing a pending snapshot while another is in flight (a send triggers several refreshes at once), or failing on something in the state. This owner holds 148 chats, 8 workspaces and 239 tabs, so size is a suspect but unproven.
+
+To resolve:
+1. Log the real error, with its cause and the worker's pending count and elapsed time, content-free, before changing anything. Reproduce on a copy of a large owner, not guess.
+2. Find the cause and fix it, for example coalescing overlapping state refreshes so a send does not queue several full snapshots, or keeping the worker from rejecting while a prior one runs.
+3. Make a send independent of the full refresh: show the submitted message immediately from the send's own response (optimistic display with its retry identity), and reconcile when the refresh arrives. A failed refresh should never hide a message.
+4. Make the toast useful: say what failed, retry automatically with backoff, and clear itself when the retry succeeds.
+5. Regression: submit messages in a large synthetic owner, with the state worker forced to fail and to be slow, and verify the message appears at once and that no duplicate is created on retry.
+
+## Carried forward
+
+- Linux renderer-crash recovery fails on the unmodified baseline and is unexplained (see the Nov 3 Linux qualification).
+- iOS physical-device responsiveness, gestures, push and reconnect remain unverified.
+- Mnemosyne work stays deferred.
+- Any Nov 3 item left open at closeout, including the relay deployment and server retention.
+
+
+## P6 — Schedule configuration inspection and preview
+
+The automation-audit workflow reports saved-only reads, opaque permission/workspace-reference
+schemas and no source discovery or change preview in the schedule tool. Source inspection
+confirms these gaps. The workflow owner explicitly says this is not a hard blocker requiring
+a build; the existing hold and Nov 3 closeout prerequisite remain unchanged.
+
+Source work is isolated on branch nov5-schedule-visibility. It adds saved/resolved configuration
+inspection, scoped source metadata paging, typed permission/reference schemas, non-writing
+change preview, start-preflight configuration in test receipts, and consistent list/read revisions.
+The current supported schema and installed-version workaround are documented in
+schedule-tool-configuration.md on that branch. Workflow manifests, customer data, live schedules,
+enabled state and unrelated runs remain with their existing owner.
+
+Acceptance: synthetic revision/permission/preview/history tests plus the required full source
+suite and static checks; future installed acceptance must verify actual captured runs and workflow
+outputs separately. No packaging, publication, installation or real workflow acceptance is claimed.
+
+
+### P6 source validation
+
+Ten focused schedule-control tests pass. The full suite passes 1,542 tests with four skipped
+using a short canonical temporary root; static checks pass. The initial default-temp run had
+11 path-alias/socket-path failures, all independently reproduced on unchanged Nov 3 source.
+No package was built, no installation changed and no real unattended workflow was tested.
+These historical results apply only to P6; the later checkpoint below records implemented P7/P8.
+
+
+## P7 — Source-aware schedule reconciliation (implemented in isolated source)
+
+The workflow owner confirmed that editing and validating its canonical manifest still leaves
+tool update blocked by source ownership. The installed CLI refresh validates exported schedule
+JSON and matching source.system/source.manifest, captures its own save revision, preserves
+history, and always pauses. It has no caller-supplied expected revision or keep-enabled option.
+The local editor supports revision-checked exported-record saves, but does not verify provenance;
+the remote editor refuses source-managed writes. None satisfies the complete requested contract.
+
+Add a supported owner reconciliation path shared by tools and UI/CLI: accept the workflow's
+validated export with explicit source identity and manifest/export hashes, require the caller's
+exact current schedule revision, preview the proposed changes without writing, and reject stale
+or mismatched evidence. Foreign manifest validation remains with its workflow owner; Proteus
+must verify its declared provenance without invoking arbitrary exporters or claiming to understand
+foreign schemas. Preserve current enabled state by default, unknown fields, prior runs, captured
+settings and history; require an explicit separate choice to change enabled state. Permission
+changes retain schedule-configure-permissions checks and ordinary owner authorization. Return
+a durable reconciliation receipt and resulting revision, then verify a real captured test run.
+
+Do not work around the source guard with raw app-data edits or a generic schedule API call.
+No live organization workflows schedule mutation is authorized for this coordinator. The latest acceptance
+handoff identifies source reconciliation as a hard unattended-workflow blocker, alongside P8.
+Nov 3 closeout and the existing build hold remain release prerequisites.
+
+## P8 — Scoped unattended workflow execution (implemented in isolated source; hard workflow blocker)
+
+The current Codex adapter fixes native approvalPolicy to untrusted and network access to false.
+Native trusted reads may proceed, but explicit filesystem grants do not authorize dynamically
+generated shell commands. Custom mode matches exact operation rules; no workflow-scoped dynamic
+shell execution mode exists. Do not promise unattended synthesis from a list of exact commands.
+
+Define an explicit workflow permission profile that supports normal read/edit/research work
+inside reviewed filesystem and network boundaries, with enforcement by the actual provider
+sandbox and owner, capability checks, inspectable effective settings, and captured-run evidence.
+Distinguish working roots, read/write grants, selected tool/action rules, network destinations and
+workflow execution authorization. Fail closed for unsupported provider capability, changed
+workflow/source identity, scope escalation or access outside approved boundaries. Prove that
+variable commands within scope work while writes/reads/network access outside scope cannot gain
+permission from their executable name. No blanket interpreter/prefix approval, sandbox bypass,
+automatic approval of pending requests, or weakening of protected credential boundaries.
+A constrained workflow entrypoint is an interim option only when it performs the complete
+authorized operation; it is not a general dynamic-command approval policy.
+
+Workflow/manifests and customer-local testing remain with the automation owner. The later operator handoff identifies this as a hard blocker for fully automated synthesis. The narrow blocker exception remains subordinate to verified Nov 3 closeout; no build or deployment is authorized while Nov 3 remains open.
+
+
+## November 5 — scoped capability implementation checkpoint
+
+P7 now has preview-reconcile and reconcile operations. They validate exported Proteus JSON,
+matching source identity and exact manifest/export hashes; the foreign manifest validator remains
+with the workflow owner. Caller revision, permission-configuration scope, preview digest and
+durable operation receipt gate the write. Enabled state, unknown fields and prior runs/history
+are retained. Source files are reread after asynchronous preflight.
+
+P8 adds explicit executionPermissions.sandboxedCommands for Codex custom mode with explicit
+folder grants. Native on-request approval lets variable commands run inside a restrictive
+permission profile; root/temp access is denied except granted paths and public runtime reads.
+Command network access stays disabled. Research uses separately authorized MCP connectors.
+An exact named tool grant or explicit readOnlyTools policy permits its selected server connection.
+Native calls use actual connected thread-scoped catalog annotations; only unambiguously annotated
+non-destructive reads qualify for read-only authorization. Writes and unknown tools retain approval.
+No interpreter/prefix grants, auto-review or pending-request approvals are introduced. Runtime
+profile identity, selected roots, approval policy and network state are checked before a turn.
+Changed permission mode or conflicting native profile configuration fails closed.
+
+The real Mac native sandbox probe (no model turn) permits an in-scope write and rejects outside
+read/write, a symlink escape, read-only child writes, .git writes and a live local test connection.
+This is source/native-boundary acceptance, not a real organization workflows workflow run or cross-platform proof.
+Other operating-system and installed end-to-end acceptance remains required before claiming it.
+
+### P9 — Real catalog rescan and unsent-create recapture
+
+Partial discovery previously reused a stale hash when a shared source remained under another
+root. Discovery now rereads the bytes. Schedule refresh-catalog rescans the base and referenced
+workspace catalogs without changing schedule selections; refresh-sources uses that same rescan.
+A chat recapture action requires an ordinary create task and stable new operationId. The owner
+must retain the exact settled pre-create source-hash rejection; pending, absent or successful
+original receipts are refused. It rescans, captures fresh sources, and claims one durable logical
+create before delivery. Original task/error/attempt evidence stays retained. Both encrypted
+transport retry and lost-reply recovery verify one created chat. A genuinely uncertain claim
+requires review and is never silently replayed. No existing live task is recaptured by this work.
+
+### P10 — Bounded schedule run status
+
+Status now sorts newest creation time first and honors limit/cursor with a stable snapshot guard.
+An exact runId still returns that run. No pending permission, enabled state or unrelated run is
+changed by reading status.
+
+### Workflow acceptance handoff
+
+Workflow source tests and real managed connector reads establish preparation and credential
+availability. They do not satisfy installed acceptance. Existing schedules remain enabled on
+their original provider settings, and the planning fixture's native approval remains unanswered.
+After authorized installation, verify real catalog refresh, revision-preserving reconciliation,
+retained enabled state/history, complete prompt-free Codex workflow execution and a second
+no-new-evidence run. Verify workflow outputs independently of model-turn completion.
+
+Final isolated-source validation: 1,548 tests pass, four skip, zero fail; static checks pass.
+Native synthetic Mac sandbox and MCP-catalog probes pass without a model turn. No installed
+workflow success, cross-platform acceptance, build, publication or deployment is claimed.
+
+## Carried over from the Nov 3 closeout
+
+Found during the Nov 3 rollout on November 5. Planning only; scope is recorded, nothing is authorized.
+
+- **Linux 0.2.42 install rolled back (needs a product fix first).** The preservation check timed out
+  twice on "Saved tab membership, order, descriptors or closed identities changed during upgrade".
+  The local diagnosis: a document tab's registry entry carried `chatId` and `associationChatId`, the
+  saved window descriptors did not, and restore rewrote the registry entry without them (revision
+  33 to 34). Required: (1) restore must not strip registry-only descriptor fields from document
+  tabs, with a regression that restores a window whose saved markdown descriptors lack them;
+  (2) the update preservation receipt records the found inventory and the specific difference, not
+  only expected scopes and a generic error; (3) a rolled-back job left in `attention` needs a
+  supported review-and-clear path (the owner currently refuses reconciliation and maintenance
+  reports `canApply:false`); (4) reopening a document should re-associate an existing tab instead of
+  failing with "Destination already contains this tab or is full."; (5) explain the unattributed
+  closure of a window on that computer (three closed tombstones, no actor in any log). The Linux
+  package built at `568705c` stays deferred until a fixed build ships.
+- **Mac and Linux are not published to downloads.proteus.example.** Their publisher signatures can only come from the
+  Windows builder; only the Windows 0.2.42 release is published. This is the same authority problem
+  as the Build Mac authority item above, and it blocks `current.json` from advertising one
+  consistent release.
+- **Windows owner single-flight.** The owner rejects an update call while another (for example a
+  maintenance inspection of 25 to 60 seconds or more) is running with "Another update operation is
+  running", `status` does not expose the busy flag, and the Codex provider shows only "dynamic tool
+  request failed". Expose the busy operation in `status`, make a rejected call return the real
+  message, and give maintenance a progress or wait handle instead of a yielded cell.
+- **Windows owner builds cannot override TEMP.** The default TEMP carries extra access grants that
+  the private-storage check rejects, which hung the source suite when a fixture created its home with
+  a plain temp directory. Add a private-temp override to the owner build request, and a source-suite
+  per-test timeout so a rejected start fails fast instead of hanging. Audit remaining fixtures that
+  create homes without the private temporary directory helper.
+- **`desktop-package-ui` fails on the Windows extraction.** The terminal canvas was not visible
+  (second run, line 108; the Nov 2 baseline fails earlier at line 91, so the comparison is
+  incomplete). Both Windows computers reported health verified, but terminal rendering in the
+  installed app was not confirmed. Investigate whether the terminal renders in the installed app.
+- **Desktop Control Verify on a remote Windows session.** On one computer Verify passed discovery,
+  permissions and window listing but the observation returned no UI Automation tree; on another the
+  update chat's tab inventory returned zero tabs for the owner window. Determine whether these are
+  session or scope effects and make the update coordinator's post-install receipt include the
+  preservation counts it needs.
+- **Server access.** The release identity now reaches root-only work through an audited, hash-bound
+  wrapper over SSH and `sudo` (documented in `docs/release-process.md`). Replace the per-release
+  retention helper with a reviewed, reusable one in the private deployment workspace, and add the
+  Webmin zero-width-tab and Command Shell quirks to the operator runbook.
+
+## November 5 transcript reconciliation and digest-first sequence
+
+Reviewed the complete Nov 3 coordinator transcript through its final rate-limit failure and
+compared it with commit 2519241. The final carry-over list was saved before the failure; it is
+now also retained in the isolated Nov 5 implementation branch. P1–P5 and the update-blocking
+rules already cover the earlier requested follow-ups; the carry-over section preserves the
+later Linux, Windows, publication and server-process findings.
+
+Fresh receiving-owner evidence confirms the second Windows consumer installed 0.2.42 with
+verified health. Its independent post-install check still reported zero visible owner tabs,
+no exposed expected/found preservation receipt, no UI Automation tree and unverified terminal
+rendering. Treat this as an unresolved acceptance discrepancy, not proof of data loss or full
+acceptance. Publication also remains incomplete: the public current descriptor still advertises
+Nov 2 / 0.2.41, and the Nov 3 PR remains open. Finish these before closing Nov 3.
+
+Recommended first Nov 5 package: the already implemented P6–P10 digest controls only, rebased
+onto closed Nov 3 and validated before packaging. P7/P8 block unattended acceptance; P6/P9/P10
+provide configuration visibility, real source refresh and run evidence needed to verify it.
+Publish the accepted Mac artifact once and install it on the digest owner through its update
+coordinator. Then its workflow owner reconciles the prepared canonical exports and verifies
+a prompt-free workflow plus a second no-new-evidence run. Keep unrelated feature work queued
+until this acceptance is complete. No Nov 5 package or installation has started.
+
+### P11 — Explain provider allowance failures
+
+The Work Mac verification continuation failed immediately with Claude rate_limit. Source inspection
+confirms this is a native Claude assistant error passed through by Proteus, not a locally imposed
+release throttle. The transcript exposes neither the allowance window nor reset time. Improve
+the displayed cause, account/model context and provider-supplied reset/retry details; distinguish
+subscription exhaustion from temporary request throttling. Preserve retry identity and completed
+external work. Provider fallback must be explicitly selected/authorized, never silent. Keep
+this diagnostic work outside the digest-only first package unless needed for its acceptance.

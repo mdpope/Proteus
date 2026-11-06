@@ -23,6 +23,7 @@ import {remapPreviewProjectSession,remapPreviewBrowserPlacement} from './feature
 import {reorderWorkspaceTabSiblings} from './features/workspaces/workspace-tabs.js';
 import {workspaceProjectsCatalog,setWorkspaceProjectsCatalog,initDesktopPreview,previewEnabled,projectIcon,previewTopId,reconcilePreviewChatPlacement,previewContentDescriptors,ensurePreviewProject,previewProjects,previewProjectForChat,previewResourceParent,capturePreviewSidebar,bindPreviewSidebar,resetPreviewProjectPaging,openPreviewChat,previewChatBreadcrumb,bindPreviewChatBreadcrumb,renderPreviewSources} from './shared/navigation/desktop-preview.js';
 import {rememberTabSelection,restoreTabSelection} from './features/workspaces/workspace-selection.js';
+import {createWindowRestore,step as restoreStep,failedChildInfo,mergeOpenedTabs} from './features/workspaces/window-restore.js';
 import {previewRelativeAge,previewChatActivity} from './shared/navigation/preview-navigation.js';
 import {previewApprovalChoices,previewPermissionNames} from './shared/navigation/preview-permissions.js';
 import {downloadsChanged} from './features/browser/browser-downloads.js';
@@ -146,7 +147,7 @@ function saveWorkspace() {
   reconcilePreviewProjects();
   projectFollower.changed(true);
   const team=teamState();
-  const session={schemaVersion:1,windowId:desktopWindowId,active:state.tab,page:state.page,engineSection:state.engineSection,chatDrafts:state.chatDrafts||{},selectedChildren:Object.fromEntries(selectedChildren),team:{...team,tabs:team.tabs.map(tab=>({id:tab.id,type:tab.type||'browser',...(tab.type==='unavailable'?{unavailableDescriptor:tab.unavailableDescriptor,unavailableReason:tab.unavailableReason}:{}),contentTabId:tab.contentTabId,customTitle:tab.customTitle,pendingOpen:tab.pendingOpen===true,...contentTabMetadata(tab),...(tab.browserId?{browserId:tab.browserId,profileId:tab.profileId||'default',url:tab.url||'',history:tab.history,navigationPending:tab.navigationPending===true,title:tab.title||'',favicon:tab.favicon,lastTouchedAt:tab.lastTouchedAt,lastActivityAt:tab.lastActivityAt,openedAt:tab.openedAt,persist:tab.persist===true,audioMuted:tab.audioMuted===true}:{}),...(tab.type==='terminal'?{label:tab.label,terminal:tab.terminal}:{}),...(tab.type==='markdown'?{label:tab.label,...documentSessionMetadata(tab)}:{}),...(['agent-terminal','remote-document'].includes(tab.type)?{runId:tab.runId,hostId:tab.hostId,documentId:tab.documentId,workspaceId:tab.workspaceId,projectId:tab.projectId,mediaType:tab.mediaType,preview:tab.preview}:{})}))},tabs:state.tabs.map(tab=>({id:tab.id,type:tab.type,label:tab.label,contentTabId:tab.contentTabId,customTitle:tab.customTitle,hidden:tab.hidden,navigationClosed:tab.navigationClosed,openedAt:tab.openedAt,lastTouchedAt:tab.lastTouchedAt,lastActivityAt:tab.lastActivityAt,...(tab.parentId?{parentId:tab.parentId}:{}),...(tab.type==='browser'?{associationChatId:tab.info?.associationChatId||tab.associationChatId,remotePreviewURL:tab.remotePreviewURL,profileId:tab.info?.profileId||tab.profileId||'default',url:tab.info?.url||'',history:tab.info?.history,navigationPending:tab.info?.navigationPending===true,unloaded:tab.info?.loaded===false,favicon:tab.info?.favicon,lastTouchedAt:tab.info?.lastTouchedAt,lastActivityAt:tab.info?.lastActivityAt||tab.lastActivityAt,openedAt:tab.info?.openedAt,persist:tab.info?.persist===true,audioMuted:tab.info?.audioMuted===true,pendingOpen:tab.pendingOpen===true,newChatDraft:tab.newChatDraft}:{}),...(tab.type==='markdown'?documentSessionMetadata(tab):{}),...(tab.type==='unavailable'?{unavailableDescriptor:tab.unavailableDescriptor,unavailableReason:tab.unavailableReason}:{}),...(tab.type==='terminal'?{terminal:tab.terminal,hostId:tab.hostId}:{}),...(['run','agent-terminal'].includes(tab.type)&&tab.runId?{runId:tab.runId}:{}),...(tab.type==='workspace'?{workspaceId:tab.workspaceId,hostId:tab.hostId,hostName:tab.hostName,workspacePage:tab.workspacePage,projectId:tab.projectId,workspaceName:tab.workspaceName,hidden:tab.hidden}:{}),...(['remote-run','remote-document'].includes(tab.type)?{hostId:tab.hostId,runId:tab.runId}:{}),...(tab.type==='remote-document'?{documentId:tab.documentId,workspaceId:tab.workspaceId,projectId:tab.projectId,mediaType:tab.mediaType,preview:tab.preview===true,previewTabId:tab.previewTabId}:{})}))};
+  const session={schemaVersion:1,windowId:desktopWindowId,active:state.tab,page:state.page,engineSection:state.engineSection,chatDrafts:state.chatDrafts||{},selectedChildren:Object.fromEntries(selectedChildren),team:retainedTeamSession||{...team,tabs:team.tabs.map(tab=>({id:tab.id,type:tab.type||'browser',...(tab.type==='unavailable'?{unavailableDescriptor:tab.unavailableDescriptor,unavailableReason:tab.unavailableReason}:{}),contentTabId:tab.contentTabId,customTitle:tab.customTitle,pendingOpen:tab.pendingOpen===true,...contentTabMetadata(tab),...(tab.browserId?{browserId:tab.browserId,profileId:tab.profileId||'default',url:tab.url||'',history:tab.history,navigationPending:tab.navigationPending===true,title:tab.title||'',favicon:tab.favicon,lastTouchedAt:tab.lastTouchedAt,lastActivityAt:tab.lastActivityAt,openedAt:tab.openedAt,persist:tab.persist===true,audioMuted:tab.audioMuted===true}:{}),...(tab.type==='terminal'?{label:tab.label,terminal:tab.terminal}:{}),...(tab.type==='markdown'?{label:tab.label,...documentSessionMetadata(tab)}:{}),...(['agent-terminal','remote-document'].includes(tab.type)?{runId:tab.runId,hostId:tab.hostId,documentId:tab.documentId,workspaceId:tab.workspaceId,projectId:tab.projectId,mediaType:tab.mediaType,preview:tab.preview}:{})}))},tabs:state.tabs.map(tab=>({id:tab.id,type:tab.type,label:tab.label,contentTabId:tab.contentTabId,customTitle:tab.customTitle,hidden:tab.hidden,navigationClosed:tab.navigationClosed,openedAt:tab.openedAt,lastTouchedAt:tab.lastTouchedAt,lastActivityAt:tab.lastActivityAt,...(tab.parentId?{parentId:tab.parentId}:{}),...(tab.type==='browser'?{associationChatId:tab.info?.associationChatId||tab.associationChatId,remotePreviewURL:tab.remotePreviewURL,profileId:tab.info?.profileId||tab.profileId||'default',url:tab.info?.url||'',history:tab.info?.history,navigationPending:tab.info?.navigationPending===true,unloaded:tab.info?.loaded===false,favicon:tab.info?.favicon,lastTouchedAt:tab.info?.lastTouchedAt,lastActivityAt:tab.info?.lastActivityAt||tab.lastActivityAt,openedAt:tab.info?.openedAt,persist:tab.info?.persist===true,audioMuted:tab.info?.audioMuted===true,pendingOpen:tab.pendingOpen===true,newChatDraft:tab.newChatDraft}:{}),...(tab.type==='markdown'?documentSessionMetadata(tab):{}),...(tab.type==='unavailable'?{unavailableDescriptor:tab.unavailableDescriptor,unavailableReason:tab.unavailableReason}:{}),...(tab.type==='terminal'?{terminal:tab.terminal,hostId:tab.hostId}:{}),...(['run','agent-terminal'].includes(tab.type)&&tab.runId?{runId:tab.runId}:{}),...(tab.type==='workspace'?{workspaceId:tab.workspaceId,hostId:tab.hostId,hostName:tab.hostName,workspacePage:tab.workspacePage,projectId:tab.projectId,workspaceName:tab.workspaceName,hidden:tab.hidden}:{}),...(['remote-run','remote-document'].includes(tab.type)?{hostId:tab.hostId,runId:tab.runId}:{}),...(tab.type==='remote-document'?{documentId:tab.documentId,workspaceId:tab.workspaceId,projectId:tab.projectId,mediaType:tab.mediaType,preview:tab.preview===true,previewTabId:tab.previewTabId}:{})}))};
   const json=JSON.stringify(session);
   if(json!==lastWorkspace){
     // Sidebar/state repaint can save the same snapshot after owner hydration.
@@ -169,14 +170,33 @@ function openFeatureTab(type) { if(type==='life'&&!lifeVisible())return;state.pa
 function restoreFeatureTabs() {
   if(!lifeVisible()){state.tabs=state.tabs.filter(tab=>tab.type!=='life');if(!state.tabs.some(t=>t.id===state.tab))state.tab='overview';}
 }
+// Children created by an earlier attempt, keyed by saved view ID. A retry must adopt
+// them: the saved session still holds the old IDs, so it would otherwise duplicate.
+const restoreCreated=new Map();
+let retainedTeamSession=null;
+function adoptRestoredBrowser(tab,info){
+ const previous=tab.id;tab.info=info;delete tab.restoreFailed;delete tab.restoreRetrying;
+ if(previous!==info.id){tab.id=info.id;if(state.tab===previous)state.tab=info.id;for(const [parent,child]of selectedChildren)if(child===previous)selectedChildren.set(parent,info.id);}
+}
+function createRestoredBrowser(tab){
+ return window.desktop.browser({action:'create',restore:true,deferLoad:true,contentTabId:tab.contentTabId||tab.id,profileId:tab.profileId,parentId:tab.parentId,unloaded:true,hidden:!!tab.hidden,url:tab.remotePreviewURL?'about:blank':tab.url,history:tab.remotePreviewURL?undefined:tab.history,navigationPending:!tab.remotePreviewURL&&tab.navigationPending===true,title:tab.label,favicon:tab.favicon,lastTouchedAt:tab.lastTouchedAt,lastActivityAt:tab.lastActivityAt,associationChatId:tab.associationChatId,openedAt:tab.openedAt,persist:tab.persist===true,audioMuted:tab.audioMuted===true});
+}
+function retainFailedBrowser(tab,pending){
+ tab.restoreFailed=true;tab.info=failedChildInfo(tab);
+ // A step past its deadline can still finish. Keep that view when the tab still
+ // needs it; otherwise release it so this window cannot accumulate a duplicate.
+ pending?.then(info=>{if(tab.restoreFailed&&(!workspaceReady||state.tabs.includes(tab))){adoptRestoredBrowser(tab,info);restoreCreated.set(tab.savedId,info);if(workspaceReady){saveWorkspace();render();}}else void window.desktop.browser({action:'close',presentationOnly:true,id:info.id}).catch(()=>{});},()=>{});
+}
 async function restoreWorkspace() {
   await initializeViewPositions().catch(error=>toast(error.message));
   workspaceRestoring=true;
+  let failedChildren=0;
   try {
-    let saved=window.desktop?.workspaceSession?await window.desktop.workspaceSession({action:'get'}):JSON.parse(localStorage.getItem('proteus.workspace')||'null');
+    let saved=await restoreStep('session',()=>window.desktop?.workspaceSession?window.desktop.workspaceSession({action:'get'}):JSON.parse(localStorage.getItem('proteus.workspace')||'null'));
     if(!saved&&state.data.desktopPreview?.enabled){const profile=state.data.context.workspaces.find(w=>w.name==='Studio')||state.data.context.workspaces[0];saved={tabs:[state.tabs[0],{id:'workspace:local:'+profile.id,type:'workspace',workspaceId:profile.id,label:profile.name,workspacePage:'projects'}],active:'workspace:local:'+profile.id,page:'context'};}
     if(!saved){let legacy=[];try{legacy=JSON.parse(localStorage.getItem('proteus.feature-tabs')||'[]');}catch{}saved={tabs:[...state.tabs,...legacy.filter(type=>['omi','life'].includes(type)).map(type=>({id:'feature-'+type,type,label:type==='omi'?'Transcription':'Life'}))],active:'overview',page:'home'};}
-    const tabs=[], restoredBrowserIds=new Map(), existingBrowser=window.desktop?await window.desktop.browser({action:'list'}):[];
+    const tabs=[], restoredBrowserIds=new Map(), existingBrowser=window.desktop?await restoreStep('inventory',()=>window.desktop.browser({action:'list'})):[];
+    const claimedBrowsers=new Set(existingBrowser.filter(info=>saved.tabs?.some(tab=>tab.id===info.id)).map(info=>info.id));
     for(const entry of saved.tabs||[]) {
       const tab={...entry};
       if(tab.type==='standup'){tab.type='team';tab.id='feature-team';tab.label='Team Tools';if(saved.active===entry.id)saved.active=tab.id;if(!saved.team)saved.team={active:'standup'};}
@@ -191,22 +211,78 @@ async function restoreWorkspace() {
       if(tab.type==='browser') {
         if(!window.desktop)continue;
         // A renderer reload reuses the live view; an app restart creates a private tab.
-        if(!tab.remotePreviewURL&&saved.tabs.some(parent=>parent.id===tab.parentId&&parent.type==='remote-run')&&isLoopbackPreview(tab.url))tab.remotePreviewURL=tab.url;const previous=tab.id;tab.contentTabId??=previous;let info=existingBrowser.find(info=>info.id===tab.id);
-        if(!info){info=await window.desktop.browser({action:'create',restore:true,contentTabId:tab.contentTabId||tab.id,profileId:tab.profileId,parentId:tab.parentId,unloaded:tab.hidden||saved.active!==previous,hidden:!!tab.hidden,url:tab.remotePreviewURL?'about:blank':tab.url,history:tab.remotePreviewURL?undefined:tab.history,navigationPending:!tab.remotePreviewURL&&tab.navigationPending===true,title:tab.label,favicon:tab.favicon,lastTouchedAt:tab.lastTouchedAt,lastActivityAt:tab.lastActivityAt,associationChatId:tab.associationChatId,openedAt:tab.openedAt,persist:tab.persist===true,audioMuted:tab.audioMuted===true});tab.info=info;tab.id=info.id;restoredBrowserIds.set(previous,tab.id);tabs.push(tab);if(saved.active===previous)saved.active=tab.id;continue;}
-        tab.info=info;
+        if(!tab.remotePreviewURL&&saved.tabs.some(parent=>parent.id===tab.parentId&&parent.type==='remote-run')&&isLoopbackPreview(tab.url))tab.remotePreviewURL=tab.url;const previous=tab.id;tab.contentTabId??=previous;tab.savedId=previous;let info=existingBrowser.find(info=>info.id===tab.id)||restoreCreated.get(previous)||existingBrowser.find(info=>!claimedBrowsers.has(info.id)&&info.restoreIdentity===tab.contentTabId&&(info.parentId||null)===(tab.parentId||null));if(info)claimedBrowsers.add(info.id);
+        if(!info){
+          // Every child starts unloaded, so one page, profile or network cannot hold
+          // the rest of this window. The selected page loads after the window is ready.
+          const pending=createRestoredBrowser(tab);
+          try{info=await restoreStep('child',()=>pending);restoreCreated.set(previous,info);}
+          catch(error){failedChildren++;retainFailedBrowser(tab,pending);tabs.push(tab);continue;}
+        }
+        tab.info=info;if(info.id!==previous){tab.id=info.id;restoredBrowserIds.set(previous,tab.id);if(saved.active===previous)saved.active=tab.id;}
       }
       if(!tabs.some(other=>other.id===tab.id))tabs.push(tab);
     }
     // Remembered selections use client-local view IDs, just like the active tab.
     // Remap them before saving; otherwise the workspace ownership filter drops them.
-    state.chatDrafts=saved.chatDrafts||{};selectedChildren.clear();for(const [parent,child] of Object.entries(saved.selectedChildren||{}))selectedChildren.set(parent,restoredBrowserIds.get(child)||child);state.tabs=tabs.length?tabs.filter(tab=>!tab.parentId||tabs.some(parent=>parent.id===tab.parentId&&['run','remote-run','workspace'].includes(parent.type))):state.tabs;state.page=saved.page||'home';state.engineSection=saved.engineSection||'resources';restoreTeamState(saved.team,existingBrowser);state.tab=state.tabs.some(tab=>tab.id===saved.active)?saved.active:'overview';
+    const interim=state.tab!=='overview'?state.tab:null;
+    state.chatDrafts={...saved.chatDrafts,...state.chatDrafts};selectedChildren.clear();for(const [parent,child] of Object.entries(saved.selectedChildren||{}))selectedChildren.set(parent,restoredBrowserIds.get(child)||child);
+    const restored=tabs.length?tabs.filter(tab=>!tab.parentId||tabs.some(parent=>parent.id===tab.parentId&&['run','remote-run','workspace'].includes(parent.type))):state.tabs;
+    state.tabs=mergeOpenedTabs(restored,state.tabs);state.page=interim?state.page:saved.page||'home';state.engineSection=saved.engineSection||'resources';
+    try{restoreTeamState(saved.team,existingBrowser);retainedTeamSession=null;}catch(error){retainedTeamSession=saved.team||null;reportWindowRestore({outcome:'failed',stage:'team',attempts:1});toast('Team tools could not be restored. They are retained and unchanged.');}
+    state.tab=interim&&state.tabs.some(tab=>tab.id===interim)?interim:state.tabs.some(tab=>tab.id===saved.active)?saved.active:'overview';
     if(!saved.rendererRecovery)for(const info of existingBrowser.filter(item=>item.loaded!==false&&!item.persist&&item.id!==state.tab))try{await window.desktop.browser({action:'unload',id:info.id});info.loaded=false;}catch{/* Protected audible, agent-owned or downloading views retain their work. */}
     state.recoveryGeneration=saved.recoveryGeneration||0;
-  } catch(error) {toast(error.message);return;}
-  finally {workspaceRestoring=false;}
-  await loadPeers();if(state.tabs.find(tab=>tab.id===state.tab)?.connectionPaused)state.tab='overview';
+  } finally {workspaceRestoring=false;}
+  restoreCreated.clear();
+  // Peers and later rendering cannot undo a completed restoration or block saving.
+  await loadPeers().catch(error=>toast(error.message));if(state.tabs.find(tab=>tab.id===state.tab)?.connectionPaused)state.tab='overview';
   resetTabReveals();workspaceReady=true;render();requestAnimationFrame(revealSelectedTab);await saveWorkspace();await window.desktop?.workspaceSession({action:'ready',generation:state.recoveryGeneration||0});
+  if(failedChildren)reportWindowRestore({outcome:'partial',stage:'child',failed:failedChildren,total:state.tabs.filter(tab=>tab.type==='browser').length});
+  renderWindowRestoreNotice();
+  void loadRestoredBrowsers();
 }
+// Page loads happen only after the session is restored, and each is independent.
+async function loadRestoredBrowsers(){
+ const selected=state.tabs.find(tab=>tab.id===state.tab);
+ const load=(tab,request)=>request.then(info=>{if(!state.tabs.includes(tab))return;tab.info=info;tab.label=tab.customTitle||info.title||tab.label;saveWorkspace();if(state.tab===tab.id)renderBrowser();}).catch(error=>{if(state.tab===tab.id)toast(error.message);});
+ if(selected?.type==='browser'&&!selected.restoreFailed&&selected.info?.loaded===false&&selected.info.url&&!selected.activating){selected.activating=true;void load(selected,window.desktop.browser({action:'activate',id:selected.id})).finally(()=>{selected.activating=false;});}
+ for(const tab of state.tabs.slice())if(tab.type==='browser'&&!tab.restoreFailed&&tab!==selected&&tab.info?.persist&&tab.info.loaded===false)await load(tab,window.desktop.browser({action:'persist',id:tab.id,enabled:true}));
+}
+function reportWindowRestore(detail){void window.desktop?.workspaceSession?.({action:'restore-status',...detail})?.catch(()=>{});}
+const failedRestoreTabs=()=>state.tabs.filter(tab=>tab.restoreFailed);
+// Re-create only what failed: successfully restored children keep their identity.
+async function retryFailedBrowsers(){
+ for(const tab of failedRestoreTabs()){
+  if(tab.restoreRetrying)continue;tab.restoreRetrying=true;
+  try{adoptRestoredBrowser(tab,await restoreStep('child',()=>createRestoredBrowser(tab)));}
+  catch(error){delete tab.restoreRetrying;}
+ }
+ saveWorkspace();render();renderWindowRestoreNotice();
+ if(!failedRestoreTabs().length)reportWindowRestore({outcome:'recovered',attempts:1});
+}
+function windowRestoreNotice(){
+ const {status}=windowRestore.status(),failed=failedRestoreTabs().length;
+ if(status==='restored'&&!failed)return null;
+ if(status==='restored')return {text:(failed===1?'One saved tab':failed+' saved tabs')+' could not be restored. They are retained and were not closed.',retry:retryFailedBrowsers};
+ if(status==='failed')return {text:'This window’s saved tabs could not be restored. They are retained and unchanged, and this window is not showing them or saving changes yet.',retry:()=>windowRestore.retry()};
+ return {text:status==='retrying'?'Still restoring this window’s saved tabs…':'Restoring this window’s saved tabs…'};
+}
+function renderWindowRestoreNotice(){
+ const notice=windowRestoreNotice();let bar=$('#window-restore-notice');
+ if(!notice){bar?.remove();return;}
+ if(!bar){bar=document.createElement('div');bar.id='window-restore-notice';bar.setAttribute('role','status');$('#workspace').prepend(bar);}
+ bar.innerHTML='<span></span>'+(notice.retry?'<button type="button" data-restore-retry>Try again</button><button type="button" data-restore-reload>Reload Window</button>':'');
+ bar.firstChild.textContent=notice.text;
+ const retry=bar.querySelector('[data-restore-retry]');if(retry)retry.onclick=()=>void notice.retry();
+ const reload=bar.querySelector('[data-restore-reload]');if(reload)reload.onclick=()=>location.reload();
+}
+const windowRestore=createWindowRestore({
+ // State is read again on each attempt: the first read can fail while the owner starts.
+ attempt:async()=>{await restoreStep('state',()=>refresh(true));await restoreWorkspace();},
+ onChange:()=>{if(state.data)render();renderWindowRestoreNotice();},
+ report:reportWindowRestore
+});
 function saveAppearance(patch) {
   if(appearanceBusy)return;
   appearanceSaving=performAppearanceSave(patch);return appearanceSaving;
@@ -295,7 +371,8 @@ function recordChatActivity(id){
  const run=state.data.runs.find(run=>run.id===id);if(run)run.lastActivityAt=at;saveWorkspace();schedulePreviewActivityRender();
 }
 async function setTabVisibility(tab,hidden){
- if(previewEnabled(state)&&tab.type==='browser'){
+ if(tab.restoreFailed){tab.info={...tab.info,hidden};}
+ else if(previewEnabled(state)&&tab.type==='browser'){
   const info=await window.desktop.browser({action:'visibility',id:tab.browserId||tab.id,hidden});
   if(tab.info)tab.info=info;else Object.assign(tab,info,{id:tab.id,browserId:tab.browserId});
  }
@@ -925,7 +1002,7 @@ function scopeParent(scope){
  return matches.find(tab=>tab.id===scope.parentId)||matches.find(tab=>visible.has(tab.id))||matches.find(tab=>!tab.parentId)||matches[0];
 }
 function sharedBrowserDescriptor(tab){
-  const info=tab.info||tab,title=tab.customTitle||tab.label||tab.title||'New tab',browserURL=tab.remotePreviewURL||info.url||tab.url||'',entry=info.history?.entries?.[info.history.index];
+  const info=tab.info||tab,title=tab.customTitle||tab.label||tab.title||'New tab',browserURL=tab.remotePreviewURL||info.sharedURL||info.url||tab.url||'',entry=info.history?.entries?.[info.history.index];
   const privateLocal=info.privateLocal||syncableTabURL(browserURL)===null;
   const url=privateLocal?(syncableTabURL(entry?.url||'')||tab.lastSharedURL||''):browserURL;
   const sharedTitle=privateLocal?(tab.customTitle||entry?.title||tab.lastSharedTitle||'New tab'):title;
@@ -969,7 +1046,7 @@ const contentTabSync=createTabSynchronizer({navigation:true,explicitCloseOnly:tr
     const parent=scopeParent(scope);if(scope.scope!=='team'&&(!parent||parent.connectionPaused))return;
     const list=scope.scope==='team'?teamState().tabs:state.tabs.filter(tab=>!tab.connectionPaused&&tab.parentId===parent.id);
     for(const tab of list){
-      if(tab.type!=='browser'||tab.remotePreviewURL)continue;
+      if(tab.type!=='browser'||tab.remotePreviewURL||tab.restoreFailed)continue;
       const current=await descriptorFor(tab,scope.scope==='team'?{type:'team',id:null}:parent),descriptor=descriptors.find(item=>item.id===current?.id);
       if(!acknowledgesBrowserNavigation(current,descriptor))continue;
       const info=await window.desktop.browser({action:'apply-history',id:tab.browserId||tab.id,url:descriptor.url,history:descriptor.history,title:descriptor.history.entries[descriptor.history.index]?.title||descriptor.title,expectedURL:current.url,expectedEntryId:current.history.currentEntryId});
@@ -988,7 +1065,7 @@ const contentTabSync=createTabSynchronizer({navigation:true,explicitCloseOnly:tr
       const currentIds=[];for(const tab of list)currentIds.push(await descriptorId(tab));
       const currentOrder=order(currentIds),orderChangedDuringRequest=currentOrder.join('\0')!==order(captured.map(tab=>tab.id)).join('\0');
       const capturedIds=new Set(captured.map(item=>item.id));
-      for(const tab of list.slice()){const id=await descriptorId(tab);if(!shouldRemoveCapturedTab(id,ids,capturedIds,{membershipOnly,removedIds,preservedIds,pendingOpen:tab.pendingOpen===true}))continue;const currentDescriptor=await descriptorFor(tab,parent);if(scope.scope!=='team'&&tab.parentId!==parent.id)continue;if(['run','remote-run'].includes(tab.type))await releaseChatChildViews(tab);if(tab.type==='browser'||tab.browserId)await window.desktop.browser({action:'close',presentationOnly:true,id:tab.browserId||tab.id});if(tab.type==='remote-document')forgetRemoteDocument(tab.id);if(scope.scope==='team'){teamState().tabs=teamState().tabs.filter(item=>item!==tab);if(teamState().active===tab.id)teamState().active='overview';}else{state.tabs=state.tabs.filter(item=>item!==tab);if(state.tab===tab.id)state.tab=parent.id||'overview';}changed=true;}
+      for(const tab of list.slice()){const id=await descriptorId(tab);if(!shouldRemoveCapturedTab(id,ids,capturedIds,{membershipOnly,removedIds,preservedIds,pendingOpen:tab.pendingOpen===true}))continue;const currentDescriptor=await descriptorFor(tab,parent);if(scope.scope!=='team'&&tab.parentId!==parent.id)continue;if(['run','remote-run'].includes(tab.type))await releaseChatChildViews(tab);if((tab.type==='browser'||tab.browserId)&&!tab.restoreFailed)await window.desktop.browser({action:'close',presentationOnly:true,id:tab.browserId||tab.id});if(tab.type==='remote-document')forgetRemoteDocument(tab.id);if(scope.scope==='team'){teamState().tabs=teamState().tabs.filter(item=>item!==tab);if(teamState().active===tab.id)teamState().active='overview';}else{state.tabs=state.tabs.filter(item=>item!==tab);if(state.tab===tab.id)state.tab=parent.id||'overview';}changed=true;}
       if(!membershipOnly)for(const descriptor of descriptors){let tab;for(const candidate of list){if(await descriptorId(candidate)===descriptor.id){tab=candidate;break;}}
         // A tab closed/moved after the request snapshot must not be recreated
         // from that older owner response. Its close is published on the next pass.
@@ -1009,6 +1086,8 @@ const contentTabSync=createTabSynchronizer({navigation:true,explicitCloseOnly:tr
           tab.contentTabId=descriptor.id;tab.customTitle=descriptor.customTitle;if(scope.scope==='team'){const existing=teamState().tabs.find(item=>(item.contentTabId||item.id)===descriptor.id||item.browserId&&item.browserId===tab.browserId);if(existing){if(tab.browserId&&tab.browserId!==existing.browserId)await window.desktop.browser({action:'close',presentationOnly:true,id:tab.browserId});tab=existing;}else teamState().tabs.push(tab);}else{const existing=state.tabs.find(item=>item.id===tab.id);if(existing){Object.assign(existing,tab);tab=existing;}else state.tabs.push(tab);}changed=true;
         }
         if(descriptor.setup&&!tab.newChatDraft&&!descriptor.url){tab.newChatDraft={schemaVersion:1,chatType:descriptor.setup.kind==='internet'?'internet':'user',parentId:parent.id,workspaceId:parent.workspaceId,projectId:parent.projectId,...(scope.hostId?{hostId:scope.hostId}:{})};changed=true;}
+        // A retained child has no native view yet. Its saved descriptor is unchanged.
+        if(tab.restoreFailed)continue;
         // Preserve edits made while the request was in flight; they are sent next.
         if(tab.pendingOpen){delete tab.pendingOpen;changed=true;}
         const current=await descriptorFor(tab,parent);
@@ -1025,7 +1104,7 @@ const contentTabSync=createTabSynchronizer({navigation:true,explicitCloseOnly:tr
         for(const field of ['openedAt','lastTouchedAt','lastActivityAt'])if(descriptor[field]&&tab[field]!==descriptor[field]){tab[field]=descriptor[field];changed=true;}
         if(descriptor.type==='browser'&&!!(tab.info?.persist||tab.persist)!==!!descriptor.persist){const info=await window.desktop.browser({action:'persist',id:tab.browserId||tab.id,enabled:!!descriptor.persist,passive:true});if(tab.info)tab.info=info;else tab.persist=!!descriptor.persist;changed=true;}
         if((tab.customTitle||tab.label||tab.title)!==descriptor.title||tab.customTitle!==descriptor.customTitle){tab.customTitle=descriptor.customTitle;if(scope.scope==='team')tab.title=descriptor.title;else tab.label=descriptor.title;changed=true;}
-        if(descriptor.type==='browser'&&!preservedNavigationIds.includes(descriptor.id)&&!tab.remotePreviewURL&&(JSON.stringify(normalizeContentTabHistory(tab.info?.history||tab.history))!==JSON.stringify(normalizeContentTabHistory(descriptor.history))||(tab.info?.url||tab.url||'')!==descriptor.url||((tab.info?.loaded===false||tab.loaded===false)&&(tab.info?.title||tab.nativeTitle||tab.title)!==(descriptor.history?.entries[descriptor.history.index]?.title||descriptor.title)))){
+        if(descriptor.type==='browser'&&!preservedNavigationIds.includes(descriptor.id)&&!tab.remotePreviewURL&&(JSON.stringify(normalizeContentTabHistory(tab.info?.history||tab.history))!==JSON.stringify(normalizeContentTabHistory(descriptor.history))||(tab.info?.sharedURL||tab.sharedURL||tab.info?.url||tab.url||'')!==descriptor.url||((tab.info?.loaded===false||tab.loaded===false)&&(tab.info?.title||tab.nativeTitle||tab.title)!==(descriptor.history?.entries[descriptor.history.index]?.title||descriptor.title)))){
           const localURL=tab.info?.url||tab.url||'';
           if((tab.info?.privateLocal||tab.privateLocal||localURL&&syncableTabURL(localURL)===null)&&!discardPendingNavigation)continue;
           const info=await window.desktop.browser({action:'apply-history',id:tab.browserId||tab.id,url:descriptor.url,title:descriptor.history?.entries[descriptor.history.index]?.title||descriptor.title,history:descriptor.history,expectedURL:localURL,expectedEntryId:(tab.info?.history||tab.history)?.currentEntryId||null,discardPending:discardPendingNavigation});
@@ -1152,7 +1231,7 @@ function tabScope(tab){
 async function releaseChatChildViews(parent){
   const children=state.tabs.filter(tab=>tab.parentId===parent.id);
   for(const child of children){
-    if(child.type==='browser')await window.desktop.browser({action:'close',id:child.id,presentationOnly:true});
+    if(child.type==='browser'&&!child.restoreFailed)await window.desktop.browser({action:'close',id:child.id,presentationOnly:true});
     if(child.type==='terminal')disposeTerminalUi(child.id);
     if(child.type==='remote-document')forgetRemoteDocument(child.id);
   }
@@ -1169,7 +1248,7 @@ async function closeChildTab(tab){
   if(state.tab===tab.id)state.tab=replacement;
   if(selectedChildren.get(tab.parentId)===tab.id)selectedChildren.set(tab.parentId,replacement);
   try {
-  if(tab.type==='browser')await window.desktop.browser({action:'close',id:tab.id});
+  if(tab.type==='browser'&&!tab.restoreFailed)await window.desktop.browser({action:'close',id:tab.id});
   if(tab.type==='terminal'){const current=await window.desktop.terminal({action:'state'});if(current.sessions.some(session=>session.id===tab.terminal.id))await window.desktop.terminal({action:'close',id:tab.terminal.id});disposeTerminalUi(tab.id);}
   if(tab.type==='remote-document')forgetRemoteDocument(tab.id);
   if(['run','remote-run'].includes(tab.type))await releaseChatChildViews(tab);
@@ -1209,7 +1288,7 @@ async function closeTopTab(id){
   const children=state.tabs.filter(tab=>tab.parentId===id);
   await releaseChatChildViews(closing);
   const tab=state.tabs.find(item=>item.id===id);if(!tab)return;
-  if(tab.type==='browser')await window.desktop.browser({action:'close',id});
+  if(tab.type==='browser'&&!tab.restoreFailed)await window.desktop.browser({action:'close',id});
   if(tab.type==='terminal'){const current=await window.desktop.terminal({action:'state'});if(current.sessions.some(session=>session.id===tab.terminal.id))await window.desktop.terminal({action:'close',id:tab.terminal.id});disposeTerminalUi(tab.id);}
   if(closingDescriptor)contentTabSync.close(tabScope(closing),closingDescriptor.id);
   selectedChildren.delete(id);state.tabs=state.tabs.filter(item=>item.id!==id&&item.parentId!==id);if(previewEnabled(state)){for(const view of [closing,...children])releaseChatView(view);}else{localHistories.delete(id);forgetConversation(id);}
@@ -1324,6 +1403,7 @@ function newTabAction(blank,action){
 }
 function renderBrowser() {
   const tab=state.tabs.find(t=>t.id===state.tab);
+  if(tab.restoreFailed){selectBrowserSurface();void window.desktop.browser({action:'hide',...browserSurfaceIdentity()});$('#main').classList.remove('browser-main');$('#main').innerHTML='<div class="heading"><h2></h2></div><p class="banner"></p><button type="button" id="restore-tab-retry">Try again</button>';$('#main h2').textContent=browserLabel(tab);$('#main .banner').textContent='This saved tab could not be restored. It is retained and was not closed. Its address is '+(tab.info?.url||'not available')+'.';$('#restore-tab-retry').onclick=()=>void retryFailedBrowsers();return;}
   if(tab.newChatDraft){selectBrowserSurface();void window.desktop.browser({action:'hide',...browserSurfaceIdentity()});chatSetupTabs.show(tab,surface=>{const guard=async()=>{if(!state.tabs.includes(tab))throw Error('This chat setup tab was closed.');await contentTabSync.sync(tabScope(tab));if(!state.tabs.includes(tab))throw Error('This chat setup tab was closed.');};if(surface.initial.hostId)return openWorkspaceChatDialog(surface.initial.hostId,surface.initial.workspaceId,(id,title,hostId)=>finishChatSetup(tab,{id:'peer:'+hostId+':'+id,type:'remote-run',hostId,runId:id,label:title||'Chat'}),{...surface.initial,surface,beforeStart:guard});if(surface.initial.chatType==='internet')return mountInternetSearch({state,api,escape,toast,refresh,sharedSetupArgs,...surface.initial,beforeStart:guard,surface,open:run=>finishChatSetup(tab,{id:run.id,type:'run',label:run.title})});return chatDialog(created=>finishChatSetup(tab,created),guard,surface.initial,surface);});renderChatSubtabs();return;}
   // render() resets feature classes even when this tab's toolbar stays mounted.
   // Restore the surface layout independently of creating its DOM; otherwise a
@@ -1655,8 +1735,8 @@ window.desktop?.onBrowserState(infos=>{
   const previousSurface=currentBrowser?`${!!currentBrowser.info?.url}:${currentBrowser.info?.loaded!==false}`:null;
   if(previewEnabled(state)&&infos.some(info=>state.tabs.find(tab=>tab.id===info.id)?.info?.lastActivityAt!==info.lastActivityAt))schedulePreviewActivityRender();
   const ids=new Set(infos.map(info=>info.id));for(const id of browserAddressDrafts.keys())if(!ids.has(id))browserAddressDrafts.delete(id);
-  if(currentBrowser&&!ids.has(currentBrowser.id)){state.tab=tabToLeft(currentBrowser);if(currentBrowser.parentId)selectedChildren.set(currentBrowser.parentId,state.tab);}
-  state.tabs=state.tabs.filter(tab=>tab.type!=='browser'||ids.has(tab.id));
+  if(currentBrowser&&!currentBrowser.restoreFailed&&!ids.has(currentBrowser.id)){state.tab=tabToLeft(currentBrowser);if(currentBrowser.parentId)selectedChildren.set(currentBrowser.parentId,state.tab);}
+  state.tabs=state.tabs.filter(tab=>tab.type!=='browser'||tab.restoreFailed||ids.has(tab.id));
   syncTeamBrowsers(infos,{persist:false});
   for(const info of infos.filter(info=>info.group!=='team'&&!ownsTeamBrowser(info.id))){const parent=ensureBrowserParent(info),tab=state.tabs.find(t=>t.id===info.id);if(tab){tab.info=info;if(Object.hasOwn(info,'hidden'))tab.hidden=info.hidden===true;tab.label=tab.customTitle||info.title||'New tab';if(parent)tab.parentId=parent.id;else if(info.destination?.type==='application')delete tab.parentId;}else state.tabs.push({id:info.id,type:'browser',label:info.title||'New tab',hidden:info.hidden===true,info,...(parent?{parentId:parent.id}:previewEnabled(state)&&info.parentId?.startsWith('project:local:')?{parentId:info.parentId}:{})});}
   if(!state.tabs.some(tab=>tab.id===state.tab)){state.tab='overview';render();}else if(currentBrowser&&!ids.has(currentBrowser.id)){render();}else{renderTabs();renderChatSubtabs();updateBrowserControls();if(currentBrowser&&previousSurface!==`${!!currentBrowser.info?.url}:${currentBrowser.info?.loaded!==false}`)renderBrowser();}
@@ -1839,8 +1919,8 @@ initChatsIndex({moveChat:moveChatToWorkspace,copyLink:copyChatLink,sendToWorkspa
 initTeamTools({closeTeamMembership:async tab=>{const descriptor=await descriptorFor(tab,{type:'team',id:null});if(descriptor)contentTabSync.close({scope:'team',id:windowScopeId('team')},descriptor.id);},retryTeamUnavailable:async tab=>{const document=await api('/api/content-tabs',{action:'document',scope:'team',id:windowScopeId('team'),documentId:tab.unavailableDescriptor.documentId,metadataOnly:true});Object.assign(tab,{type:'markdown',file:document.file,markdown:document,label:tab.title});delete tab.unavailableDescriptor;delete tab.unavailableReason;saveWorkspace();renderTeamTools();},hideTeamBrowser:async tab=>{await setTabVisibility(tab,true);await saveWorkspace();},state,api,escape,toast,time,lines,showDialog,browserTarget,fillBrowserLogin,timezone:()=>state.data.settings.timezone,onChange:saveWorkspace,transferTeamTab:(tab,copy)=>transferTabDialog({...tab,id:tab.browserId||tab.id,type:tab.browserId?'browser':tab.type,label:tab.title,customTitle:tab.customTitle,info:{url:tab.url,agentControlling:tab.agentControlling}},copy,tab),openTeamTerminal:(callback,guard)=>openTerminalDialog(null,callback,guard),renderTeamRemoteDocument:(tab,container)=>renderRemoteDocument(tab,{container,active:()=>container.isConnected&&teamState().active===tab.id}),renderTeamAgentTerminal:async(tab,container)=>{await loadRunView(tab.runId);if(container.isConnected&&teamState().active===tab.id)renderAgentTerminal(container,localHistories.get(tab.runId));},renderTeamTerminal:renderTerminal,disposeTeamTerminal:disposeTerminalUi,openTeamMarkdown:(callback,guard)=>openMarkdownPicker('open',null,callback,guard),openTeamLink:async(source,cwd)=>{try{const kind=ProteusMarkdown.linkKind(source);if(kind==='web'){const info=await window.desktop.browser({action:'create',url:source,group:'team'});selectTeamBrowser(info);renderTeamTools();}else if(kind==='file'){const file=decodeURIComponent(new URL(source,'file://'+cwd.replace(/\/$/,'')+'/').pathname);if(file.endsWith('.md')){const markdown=await api('/api/markdown',{file});const tab={id:'markdown:'+file,type:'markdown',label:file.split('/').pop(),file,markdown};const current=teamState();const old=current.tabs.find(item=>item.id===tab.id);if(old)Object.assign(old,tab);else current.tabs.push(tab);current.active=tab.id;saveWorkspace();renderTeamTools();}else await window.desktop.openPath(file);}else if(kind==='mail'){await navigator.clipboard.writeText(source.slice(7));toast('Email address copied.');}}catch(error){toast(error.message);}}});
 initEngineRoom({showDialog,openUpdateChat:async run=>{await refresh();const current=state.data.runs.find(item=>item.id===run.id)||run;if(!previewEnabled(state)||!openPreviewChat(current))runTab(current);},openBrowser:info=>openTab({id:info.id,type:'browser',label:info.title||'Browser',info}),state,api,escape,toast,time,manageMcp,providers:renderProviders,connections:()=>renderRemote({api,escape,toast}),setup:renderSettings,resourceChanged:(action,id)=>{if(action==='close')state.tabs=state.tabs.filter(tab=>tab.id!==id);saveWorkspace();},openAccount:()=>window.desktop?.openExternal(new URL('/security',state.data.life?.websiteOrigin||'https://proteus.example').href)});
 initTerminals({state,escape,toast,showDialog,openTab,onInput:tab=>recordPreviewActivity(tab)});
-initDesktopPreview({workspaceOwners,refreshWorkspaceOwners,loadWorkspaceOwnerTabs,openRemoteProject,openWorkspaceChat,syncContentTabs:scope=>contentTabSync.sync(scope),state,api,escape,toast,refresh,openTab,render,showDialog,openWorkspace,renderChats:renderChatsIndex,newChat:newWorkspaceChat,createWorkspace,deleteWorkspace,manageWorkspaceTab,manageWorkspaceTabs});
-initWorkspaces({syncContentTabs:scope=>contentTabSync.sync(scope),reconcileRemoteProjectPlacement,revealSelectedTab,manageWorkspaceTab,manageWorkspaceTabs, state,api,escape,toast,loadPeers,openTab,render,renderTabs,showDialog,renderChats:renderChatsIndex,newChat:newWorkspaceChat});
+initDesktopPreview({windowRestoreNotice,workspaceOwners,refreshWorkspaceOwners,loadWorkspaceOwnerTabs,openRemoteProject,openWorkspaceChat,syncContentTabs:scope=>contentTabSync.sync(scope),state,api,escape,toast,refresh,openTab,render,showDialog,openWorkspace,renderChats:renderChatsIndex,newChat:newWorkspaceChat,createWorkspace,deleteWorkspace,manageWorkspaceTab,manageWorkspaceTabs});
+initWorkspaces({windowRestoreNotice,syncContentTabs:scope=>contentTabSync.sync(scope),reconcileRemoteProjectPlacement,revealSelectedTab,manageWorkspaceTab,manageWorkspaceTabs, state,api,escape,toast,loadPeers,openTab,render,renderTabs,showDialog,renderChats:renderChatsIndex,newChat:newWorkspaceChat});
 initFeatures({renderWorkspaces,state,escape,api,toast,refresh,openTab,showDialog,lines,restoreBrowser:()=>requestAnimationFrame(browserBounds)});
 initOmi({state,escape,api,toast,refresh,openSchedule:schedule,openRun:id=>{const run=state.data.runs.find(item=>item.id===id);if(run)runTab(run);}});
 initLife({state,escape,api,toast,refresh,openTab,showDialog,openSettings:()=>{navigate('engine','setup');}});
@@ -1848,7 +1928,7 @@ initMarkdownPicker({api,escape,showDialog,openTab,toast,defaultWorkspaceId:()=>s
 let rendererOverlayVisible=false;
 new MutationObserver(()=>{const visible=!!document.querySelector('dialog[open],.proteus-context-menu,#chat-context-menu');if(visible===rendererOverlayVisible)return;rendererOverlayVisible=visible;void window.desktop?.browser({action:'overlay',token:'renderer-overlays',visible}).catch(error=>toast(error.message));if(!visible)requestAnimationFrame(browserBounds);}).observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['open']});
 void window.desktop?.browser({action:'selection-init',...browserSurfaceIdentity()}).catch(error=>toast(error.message));
-refresh().then(restoreWorkspace).then(async()=>{await Promise.allSettled([refreshUsage(),loadChatsIndex()]);render();chatLinksReady=true;if(pendingChatLink){const target=pendingChatLink;pendingChatLink=null;await openChatLink(chatLink(target));}}).catch(e=>toast(e.message));
+windowRestore.start().then(async()=>{await Promise.allSettled([refreshUsage(),loadChatsIndex()]);if(state.data)render();chatLinksReady=true;if(pendingChatLink&&windowRestore.ready()){const target=pendingChatLink;pendingChatLink=null;await openChatLink(chatLink(target));}}).catch(e=>toast(e.message));
 let attentionPolling=false;const attentionInterval=setInterval(async()=>{if(!state.data||attentionPolling||document.hidden||liveEvents.readyState===EventSource.OPEN&&Date.now()-lastStateRefresh<15000)return;attentionPolling=true;try{const result=await api('/api/attention');state.data.attention=result.items;announceAttention();}catch{}finally{attentionPolling=false;}},2000);
 const usageInterval=setInterval(() => {if(!document.hidden)void refreshUsage();}, 60_000);
 const refreshInterval=setInterval(()=>{if(document.hidden||liveEvents.readyState===EventSource.OPEN&&Date.now()-lastStateRefresh<15000)return;if((!document.activeElement?.matches('input,textarea,select') || !!$('#conversation-host'))&&!$('#dialog').open)refresh().catch(()=>{});},1500);

@@ -780,6 +780,9 @@ final class RemoteTests: XCTestCase {
         let shared = SharedAppStore(), id = "duplicate-navigation"
         let base = "\(nativeFixtureHTTPOrigin)/browser/spa"
         shared.browserTabs = [BrowserDescriptor(id: id, title: "SPA", url: base + "?step=1")]
+        // This test owns the initial navigation. A restored owner descriptor is
+        // now deliberately passive until trusted interaction, even without history.
+        XCTAssertTrue(shared.navigate(URL(string: base + "?step=1")!, in: id))
         let view = shared.webView(shared.browserTabs[0], allowLocalNavigation: true)
         defer { shared.unloadBrowsers() }
         XCTAssertFalse(view.allowsBackForwardNavigationGestures, "Proteus's interactive edge swipe is the single browser swipe handler")
@@ -1012,19 +1015,18 @@ final class RemoteTests: XCTestCase {
         XCTAssertFalse(NativeChatTextEdit.isSingleReturn(before: long, after: long + "x"))
     }
 
-    func testReplyEditorGrowsOnlyForExplicitLineBreaksAndCapsWholeCard() {
-        let height = { (text: String, screen: CGFloat, chrome: CGFloat) in
-            NativeReplyEditorLayout.height(text: text, lineHeight: 22, screenHeight: screen, chromeHeight: chrome)
-        }
-        XCTAssertEqual(height("", 900, 76), 44)
-        XCTAssertEqual(height(String(repeating: "A long line that will wrap. ", count: 100), 900, 76), 44)
-        XCTAssertEqual(height("first\nsecond", 900, 76), 60)
-        XCTAssertEqual(height("first\r\nsecond", 900, 76), 60)
-        XCTAssertEqual(height("first\n", 900, 76), 60)
-        for screen in [CGFloat(400), 900, 1376] {
-            for chrome in [CGFloat(76), 180] {
-                XCTAssertLessThanOrEqual(height(String(repeating: "line\n", count: 1000), screen, chrome) + chrome, screen * 0.5)
-            }
+    @MainActor func testReplyEditorMeasuresSoftWrappingAndCapsOnNarrowAndWideLayouts() {
+        let view = NativeReplyTextView(); view.font = .preferredFont(forTextStyle: .body)
+        view.textContainerInset = UIEdgeInsets(top: 8, left: 10, bottom: 8, right: 10)
+        view.textContainer.lineFragmentPadding = 0
+        for width in [CGFloat(280), 700] {
+            view.text = "Short"
+            let short = view.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude)).height
+            view.text = String(repeating: "A long soft wrapped draft. ", count: 100)
+            let long = view.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude)).height
+            XCTAssertGreaterThan(long, short)
+            XCTAssertEqual(NativeReplyEditorLayout.height(contentHeight: long, screenHeight: 900, chromeHeight: 100), 350)
+            XCTAssertLessThan(NativeReplyEditorLayout.height(contentHeight: short, screenHeight: 900, chromeHeight: 100), 70)
         }
     }
 
@@ -1574,6 +1576,25 @@ final class RemoteTests: XCTestCase {
         raced.mergeChat(page("2026-11-03T08:00:00Z"))
         XCTAssertEqual(raced.chats["streamed"]?["events"].array.map { $0["text"].string }, ["first", "raced update"])
     }
+    @MainActor func testFieldDeltaKeepsOmittedMetadataAndRemovalsAcrossLatePages() {
+        let store = RemoteStore(); store.forget()
+        store.mergeChat(.object(["id": .string("delta"), "observedAt": .string("2026-11-03T08:00:00Z"), "eventStart": .number(0), "eventCount": .number(1), "events": .array([.object(["text": .string("one")])]), "schedule": .object(["prompt": .string("kept")]), "note": .string("removed later")]))
+        // Only changed fields arrive: what this chat already holds must survive.
+        store.mergeChat(.object(["id": .string("delta"), "observedAt": .string("2026-11-03T08:00:02Z"), "eventStart": .number(0), "eventCount": .number(2), "events": .array([]), "eventPatches": .array([.object(["index": .number(1), "event": .object(["text": .string("two")])])]), "fieldDelta": .bool(true), "removedFields": .array([.string("note")])]))
+        var chat = store.chats["delta"]!
+        XCTAssertEqual(chat["schedule"]["prompt"].string, "kept")
+        XCTAssertEqual(chat["note"], .null, "a removed field stays removed")
+        XCTAssertEqual(chat["events"].array.map { $0["text"].string }, ["one", "two"])
+        // An older page finishing late adds history without restoring old metadata.
+        store.mergeChat(.object(["id": .string("delta"), "observedAt": .string("2026-11-03T08:00:01Z"), "eventStart": .number(0), "eventCount": .number(1), "events": .array([.object(["text": .string("one")])]), "schedule": .object(["prompt": .string("stale")]), "note": .string("removed later")]))
+        chat = store.chats["delta"]!
+        XCTAssertEqual(chat["schedule"]["prompt"].string, "kept")
+        XCTAssertEqual(chat["note"], .null)
+        XCTAssertEqual(chat["eventCount"].int, 2)
+        // A newer whole value brings a removed field back.
+        store.mergeChat(.object(["id": .string("delta"), "observedAt": .string("2026-11-03T08:00:03Z"), "eventStart": .number(0), "eventCount": .number(2), "events": .array([]), "eventPatches": .array([]), "fieldDelta": .bool(true), "note": .string("restored")]))
+        XCTAssertEqual(store.chats["delta"]?["note"].string, "restored")
+    }
     @MainActor func testHistoryReadsKeepVisibleIncrementalWatchAndDoNotRestoreItAfterLeaving() async throws {
         let (data, _) = try await URLSession.shared.data(from: URL(string: nativeFixtureHTTPOrigin + "/pair?projects=1")!)
         let fixture = try JSONDecoder().decode(JSON.self, from: data)
@@ -1883,14 +1904,18 @@ extension DestinationTests {
         try await destinationWait { destinations.selected?.connected == true }
         let remote = try XCTUnwrap(destinations.selected), original = try XCTUnwrap(remote.connection)
         remote.setDraft("new-chat", .string("Keep live draft"))
-        // Same fixture relay, different valid address: requires replacing the WebSocket transport.
-        try destinations.editRelay(original.hostId, address: nativeFixtureRelayOrigin.replacingOccurrences(of: "127.0.0.1", with: "localhost"))
-        XCTAssertFalse(remote.connected); XCTAssertEqual(remote.status, "Connecting…")
-        try await destinationWait { remote.connected }
-        await remote.refresh()
-        XCTAssertTrue(destinations.selected === remote); XCTAssertEqual(remote.connection?.relay, nativeFixtureRelayOrigin.replacingOccurrences(of: "127.0.0.1", with: "localhost"))
-        XCTAssertEqual(remote.connection?.key, original.key); XCTAssertEqual(remote.connection?.deviceId, original.deviceId); XCTAssertEqual(remote.connection?.hostId, original.hostId)
-        XCTAssertEqual(remote.state["hostName"].string, "Build Mac"); XCTAssertEqual(remote.draft("new-chat").string, "Keep live draft")
+        // Replace the transport while its initial automatic sync can still be
+        // pending. A coalesced refresh must await the replacement's state too.
+        let alternate = nativeFixtureRelayOrigin.replacingOccurrences(of: "127.0.0.1", with: "localhost")
+        for address in [alternate, nativeFixtureRelayOrigin, alternate] {
+            try destinations.editRelay(original.hostId, address: address)
+            XCTAssertFalse(remote.connected); XCTAssertEqual(remote.status, "Connecting…")
+            try await destinationWait { remote.connected }
+            await remote.refresh()
+            XCTAssertTrue(destinations.selected === remote); XCTAssertEqual(remote.connection?.relay, address)
+            XCTAssertEqual(remote.connection?.key, original.key); XCTAssertEqual(remote.connection?.deviceId, original.deviceId); XCTAssertEqual(remote.connection?.hostId, original.hostId)
+            XCTAssertEqual(remote.state["hostName"].string, "Build Mac"); XCTAssertEqual(remote.draft("new-chat").string, "Keep live draft")
+        }
     }
 }
 
@@ -3182,4 +3207,198 @@ extension RemoteTests {
 @MainActor private final class MomentumScrollView: UIScrollView {
     var momentum = false
     override var isDecelerating: Bool { momentum }
+}
+
+// Content-free, repeatable CPU profile; no real owner, account or browser data.
+final class Nov3PerformanceTests: XCTestCase {
+    @MainActor func testLargeStateCPUProfile() async throws {
+        let runs: [JSON] = (0..<1500).map { i in .object(["id": .string("chat-\(i)"), "title": .string("Synthetic General chat \(i)"), "status": .string("running"), "text": .string(String(repeating: "markdown **stream** and code `test` ", count: 35))]) }
+        let tabs: [JSON] = (0..<200).map { .object(["id": .string("tab-\($0)"), "url": .string("https://example.test/\($0)")]) }
+        let state: JSON = .object(["runs": .array(runs), "tabs": .array(tabs), "capabilities": .array([.string("projects.v1")]), "hostName": .string("Synthetic owner")])
+        let data = try JSONEncoder().encode(state), key = RemoteCrypto.random()
+        let box = try RemoteCrypto.seal(state, key: key, aad: "profile")
+        var decode: [Double] = [], opened: [Double] = [], apply: [Double] = []
+        let store = RemoteStore(connection: nil, legacyCredentials: false)
+        for _ in 0..<10 {
+            var start = ProcessInfo.processInfo.systemUptime
+            let value = try await RemoteStore.decoded(data)
+            decode.append((ProcessInfo.processInfo.systemUptime - start) * 1000)
+            start = ProcessInfo.processInfo.systemUptime
+            _ = try await RemoteStore.opened(box, key: key, aad: "profile")
+            opened.append((ProcessInfo.processInfo.systemUptime - start) * 1000)
+            start = ProcessInfo.processInfo.systemUptime
+            store.updateState(value)
+            apply.append((ProcessInfo.processInfo.systemUptime - start) * 1000)
+            try await Task.sleep(for: .milliseconds(1000))
+        }
+        func mean(_ v: [Double]) -> Double { v.reduce(0,+) / Double(v.count) }
+        print("NOV3_PROFILE bytes=\(data.count) decode_ms=\(mean(decode)) decrypt_decode_ms=\(mean(opened)) apply_ms=\(mean(apply)) apply_max_ms=\(apply.max()!)")
+    }
+}
+
+extension RemoteTests {
+    func testStalePresentationBoundaryCannotHideANonemptyShorterHistory() {
+        let events: [JSON] = (0..<100).map { .object(["role": .string("assistant"), "text": .string("Message \($0)")]) }
+        XCTAssertEqual(NativeHistoryWindow.presentedStart(events: events, loadedStart: 0, requestedStart: 980), 88)
+        XCTAssertEqual(NativeHistoryWindow.presentedStart(events: events, loadedStart: 0, requestedStart: 90), 90)
+        XCTAssertEqual(NativeHistoryWindow.presentedStart(events: events, loadedStart: 100, requestedStart: 90), 100)
+        XCTAssertEqual(NativeHistoryWindow.presentedStart(events: [], loadedStart: 100, requestedStart: 980), 100)
+    }
+    @MainActor func testRendererVisibilityReevaluatesWhenOnlyViewportBecomesKnown() {
+        let visibility = NativeMessageRenderVisibility()
+        visibility.frame = CGRect(x: 0, y: 100, width: 300, height: 200)
+        XCTAssertFalse(visibility.visible(in: CGRect(x: 0, y: 80, width: 0, height: 600)))
+        XCTAssertTrue(visibility.visible(in: CGRect(x: 0, y: 80, width: 300, height: 600)))
+        visibility.frame = CGRect(x: 500, y: 100, width: 300, height: 200)
+        XCTAssertTrue(visibility.visible(in: CGRect(x: 0, y: 80, width: 300, height: 600)), "An iPad sidebar offset must not hide a vertically visible message")
+        visibility.frame = CGRect(x: 0, y: 5000, width: 300, height: 200)
+        XCTAssertFalse(visibility.visible(in: CGRect(x: 0, y: 80, width: 300, height: 600)))
+        XCTAssertTrue(visibility.visible(in: nil))
+        let owner = NativeMessageRenderViewport()
+        visibility.frame = CGRect(x: 0, y: 2000, width: 300, height: 200)
+        visibility.bind(owner)
+        owner.update(NativeScrollSnapshot(offset: 0, contentHeight: 10000, viewportHeight: 600, viewportWidth: 300, viewportTop: 80))
+        XCTAssertFalse(visibility.isVisible)
+        owner.update(NativeScrollSnapshot(offset: 1900, contentHeight: 10000, viewportHeight: 600, viewportWidth: 300, viewportTop: 80))
+        XCTAssertTrue(visibility.isVisible, "UIKit offset changes must admit a row without a SwiftUI frame change")
+        owner.update(NativeScrollSnapshot(offset: 4000, contentHeight: 10000, viewportHeight: 600, viewportWidth: 300, viewportTop: 80))
+        XCTAssertFalse(visibility.isVisible)
+        visibility.detach()
+    }
+    @MainActor func testSettledMirrorKeepsDelayedPassivePageNavigationLocal() throws {
+        let shared = SharedAppStore()
+        let entries = [BrowserHistoryEntry(id: "one", url: "https://example.test/one", title: "One")]
+        shared.browserTabs = [BrowserDescriptor(id: "settled", title: "One", url: entries[0].url, scope: "main", history: BrowserTabHistory(entries: entries, index: 0, currentEntryId: "one", revision: 4))]
+        _ = shared.webView(shared.browserTabs[0], allowLocalNavigation: true)
+        defer { shared.unloadBrowsers(); shared.close("settled") }
+        let login = URL(string: "https://example.test/login")!
+        shared.completeBrowserNavigation(login, title: "Device login", in: "settled")
+        XCTAssertEqual(shared.browserTabs[0].url, entries[0].url)
+        shared.completeBrowserNavigation(login, title: "Duplicate KVO", in: "settled", sameDocumentObservation: true)
+        XCTAssertEqual(shared.browserTabs[0].url, entries[0].url)
+        shared.completeBrowserNavigation(URL(string: "https://example.test/delayed-route")!, title: "Delayed SPA route", in: "settled", sameDocumentObservation: true)
+        XCTAssertEqual(shared.browserTabs[0].url, entries[0].url, "Settling and delayed passive routing cannot release the mirror")
+        XCTAssertEqual(shared.browserTabs[0].history?.revision, 4, "Local-only navigation must not advance an owner revision")
+    }
+    @MainActor func testPreOwnerNavigationAdoptsFinalURLAndHistoryInsteadOfBlankTab() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString), key = RemoteCrypto.random()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let shared = SharedAppStore(cacheWriter: NativeSharedCacheWriter(), cacheRoot: root, cacheKey: { key })
+        let id = try XCTUnwrap(shared.open(nil, scope: "team"))
+        shared.completeBrowserNavigation(URL(string: "https://example.test/one")!, title: "One", in: id)
+        shared.completeBrowserNavigation(URL(string: "https://example.test/final")!, title: "Final", in: id, sameDocumentObservation: true)
+        let host = "10000000-0000-4000-8000-000000000001"
+        shared.assignBrowserOwner(id, host: host)
+        let descriptor = try XCTUnwrap(shared.contentPending["team:" + host]?.last?["tab"])
+        XCTAssertEqual(descriptor["url"].string, "https://example.test/final")
+        XCTAssertEqual(descriptor["history"]["entries"].array.map { $0["url"].string }, ["https://example.test/one", "https://example.test/final"])
+        shared.flushCachedState()
+    }
+    @MainActor func testDeviceMainNavigationDoesNotCreateAnUndeliverableOwnerMutation() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString), key = RemoteCrypto.random()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let shared = SharedAppStore(cacheWriter: NativeSharedCacheWriter(), cacheRoot: root, cacheKey: { key })
+        let id = try XCTUnwrap(shared.open(nil, scope: "main"))
+        shared.assignBrowserOwner(id, host: "synthetic")
+        shared.completeBrowserNavigation(URL(string: "https://example.test/local")!, title: "Local", in: id)
+        XCTAssertNil(shared.contentPending["main:synthetic"])
+        shared.flushCachedState()
+    }
+    @MainActor func testNavigationWithoutTransportBindingSurvivesRestart() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString), key = RemoteCrypto.random()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let shared = SharedAppStore(cacheWriter: NativeSharedCacheWriter(), cacheRoot: root, cacheKey: { key })
+        let id = try XCTUnwrap(shared.open(nil, scope: "workspace:synthetic:general"))
+        shared.assignBrowserOwner(id, host: "synthetic")
+        let url = URL(string: "https://example.test/soft-navigation")!
+        shared.completeBrowserNavigation(url, title: "Final page", in: id, nativePosition: 0, sameDocumentObservation: true)
+        let scope = "workspace:synthetic:general"
+        let operation = try XCTUnwrap(shared.contentPending[scope]?.last)
+        XCTAssertEqual(operation["url"].string, url.absoluteString)
+        XCTAssertEqual(operation["action"].string, "browser-navigate")
+        XCTAssertFalse(operation["operationId"].string.isEmpty)
+        XCTAssertNil(shared.flushCachedState())
+        let restored = SharedAppStore(cacheWriter: NativeSharedCacheWriter(), cacheRoot: root, cacheKey: { key })
+        XCTAssertEqual(restored.contentPending[scope]?.last, operation)
+    }
+    @MainActor func testOldGenerationDecryptCannotApplyStateAfterDisconnect() async throws {
+        let key = RemoteCrypto.random()
+        let store = RemoteStore(connection: DeviceConnection(relay: "wss://example.test", hostId: "synthetic", deviceId: "synthetic", key: key), cacheRoot: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString), legacyCredentials: false)
+        let value: JSON = .object(["type": .string("event"), "event": .string("state"), "data": .object(["hostName": .string("Stale owner"), "padding": .string(String(repeating: "x", count: 2_000_000))])])
+        let box = try RemoteCrypto.seal(value, key: key, aad: ":host:1")
+        let task = Task { try await store.receive(.object(["type": .string("data"), "seq": .number(1), "box": .string(box)])) }
+        await Task.yield(); store.disconnect()
+        try await task.value
+        XCTAssertEqual(store.state, .null)
+    }
+}
+
+private final class Nov3BodyCounts { var broad = 0; var narrow = 0 }
+private struct Nov3StateProbe: View {
+    let store: RemoteStore
+    let narrow: Bool
+    let counts: Nov3BodyCounts
+    var body: some View {
+        let _ = narrow ? (counts.narrow += 1) : (counts.broad += 1)
+        Text((narrow ? store.stateValue("hostName") : store.state["hostName"]).string)
+    }
+}
+extension Nov3PerformanceTests {
+    @MainActor func testPushInvalidationsAndInputLatency() async throws {
+        let counts = Nov3BodyCounts(), store = RemoteStore(connection: nil, legacyCredentials: false)
+        let controller = UIHostingController(rootView: HStack { Nov3StateProbe(store: store, narrow: false, counts: counts); Nov3StateProbe(store: store, narrow: true, counts: counts) })
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844)); window.rootViewController = controller; window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        store.updateState(.object(["hostName": .string("Synthetic owner")]))
+        try await Task.sleep(for: .milliseconds(100))
+        let initialBroad = counts.broad, initialNarrow = counts.narrow
+        let editor = NativeReplyTextView(); editor.text = "Draft"; editor.font = .preferredFont(forTextStyle: .body)
+        var samples: [Double] = []
+        for i in 0..<10 {
+            let payload: JSON = .object(["hostName": .string("Synthetic owner"), "tick": .number(Double(i)), "stream": .string(String(repeating: "markdown **stream** ", count: 100_000))])
+            let data = try JSONEncoder().encode(payload)
+            let push = Task { store.updateState(try await RemoteStore.decoded(data)) }
+            for _ in 0..<20 {
+                let start = ProcessInfo.processInfo.systemUptime
+                try await Task.sleep(for: .milliseconds(10))
+                editor.insertText("x")
+                samples.append(max(0, (ProcessInfo.processInfo.systemUptime - start) * 1000 - 10))
+            }
+            try await push.value
+            try await Task.sleep(for: .milliseconds(800))
+        }
+        samples.sort()
+        print("NOV3_UI broad_bodies=\(counts.broad-initialBroad) narrow_bodies=\(counts.narrow-initialNarrow) input_p95_ms=\(samples[Int(Double(samples.count)*0.95)]) input_max_ms=\(samples.last!) hangs_over_250ms=\(samples.filter { $0 > 250 }.count)")
+        XCTAssertGreaterThanOrEqual(counts.broad - initialBroad, 10)
+        XCTAssertEqual(counts.narrow - initialNarrow, 0)
+        XCTAssertEqual(editor.text, "Draft" + String(repeating: "x", count: 200))
+    }
+}
+
+extension Nov3PerformanceTests {
+    func testFoundationDecoderMatchesCodableAndRejectsInvalidInput() throws {
+        for source in ["true", "false", "null", "1", "0", "-2.5", "1e8", "\"hello\"", "[]", "{}", "[true,1,0,false,null,{\"emoji\":\"👨‍👩‍👧 café\",\"values\":[1.5,-3]}]"] {
+            let data = Data(source.utf8)
+            XCTAssertEqual(try JSON.decode(data), try JSONDecoder().decode(JSON.self, from: data))
+        }
+        XCTAssertThrowsError(try JSON.decode(Data("{broken".utf8)))
+    }
+}
+
+extension Nov3PerformanceTests {
+    @MainActor func testCacheLifecycleCPUProfile() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let connection = DeviceConnection(relay: "wss://example.test", hostId: "synthetic", deviceId: "synthetic", key: RemoteCrypto.random())
+        let store = RemoteStore(connection: connection, cacheRoot: root, legacyCredentials: false)
+        store.state = .object(["runs": .array((0..<1500).map { .object(["id": .string("chat-\($0)"), "text": .string(String(repeating: "Synthetic markdown ", count: 70))]) })])
+        var start = ProcessInfo.processInfo.systemUptime
+        store.flushCache()
+        let flush = (ProcessInfo.processInfo.systemUptime - start) * 1000
+        start = ProcessInfo.processInfo.systemUptime
+        let restored = RemoteStore(connection: connection, cacheRoot: root, legacyCredentials: false)
+        let restore = (ProcessInfo.processInfo.systemUptime - start) * 1000
+        XCTAssertEqual(restored.state, store.state)
+        print("NOV3_CACHE main_actor_flush_ms=\(flush) main_actor_restore_ms=\(restore)")
+    }
 }

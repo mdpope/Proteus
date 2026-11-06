@@ -1,5 +1,6 @@
 import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import test from 'node:test';
+import {RemoteStateStream} from '../src/services/remote/state-stream.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -156,12 +157,14 @@ test('remote publication remains ordered and suppresses only unchanged state/run
   const f = fixture(t), run = { id: 'rehearsal', title: 'Synthetic', trigger: 'chat', status: 'running', events: [], schedule: { provider: 'fake', name: 'Rehearsal' } };
   let permissionRevision = 'one';
   const service = { ...f, attention: () => [], engine: { providers: {}, schedules: { list: () => [] }, listRuns: () => [run], runs: new Map([[run.id, run]]), getRun: () => run, permissions: { describeRun: () => ({ mode: 'ask' }), get: () => ({ revision: permissionRevision }) } } };
-  const host = { service, config: { enabled: true }, peers: new Map([['peer', { device: { id: 'peer' }, runId: run.id }]]), journal: [], epoch: 'rehearsal', sequence: 0, send: () => {}, broadcast: RemoteHost.prototype.broadcast };
+  const sent = [], host = { service, config: { enabled: true }, peers: new Map([['peer', { device: { id: 'peer' }, runId: run.id }]]), journal: [], epoch: 'rehearsal', sequence: 0, send: (_peer, value) => sent.push(value.event), broadcast: RemoteHost.prototype.broadcast };
+  host.stateStream = new RemoteStateStream(host, { legacyMinMs: 0, legacyVolatileMs: 0 });
   RemoteHost.prototype.publish.call(host);
-  assert.deepEqual(host.journal.map(e => e.event), ['state', 'run']);
-  RemoteHost.prototype.publish.call(host); assert.equal(host.journal.length, 2);
+  // State is replaceable, so it reaches the client without entering the replay journal.
+  assert.deepEqual(sent, ['state', 'run']); assert.deepEqual(host.journal.map(e => e.event), ['run']);
+  RemoteHost.prototype.publish.call(host); assert.equal(sent.length, 2); assert.equal(host.journal.length, 1);
   run.status = 'awaiting_input'; RemoteHost.prototype.publish.call(host);
-  assert.deepEqual(host.journal.slice(2).map(e => e.event), ['state', 'run']);
+  assert.deepEqual(sent.slice(2), ['state', 'run']); assert.deepEqual(host.journal.slice(1).map(e => e.event), ['run']);
   permissionRevision = 'two'; RemoteHost.prototype.publish.call(host);
   assert.equal(host.journal.at(-1).event, 'run'); assert.equal(host.journal.at(-1).data.permissionRevision, 'two');
   assert.deepEqual(host.journal.map(e => e.cursor), host.journal.map((_, i) => 'rehearsal:' + (i + 1)));

@@ -113,8 +113,10 @@ profile without extension or per-tab sharing opt-ins. Preserve the host/account 
 backend availability. Do not install packages or change live settings/grants during queue-only work. Required orientation/tool discovery
 must distinguish actual current capability from queued normal/developer access changes.
 
-For Virtualmin/Webmin administration, use the Codex in-app browser and reuse its existing
-signed-in tab. Read the deployment workspace access record for the exact origin; aliases can
+For server release work, use the deployment SSH alias and the audited root wrapper described in
+`docs/release-process.md` ("Server access and root operations") before any browser route. For
+Virtualmin/Webmin administration that SSH cannot do, use the Codex in-app browser and reuse its
+existing signed-in tab. Read the deployment workspace access record for the exact origin; aliases can
 have different session cookies. Do not fall back to a different browser or request credentials
 before checking that session. Production access and recovery receipts stay in the deployment
 workspace, outside this application repository.

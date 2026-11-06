@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "2026-11-03",
+  "name": "Nov 3",
+  "version": "0.2.42",
+  "status": "open",
+  "openedOn": "2026-11-03",
+  "plan": "docs/2026-11-03-release-plan.md",
+  "implementation": "docs/releases/2026-11-03/implementation.md",
+  "rollout": "docs/releases/2026-11-03/rollout.md",
+  "closeout": "docs/releases/2026-11-03/closeout.md",
+  "sourceCommit": null
+}

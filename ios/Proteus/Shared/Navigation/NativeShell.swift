@@ -361,11 +361,6 @@ enum NativeNavigationCounts {
         return states.reduce(0) { $0 + $1["schedules"].array.count }
     }
 }
-func nativeNeedsAttention(_ run: JSON) -> Bool {
-    guard !run["archived"].bool, run["archivedAt"].string.isEmpty else { return false }
-    if run["attentionRequired"] != .null { return run["attentionRequired"].bool }
-    return run["status"].string == "awaiting_input" || (["failed", "interrupted"].contains(run["status"].string) && run["failureReviewedAt"].string.isEmpty)
-}
 
 private enum NativeArea: String, CaseIterable, Identifiable {
     case home = "Home", workspaces = "Workspaces", schedules = "Schedules", chats = "Chats", internet = "Internet Searches", attention = "Needs Attention", life = "Life", team = "Team", engine = "Engine Room"
@@ -426,17 +421,17 @@ struct NativeShell: View {
     private var tablet: Bool { sizeClass == .regular && !NativePhonePreview.enabled }
     private var tabAccent: Color { NativeTheme.accent }
     private func count(for item: NativeArea) -> Int? {
-        if item == .schedules { return destinations.selected.flatMap { $0.connected ? NativeNavigationCounts.schedules([$0.state]) : nil } }
+        if item == .schedules { return destinations.selected.flatMap { $0.connected ? NativeNavigationCounts.schedules([$0.navigationCountState]) : nil } }
         if item == .chats {
             let states: [JSON] = destinations.destinations.compactMap { destination in
                 guard let remote = destinations.remote(for: destination.id), remote.connected else { return nil }
-                var state = remote.state.object; state["hostId"] = .string(destination.id); return .object(state)
+                var state = remote.navigationCountState.object; state["hostId"] = .string(destination.id); return .object(state)
             }
             return NativeNavigationCounts.chats(states) ?? (states.isEmpty ? 0 : nil)
         }
         let remotes = destinations.destinations.map { destinations.remote(for: $0.id) }
         guard !remotes.isEmpty, remotes.allSatisfy({ $0?.connected == true }) else { return nil }
-        let states = remotes.map { $0?.state ?? .null }
+        let states = remotes.map { $0?.navigationCountState ?? .null }
         switch item {
         case .chats: return NativeNavigationCounts.chats(states)
         case .attention: return NativeNavigationCounts.attention(states).map { $0 + nativeAttentionItems(destinations).count }
@@ -462,28 +457,28 @@ struct NativeShell: View {
     private func chatEntry(for tab: NativeContentTab) -> AggregateChat? {
         guard tab.kind == "chat", let hostID = tab.hostID, let remote = destinations.remote(for: hostID) else { return nil }
         let chatID = String(tab.id.dropFirst(hostID.count + 1))
-        let run = remote.chats[chatID] ?? remote.state["runs"].array.first(where: { $0["id"].string == chatID }) ?? .null
+        let run = remote.chats[chatID] ?? remote.stateValue("runs").array.first(where: { $0["id"].string == chatID }) ?? .null
         guard run != .null else { return nil }
         return AggregateChat(hostID: hostID, hostName: destinations.destinations.first(where: { $0.id == hostID })?.label ?? "Computer", run: run)
     }
     private var recentAttention: [NativeAttentionItem] {
-        let chats = destinations.destinations.flatMap { destination in (destinations.remote(for: destination.id)?.state["runs"].array ?? []).filter(nativeNeedsAttention).map { run in NativeAttentionItem(hostID: destination.id, hostName: destination.label, value: .object(["id": .string("chat:" + run["id"].string), "kind": .string("chat"), "chatId": run["id"], "title": run["title"], "at": run["updatedAt"]])) } }
+        let chats = destinations.destinations.flatMap { destination in (destinations.remote(for: destination.id)?.attentionRunSummaries ?? []).map { run in NativeAttentionItem(hostID: destination.id, hostName: destination.label, value: .object(["id": .string("chat:" + run["id"].string), "kind": .string("chat"), "chatId": run["id"], "title": run["title"], "at": run["updatedAt"]])) } }
         return Array((chats + nativeAttentionItems(destinations)).sorted { $0.value["at"].string > $1.value["at"].string }.prefix(7))
     }
     private var recentChats: [AggregateChat] {
         Array(destinations.destinations.flatMap { destination in
-            (destinations.remote(for: destination.id)?.state["runs"].array ?? []).map { AggregateChat(hostID: destination.id, hostName: destination.label, run: $0) }
+            (destinations.remote(for: destination.id)?.stateValue("runs").array ?? []).map { AggregateChat(hostID: destination.id, hostName: destination.label, run: $0) }
         }.sorted { (NativeProjectActivity.date($0.run) ?? .distantPast) > (NativeProjectActivity.date($1.run) ?? .distantPast) }.filter { nativeChatType($0.run) == (activeArea == .internet ? "internet" : activeArea == .schedules ? "scheduled" : "user") }.prefix(7))
     }
     private func title(for tab: NativeContentTab) -> String {
         if tab.kind == "browser" { return shared.browserTabs.first(where: { $0.id == tab.id })?.title ?? tab.title }
         if tab.kind == "workspace", let hostID = tab.hostID, let remote = destinations.remote(for: hostID) {
             let id = String(tab.id.dropFirst("workspace:\(hostID):".count))
-            return remote.state["context"]["workspaces"].array.first { $0["id"].string == id }?["name"].string ?? tab.title
+            return remote.stateValue("context")["workspaces"].array.first { $0["id"].string == id }?["name"].string ?? tab.title
         }
         if tab.kind == "chat", let hostID = tab.hostID, let remote = destinations.remote(for: hostID) {
             let chatID = String(tab.id.dropFirst(hostID.count + 1))
-            let title = (remote.chats[chatID] ?? remote.state["runs"].array.first(where: { $0["id"].string == chatID }) ?? .null)["title"].string
+            let title = (remote.chats[chatID] ?? remote.stateValue("runs").array.first(where: { $0["id"].string == chatID }) ?? .null)["title"].string
             if !title.isEmpty { return title }
         }
         return tab.title
@@ -604,14 +599,14 @@ struct NativeShell: View {
         .onChange(of: shared.browserTabs) { _, tabs in reconcileMainBrowserTabs(tabs) }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ProteusPhoneSelectChat"))) { notification in
             guard NativeDesignPreview.enabled, let host = notification.userInfo?["hostID"] as? String, let chat = notification.userInfo?["chatID"] as? String else { return }
-            if let remote = destinations.remote(for: host) { openChat(AggregateChat(hostID: host, hostName: remote.displayName, run: remote.chats[chat] ?? remote.state["runs"].array.first { $0["id"].string == chat } ?? .object(["id": .string(chat)]))) }
+            if let remote = destinations.remote(for: host) { openChat(AggregateChat(hostID: host, hostName: remote.displayName, run: remote.chats[chat] ?? remote.stateValue("runs").array.first { $0["id"].string == chat } ?? .object(["id": .string(chat)]))) }
         }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ProteusWorkspaceDeleted"))) { notification in
             guard let host = notification.userInfo?["hostID"] as? String, let workspace = notification.userInfo?["workspaceID"] as? String else { return }
             let id = "workspace:" + host + ":" + workspace; opened.removeAll { $0.id == id }; if selectedTab == id { selectedTab = nil }
         }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ProteusChatWorkspaceMoved"))) { notification in
-            guard let host = notification.userInfo?["hostID"] as? String, let chat = notification.userInfo?["chatID"] as? String, let workspace = notification.userInfo?["workspaceID"] as? String, let remote = destinations.remote(for: host), let profile = remote.state["context"]["workspaces"].array.first(where: { $0["id"].string == workspace }) else { return }
+            guard let host = notification.userInfo?["hostID"] as? String, let chat = notification.userInfo?["chatID"] as? String, let workspace = notification.userInfo?["workspaceID"] as? String, let remote = destinations.remote(for: host), let profile = remote.stateValue("context")["workspaces"].array.first(where: { $0["id"].string == workspace }) else { return }
             NativeWorkspaceNavigation.openChat(chat, workspaceID: workspace, remote: remote, shared: shared)
             openWorkspace(NativeWorkspaceIdentity(hostID: host, hostName: remote.displayName, profile: profile))
         }
@@ -695,8 +690,8 @@ struct NativeShell: View {
                                             if tab.kind == "browser", let browser = shared.browserTabs.first(where: { $0.id == tab.id }) { Button("Send tab", systemImage: "arrow.right.square") { shellTransfer = browser } }
                                             Button("Copy tab name", systemImage: "doc.on.doc") { UIPasteboard.general.string = title(for: tab) }
                                             if let entry = chatEntry(for: tab) { Button("Copy chat link", systemImage: "link") { UIPasteboard.general.url = NativeChatLink.url(host: entry.hostID, id: entry.run["id"].string) } }
-                                            if let entry = chatEntry(for: tab), destinations.remote(for: entry.hostID)?.state["capabilities"].array.contains(.string("chat.rename.v1")) == true { Button("Rename", systemImage: "pencil") { shellRename = entry } }
-                                            if let entry = chatEntry(for: tab), destinations.remote(for: entry.hostID)?.state["capabilities"].array.contains(.string("chat.lifecycle.v1")) == true {
+                                            if let entry = chatEntry(for: tab), destinations.remote(for: entry.hostID)?.stateValue("capabilities").array.contains(.string("chat.rename.v1")) == true { Button("Rename", systemImage: "pencil") { shellRename = entry } }
+                                            if let entry = chatEntry(for: tab), destinations.remote(for: entry.hostID)?.stateValue("capabilities").array.contains(.string("chat.lifecycle.v1")) == true {
                                                 Button(entry.run["archived"].bool ? "Unarchive chat" : "Archive chat", systemImage: "archivebox") { Task { do { try await destinations.remote(for: entry.hostID)?.archiveChat(entry.run["id"].string, archived: !entry.run["archived"].bool) } catch { destinations.error = error.localizedDescription } } }.disabled(chatHasPendingWork(entry.run))
                                                 Button("Delete chat", systemImage: "trash", role: .destructive) { shellDelete = entry }.disabled(chatHasPendingWork(entry.run))
                                             }
@@ -848,7 +843,7 @@ struct NativeShell: View {
             guard let remote = destinations.remote(for: destination.id) else { continue }
             let prefix = "chat:" + destination.id + ":"
             let current = phoneChrome.currentID.hasPrefix(prefix) ? String(phoneChrome.currentID.dropFirst(prefix.count)) : nil
-            if let current, let row = remote.chats[current] ?? remote.state["runs"].array.first(where: { $0["id"].string == current }) {
+            if let current, let row = remote.chats[current] ?? remote.stateValue("runs").array.first(where: { $0["id"].string == current }) {
                 let member = remote.projectCatalog.membership(for: row)
                 if !member["workspaceId"].string.isEmpty { return (destination.id, member["workspaceId"].string, member["projectId"].string) }
             }
@@ -874,7 +869,7 @@ struct NativeShell: View {
                 result.append(NativePhoneTab(id: "project-home:" + owner.host + ":" + projectID, title: caption, symbol: "folder", detail: "Project home", section: caption, sectionID: scope, preview: nil, select: {
                     remote.setDraft("workspace-selected-project:" + owner.workspace, .string(projectID))
                     var navigation = remote.draft("project-navigation:" + projectID).object; navigation["selected"] = .string("workspace"); remote.setDraft("project-navigation:" + projectID, .object(navigation))
-                    if let profile = remote.state["context"]["workspaces"].array.first(where: { $0["id"].string == owner.workspace }) { openWorkspace(NativeWorkspaceIdentity(hostID: owner.host, hostName: remote.displayName, profile: profile)) }
+                    if let profile = remote.stateValue("context")["workspaces"].array.first(where: { $0["id"].string == owner.workspace }) { openWorkspace(NativeWorkspaceIdentity(hostID: owner.host, hostName: remote.displayName, profile: profile)) }
                 }))
                 for descriptor in descriptors where !descriptor["hidden"].bool && !descriptor["navigationClosed"].bool {
                     if descriptor["type"].string == "browser", let tab = shared.tabs(in: scope).first(where: { ($0.contentTabId ?? $0.id) == descriptor["id"].string }), !tab.hidden { result.append(overviewBrowser(tab, section: caption, sectionID: scope)) }
@@ -883,11 +878,11 @@ struct NativeShell: View {
                         result.append(NativePhoneTab(id: "setup:" + scope + ":" + id, title: descriptor["title"].string, symbol: "bubble.left.and.bubble.right", detail: remote.displayName, section: caption, sectionID: scope, preview: nil, select: {
                             remote.setDraft("workspace-selected-project:" + owner.workspace, .string(projectID))
                             var navigation = remote.draft("project-navigation:" + projectID).object; navigation["selected"] = .string("draft:" + id); remote.setDraft("project-navigation:" + projectID, .object(navigation))
-                            if let profile = remote.state["context"]["workspaces"].array.first(where: { $0["id"].string == owner.workspace }) { openWorkspace(NativeWorkspaceIdentity(hostID: owner.host, hostName: remote.displayName, profile: profile)) }
+                            if let profile = remote.stateValue("context")["workspaces"].array.first(where: { $0["id"].string == owner.workspace }) { openWorkspace(NativeWorkspaceIdentity(hostID: owner.host, hostName: remote.displayName, profile: profile)) }
                         }))
                     } else if descriptor["type"].string == "chat" {
                         let id = descriptor["chatId"].string, key = "chat:" + owner.host + ":" + id
-                        let run = remote.chats[id] ?? remote.state["runs"].array.first { $0["id"].string == id } ?? .object(["id": .string(id), "title": descriptor["title"]])
+                        let run = remote.chats[id] ?? remote.stateValue("runs").array.first { $0["id"].string == id } ?? .object(["id": .string(id), "title": descriptor["title"]])
                         let preview = phoneChrome.visited.first { $0.id == key }?.preview ?? NativeThumbnailCache.load(phoneChrome.cacheNamespace + ":" + key)
                         result.append(NativePhoneTab(id: key, title: run["title"].string, symbol: "bubble.left.and.bubble.right", detail: remote.displayName, section: caption, sectionID: scope, preview: preview, select: { openChat(AggregateChat(hostID: owner.host, hostName: remote.displayName, run: run)) }))
                     } else if ["document", "terminal"].contains(descriptor["type"].string) {
@@ -895,7 +890,7 @@ struct NativeShell: View {
                         result.append(NativePhoneTab(id: (isDocument ? "document:" : "terminal:") + scope + ":" + id, title: descriptor["title"].string, symbol: isDocument ? "doc.text" : "terminal", detail: remote.displayName, section: caption, sectionID: scope, preview: nil, select: {
                             remote.setDraft("workspace-selected-project:" + owner.workspace, .string(project["id"].string))
                             var navigation = remote.draft("project-navigation:" + project["id"].string).object; navigation["selected"] = .string(isDocument ? "document:" + id : id); remote.setDraft("project-navigation:" + project["id"].string, .object(navigation))
-                            if let profile = remote.state["context"]["workspaces"].array.first(where: { $0["id"].string == owner.workspace }) { openWorkspace(NativeWorkspaceIdentity(hostID: owner.host, hostName: remote.displayName, profile: profile)) }
+                            if let profile = remote.stateValue("context")["workspaces"].array.first(where: { $0["id"].string == owner.workspace }) { openWorkspace(NativeWorkspaceIdentity(hostID: owner.host, hostName: remote.displayName, profile: profile)) }
                         }))
                     }
                 }
@@ -932,7 +927,7 @@ struct NativeShell: View {
             let kind = tab.scope.hasPrefix("project:") ? "project" : "workspace"
             let scopeID = String(tab.scope.dropFirst((kind + ":" + destination.id + ":").count))
             let workspaceID = kind == "project" ? remote.projectCatalog.project(id: scopeID)?["workspaceId"].string ?? "" : scopeID
-            guard let profile = remote.state["context"]["workspaces"].array.first(where: { $0["id"].string == workspaceID }) else { destinations.error = "This tab’s workspace is unavailable on its computer."; return }
+            guard let profile = remote.stateValue("context")["workspaces"].array.first(where: { $0["id"].string == workspaceID }) else { destinations.error = "This tab’s workspace is unavailable on its computer."; return }
             remote.setDraft("workspace-selected-project:" + workspaceID, .string(kind == "project" ? scopeID : ""))
             var navigation = remote.draft(kind + "-navigation:" + scopeID).object
             navigation["selected"] = .string(tab.id)
@@ -1021,14 +1016,14 @@ struct NativeShell: View {
             return
         }
         if route.type == "schedule.completed", !route.scheduleID.isEmpty {
-            if !remote.state["schedules"].array.contains(where: { $0["id"].string == route.scheduleID }), remote.connected { await remote.refresh() }
-            guard remote.state["schedules"].array.contains(where: { $0["id"].string == route.scheduleID }) else {
+            if !remote.stateValue("schedules").array.contains(where: { $0["id"].string == route.scheduleID }), remote.connected { await remote.refresh() }
+            guard remote.stateValue("schedules").array.contains(where: { $0["id"].string == route.scheduleID }) else {
                 notificationFallback("This schedule is not available on this device. Reconnect \(destinations.selectedLabel) and refresh Schedules."); return
             }
             if tablet || NativePhonePreview.enabled {
                 // Retained phone NavigationStacks can prevent a shell-level sheet
                 // from presenting. Use the same durable tab route as the tablet.
-                openSchedule(remote.state["schedules"].array.first { $0["id"].string == route.scheduleID } ?? .null, hostID: route.hostID)
+                openSchedule(remote.stateValue("schedules").array.first { $0["id"].string == route.scheduleID } ?? .null, hostID: route.hostID)
             } else { selectedTab = nil; area = .home; notificationScheduleTarget = NotificationScheduleTarget(hostID: route.hostID, scheduleID: route.scheduleID)
                 #if DEBUG
                 if ProcessInfo.processInfo.arguments.contains("--synthetic-notification-controls") { notifications.fixtureStatus = "Schedule sheet ready" }
@@ -1052,10 +1047,10 @@ struct NativeShell: View {
     /// of its tabs; only an unassigned chat may use top-level navigation.
     @discardableResult private func openAssociatedChat(_ entry: AggregateChat) -> Bool {
         guard let remote = destinations.remote(for: entry.hostID) else { return false }
-        let run = entry.run["id"].string.isEmpty ? entry.run : (remote.chats[entry.run["id"].string] ?? remote.state["runs"].array.first { $0["id"] == entry.run["id"] } ?? entry.run)
+        let run = entry.run["id"].string.isEmpty ? entry.run : (remote.chats[entry.run["id"].string] ?? remote.stateValue("runs").array.first { $0["id"] == entry.run["id"] } ?? entry.run)
         let membership = remote.projectCatalog.membership(for: run)
         let workspaceID = membership["workspaceId"].string.isEmpty ? NativeWorkspaceIdentity.workspaceID(run) : membership["workspaceId"].string
-        guard !workspaceID.isEmpty, let profile = remote.state["context"]["workspaces"].array.first(where: { $0["id"].string == workspaceID }) else { return false }
+        guard !workspaceID.isEmpty, let profile = remote.stateValue("context")["workspaces"].array.first(where: { $0["id"].string == workspaceID }) else { return false }
         let projectID = membership["workspaceId"].string == workspaceID && !membership["projectId"].string.isEmpty ? membership["projectId"].string : nil
         NativeWorkspaceNavigation.openChat(entry.run["id"].string, workspaceID: workspaceID, projectID: projectID, remote: remote, shared: shared)
         opened.removeAll { $0.id == entry.id }
@@ -1067,7 +1062,7 @@ struct NativeShell: View {
         guard run != .null else { return nil }
         let member = remote.projectCatalog.membership(for: run)["workspaceId"].string
         let id = member.isEmpty ? NativeWorkspaceIdentity.workspaceID(run) : member
-        return !id.isEmpty && remote.state["context"]["workspaces"].array.contains(where: { $0["id"].string == id }) ? id : nil
+        return !id.isEmpty && remote.stateValue("context")["workspaces"].array.contains(where: { $0["id"].string == id }) ? id : nil
     }
     /// Earlier releases saved associated chats as app tabs. Restoring that local
     /// session is not an explicit reopen of a tab the desktop may have closed.
@@ -1082,7 +1077,7 @@ struct NativeShell: View {
             let wasSelected = selectedTab == tab.id
             if let encoded = try? JSONEncoder().encode(tab), let retained = try? JSONDecoder().decode(JSON.self, from: encoded) { remote.setDraft("legacy-app-chat:" + tab.id, retained) }
             opened.removeAll { $0.id == tab.id }
-            if wasSelected, let profile = remote.state["context"]["workspaces"].array.first(where: { $0["id"].string == workspaceID }) {
+            if wasSelected, let profile = remote.stateValue("context")["workspaces"].array.first(where: { $0["id"].string == workspaceID }) {
                 if !project.isEmpty { remote.setDraft("workspace-selected-project:" + workspaceID, .string(project)) }
                 openWorkspace(NativeWorkspaceIdentity(hostID: entry.hostID, hostName: entry.hostName, profile: profile))
                 let restoredAppTab = selectedTab
@@ -1150,7 +1145,7 @@ struct NativeShell: View {
         destinations.remote(for: entry.hostID)?.setDraft("workspace-last-opened:" + entry.workspaceID, .string(ISO8601DateFormatter().string(from: Date())))
     }
     private func sendToWorkspace(_ entry: AggregateChat) {
-        guard let remote = destinations.remote(for: entry.hostID), let profile = remote.state["context"]["workspaces"].array.first(where: { $0["id"].string == NativeWorkspaceIdentity.workspaceID(entry.run) }) else { return }
+        guard let remote = destinations.remote(for: entry.hostID), let profile = remote.stateValue("context")["workspaces"].array.first(where: { $0["id"].string == NativeWorkspaceIdentity.workspaceID(entry.run) }) else { return }
         let workspace = NativeWorkspaceIdentity(hostID: entry.hostID, hostName: entry.hostName, profile: profile)
         NativeWorkspaceNavigation.openChat(entry.run["id"].string, workspaceID: workspace.workspaceID, remote: remote, shared: shared)
         opened.removeAll { $0.id == entry.id }; openWorkspace(workspace)
@@ -1237,11 +1232,11 @@ struct NativeHome: View {
     private var attentionCount: Int? {
         let remotes = destinations.destinations.map { destinations.remote(for: $0.id) }
         guard !remotes.isEmpty, remotes.allSatisfy({ $0?.connected == true }) else { return nil }
-        return NativeNavigationCounts.attention(remotes.map { $0?.state ?? .null })
+        return NativeNavigationCounts.attention(remotes.map { $0?.navigationCountState ?? .null })
     }
     private var attentionRows: [NativeAttentionItem] {
         let chats = destinations.destinations.flatMap { destination in
-            (destinations.remote(for: destination.id)?.state["runs"].array ?? []).filter(nativeNeedsAttention).map { run in
+            (destinations.remote(for: destination.id)?.attentionRunSummaries ?? []).map { run in
                 NativeAttentionItem(hostID: destination.id, hostName: destination.label, value: .object(["id": .string("chat:" + run["id"].string), "kind": .string("chat"), "chatId": run["id"], "title": run["title"], "at": run["updatedAt"]]))
             }
         }
@@ -1250,13 +1245,15 @@ struct NativeHome: View {
     }
     private var version: String { Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown" }
     private var build: String { Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "Unknown" }
-    private var releaseDate: String {
+    // Fixed for the life of the process: Home's body must not build formatters on every pass.
+    private static let releaseDateText: String = {
         guard let raw = Bundle.main.infoDictionary?["ProteusReleaseDate"] as? String else { return "" }
         let parser = DateFormatter(); parser.locale = Locale(identifier: "en_US_POSIX"); parser.timeZone = TimeZone(secondsFromGMT: 0); parser.dateFormat = "yyyy-MM-dd"; parser.isLenient = false
         guard let date = parser.date(from: raw), parser.string(from: date) == raw else { return "" }
         let display = DateFormatter(); display.locale = Locale(identifier: "en_US"); display.timeZone = parser.timeZone; display.dateFormat = "MMM d"
         return display.string(from: date)
-    }
+    }()
+    private var releaseDate: String { Self.releaseDateText }
     var body: some View {
         NavigationStack {
             if let remote = destinations.selected {
@@ -1283,7 +1280,7 @@ struct NativeHome: View {
                             if recent.count > recentLimit { Button("More") { recentLimit += 7 }.accessibilityIdentifier("home-recents-more") }
                         }
                     }
-                    Section(destinations.selectedLabel) { NavigationLink("Schedules" + ((remote.connected ? NativeNavigationCounts.schedules([remote.state]) : nil).map { " · \($0)" } ?? "")) { SchedulesView(onSelect: onSchedule).environment(remote) }; NavigationLink("Workspaces") { NativeWorkspacesView().modifier(NativePhoneBackNavigation()) } }
+                    Section(destinations.selectedLabel) { NavigationLink("Schedules" + ((remote.connected ? NativeNavigationCounts.schedules([remote.navigationCountState]) : nil).map { " · \($0)" } ?? "")) { SchedulesView(onSelect: onSchedule).environment(remote) }; NavigationLink("Workspaces") { NativeWorkspacesView().modifier(NativePhoneBackNavigation()) } }
                     Section("Needs attention" + (attentionCount.map { " · \($0)" } ?? "")) {
                         NavigationLink("View all computers") { AggregateChatsView(attentionOnly: true) }
                         if NativeDesignPreview.enabled {
@@ -1292,7 +1289,7 @@ struct NativeHome: View {
                                 else { NavigationLink { AggregateChatsView(attentionOnly: true, initialAttentionTab: "notifications") } label: { Label(item.value["title"].string, systemImage: "exclamationmark.circle") } }
                             }
                             if attentionRows.count > attentionLimit { Button("More") { attentionLimit += 7 }.accessibilityIdentifier("home-attention-more") }
-                        } else { ForEach(remote.state["runs"].array.filter(nativeNeedsAttention), id: \.self) { run in NavigationLink { ChatView(id: run["id"].string).environment(remote) } label: { Label(run["title"].string, systemImage: "exclamationmark.circle") } } }
+                        } else { ForEach(remote.attentionRunSummaries, id: \.self) { run in NavigationLink { ChatView(id: run["id"].string).environment(remote) } label: { Label(run["title"].string, systemImage: "exclamationmark.circle") } } }
                     }
                     #if DEBUG
                     if ProcessInfo.processInfo.arguments.contains("--synthetic-notification-controls") {
@@ -1387,12 +1384,8 @@ private struct BundledChangelogView: View {
     }
 }
 struct AggregateChat: Identifiable { let hostID: String; let hostName: String; let run: JSON; var id: String { hostID + ":" + run["id"].string } }
-private func chatRowTimestamp(_ run: JSON, timeZone: TimeZone) -> String {
-    let value = run["updatedAt"].string.isEmpty ? run["createdAt"].string : run["updatedAt"].string
-    let fractional = ISO8601DateFormatter(); fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    guard let date = fractional.date(from: value) ?? ISO8601DateFormatter().date(from: value) else { return "" }
-    let formatter = DateFormatter(); formatter.dateStyle = .short; formatter.timeStyle = .short; formatter.timeZone = timeZone
-    return formatter.string(from: date)
+@MainActor private func chatRowTimestamp(_ run: JSON, timeZone: TimeZone) -> String {
+    NativeChatTimestamp.text(run, timeZone: timeZone)
 }
 func nativeChatType(_ run: JSON) -> String {
     if run["chatType"].string == "internet" { return "internet" }
@@ -1436,7 +1429,7 @@ struct AggregateChatsView: View {
     private var chats: [AggregateChat] {
         destinations.destinations.flatMap { d in
             guard let remote = destinations.remote(for: d.id) else { return [AggregateChat]() }
-            let rows = showArchived && !remote.allRuns.isEmpty ? remote.allRuns : remote.state["runs"].array
+            let rows = showArchived && !remote.allRuns.isEmpty ? remote.allRuns : remote.stateValue("runs").array
             return rows.map { AggregateChat(hostID: d.id, hostName: d.label, run: $0) }
         }
             .filter { item in
@@ -1490,7 +1483,7 @@ struct AggregateChatsView: View {
                 }
                 Section { Text("New chats execute on \(lockedHostID.flatMap { id in destinations.destinations.first { $0.id == id }?.label } ?? destinations.selectedLabel). Viewing another computer’s history does not change that destination.").font(.caption).foregroundStyle(.secondary) }
                 ForEach(chats) { item in chatRow(item) }
-                ForEach(destinations.destinations) { d in if let remote = destinations.remote(for: d.id), (showArchived ? remote.allRuns.count < remote.allRunCount : remote.state["runs"].array.count < remote.state["runCount"].int) { Button("Load older · " + d.label) { Task { if showArchived { await remote.loadAllRuns() } else { await remote.loadMoreRuns() } } }.disabled(!remote.connected) } }
+                ForEach(destinations.destinations) { d in if let remote = destinations.remote(for: d.id), (showArchived ? remote.allRuns.count < remote.allRunCount : remote.stateValue("runs").array.count < remote.stateValue("runCount").int) { Button("Load older · " + d.label) { Task { if showArchived { await remote.loadAllRuns() } else { await remote.loadMoreRuns() } } }.disabled(!remote.connected) } }
                 }
             }.background(NativeTheme.background).navigationTitle(NativeDesignPreview.enabled || sizeClass == .regular ? "" : attentionOnly ? "Needs attention" : "Chats").safeAreaInset(edge: .top, spacing: 0) { if sizeClass == .regular && !NativeDesignPreview.enabled { Text(attentionOnly ? "Needs attention" : "Chats").font(.title2.bold()).frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 20).padding(.vertical, 12).background(NativeTheme.background) } }.onAppear { chatType = initialChatType; attentionTab = initialAttentionTab }.onChange(of: initialAttentionTab) { _, value in attentionTab = value }.onChange(of: initialChatType) { _, value in chatType = value }.nativeFeaturePage(attentionOnly ? "Needs Attention" : initialChatType == "internet" ? "Internet Searches" : "Chats", search: $query, embedded: lockedWorkspaceID != nil).refreshable { await destinations.refreshAll() }
                 .toolbar { if lockedHostID == nil { Menu { ForEach(destinations.destinations) { d in Button(d.label) { try? destinations.select(d.id) } } } label: { Label(destinations.selectedLabel, systemImage: "desktopcomputer") } }; Button("New chat", systemImage: "square.and.pencil") {
@@ -1552,7 +1545,7 @@ struct AggregateChatsView: View {
             }
             Button("Copy chat link", systemImage: "link") { UIPasteboard.general.url = NativeChatLink.url(host: item.hostID, id: item.run["id"].string) }
             Button("Copy chat name", systemImage: "doc.on.doc") { UIPasteboard.general.string = item.run["title"].string }
-            if destinations.remote(for: item.hostID)?.state["capabilities"].array.contains(.string("chat.rename.v1")) == true { Button("Rename", systemImage: "pencil") { pendingRename = item }.disabled(destinations.remote(for: item.hostID)?.connected != true) }
+            if destinations.remote(for: item.hostID)?.stateValue("capabilities").array.contains(.string("chat.rename.v1")) == true { Button("Rename", systemImage: "pencil") { pendingRename = item }.disabled(destinations.remote(for: item.hostID)?.connected != true) }
             if canManage(item) {
                 Button(item.run["archived"].bool ? "Unarchive" : "Archive", systemImage: "archivebox") { Task { await archive(item) } }.disabled(chatHasPendingWork(item.run))
                 Button("Delete chat", systemImage: "trash", role: .destructive) { pendingDelete = item }.disabled(chatHasPendingWork(item.run))
@@ -1561,7 +1554,7 @@ struct AggregateChatsView: View {
     }
     private func canManage(_ item: AggregateChat) -> Bool {
         guard let remote = destinations.remote(for: item.hostID) else { return false }
-        return remote.connected && remote.state["capabilities"].array.contains(.string("chat.lifecycle.v1"))
+        return remote.connected && remote.stateValue("capabilities").array.contains(.string("chat.lifecycle.v1"))
     }
     private func archive(_ item: AggregateChat) async {
         guard let remote = destinations.remote(for: item.hostID) else { return }
@@ -1617,15 +1610,10 @@ struct NativeAttentionItem: Identifiable {
 @MainActor func nativeAttentionItems(_ destinations: DestinationStore) -> [NativeAttentionItem] {
     destinations.destinations.flatMap { destination in
         let remote = destinations.remote(for: destination.id)
-        let attention = remote?.state["attention"].array ?? []
+        let attention = remote?.stateValue("attention").array ?? []
         // One title index per host: a linear run search per item made ~1,000 attention items
         // cost seconds of main-thread time across Home and drawer counts.
-        var titles: [String: String] = [:]
-        if !attention.isEmpty, let remote {
-            for run in remote.allRuns { titles[run["id"].string] = run["title"].string }
-            for run in remote.state["runs"].array { titles[run["id"].string] = run["title"].string }
-            for (id, run) in remote.chats { titles[id] = run["title"].string }
-        }
+        let titles = attention.isEmpty ? [:] : remote?.chatTitleIndex.mapValues(\.string) ?? [:]
         return attention.map { item in
             var fields = item.object
             let title = (titles[item["chatId"].string] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)

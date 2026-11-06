@@ -1,3 +1,6 @@
+import {createVisibleChatWatch} from './chat-watch.js';
+import {updateWebState,applyLifecycleState,updateRunSummary,onlyChatIndexChanges} from './remote-state.js';
+import {acceptRemoteState,coalesceRender,draftSubmission,acknowledgeDraft} from "./remote-updates.js";
 import {bindSharedDraftText} from '../../../public/features/chats/shared-draft-text.js';
 const webWindowId=(()=>{try{const key='proteus.remote.window';let value=sessionStorage.getItem(key);if(!value){value=crypto.randomUUID();sessionStorage.setItem(key,value);}return value;}catch{return crypto.randomUUID();}})();
 import {enterSubmits} from '../../../public/shared/ui/enter-submit.js';
@@ -81,6 +84,7 @@ const readPreferences = () => { try { return JSON.parse(localStorage.getItem(pre
 const writePreferences = changes => { try { localStorage.setItem(preferenceKey, JSON.stringify({ ...readPreferences(), ...changes })); } catch {} };
 function setView(value) {
     view = sectionNames.includes(value) ? value : 'chats';
+    if(view!=='chats'||chatMode!=='chat')visibleChatWatch.clear();
     if(view!=='chats')session()?.previewApprovals?.clear();
     const route=workspaces.route,query=new URLSearchParams({view});if(attentionOnly&&view==='chats')query.set('attention','1');if(transcriptionOnly&&view==='schedules')query.set('transcription','1');if(route&&['workspaces','chats'].includes(view)){query.set('host',route.hostId);query.set('workspace',route.id);if(route.projectId)query.set('project',route.projectId);if(route.page)query.set('page',route.page);if(route.tab?.startsWith('chat:'))query.set('chat',route.tab.slice(5));else if(route.tab&&route.tab!=='new')query.set('tab',route.tab);}history.replaceState(null,'',location.pathname+'?'+query);
     document.dispatchEvent(new CustomEvent('proteus:section', { detail: { key: attentionOnly&&view==='chats'?'attention':transcriptionOnly&&view==='schedules'?'transcription':view==='connections'?'engine-room':view } }));
@@ -125,7 +129,7 @@ async function prepareAttachmentSend(current,run,key,retained,input,base){
     const verifySteering=async()=>{
         assertAttachmentDestination(current,run);
         if(!steering)return;
-        const fresh=await commandForHost(current,'chat.get',{id:run.id});
+        const fresh=await commandForHost(current,'chat.get',{watch:'none',id:run.id});
         assertAttachmentDestination(current,run);
         if(fresh.status!=='running'||fresh.schedule?.provider!==providerId||fresh.turns?.at(-1)?.id!==turnId||!fresh.chatControls?.steering||items.some(item=>!fresh.chatControls.steeringMediaTypes?.includes(item.mediaType)))throw new Error('The active turn or supported attachment types changed. Review the message again.');
     };
@@ -140,6 +144,10 @@ async function prepareAttachmentSend(current,run,key,retained,input,base){
     return {method:run?'chat.send':'chat.start',args:{...base,...(run?{}:{draftId:retained.draftId}),providerId,messageId,mode:steering?'steer':'queue',attachments:metadata.map(item=>item.attachmentId),consentId:authorization.consentId}};
 }
 const session = () => sessions.get(active);
+const scheduleRemoteRender=coalesceRender(()=>{preserveDrafts();render();});
+const visibleChatWatch=createVisibleChatWatch({request:commandForHost,updated:(current,id,fresh)=>{if(session()!==current||current.selected!==id||view!=='chats'||chatMode!=='chat'||document.hidden)return;current.run=mergeChatHistory(current.run,fresh);render();},failed:error=>{if(!error.cancelled)notice(error.message);}});
+function syncVisibleChatWatch(){const current=session();if(document.hidden||view!=='chats'||chatMode!=='chat'||!current?.selected||current.client?.status!=='online')visibleChatWatch.clear();else visibleChatWatch.ensure(current,current.selected);}
+document.addEventListener('visibilitychange',syncVisibleChatWatch);
 function connectionLabel(hostId) {
     const current=sessions.get(hostId);
     if(current?.client?.status==='online')return 'Connected';
@@ -178,20 +186,20 @@ async function commandForHost(current,method,args){
 }
 async function refresh() {
     const target = active, current = session(); const result = await command('sync', { cursor: current.host.cursor || '' });
-    if (target !== active) return; current.state = result.state;rememberHostName(current,result.state);current.cachedRuns=result.state.runs||[];if(!chatIndexShowsArchived())current.archivedRuns=null;current.lastSyncAt=new Date().toISOString();void saveChatIndex(root.dataset.account,current.host,current.cachedRuns).catch(()=>{}); current.host.cursor = result.cursor; if(current.host.source==='legacy')await legacyStore.save(current.host); if(chatIndexShowsArchived())await loadArchivedChats(true);else render();
+    if (target !== active) return; acceptRemoteState(current,result.state);current.state=result.state;rememberHostName(current,result.state);current.cachedRuns=result.state.runs||[];if(!chatIndexShowsArchived())current.archivedRuns=null;current.lastSyncAt=new Date().toISOString();void saveChatIndex(root.dataset.account,current.host,current.cachedRuns).catch(()=>{}); current.host.cursor = result.cursor; if(current.host.source==='legacy')await legacyStore.save(current.host); if(chatIndexShowsArchived())await loadArchivedChats(true);else render();
 }
 function preserveDrafts() {
     const current = session();if(current?.selected){current.scroll ||= new Map();const pane=root.querySelector('.remote-messages');if(pane)current.scroll.set(current.selected,pane.scrollTop);} if (!current) return;rememberActivityDisclosures(current);
-    for (const form of root.querySelectorAll('form[data-draft]')) { const old = current.drafts.get(form.dataset.draft) || {}; current.drafts.set(form.dataset.draft, { ...old, ...(form.querySelector('[data-setup-disclosure]') ? {setupOpen:form.querySelector('[data-setup-disclosure]').open} : {}), values: { ...old.values, ...Object.fromEntries(new FormData(form)) } }); }
+    for (const form of root.querySelectorAll('form[data-draft]')) { const old = current.drafts.get(form.dataset.draft) || {}; Object.assign(old, { ...(form.querySelector('[data-setup-disclosure]') ? {setupOpen:form.querySelector('[data-setup-disclosure]').open} : {}), values: { ...old.values, ...Object.fromEntries(new FormData(form)) } });current.drafts.set(form.dataset.draft,old); }
 }
 function currentDraft(key, initial) { const current = session(); if (!current.drafts.has(key)) current.drafts.set(key, { values: initial, id: crypto.randomUUID(), issuedAt: new Date().toISOString() }); return current.drafts.get(key); }
 function bindDraft(formId, key, method, args, after) {
     const form = $(formId); if (!form) return;
     form.oninput = () => { const draft = session().drafts.get(key); draft.values = { ...draft.values, ...Object.fromEntries(new FormData(form)) }; delete draft.sentAt; draft.id = crypto.randomUUID(); draft.issuedAt = new Date().toISOString(); };
     form.onsubmit = async event => {
-        event.preventDefault(); const current = session(), draft = current.drafts.get(key); const button = form.querySelector('button[type="submit"]'); button.disabled = true; notice('');
-        try { const prepared=await args(Object.fromEntries(new FormData(form)),draft);assertAttachmentDestinationForSubmit(current,formId);const result = await command(prepared?.method||method, prepared?.args||prepared, { id: draft.id, issuedAt: draft.sentAt ||= new Date().toISOString() }); if(formId==='remote-composer')clearAttachmentItems(current,key);current.drafts.delete(key);await saveChatDrafts(root.dataset.account,current.host,current.drafts); form.removeAttribute('data-draft'); await after?.(result); await refresh(); }
-        catch (error) { if(!error.cancelled)notice(error.message); } finally { if (button.isConnected) button.disabled = false; }
+        event.preventDefault(); if(form.dataset.submitting)return;form.dataset.submitting="true"; const current = session(), draft = current.drafts.get(key); const button = form.querySelector('button[type="submit"]'); button.disabled = true; notice('');
+        try { const submission=await draftSubmission(draft,Object.fromEntries(new FormData(form)),args),prepared=submission.prepared;await saveChatDrafts(root.dataset.account,current.host,current.drafts);assertAttachmentDestinationForSubmit(current,formId);const result = await command(prepared?.method||method, prepared?.args||prepared, { id: submission.id, issuedAt: submission.issuedAt }); if(acknowledgeDraft(draft,submission)){if(formId==='remote-composer')clearAttachmentItems(current,key);current.drafts.delete(key);}await saveChatDrafts(root.dataset.account,current.host,current.drafts); form.removeAttribute('data-draft'); await after?.(result); await refresh(); }
+        catch (error) { if(!error.cancelled)notice(error.message); } finally { delete form.dataset.submitting;if (button.isConnected) button.disabled = false; }
     };
 }
 function assertAttachmentDestinationForSubmit(current,formId){if(formId==='remote-composer'&&session()!==current)throw new Error('The destination changed. Review the message and files before sending.');}
@@ -241,9 +249,31 @@ async function connectNow(hostId,{automatic=false}={}) {
         client.addEventListener('failure', event => { if (relevant()) notice(event.detail); });
         // Routing packets are not authenticated revocation proofs. Keep account credentials intact.
         client.addEventListener('rejected', () => { if(!relevant())return;suppressed.add(hostId);stopReconnect();preserveDrafts();current.state=null;current.run=null;notice('This computer rejected the connection. Retry or create a fresh pairing; the saved account destination was retained.'); });
-        client.addEventListener('change', event => { if(ended||suspended||current.client!==client)return; const change = event.detail;void workspaces.changed(hostId,change).catch(error=>notice(error.message)); current.host.cursor = change.cursor; if(change.event==='chat.lifecycle'){applyChatLifecycle(current,hostId,change.data);if(chatIndexShowsArchived())void loadArchivedChats(true).catch(error=>notice(error.message));} if (change.event === 'state'){current.state = change.data;rememberHostName(current,change.data);current.cachedRuns=change.data.runs||[];if(!chatIndexShowsArchived())current.archivedRuns=null;current.lastSyncAt=new Date().toISOString();void saveChatIndex(root.dataset.account,current.host,current.cachedRuns).catch(()=>{});if(chatIndexShowsArchived())void loadArchivedChats(true).catch(error=>notice(error.message));} if (change.event === 'run' && change.runId === current.selected) current.run = mergeChatHistory(current.run, change.data); if(active===hostId){preserveDrafts();render();}else renderRecentChats(); });
+        client.addEventListener('change',event=>{if(!ended&&!suspended&&current.client===client)handleRemoteChange(current,hostId,event.detail);});
         await client.connect(); if (!relevant()) { client.close(); return; } await refresh();reconnectAttempt=0;void refreshUsage();
     } catch (error) { if(generation!==switching)return;if(error.sessionInvalid){await endAccount();return;}current.connecting=false;notice(error.message);render();if(![409,404].includes(error.status))reconnect(hostId); }
+}
+function handleRemoteChange(current,hostId,change) {
+    if(change.cursor)current.host.cursor=change.cursor;
+    const state=change.event==='state';
+    if(!state)recentRenderInputs=null;
+    if(state&&!acceptRemoteState(current,change.data))return;
+    const sections=current.changedStateSections;
+    if(!state||sections.has('context')||sections.has('workspaceProjects'))void workspaces.changed(hostId,change).catch(error=>notice(error.message));
+    if(change.event==='chat.lifecycle'){applyChatLifecycle(current,hostId,change.data);if(chatIndexShowsArchived())void loadArchivedChats(true).catch(error=>notice(error.message));}
+    if(state){
+        current.state=change.data;rememberHostName(current,change.data);current.lastSyncAt=new Date().toISOString();
+        if(sections.has('runs')){
+            current.cachedRuns=change.data.runs||[];
+            if(!chatIndexShowsArchived())current.archivedRuns=null;
+            void saveChatIndex(root.dataset.account,current.host,current.cachedRuns).catch(()=>{});
+            if(chatIndexShowsArchived())void loadArchivedChats(true).catch(error=>notice(error.message));
+        }
+    }
+    if(change.event==='run'&&change.runId===current.selected)current.run=mergeChatHistory(current.run,change.data);
+    if(state&&[...sections].every(key=>key==='providerUsage')){renderUsage();return;}
+    if(state&&view==='chats'&&chatMode==='chat'&&session()?.run&&onlyChatIndexChanges(sections)){renderChatTabs();renderRecentChats();return;}
+    if(active===hostId)scheduleRemoteRender();else renderRecentChats();
 }
 function renderUsage() { /* Shared shell owns Default computer allowance across every feature. */ }
 async function refreshUsage(force = false) {
@@ -253,9 +283,7 @@ async function refreshUsage(force = false) {
     try {
         const value = await command('provider.usage', { force });
         if (active !== target || session() !== current) return;
-        current.state.appearance ||= {};
-        current.state.appearance.showProviderUsage = value.enabled !== false;
-        current.state.providerUsage = value;
+        updateWebState(current,{appearance:{...current.state.appearance,showProviderUsage:value.enabled !== false},providerUsage:value});
     } catch { if (active === target) current.usageError = 'Usage is unavailable. Check or update Proteus on this computer.'; }
     finally { current.usageLoading = false; if (active === target) renderUsage(); }
 }
@@ -277,6 +305,7 @@ function contextFields(values) {
     return `<label>Workspace<select name="workspaceId">${options(workspaces, values.workspaceId || context.defaultWorkspaceId, w => w.name || w.label || w.path || w.id)}</select></label><label>Agent<select name="agentId"><option value="">Default agent</option>${options((context.entries || []).filter(e => e.kind === 'agent' && e.userInvocable !== false && e.mode !== 'disabled'), values.agentId)}</select></label><label>Default context<select name="includeDefaults"><option value="true" ${values.includeDefaults !== 'false' ? 'selected' : ''}>Include workspace defaults</option><option value="false" ${values.includeDefaults === 'false' ? 'selected' : ''}>Only selected sources</option></select></label>`;
 }
 function render() {
+    syncVisibleChatWatch();
     if($('remote-default-label'))$('remote-default-label').textContent='Account Default computer: '+(hosts.get(appPreferences.defaultMacId)?.label|| (appPreferences.defaultMacId?'Unavailable paired computer':'Not selected'))+'. Connected computer: '+(session()?.client?.status==='online'?(hosts.get(active)?.label||'computer'):'None')+'.';
     const focused = document.activeElement; const focus = focused?.name && focused.closest('form') ? { form: focused.closest('form').id, name: focused.name, start: focused.selectionStart, end: focused.selectionEnd } : null;
     const priorDetails=root.querySelector('.remote-chat-details');
@@ -317,12 +346,12 @@ function render() {
 function bindCatalog(formId, key) {
     const form = $(formId);
     if(!form)return;
-    for (const select of form.querySelectorAll('select[name="provider"],select[name="model"],select[data-provider-route]')) select.onchange = async () => { preserveDrafts(); const draft = session().drafts.get(key); if (select.name === 'provider' || select.hasAttribute('data-provider-route')) { const choice=select.hasAttribute('data-provider-route')?inferenceProviderChoices(session().state.providerStatuses,{ownerLabel:session().host.label,selected:select.value}).find(choice=>choice.id===select.value):null; if(choice){draft.values.providerRoute=choice.id;draft.values.provider=choice.provider;form.querySelector('[name="provider"]').value=choice.provider;} draft.values.model = ''; draft.values.reasoningEffort = ''; draft.values.contextTier = ''; draft.values.serviceTier = ''; try { const status = await command('provider.status', { provider: choice?.provider || select.value }); session().state.providerStatuses ||= {}; session().state.providerStatuses[choice?.provider || select.value] = status; } catch (error) { notice(error.message); } } else {const model=session().state.providerStatuses?.[draft.values.provider]?.models?.find(model=>model.id===select.value);if(model)Object.assign(draft.values,optionsForModelChange(model.controls,draft.values));} render(); };
+    for (const select of form.querySelectorAll('select[name="provider"],select[name="model"],select[data-provider-route]')) select.onchange = async () => { preserveDrafts(); const draft = session().drafts.get(key); if (select.name === 'provider' || select.hasAttribute('data-provider-route')) { const choice=select.hasAttribute('data-provider-route')?inferenceProviderChoices(session().state.providerStatuses,{ownerLabel:session().host.label,selected:select.value}).find(choice=>choice.id===select.value):null; if(choice){draft.values.providerRoute=choice.id;draft.values.provider=choice.provider;form.querySelector('[name="provider"]').value=choice.provider;} draft.values.model = ''; draft.values.reasoningEffort = ''; draft.values.contextTier = ''; draft.values.serviceTier = ''; try { const status = await command('provider.status', { provider: choice?.provider || select.value }); updateWebState(session(),{providerStatuses:{...session().state.providerStatuses,[choice?.provider || select.value]:status}}); } catch (error) { notice(error.message); } } else {const model=session().state.providerStatuses?.[draft.values.provider]?.models?.find(model=>model.id===select.value);if(model)Object.assign(draft.values,optionsForModelChange(model.controls,draft.values));} render(); };
 }
-async function openChat(id,hostId=active,panel=null,scope=workspaces.active) { if(scope){workspaces.restore(scope);workspaces.selectChat(id);}else workspaces.leave(); chatMode='chat'; if(hostId!==active||session()?.run?.id!==id||view!=='chats')stopMessageSpeech();preserveDrafts();if(hostId!==active||session()?.client?.status!=='online')await connect(hostId);const current=session();if(current?.client?.status!=='online')throw new Error('This chat’s computer is not connected. Use Connect to retry.');const changed=current.selected!==id;if(changed){current.earlierError=false;if(current.selected)saveChildTabs(current,current.selected);current.previewApprovals?.clear();current.activeChatPanel='conversation';}current.selected=id;setView('chats');const fresh=await command('chat.get',{id});if(scope?!workspaces.isChatCurrent(scope,id):!!workspaces.active||current.selected!==id)return;current.run=mergeChatHistory(current.run,fresh);if(current.state?.capabilities?.includes('chat.paths.v1'))current.run.storage=await command('chat.paths',{id});if(scope?!workspaces.isChatCurrent(scope,id):!!workspaces.active||current.selected!==id)return;restoreChildTabs(current,id);if(changed){const remembered=savedChildTabs[hostId+':'+id]?.active||'conversation',children=current.childOrder?.get(id)||[];current.activeChatPanel=remembered==='conversation'||remembered==='browser'&&children.some(item=>item.type==='browser')||children.some(item=>item.documentId===remembered)?remembered:'conversation';}if(panel){const children=current.childOrder?.get(id)||[];if(panel==='conversation'||panel==='browser'&&children.some(item=>item.type==='browser')||children.some(item=>item.documentId===panel)){current.activeChatPanel=panel;saveChildTabs(current,id);}}if(scope){if(current.run.workspaceId!==scope.id&&current.run.context?.workspaceId!==scope.id&&current.run.schedule?.context?.workspaceId!==scope.id)throw new Error('This chat belongs to another workspace.');await workspaces.adoptChat(current.run);setView('chats');}else{chatTabs.set(hostId+':'+id,{hostId,id,title:chatTabTitle(current.run.title||current.run.schedule?.name||chatTabs.get(hostId+':'+id)?.title)});saveChatTabs();}render();
+async function openChat(id,hostId=active,panel=null,scope=workspaces.active) { if(scope){workspaces.restore(scope);workspaces.selectChat(id);}else workspaces.leave(); chatMode='chat'; if(hostId!==active||session()?.run?.id!==id||view!=='chats')stopMessageSpeech();preserveDrafts();if(hostId!==active||session()?.client?.status!=='online')await connect(hostId);const current=session();if(current?.client?.status!=='online')throw new Error('This chat’s computer is not connected. Use Connect to retry.');const changed=current.selected!==id;if(changed){current.earlierError=false;if(current.selected)saveChildTabs(current,current.selected);current.previewApprovals?.clear();current.activeChatPanel='conversation';}current.selected=id;setView('chats');const fresh=await visibleChatWatch.read(current,id,{visible:!document.hidden}).catch(error=>{if(!error.cancelled)throw error;return null;});if(!fresh)return;if(scope?!workspaces.isChatCurrent(scope,id):!!workspaces.active||current.selected!==id)return;current.run=mergeChatHistory(current.run,fresh);if(current.state?.capabilities?.includes('chat.paths.v1'))current.run={...current.run,storage:await command('chat.paths',{id})};if(scope?!workspaces.isChatCurrent(scope,id):!!workspaces.active||current.selected!==id)return;restoreChildTabs(current,id);if(changed){const remembered=savedChildTabs[hostId+':'+id]?.active||'conversation',children=current.childOrder?.get(id)||[];current.activeChatPanel=remembered==='conversation'||remembered==='browser'&&children.some(item=>item.type==='browser')||children.some(item=>item.documentId===remembered)?remembered:'conversation';}if(panel){const children=current.childOrder?.get(id)||[];if(panel==='conversation'||panel==='browser'&&children.some(item=>item.type==='browser')||children.some(item=>item.documentId===panel)){current.activeChatPanel=panel;saveChildTabs(current,id);}}if(scope){if(current.run.workspaceId!==scope.id&&current.run.context?.workspaceId!==scope.id&&current.run.schedule?.context?.workspaceId!==scope.id)throw new Error('This chat belongs to another workspace.');await workspaces.adoptChat(current.run);setView('chats');}else{chatTabs.set(hostId+':'+id,{hostId,id,title:chatTabTitle(current.run.title||current.run.schedule?.name||chatTabs.get(hostId+':'+id)?.title)});saveChatTabs();}render();
     // A failed chat is only acknowledged after its detail has been delivered and rendered.
     if(['failed','interrupted'].includes(current.run.status)&&current.run.attentionRequired===true){
-        try{const reviewed=await command('chat.review',{id,expectedFailureEventAt:current.run.failureEventAt});if(session()!==current)return;current.run={...current.run,...reviewed};reviewedChats.set(active+':'+id,{...current.run});const row=current.state?.runs?.find(item=>item.id===id);if(row)Object.assign(row,reviewed);render();}catch(error){notice('Could not mark this failure reviewed: '+error.message);}
+        try{const reviewed=await command('chat.review',{id,expectedFailureEventAt:current.run.failureEventAt});if(session()!==current)return;current.run={...current.run,...reviewed};reviewedChats.set(active+':'+id,{...current.run});updateRunSummary(current,id,reviewed);render();}catch(error){notice('Could not mark this failure reviewed: '+error.message);}
     }
 }
 async function openSchedule(id,hostId=active){
@@ -398,7 +427,7 @@ function renameWebsiteChat(current,run){
     if(!current?.state?.capabilities?.includes('chat.rename.v1')){notice('Update Proteus on this computer to rename chats.');return;}
     const dialog=document.createElement('dialog');dialog.className='remote-rename-dialog';
     dialog.innerHTML=`<form method="dialog"><h2>Rename chat</h2><label>Chat name<input name="title" type="text" maxlength="200" required value="${escape(run.title||'')}"></label><menu><button value="cancel">Cancel</button><button value="save" class="primary">Save</button></menu></form>`;
-    const field=dialog.querySelector('input');dialog.addEventListener('close',async()=>{const save=dialog.returnValue==='save',title=field.value.trim();dialog.remove();if(!save)return;if(!title){notice('Enter a chat name.');return;}try{const result=await commandForHost(current,'chat.rename',{id:run.id,title,expectedTitleRevision:run.titleRevision});if(current.run?.id===run.id)current.run={...current.run,...result};for(const row of current.state?.runs||[])if(row.id===run.id)Object.assign(row,result);for(const row of current.cachedRuns||[])if(row.id===run.id)Object.assign(row,result);for(const row of current.archivedRuns||[])if(row.id===run.id)Object.assign(row,result);const tab=chatTabs.get(current.host.hostId+':'+run.id);if(tab)tab.title=chatTabTitle(result.title);saveChatTabs();render();}catch(error){notice(error.message);}} ,{once:true});
+    const field=dialog.querySelector('input');dialog.addEventListener('close',async()=>{const save=dialog.returnValue==='save',title=field.value.trim();dialog.remove();if(!save)return;if(!title){notice('Enter a chat name.');return;}try{const result=await commandForHost(current,'chat.rename',{id:run.id,title,expectedTitleRevision:run.titleRevision});if(current.run?.id===run.id)current.run={...current.run,...result};updateRunSummary(current,run.id,result);const tab=chatTabs.get(current.host.hostId+':'+run.id);if(tab)tab.title=chatTabTitle(result.title);saveChatTabs();render();}catch(error){notice(error.message);}} ,{once:true});
     document.body.append(dialog);dialog.showModal();field.focus();field.select();
 }
 function composerModeStatus(current){
@@ -617,11 +646,11 @@ function renderChats(current) {
         mountMessageActions(actions,{key:actions.dataset.messageKey,text:event.text,rendered:element,notify:notice});
     }
     root.querySelectorAll('[data-run]').forEach(button => button.onclick = () => openChat(button.dataset.run,button.dataset.runHost).catch(error => notice(error.message)));
-    $('remote-more-runs')?.addEventListener('click', async () => { try { const older = await command('runs.list', { offset: (current.state.runs||[]).length }); current.state.runs.push(...older); preserveDrafts(); render(); } catch (error) { notice(error.message); } });
+    $('remote-more-runs')?.addEventListener('click', async () => { try { const older = await command('runs.list', { offset: (current.state.runs||[]).length }); updateWebState(current,{runs:[...(current.state.runs||[]),...older]}); preserveDrafts(); render(); } catch (error) { notice(error.message); } });
     function prefetchHistory(force=false){
         if(!run||!eventStart||!force&&current.historyPrefetchFailedAt===eventStart)return null;
         const key=run.id+':'+eventStart;
-        if(current.historyPrefetch?.key!==key){current.historyPrefetch={key,promise:command('chat.get',{id:run.id,offset:run.eventCount-eventStart,beforeEvent:eventStart})};current.historyPrefetch.promise.catch(()=>{current.historyPrefetchFailedAt=eventStart;if(current.historyPrefetch?.key===key)current.historyPrefetch=null;});}
+        if(current.historyPrefetch?.key!==key){current.historyPrefetch={key,promise:command('chat.get',{watch:'none',id:run.id,offset:run.eventCount-eventStart,beforeEvent:eventStart})};current.historyPrefetch.promise.catch(()=>{current.historyPrefetchFailedAt=eventStart;if(current.historyPrefetch?.key===key)current.historyPrefetch=null;});}
         return current.historyPrefetch.promise;
     }
     const historyPane=root.querySelector('.remote-messages');
@@ -715,7 +744,7 @@ function consumeFragment() {
     return !!fragment;
 }
 const workspaces=createWebWorkspaces({account:root.dataset.account,hosts,sessions,escape,notify:notice,request:commandForHost,connect,preserve:preserveDrafts,setView,render,openChat,newChat:async(internet,scope)=>{newInternet=internet;await newChat(scope);},defaultHost:()=>appPreferences.defaultMacId,rows:aggregateChats,renderIndex:(container,scope)=>renderChatIndex(container,{rows:scope.rows||aggregateChats(),hosts:[...hosts.values()],escape,time:value=>dateTime(value,appPreferences.timezone),timezone:appPreferences.timezone,workspaceScope:scope,open:scope.open,refresh:()=>void refreshAggregate(true).then(render),loadMore:loadMoreChats,hasMore:[...sessions.values()].some(s=>(s.state?.runs?.length||0)<(s.state?.runCount||0)),move:row=>moveWebsiteChat(sessions.get(row.hostId),row),archive:(row,archived)=>lifecycleChat(row,'chat.archive',{archived}),remove:row=>lifecycleChat(row,'chat.delete'),rename:row=>renameWebsiteChat(sessions.get(row.hostId),row),onShowArchived:shown=>shown?loadArchivedChats(true):render(),onError:error=>notice(error.message)})});
-document.addEventListener('proteus:chat-send-workspace',event=>{event.detail.handled=true;void(async()=>{let row=aggregateChats().find(r=>r.id===event.detail.id&&r.hostId===event.detail.hostId);if(!row?.workspaceId){await connect(event.detail.hostId);const run=await commandForHost(sessions.get(event.detail.hostId),'chat.get',{id:event.detail.id});row={...run,hostId:event.detail.hostId,workspaceId:run.workspaceId||run.context?.workspaceId||run.schedule?.context?.workspaceId,workspaceName:run.workspaceName||run.context?.workspaceName||run.schedule?.context?.workspaceName};}if(!row.workspaceId)throw Error('This chat has no workspace.');await workspaces.sendChat(row);})().catch(error=>notice(error.message));});
+document.addEventListener('proteus:chat-send-workspace',event=>{event.detail.handled=true;void(async()=>{let row=aggregateChats().find(r=>r.id===event.detail.id&&r.hostId===event.detail.hostId);if(!row?.workspaceId){await connect(event.detail.hostId);const run=await commandForHost(sessions.get(event.detail.hostId),'chat.get',{watch:'none',id:event.detail.id});row={...run,hostId:event.detail.hostId,workspaceId:run.workspaceId||run.context?.workspaceId||run.schedule?.context?.workspaceId,workspaceName:run.workspaceName||run.context?.workspaceName||run.schedule?.context?.workspaceName};}if(!row.workspaceId)throw Error('This chat has no workspace.');await workspaces.sendChat(row);})().catch(error=>notice(error.message));});
 consumeFragment(); setView(view); window.addEventListener('hashchange', consumeFragment);
 async function endAccount() {
     workspaces.clear();
@@ -743,8 +772,8 @@ async function loadArchivedChats(reset=false){
 function applyChatLifecycle(current,hostId,change){
     if(!change?.id)return;
     if(current.archivedRuns)current.archivedRuns=change.deleted?current.archivedRuns.filter(row=>row.id!==change.id):current.archivedRuns.map(row=>row.id===change.id?{...row,...change}:row);
-    if(!change.deleted){if(current.run?.id===change.id)Object.assign(current.run,change);return;}
-    if(current.state?.runs)current.state.runs=current.state.runs.filter(row=>row.id!==change.id);
+    applyLifecycleState(current,change);
+    if(!change.deleted)return;
     if(current.cachedRuns)current.cachedRuns=current.cachedRuns.filter(row=>row.id!==change.id);
     chatTabs.delete(hostId+':'+change.id);saveChatTabs();delete savedChildTabs[hostId+':'+change.id];try{localStorage.setItem(childTabKey,JSON.stringify(savedChildTabs));}catch{}
     for(const item of current.documents?.values()||[])if(item.chatId===change.id)releaseDocumentAssets(item);
@@ -764,7 +793,11 @@ async function lifecycleChat(row,method,extra={}){
     current.state=result.state;current.cachedRuns=result.state.runs||[];if(!chatIndexShowsArchived())current.archivedRuns=null;current.lastSyncAt=new Date().toISOString();void saveChatIndex(root.dataset.account,current.host,current.cachedRuns).catch(()=>{});
     if(chatIndexShowsArchived())await loadArchivedChats(true);else render();
 }
+let recentRenderInputs;
 function renderRecentChats(){
+ const inputs=[view,chatMode,active,attentionOnly,attentionPanel,transcriptionOnly,selectedChatType(),workspaces.active,...[...sessions.values()].flatMap(current=>[current.state?.runs?.length,...(current.state?.runs||[]),current.state?.runningChatCount,current.cachedRuns,current.archivedRuns,current.state?.attention,current.state?.schedules,current.state?.context,current.state?.workspaceProjects,current.client?.status,current.selected,current.run,current.host.label])];
+ if(recentRenderInputs&&inputs.length===recentRenderInputs.length&&inputs.every((value,index)=>value===recentRenderInputs[index]))return;
+ recentRenderInputs=inputs;
  for(const [id,current] of sessions)observeRunningChats(id,'remote',current.state,current.client?.status==='online');
  const feature=workspaces.active?'workspaces':attentionOnly&&view==='chats'?'attention':transcriptionOnly&&view==='schedules'?'transcription':view==='chats'&&selectedChatType()==='internet'?'internet':view==='connections'?'engine-room':view;document.body.dataset.activeFeature=feature;
  document.querySelectorAll('[data-shell-nav]').forEach(link=>{const selected=link.dataset.shellNav===feature;link.classList.toggle('active',selected);if(selected)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');});
@@ -798,7 +831,7 @@ async function loadMoreChats(){
     try{await verifyWebsite();const archived=chatIndexShowsArchived();await Promise.all([...sessions.values()].filter(current=>current.client?.status==='online'&&(archived&&current.state?.capabilities?.includes('chat.lifecycle.v1')?(current.archivedRuns?.length||0)<(current.state?.runCountIncludingArchived||0):(current.state?.runs?.length||0)<(current.state?.runCount||0))).map(async current=>{
         const client=current.client,includeArchived=archived&&current.state?.capabilities?.includes('chat.lifecycle.v1'),existing=includeArchived?current.archivedRuns||[]:current.state.runs||[],older=await client.request('runs.list',{offset:existing.length,...(includeArchived?{includeArchived:true}:{})});
         if(ended||suspended||current.client!==client)return;
-        if(includeArchived)current.archivedRuns=[...new Map([...existing,...older].map(run=>[run.id,run])).values()];else{current.state.runs=[...new Map([...existing,...older].map(run=>[run.id,run])).values()];current.cachedRuns=current.state.runs;await saveChatIndex(root.dataset.account,current.host,current.cachedRuns).catch(()=>{});}
+        if(includeArchived)current.archivedRuns=[...new Map([...existing,...older].map(run=>[run.id,run])).values()];else{updateWebState(current,{runs:[...new Map([...existing,...older].map(run=>[run.id,run])).values()]});current.cachedRuns=current.state.runs;await saveChatIndex(root.dataset.account,current.host,current.cachedRuns).catch(()=>{});}
     }));render();}catch(error){notice(error.message);}
 }
 async function refreshAggregate(force=false){
@@ -807,7 +840,7 @@ async function refreshAggregate(force=false){
         const credential=metadata.source==='account'?await accountStore.credential(metadata.hostId):metadata;
         if(ended||suspended)return;
         const client=new BrowserRemoteClient(credential);current={host:credential,client,drafts:new Map(),selected:null,run:null,state:null};sessions.set(metadata.hostId,current);current.drafts=await loadChatDrafts(root.dataset.account,credential);const cached=await loadChatIndex(root.dataset.account,credential);if(cached){current.cachedRuns=cached.items;current.lastSyncAt=cached.observedAt;}bindRevocation(client,metadata.hostId,current);client.addEventListener('status',()=>{if(client.status!=='online')observeRunningChats(metadata.hostId,'remote',null,false);if(client.status==='closed'){current.state=null;renderRecentChats();if(active===metadata.hostId){render();reconnect(metadata.hostId);}}});
-        client.addEventListener('change',event=>{if(ended||suspended||current.client!==client)return;void workspaces.changed(metadata.hostId,event.detail).catch(error=>notice(error.message));if(event.detail.event==='chat.lifecycle'){applyChatLifecycle(current,metadata.hostId,event.detail.data);if(chatIndexShowsArchived())void loadArchivedChats(true).catch(error=>notice(error.message));}if(event.detail.event==='state'){current.state=event.detail.data;rememberHostName(current,event.detail.data);current.cachedRuns=event.detail.data.runs||[];if(!chatIndexShowsArchived())current.archivedRuns=null;current.lastSyncAt=new Date().toISOString();void saveChatIndex(root.dataset.account,current.host,current.cachedRuns).catch(()=>{});renderRecentChats();if(chatIndexShowsArchived())void loadArchivedChats(true).catch(error=>notice(error.message));if(active===metadata.hostId){preserveDrafts();render();}}if(event.detail.event==='run'&&event.detail.runId===current.selected){current.run=event.detail.data;if(active===metadata.hostId){preserveDrafts();render();}}});
+        client.addEventListener('change',event=>{if(!ended&&!suspended&&current.client===client)handleRemoteChange(current,metadata.hostId,event.detail);});
         try{await client.connect();await verifyWebsite();const result=await client.request('sync',{cursor:''});current.state=result.state;rememberHostName(current,result.state);current.cachedRuns=result.state.runs||[];current.lastSyncAt=new Date().toISOString();await saveChatIndex(root.dataset.account,current.host,current.cachedRuns).catch(()=>{});current.host.cursor=result.cursor;}catch{client.close();current.client=null;current.state=null;}
     }));
 }
@@ -850,7 +883,7 @@ async function startup(){
         const deep=initialQuery;if(deep.get('workspace')&&hosts.has(deep.get('host'))){await workspaces.enter({hostId:deep.get('host'),id:deep.get('workspace'),projectId:deep.get('project')},['projects','chats','tabs','configuration'].includes(deep.get('page'))?deep.get('page'):undefined);if(deep.get('chat'))await workspaces.openChat(deep.get('chat'));else if(deep.get('tab'))await workspaces.openResource(deep.get('tab'));}else if(deep.get('chat')&&hosts.has(deep.get('host'))){await openChat(deep.get('chat'),deep.get('host'),deep.get('panel'));if(deep.get('rename')==='1')renameWebsiteChat(session(),session().run);if(deep.get('sendWorkspace')==='1'){const run=session().run;await workspaces.sendChat({...run,hostId:active,workspaceId:run.workspaceId||run.context?.workspaceId||run.schedule?.context?.workspaceId,workspaceName:run.workspaceName||run.context?.workspaceName||run.schedule?.context?.workspaceName});}}else if(deep.get('schedule')&&hosts.has(deep.get('host')))await openSchedule(deep.get('schedule'),deep.get('host'));else if(deep.get('chat'))notice('Pair and connect this chat’s owning computer before opening its link.');
     }catch(error){if(error.sessionInvalid)await endAccount();else{pauseUnverified();notice(error.message+' Reload to try again.');}}
 }
-window.addEventListener('pagehide',()=>{suspended=true;++switching;stopReconnect();stopLifecycle();for(const pair of pendingPairs)pair.close();pendingPairs.clear();for(const current of sessions.values())current.client?.close();sessions.clear();hosts.clear();active='';legacyStore.close();render();});
+window.addEventListener('pagehide',()=>{visibleChatWatch.clear();suspended=true;++switching;stopReconnect();stopLifecycle();for(const pair of pendingPairs)pair.close();pendingPairs.clear();for(const current of sessions.values())current.client?.close();sessions.clear();hosts.clear();active='';legacyStore.close();render();});
 window.addEventListener('pageshow',event=>{if(event.persisted&&!ended)void startup();});
 await startup();
 
@@ -872,7 +905,7 @@ function mountEventMarkdown(scope,current,run){
   mountChatRecovery(element.parentElement,entry,run,{notify:notice,recover:run.chatControls?.recovery?async(action,expectedFailureEventAt)=>{
    if(session()!==current||current.run?.id!==run.id)throw new Error('The selected chat changed. Review it before continuing.');
    await recoverRemoteChat({run,action,expectedFailureEventAt,request:(method,args)=>commandForHost(current,method,args),mutate:(method,args)=>commandForHost(current,method,args)});
-   const fresh=await commandForHost(current,'chat.get',{id:run.id});
+   const fresh=await commandForHost(current,'chat.get',{watch:'none',id:run.id});
    if(session()===current&&current.run?.id===run.id){preserveDrafts();current.run=mergeChatHistory(current.run,fresh);render();}
   }:null});
  }
@@ -916,7 +949,7 @@ async function openSharedPreview(current,run,source){
 
 async function moveWebsiteChat(current,run){
  const supportsProjects=current.state?.capabilities?.includes('projects.v1');
- const [catalog,projectCatalog,fresh]=await Promise.all([commandForHost(current,'context.get',{}),supportsProjects?commandForHost(current,'projects.get',{}):null,commandForHost(current,'chat.get',{id:run.id})]);
+ const [catalog,projectCatalog,fresh]=await Promise.all([commandForHost(current,'context.get',{}),supportsProjects?commandForHost(current,'projects.get',{}):null,commandForHost(current,'chat.get',{watch:'none',id:run.id})]);
  const dialog=document.createElement('dialog');dialog.className='remote-rename-dialog';
  const groups=projectMoveGroups(catalog.workspaces,projectCatalog?.projects||[],{workspaceOnly:!supportsProjects});
  dialog.innerHTML=`<form><h2>Move tab</h2>${moveMenuMarkup({groups,current:supportsProjects?fresh.projectId:fresh.workspaceId,escape,application:false})}<p>Choose where this tab belongs. Its session and history are preserved.</p><p data-error></p><button type="button">Cancel</button><button>Move tab</button></form>`;

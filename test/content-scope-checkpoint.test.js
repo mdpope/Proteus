@@ -21,7 +21,7 @@ function appFixture({checkpoint=async()=>false,sync=async()=>{},save=async()=>{}
   const calls=[],errors=[],browser={id:'browser',type:'browser',parentId:chat.id,label:'Next',info:{url:nextEntry.url,history:pendingHistory,navigationPending:true,profileId:'default'}};
   const state={tab:browser.id,page:'context',tabs:copy([oldProject,newProject,chat,browser])};
   let follower;
-  const sandbox={crypto:webcrypto,state,workspaceReady:true,workspaceRestoring:false,workspaceClosing:false,lastWorkspace:'',workspaceSaving:undefined,
+  const sandbox={crypto:webcrypto,state,retainedTeamSession:null,workspaceReady:true,workspaceRestoring:false,workspaceClosing:false,lastWorkspace:'',workspaceSaving:undefined,
     window:{desktop:{workspaceSession:async value=>{calls.push({kind:'save',session:copy(value.session)});return save(value);}}},
     document:{hidden:false},chatSetupTabs:{capture(){}},reconcilePreviewProjects(){},selectedChildren:new Map(),desktopWindowId:'main',windowScopeId:value=>value,
     teamState:()=>team,contentTabMetadata:()=>({}),setTimeout:()=>1,clearTimeout(){},toast:error=>errors.push(error),

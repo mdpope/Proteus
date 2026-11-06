@@ -80,3 +80,9 @@ enum NativeProjectActivity {
         items.map { ($0, date($0) ?? .distantPast) }.sorted { $0.1 > $1.1 }.map(\.0)
     }
 }
+
+func nativeNeedsAttention(_ run: JSON) -> Bool {
+    guard !run["archived"].bool, run["archivedAt"].string.isEmpty else { return false }
+    if run["attentionRequired"] != .null { return run["attentionRequired"].bool }
+    return run["status"].string == "awaiting_input" || (["failed", "interrupted"].contains(run["status"].string) && run["failureReviewedAt"].string.isEmpty)
+}

@@ -88,8 +88,10 @@ if (process.argv.includes('--structure-only')) {
     checks.push('isolated UI startup, shared platform metadata and unavailable provider catalogs');
     await page.locator('[data-page="schedules"]').click();
     await page.getByRole('row').filter({ hasText: 'Synthetic package rehearsal' }).click();
-    await page.locator('#run-now').click(); await page.locator('#answer').waitFor();
-    await page.locator('#answer').fill('SYNTHETIC_PACKAGE_CHECKPOINT'); await page.locator('#reply').click();
+    await page.locator('#run-now').click();
+    // A pending question is answered in its inline card; the legacy #answer field stays hidden.
+    const question = page.locator('.user-question-card').first(); await question.locator('textarea').waitFor();
+    await question.locator('textarea').fill('SYNTHETIC_PACKAGE_CHECKPOINT'); await question.getByRole('button', { name: 'Send answer', exact: true }).click();
     await until(async () => (await runs())[0]?.status === 'completed', 'synthetic rehearsal completes');
     const [run] = await runs(); assert.equal(run.provider, 'rehearsal'); assert.equal(run.usage.observed, false);
     assert.ok(run.events.some(event => event.role === 'assistant' && event.text.includes('no AI provider was called')));

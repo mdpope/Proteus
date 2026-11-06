@@ -1,3 +1,18 @@
+## Nov 3 — 0.2.42 source validation
+
+- Faster heterogeneous state decoding and section-level chat observation.
+- Keep shell badges, workspace identities, attention rows and attention titles subscribed to the values they display; skip redundant drawer/chrome publications while preserving live updates.
+- Project sidebar run metadata separately from streamed events/progress and resolve browser aliases once per recent-items calculation; record completed baseline/current whole-app Release traces and SDK launch/scroll measurement limits.
+- Index large tab projections and reuse bounded chat timestamp formatting instead of repeating list scans and formatter creation.
+- Admit message WebKit renderers from the native visible range and keep stale history-window bookmarks from hiding a nonempty conversation.
+- Negotiate versioned incremental owner state with a separate wire baseline, full recovery after gaps and debounced cache writes.
+- Soft-wrapped message drafts grow within the existing composer height budget.
+- Ignore packets decoded across connection generations; retain offline browser navigation and resume pending intent after history hydration.
+- Await replacement-connection state before releasing coalesced refresh callers.
+- Adopt acknowledged browser revisions, including owner rebases across other clients' title updates; retain ordered successor intent without predicting revisions.
+- Keep owner-mirrored redirects and titles local indefinitely until trusted page interaction or explicit navigation. Delayed SPA routes after a touch publish normally; the address bar retains the real landed URL.
+- Simulator evidence and remaining acceptance: `docs/releases/2026-11-03/ios-performance.md`.
+
 # Native follow-up, October 29, 2026 — main-thread smoothness
 
 Applying the desktop main-thread review to iOS: Time Profiler traces of the preview app while

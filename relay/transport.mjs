@@ -17,3 +17,14 @@ export function transportBudget({packets,bytes,windowMs=remoteTransportLimits.wi
  let start=now(),count=0,total=0;
  return size=>{const at=now();if(at-start>=windowMs){start=at;count=0;total=0;}count++;total+=size;return count<=packets&&total<=bytes;};
 }
+// A pong queues behind everything already buffered in that direction, so a slow but
+// healthy link can miss the ping window while it is actively draining data. Treat
+// received frames and drained bytes as proof of life. A dead peer stops draining once
+// the kernel send buffer fills, so it is still terminated on a later check.
+export function connectionVerdict(ws){
+ if(ws.alive){ws.alive=false;ws.flushedAtPing=flushedBytes(ws);return 'ping';}
+ const flushed=flushedBytes(ws);
+ if((ws.bufferedAmount||0)>0&&flushed>(ws.flushedAtPing??0)){ws.flushedAtPing=flushed;return 'draining';}
+ return 'terminate';
+}
+function flushedBytes(ws){return (ws._socket?.bytesWritten||0)-(ws.bufferedAmount||0);}

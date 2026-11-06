@@ -37,7 +37,7 @@ export function publishChatStreams(host, {summary, page}) {
     for(const peer of pagePeers){
       if(peer.runSignature===signature)continue;
       if(peer.deltaOnly){
-        const delta=chatDelta(source,value,peer.historyCursor);peer.historyCursor=delta.historyCursor;
+        const delta=chatDelta(source,value,peer.historyCursor,{omitUnchanged:peer.fieldDelta===true});peer.historyCursor=delta.historyCursor;
         // Replaceable per-peer patches are not global journal entries. Reconnect
         // starts with chat.get's current page and a fresh bounded cursor.
         // Keep the last durable journal cursor: a private sequence increment

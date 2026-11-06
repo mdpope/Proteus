@@ -89,3 +89,23 @@ test('question publication persists pending state and question history in one du
   engine.reply(run.id,'Continue',run.pending.id);assert.equal(await waiting,'Continue');run.status='completed';engine.persist(run);
  }finally{await engine.close();fs.rmSync(home,{recursive:true,force:true});}
 });
+test('a streaming delta omits unchanged page metadata for a client that merges by field',async()=>{
+ const {mergeChatHistory}=await import('../public/features/chats/chat-history.js');
+ const run={id:'field-delta'},context={entries:'x'.repeat(30000)},schedule={prompt:'y'.repeat(30000)};
+ const view={id:run.id,status:'running',eventCount:2,eventStart:0,earlier:0,observedAt:'a',context,schedule,fusionNote:'kept',events:[{text:'one'},{text:'two'}]};
+ const first=chatDelta(run,view,undefined,{omitUnchanged:true});assert.equal(first.context,context,'the first page is whole');
+ let client=mergeChatHistory(undefined,first);
+ const next={...view,eventCount:3,observedAt:'b',events:[{text:'one'},{text:'two'},{text:'three'}]},second=chatDelta(run,next,first.historyCursor,{omitUnchanged:true});
+ assert.equal(second.context,undefined);assert.equal(second.schedule,undefined);assert.ok(JSON.stringify(second).length<1000,'unchanged metadata is not resent');
+ client=mergeChatHistory(client,second);
+ assert.deepEqual(client.context,context,'the client keeps what was omitted');assert.deepEqual(client.schedule,schedule);assert.equal(client.eventCount,3);assert.deepEqual(client.events.map(event=>event.text),['one','two','three']);
+ const {fusionNote,...withoutNote}=next,changed={...withoutNote,eventCount:4,schedule:{prompt:'changed'},events:[...next.events,{text:'four'}]},third=chatDelta(run,changed,second.historyCursor,{omitUnchanged:true});
+ assert.deepEqual(third.schedule,{prompt:'changed'});assert.deepEqual(third.removedFields,['fusionNote']);
+ client=mergeChatHistory(client,third);assert.deepEqual(client.schedule,{prompt:'changed'});assert.equal(Object.hasOwn(client,'fusionNote'),false);assert.deepEqual(client.context,context);
+ // The first push after an ordinary chat.get page is already small.
+ const page=chatDelta(run,view),push=chatDelta(run,{...view,observedAt:'c'},page.historyCursor,{omitUnchanged:true});assert.equal(page.context,context);assert.equal(push.context,undefined);
+ // A client that has not opted in keeps complete pages.
+ const legacy=chatDelta(run,view,chatDelta(run,view).historyCursor);assert.equal(legacy.context,context);assert.equal(legacy.fieldDelta,undefined);
+ // An older page arriving after a field delta cannot drop metadata.
+ const reordered=mergeChatHistory(client,{id:run.id,eventCount:1,eventStart:0,events:[{text:'one'}],context:{old:true}});assert.deepEqual(reordered.context,context);assert.equal(reordered.eventCount,4);
+});

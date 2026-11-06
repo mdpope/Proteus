@@ -597,15 +597,14 @@ struct BrowserHistoryFixture: View {
         for frame in mediaFrames { evaluateJavaScript(source, in: frame, in: .page) { _ in } }
     }
     private var pressedAt = Date.distantPast
-    private var navigationIntentAt = Date.distantPast
-    func noteNavigationIntent() { navigationIntentAt = Date() }
-    var hasRecentNavigationIntent: Bool { Date().timeIntervalSince(navigationIntentAt) < 1.2 }
+    var trustedInteraction: (() -> Void)?
+    func noteNavigationIntent() { trustedInteraction?() }
     private final class TargetHandler: NSObject, WKScriptMessageHandler {
         weak var view: NativeLinkWebView?
         init(_ view: NativeLinkWebView) { self.view = view }
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
             guard let view, message.webView === view else { return }
-            if message.name == "proteusNavigationIntent" { if message.frameInfo.isMainFrame { view.noteNavigationIntent() }; return }
+            if message.name == "proteusNavigationIntent" { view.noteNavigationIntent(); return }
             if message.name == "proteusMediaFrame" {
                 if message.frameInfo.isMainFrame { view.mediaFrames.removeAll() }
                 if view.mediaFrames.count >= 256 { view.mediaFrames.removeFirst() }; view.mediaFrames.append(message.frameInfo); return
@@ -621,8 +620,8 @@ struct BrowserHistoryFixture: View {
         super.init(frame: frame, configuration: configuration)
         let source = """
         (() => {
-          for (const name of ['click','submit','keydown']) addEventListener(name,event => {
-            if (event.isTrusted && (name !== 'keydown' || event.key === 'Enter' || event.key === ' ')) window.webkit.messageHandlers.proteusNavigationIntent.postMessage('intent');
+          for (const name of ['pointerdown','touchstart','click','submit','keydown']) addEventListener(name,event => {
+            if (event.isTrusted) window.webkit.messageHandlers.proteusNavigationIntent.postMessage('intent');
           },true);
           const capture = event => {
             const path = event.composedPath ? event.composedPath() : [event.target];
@@ -769,7 +768,7 @@ struct NativeBrowser: UIViewRepresentable {
         func webView(_ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse, decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) { decisionHandler(navigationResponse.canShowMIMEType ? .allow : .download) }
         func webView(_ webView: WKWebView, navigationAction: WKNavigationAction, didBecome download: WKDownload) { shared.receiveDownload(download) }
         func webView(_ webView: WKWebView, navigationResponse: WKNavigationResponse, didBecome download: WKDownload) { shared.receiveDownload(download) }
-        func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) { guard shared.isCurrentBrowserView(webView, id: id) else { decisionHandler(.cancel); return }; guard let url = navigationAction.request.url, ["http", "https", "about"].contains(url.scheme) else { decisionHandler(.cancel); return }; if navigationAction.targetFrame?.isMainFrame == true { shared.prepareBrowserLoad(url, in: id, userInitiated: [.linkActivated, .formSubmitted, .formResubmitted, .backForward].contains(navigationAction.navigationType) || (webView as? NativeLinkWebView)?.hasRecentNavigationIntent == true); if navigationAction.navigationType == .backForward { shared.prepareBrowserHistoryNavigation(url, in: id) } }; if navigationAction.shouldPerformDownload { decisionHandler(.download) } else { decisionHandler(.allow) } }
+        func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) { guard shared.isCurrentBrowserView(webView, id: id) else { decisionHandler(.cancel); return }; guard let url = navigationAction.request.url, ["http", "https", "about"].contains(url.scheme) else { decisionHandler(.cancel); return }; if navigationAction.targetFrame?.isMainFrame == true { shared.prepareBrowserLoad(url, in: id); if navigationAction.navigationType == .backForward { shared.prepareBrowserHistoryNavigation(url, in: id) } }; if navigationAction.shouldPerformDownload { decisionHandler(.download) } else { decisionHandler(.allow) } }
         func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? { if let url = navigationAction.request.url, ["http", "https"].contains(url.scheme) { shared.open(url, title: url.host ?? "Browser", scope: shared.browserTabs.first(where: { $0.id == id })?.scope ?? "team", profileId: shared.browserTabs.first(where: { $0.id == id })?.profileId ?? "default", afterSourceID: id) }; return nil }
     }
 }

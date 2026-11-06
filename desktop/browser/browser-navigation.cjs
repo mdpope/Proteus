@@ -17,9 +17,20 @@ function restoreNavigation(value,appOrigin){
   if(entries.some(item=>!item.url))return null;
   return {entries,index:value.index,currentEntryId:entries[value.index].id,...(Number.isSafeInteger(value.revision)?{revision:value.revision}:{})};
 }
+// A selected entry that came from the owner is shared; this device only mirrors it.
+// Its page may redirect for reasons private to this device (cookies, user agent,
+// region), and writing that landing back would move every other client off the URL
+// they chose. Only trusted input, an agent action or an explicit navigation ends this.
+function mirrorHolds(tab){return !!tab.mirror&&tab.mirror.entryId===tab.logicalHistory?.currentEntryId&&!tab.agentActions;}
 function commitNavigation(tab,url,title,{redirect=false,force=false}={}){
   url=safeHistoryURL(url);if(!url)return null;
   const prior=tab.logicalHistory,current=prior?.entries[prior.index];
+  if(mirrorHolds(tab)){
+    tab.localLanding=current?.url===url?null:url;
+    if(current?.url===url&&!current.title)current.title=String(title||'').slice(0,200);
+    return null;
+  }
+  tab.localLanding=null;
   if(tab.applyingShared&&(!redirect||current?.url===url)){if(current?.url===url)current.title=String(title||current.title).slice(0,200);return null;}
 
   if(current?.url===url&&!force){current.title=String(title||current.title).slice(0,200);return null;}
@@ -28,4 +39,4 @@ function commitNavigation(tab,url,title,{redirect=false,force=false}={}){
   tab.logicalHistory={entries,index:entries.length-1,currentEntryId:entry.id,...(Number.isSafeInteger(prior?.revision)?{revision:prior.revision}:{})};return entry;
 }
 function traverseNavigation(tab,index){const history=tab.logicalHistory;if(!history?.entries[index])return null;tab.navigationPending=true;history.index=index;history.currentEntryId=history.entries[index].id;return history.entries[index];}
-module.exports={restoreNavigation,commitNavigation,traverseNavigation,validPendingNavigation,acknowledgesNavigation};
+module.exports={mirrorHolds,restoreNavigation,commitNavigation,traverseNavigation,validPendingNavigation,acknowledgesNavigation};

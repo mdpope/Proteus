@@ -118,7 +118,7 @@ struct NativeWorkspaceTabsView: View {
         .onChange(of: shared.workspaceContentDescriptors) { _, _ in loadCachedTabs() }
         .sheet(isPresented: $moving) {
             NavigationStack { Form {
-                NativeMoveDestinationPicker(groups: NativeMoveLocations.groups(context: catalog, projects: store.projectCatalog.raw, chats: store.state["runs"].array, containersOnly: moveTab["type"].string == "chat"), selection: $destination)
+                NativeMoveDestinationPicker(groups: NativeMoveLocations.groups(context: catalog, projects: store.projectCatalog.raw, chats: store.stateValue("runs").array, containersOnly: moveTab["type"].string == "chat"), selection: $destination)
             }.navigationTitle("Move tab").toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { moving = false } }; ToolbarItem(placement: .confirmationAction) { Button("Move") { move() } } } }
         }
     }
@@ -239,9 +239,9 @@ struct ContextFavoriteButton: View {
     let entry: JSON
     var workspaceID: String = ""
     @State private var busy = false
-    private var favorite: Bool { let catalog = store.state["context"]; let profile = catalog["workspaces"].array.first { $0["id"].string == workspaceID }; return (profile?["favorites"] ?? catalog["favorites"]).array.contains(entry["id"]) }
+    private var favorite: Bool { let catalog = store.stateValue("context"); let profile = catalog["workspaces"].array.first { $0["id"].string == workspaceID }; return (profile?["favorites"] ?? catalog["favorites"]).array.contains(entry["id"]) }
     var body: some View {
-        Button { busy = true; Task { defer { busy = false }; do { _ = try await store.request("context.favorite", ["workspaceId": .string(workspaceID), "id": entry["id"], "enabled": .bool(!favorite), "expectedRevision": store.state["context"]["revision"]]); await store.refresh() } catch { store.error = error.localizedDescription } } } label: { Image(systemName: favorite ? "star.fill" : "star") }
+        Button { busy = true; Task { defer { busy = false }; do { _ = try await store.request("context.favorite", ["workspaceId": .string(workspaceID), "id": entry["id"], "enabled": .bool(!favorite), "expectedRevision": store.stateValue("context")["revision"]]); await store.refresh() } catch { store.error = error.localizedDescription } } } label: { Image(systemName: favorite ? "star.fill" : "star") }
             .buttonStyle(.borderless).disabled(busy || !store.connected).accessibilityLabel("\(favorite ? "Remove from" : "Add to") favorites: \(entry["name"].string)")
     }
 }
@@ -256,7 +256,7 @@ struct ContextSelection: View {
     @State private var scopedCatalog: JSON = .null
     @State private var preview: JSON = .null
     @State private var previewError = ""
-    private var catalog: JSON { scopedCatalog == .null ? store.state["context"] : scopedCatalog }
+    private var catalog: JSON { scopedCatalog == .null ? store.stateValue("context") : scopedCatalog }
     static func selectionWorkspaceID(_ explicitID: String, profile: JSON) -> String {
         explicitID.isEmpty ? profile["id"].string : explicitID
     }
@@ -267,7 +267,7 @@ struct ContextSelection: View {
         let value = profile?["favorites"] ?? .null
         return Set((value == .null ? scopedCatalog["favorites"] : value).array.map(\.string))
     }
-    private var favorites: Set<String> { Self.favoriteIDs(hostCatalog: store.state["context"], scopedCatalog: catalog, workspaceID: resolvedWorkspaceID) }
+    private var favorites: Set<String> { Self.favoriteIDs(hostCatalog: store.stateValue("context"), scopedCatalog: catalog, workspaceID: resolvedWorkspaceID) }
     private var entries: [JSON] { catalog["entries"].array.filter { $0["mode"].string != "disabled" || favorites.contains($0["id"].string) } }
     private var profile: JSON { workspace != .null ? workspace : catalog["workspaces"].array.first { $0["id"].string == (workspaceID.isEmpty ? catalog["defaultWorkspaceId"].string : workspaceID) } ?? .null }
     private var resolvedWorkspaceID: String { Self.selectionWorkspaceID(workspaceID, profile: profile) }
@@ -293,7 +293,7 @@ struct ContextSelection: View {
             }
             if !previewError.isEmpty { Text(previewError).font(.caption).foregroundStyle(.orange) }
             Button("Refresh sources") { Task { do { _ = try await store.request("context.refresh", [:]); await store.refresh() } catch { store.error = error.localizedDescription } } }.disabled(!store.connected)
-        }.task(id: workspaceID + ":" + store.state["context"]["revision"].string) {
+        }.task(id: workspaceID + ":" + store.stateValue("context")["revision"].string) {
             let id = workspaceID.isEmpty ? profile["id"].string : workspaceID
             if !id.isEmpty, let result = try? await store.request("context.get", ["workspaceId": .string(id)]) { scopedCatalog = result }
         }.task(id: previewKey) {
@@ -351,7 +351,7 @@ struct ContextView: View {
     @State private var approvalMode = "ask"
     @State private var collapsed = Set<String>()
     @State private var folderModes: [String: String] = [:]
-    private var context: JSON { scoped == .null ? store.state["context"] : scoped }
+    private var context: JSON { scoped == .null ? store.stateValue("context") : scoped }
     private var profile: JSON { context["workspaces"].array.first { $0["id"].string == workspace } ?? .null }
     private var roots: [String] { Array(Set([profile["cwd"].string] + profile["additionalDirectories"].array.map(\.string) + profile["libraryFolders"].array.map(\.string))).filter { !$0.isEmpty }.sorted { $0.localizedStandardCompare($1) == .orderedAscending } }
     private var entries: [JSON] { context["entries"].array.filter { entry in (search.isEmpty ? entry["kind"].string == kind : (entry["name"].string + " " + entry["path"].string + " " + entry["kind"].string).localizedCaseInsensitiveContains(search)) }.sorted { $0["name"].string.localizedStandardCompare($1["name"].string) == .orderedAscending } }
@@ -429,7 +429,7 @@ struct ContextView: View {
         }.navigationTitle("Workspace configuration")
             .toolbar { Button("Refresh sources", systemImage: "arrow.clockwise") { refresh(nil) }.disabled(busy || !store.connected) }
             .sheet(isPresented: $deleting) { NativeWorkspaceDeleteView(workspaceID: workspace).environment(store) }
-        .task { workspace = workspaceID.isEmpty ? store.state["context"]["defaultWorkspaceId"].string : workspaceID; await load() }
+        .task { workspace = workspaceID.isEmpty ? store.stateValue("context")["defaultWorkspaceId"].string : workspaceID; await load() }
             .onChange(of: workspace) { _, _ in Task { await load() } }
             .onDisappear { retainDraft() }
     }
@@ -485,7 +485,7 @@ struct NativeWorkspaceIdentity: Identifiable, Hashable {
         return ""
     }
     @MainActor static func all(_ destinations: DestinationStore) -> [Self] {
-        destinations.destinations.flatMap { host in (destinations.remote(for: host.id)?.state["context"]["workspaces"].array ?? []).map { Self(hostID: host.id, hostName: host.label, profile: $0) } }.sorted { $0.profile["name"].string.localizedStandardCompare($1.profile["name"].string) == .orderedAscending }
+        destinations.destinations.flatMap { host in (destinations.remote(for: host.id)?.stateValue("context")["workspaces"].array ?? []).map { Self(hostID: host.id, hostName: host.label, profile: $0) } }.sorted { $0.profile["name"].string.localizedStandardCompare($1.profile["name"].string) == .orderedAscending }
     }
     @MainActor static func recent(_ destinations: DestinationStore) -> [Self] {
         Array(all(destinations).sorted { (destinations.remote(for: $0.hostID)?.draft("workspace-last-opened:" + $0.workspaceID).string ?? "") > (destinations.remote(for: $1.hostID)?.draft("workspace-last-opened:" + $1.workspaceID).string ?? "") }.prefix(7))
@@ -497,7 +497,7 @@ struct NativeWorkspaceIdentity: Identifiable, Hashable {
 /// the iPhone drawer and the iPad sidebar; views never keep a second copy.
 enum NativeWorkspaceNavigation {
     static func deduplicated(_ ids: [String]) -> [String] { var seen = Set<String>(); return ids.filter { !$0.isEmpty && seen.insert($0).inserted } }
-    @MainActor static func run(_ id: String, remote: RemoteStore) -> JSON { remote.chats[id] ?? remote.state["runs"].array.first { $0["id"].string == id } ?? .object(["id": .string(id), "title": .string("Chat")]) }
+    @MainActor static func run(_ id: String, remote: RemoteStore) -> JSON { remote.chats[id] ?? remote.stateValue("runs").array.first { $0["id"].string == id } ?? .object(["id": .string(id), "title": .string("Chat")]) }
     @MainActor static func select(_ id: String, navigationKey: String, remote: RemoteStore) {
         var value = remote.draft(navigationKey).object
         let next = id.isEmpty ? "workspace" : id
@@ -560,7 +560,7 @@ enum NativeWorkspaceNavigation {
         }.map(\.element).filter { !hidden.contains($0["sortId"].string) && !hiddenBrowsers.contains($0["id"].string) }
     }
     @MainActor static func openChat(_ chatID: String, workspaceID: String, projectID: String? = nil, remote: RemoteStore, shared: SharedAppStore) {
-        let membership = remote.projectCatalog.membership(for: remote.chats[chatID] ?? remote.state["runs"].array.first { $0["id"].string == chatID } ?? .null)
+        let membership = remote.projectCatalog.membership(for: remote.chats[chatID] ?? remote.stateValue("runs").array.first { $0["id"].string == chatID } ?? .null)
         let resolved = projectID ?? (remote.supportsProjects && membership["workspaceId"].string == workspaceID ? membership["projectId"].string : "")
         let kind = resolved.isEmpty ? "workspace" : "project", ownerID = resolved.isEmpty ? workspaceID : resolved
         if !resolved.isEmpty { remote.setDraft("workspace-selected-project:" + workspaceID, .string(resolved)) }
@@ -622,7 +622,7 @@ struct NativeWorkspaceCreateView: View {
     @State private var folder = ""
     @State private var busy = false
     @State private var message = ""
-    private var roots: [String] { Array(Set((destinations.remote(for: hostID)?.state["context"]["workspaces"].array ?? []).flatMap { [$0["cwd"].string] + $0["additionalDirectories"].array.map(\.string) })).filter { !$0.isEmpty }.sorted() }
+    private var roots: [String] { Array(Set((destinations.remote(for: hostID)?.stateValue("context")["workspaces"].array ?? []).flatMap { [$0["cwd"].string] + $0["additionalDirectories"].array.map(\.string) })).filter { !$0.isEmpty }.sorted() }
     var body: some View {
         NavigationStack {
             Form {
@@ -663,7 +663,7 @@ struct NativeWorkspaceContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var page = "Projects"
     @State private var transferTab: BrowserDescriptor?
-    private var profile: JSON { store.state["context"]["workspaces"].array.first { $0["id"].string == workspaceID } ?? .null }
+    private var profile: JSON { store.stateValue("context")["workspaces"].array.first { $0["id"].string == workspaceID } ?? .null }
     private var hostID: String { store.connection?.hostId ?? "" }
     private var scopeKind: String { projectID == nil ? "workspace" : "project" }
     private var scopeID: String { projectID ?? workspaceID }
@@ -875,7 +875,7 @@ struct NativeWorkspaceCopyView: View {
     @State private var message = ""
     @State private var mappings: [String: String] = [:]
     private var sourceRoots: [String] { Array(Set([source.profile["cwd"].string] + source.profile["additionalDirectories"].array.map(\.string) + source.profile["libraryFolders"].array.map(\.string) + source.profile["universalFolders"].array.map(\.string))).filter { !$0.isEmpty }.sorted() }
-    private var targetRoots: [String] { Array(Set((destinations.remote(for: hostID)?.state["context"]["workspaces"].array ?? []).flatMap { [$0["cwd"].string] + $0["additionalDirectories"].array.map(\.string) + $0["libraryFolders"].array.map(\.string) })).filter { !$0.isEmpty }.sorted() }
+    private var targetRoots: [String] { Array(Set((destinations.remote(for: hostID)?.stateValue("context")["workspaces"].array ?? []).flatMap { [$0["cwd"].string] + $0["additionalDirectories"].array.map(\.string) + $0["libraryFolders"].array.map(\.string) })).filter { !$0.isEmpty }.sorted() }
     var body: some View {
         NavigationStack {
             Form {
@@ -938,7 +938,7 @@ struct NativeBrowserTransferView: View {
     private var browserMoveGroups: [NativeMoveGroup] {
         [NativeMoveGroup(id: "application", label: "Application", locations: [NativeMoveLocation(id: "main", label: "Application tabs"), NativeMoveLocation(id: "team", label: "Team Tools")])] + destinations.destinations.flatMap { owner in
             guard let remote = destinations.remote(for: owner.id) else { return [NativeMoveGroup]() }
-            return NativeMoveLocations.groups(context: remote.state["context"], projects: remote.projectCatalog.raw, hostID: owner.id, roots: false).map { NativeMoveGroup(id: $0.id, label: $0.label + " · " + owner.label, locations: $0.locations) }
+            return NativeMoveLocations.groups(context: remote.stateValue("context"), projects: remote.projectCatalog.raw, hostID: owner.id, roots: false).map { NativeMoveGroup(id: $0.id, label: $0.label + " · " + owner.label, locations: $0.locations) }
         }
     }
     private func transfer() {
@@ -1007,7 +1007,7 @@ struct NativeScopeTabRows: View {
     private var scopeID: String { project == nil ? workspaceID : projectID }
     private var scope: String { kind + ":" + hostID + ":" + scopeID }
     private var navigationKey: String { kind + "-navigation:" + scopeID }
-    private var owner: String { project?["name"].string ?? remote.state["context"]["workspaces"].array.first { $0["id"].string == workspaceID }?["name"].string ?? "Workspace" }
+    private var owner: String { project?["name"].string ?? remote.stateValue("context")["workspaces"].array.first { $0["id"].string == workspaceID }?["name"].string ?? "Workspace" }
     var body: some View {
         let children = NativeWorkspaceNavigation.children(scope: scope, navigationKey: navigationKey, remote: remote, shared: shared)
         let selected = remote.draft(navigationKey)["selected"].string

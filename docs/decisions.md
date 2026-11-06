@@ -3224,3 +3224,11 @@ request from the active tab outbox, while retaining its original envelope and op
 encrypted review state. Do not issue a new mutation identity or replay those edits as new intent.
 Timeouts and unknown failures preserve the active retry unchanged. A subsequent read can reconcile
 canonical membership independently; newer local intent must still win over an in-flight read.
+
+## 2026-11-03 — only human or agent intent moves a shared browser URL
+
+A client's page can redirect for reasons private to that device: cookies, user agent, region. When a client only mirrors an entry the owner already holds, those landings stay local. Trusted input, an agent action or an explicit navigation ends the mirror. Alternative rejected: let the last client to load a page publish its landing, which let two devices fight over one tab and left their URLs different for good.
+
+## 2026-11-03 — state crosses the wire as patches, not snapshots
+
+Owner state is replaceable and about 1.4 MB, so resending it per change was the largest source of traffic. Clients opt in through `sync` and keep their own baseline; a gap resynchronizes, and older clients keep whole snapshots at a batched cadence. State stays out of the replay journal, which exists for events a reconnect must not miss.

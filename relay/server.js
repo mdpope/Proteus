@@ -5,7 +5,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import { WebSocketServer, WebSocket } from 'ws';
 import { randomUUID } from 'node:crypto';
-import {remoteTransportLimits as limits,transportBudget} from './transport.mjs';
+import {remoteTransportLimits as limits,transportBudget,connectionVerdict} from './transport.mjs';
 
 const equal = (a, b) => typeof a === 'string' && Buffer.byteLength(a) === Buffer.byteLength(b) && timingSafeEqual(Buffer.from(a), Buffer.from(b));
 export function sendRelayPacket(ws,value){
@@ -43,7 +43,7 @@ export function relayHostTokens(file) {
   if (new Set(Object.values(values)).size !== Object.keys(values).length) throw new Error('Each host needs a distinct registration token.');
   return new Map(Object.entries(values));
 }
-export async function startRelay({ port = 4318, bind = '127.0.0.1', token = process.env.PROTEUS_RELAY_TOKEN, allowedClientOrigins = process.env.PROTEUS_RELAY_ALLOWED_CLIENT_ORIGINS || '', hostTokensFile = process.env.PROTEUS_RELAY_HOST_TOKENS_FILE } = {}) {
+export async function startRelay({ port = 4318, bind = '127.0.0.1', token = process.env.PROTEUS_RELAY_TOKEN, allowedClientOrigins = process.env.PROTEUS_RELAY_ALLOWED_CLIENT_ORIGINS || '', hostTokensFile = process.env.PROTEUS_RELAY_HOST_TOKENS_FILE, heartbeatMs = 20_000 } = {}) {
   const origins = relayOrigins(allowedClientOrigins);
   const hostTokens = relayHostTokens(hostTokensFile);
   if (!hostTokens && !/^[a-f0-9]{64}$/.test(token || '')) throw new Error('Set a random 32-byte PROTEUS_RELAY_TOKEN or an owner-only host token map.');
@@ -66,7 +66,7 @@ export async function startRelay({ port = 4318, bind = '127.0.0.1', token = proc
       ws.proteusWire={receivedPackets:0,receivedBytes:0,sentPackets:0,sentBytes:0};
       ws.on('message',bytes=>{ws.proteusWire.receivedPackets++;ws.proteusWire.receivedBytes+=bytes.length;});
       ws.on('close',(code,reason)=>{const known=['Host traffic budget exceeded','Client traffic budget exceeded','Message too large','Slow connection','Host disconnected','Temporary congestion; reconnect','Pairing timed out','Device access ended'];closedConnections.push({role,code,reason:known.includes(reason.toString())?reason.toString():'other',...ws.proteusWire});if(closedConnections.length>32)closedConnections.shift();});
-      ws.alive = true; ws.on('pong', () => { ws.alive = true; }); ws.on('error', () => {});
+      ws.alive = true; ws.on('pong', () => { ws.alive = true; }); ws.on('message', () => { ws.alive = true; }); ws.on('error', () => {});
       if (role === 'host') {
         hosts.set(hostId, ws);
         send(ws,{type:'relay.ready',capabilities:['client.disconnect.v1']});
@@ -101,7 +101,7 @@ export async function startRelay({ port = 4318, bind = '127.0.0.1', token = proc
       }
     });
   });
-  const heartbeat = setInterval(() => { for (const ws of wss.clients) { if (!ws.alive) ws.terminate(); else { ws.alive = false; ws.ping(); } } }, 20_000);
+  const heartbeat = setInterval(() => { for (const ws of wss.clients) { const verdict=connectionVerdict(ws); if (verdict==='terminate') ws.terminate(); else if (verdict==='ping') ws.ping(); } }, heartbeatMs);
   try { await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, bind, resolve); }); }
   catch (error) { clearInterval(heartbeat); throw error; }
   return { port: server.address().port, diagnostics:()=>({closedConnections:structuredClone(closedConnections)}), async close() { clearInterval(heartbeat); for (const ws of wss.clients) ws.terminate(); await new Promise(resolve => wss.close(resolve)); await new Promise(resolve => server.close(resolve)); } };

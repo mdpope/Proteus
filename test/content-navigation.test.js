@@ -111,3 +111,21 @@ test('an empty stale relocation cannot overwrite an existing populated destinati
  await assert.rejects(history.relocateNavigation({source:'empty-copy',target:'full-copy'}),/Destination retains browser history/);
  assert.equal((await history.navigationGet({tabId:'full-copy'})).url,'https://example.test/preserved');
 });
+
+test('a title settling on another client does not conflict with a navigation based on the earlier revision',async t=>{
+ const {BrowserHistoryStore}=await import('../src/services/browser/browser-history-store.js');
+ const {privateTemporaryDirectory}=await import('../src/shared/private-paths.cjs');
+ const home=privateTemporaryDirectory((await import('node:path')).join((await import('node:os')).tmpdir(),'proteus-nav-rebase-')),store=new BrowserHistoryStore(home);t.after(()=>store.close());
+ const navigate=(operationId,entryId,url,baseRevision)=>store.navigation({action:'navigate',tabId:'tab',profileId:'default',operationId,entryId,url,title:url,baseRevision,visitedAt:'2026-11-03T00:00:00.000Z'});
+ await navigate('op-1','one','https://example.test/one',0);
+ const title=(operationId,baseRevision,value)=>store.navigation({action:'redirect',tabId:'tab',profileId:'default',operationId,entryId:'one',url:'https://example.test/one',title:value,baseRevision});
+ assert.equal((await title('op-title-1',1,'Page')).revision,2);
+ assert.equal((await title('op-title-2',2,'(1) Page')).revision,3);
+ const rebased=await navigate('op-2','two','https://example.test/two',1);
+ assert.equal(rebased.currentEntryId,'two','the stale base differs only by titles');assert.equal(rebased.revision,4);
+ // A real navigation by another client since the base still conflicts and is preserved for review.
+ await assert.rejects(async()=>navigate('op-3','three','https://example.test/three',3),error=>error.code==='NAVIGATION_CONFLICT');
+ await assert.rejects(async()=>navigate('op-4','four','https://example.test/four',99),error=>error.code==='NAVIGATION_CONFLICT','a base ahead of the owner is never accepted');
+ assert.equal((await navigate('op-5','five','https://example.test/five',4)).currentEntryId,'five');
+ assert.equal((await store.navigation({action:'navigate',tabId:'tab',profileId:'default',operationId:'op-2',entryId:'two',url:'https://example.test/two',title:'https://example.test/two',baseRevision:1,visitedAt:'2026-11-03T00:00:00.000Z'})).replayed,true,'the retried identity replays its receipt');
+});

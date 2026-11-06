@@ -1,3 +1,7 @@
+## Nov 5 planning — build hold active
+
+The [Nov 5 release plan](2026-11-05-release-plan.md) replaces the Nov 4 plan and preserves its queued scope. Nov 3 / 0.2.42 remains open: no Nov 5 build or version reservation until its closeout is verified. Await the daily-digest improvement chat's instructions and the operator's explicit hold release. An explicitly reported blocker from that chat is a narrow exception for that required change only; it never bypasses Nov 3 closeout. The automation audit handoff is recorded under P6; it explicitly is not a hard blocker requiring a build. Source changes remain isolated on nov5-schedule-visibility. Planning migration only; no implementation or build started.
+
 ## R31 live General accepted / R32 traffic validation
 
 The iPhone runs build 2611.2.9 with prelaunch hash preservation of all 307 current protected files,

@@ -22,7 +22,7 @@ enum RemoteCrypto {
     static func open(_ value: String, key: String, aad: String) throws -> JSON {
         guard let data = Data(base64Encoded: value) else { throw RemoteError(message: "Invalid encrypted message.") }
         let plain = try AES.GCM.open(AES.GCM.SealedBox(combined: data), using: self.key(key), authenticating: Data(aad.utf8))
-        return try JSONDecoder().decode(JSON.self, from: plain)
+        return try JSON.decode(plain)
     }
 }
 struct DeviceConnection: Codable {
