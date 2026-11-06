@@ -236,3 +236,19 @@ test('explicit schedule MCP servers survive excluded defaults without enabling u
  const approvals=[];f.args.ask=async request=>{approvals.push(request);return 'approve';};
  try{const task=f.provider.run(f.args);await until(()=>f.rpc.turn===1);const config=f.rpc.calls.find(call=>call.method==='thread/start').params.config.mcp_servers;assert.equal(config.scoped.command,'/synthetic/not-executed');assert.equal(config.unselected.enabled,false);assert.equal(config.blocked,undefined);assert.deepEqual(approvals.filter(request=>request.details?.kind==='mcp-connect').map(request=>request.details.serverName),['scoped']);f.rpc.notice('turn/completed',{turn:{status:'completed'}});await task;}finally{await f.provider.close();}
 });
+
+test('Codex attaches only the owner bridge and leaves actual managed tool authorization to that bridge',async()=>{
+ const f=fixture(),asked=[];f.args.ask=async request=>{asked.push(request);return 'approve';};
+ const server={type:'stdio',command:process.execPath,args:['synthetic-owner-client'],env:{PROTEUS_MANAGED_MCP_CAPABILITY:'synthetic'}};
+ f.args.managedMcp={example:server};
+ try{
+  const task=f.provider.run(f.args);await until(()=>f.provider.active?.turnId);
+  const config=f.rpc.calls.find(c=>c.method==='thread/start').params.config.mcp_servers.example;
+  assert.equal(config.command,process.execPath);assert.deepEqual(config.env,server.env);assert.equal(asked.length,0);
+  f.rpc.emit('request',{id:992,method:'mcpServer/elicitation/request',params:{threadId:'thread',turnId:'turn-1',serverName:'example',mode:'form',message:'Allow the example MCP server to run tool "write"?',requestedSchema:{type:'object',properties:{}},_meta:{codex_approval_kind:'mcp_tool_call',tool_params:{value:'synthetic'}}}});
+  await until(()=>f.rpc.responses.some(r=>r.id===992));assert.equal(f.rpc.responses.find(r=>r.id===992).result.action,'accept');assert.equal(asked.length,0,'the downstream owner lease enforces the operation once');
+  f.rpc.notice('turn/completed',{turn:{status:'completed'}});await task;
+ }finally{await f.provider.close();}
+ const conflict=fixture();conflict.run.schedule.mcpServers={example:{command:'competing'}};
+ await assert.rejects(conflict.provider.run({...conflict.args,managedMcp:{example:server}}),/competing/);await conflict.provider.close();
+});

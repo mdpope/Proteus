@@ -1,3 +1,4 @@
+import {validateManagedRequirements} from '../integrations/managed-requirements.js';
 import {validateScheduleSources} from './schedule-context.js';
 import {canonicalPath} from '../settings/permissions.js';
 import { validateModelOptionShape } from '../../models/model-catalog.js';
@@ -28,6 +29,7 @@ export function validateSchedule(value) {
   if (value.notifications !== undefined && (!value.notifications || typeof value.notifications !== 'object' || Array.isArray(value.notifications) || (value.notifications.onCompletion !== undefined && typeof value.notifications.onCompletion !== 'boolean'))) throw new Error('Schedule completion notification must be true or false.');
   validateScheduleSources(value);
   validateModelOptionShape(value);
+  if (value.managedConnections !== undefined) validateManagedRequirements(value.managedConnections);
   if (value.contextSelection !== undefined) validateContextSelection(value.contextSelection);
   nextRuns(value.cron, value.timezone);
   return value;

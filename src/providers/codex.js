@@ -1,3 +1,4 @@
+import {mergeManagedServers} from '../services/integrations/managed-run.js';
 import {scopedExecutionSandbox} from '../services/scheduling/scoped-execution.js';
 import {codexMcpReadOnly} from './codex-mcp-policy.js';
 import {subagentJournal} from '../services/chats/subagents.js';
@@ -118,7 +119,7 @@ export class CodexRPC extends EventEmitter {
  }
 }
 export class CodexProvider {
- constructor(options={}, {browser,context}={}){this.options=options;this.browser=browser;this.context=context;this.active=null;this.starting=null;this.acceptedMediaTypes=Object.freeze(['image/png','image/jpeg','image/gif','image/webp','text/plain']);this.acceptedSteeringMediaTypes=this.acceptedMediaTypes;}
+ constructor(options={}, {browser,context}={}){this.options=options;this.browser=browser;this.context=context;this.active=null;this.starting=null;this.supportsManagedConnections=true;this.acceptedMediaTypes=Object.freeze(['image/png','image/jpeg','image/gif','image/webp','text/plain']);this.acceptedSteeringMediaTypes=this.acceptedMediaTypes;}
  async connect(){
   if(!this.starting){
    const client=this.options.clientFactory?this.options.clientFactory():new CodexRPC(this.options);this.client=client;
@@ -147,7 +148,7 @@ export class CodexProvider {
   // ambiguous acknowledgements. A request response alone need not consume bytes.
   await a.client.request('turn/steer',{threadId:run.providerSessionId,expectedTurnId:a.turnId,input});
  }
- async run({run,prompt,attachments=[],emit,ask,update,signal,stream,permissionProfile}){
+ async run({run,prompt,attachments=[],emit,ask,update,signal,stream,permissionProfile,managedMcp={}}){
   for(const item of attachments)if(!this.acceptedMediaTypes.includes(item.mediaType)||!Buffer.isBuffer(item.bytes))throw new Error('Codex can receive images and plain text here. PDF and other files are not supported.');
   let imageDir=null,appBridge=null;
   const client=await this.connect();const model=(await this.models(client)).find(m=>m.id===run.schedule.model);if(!model)throw new Error('Choose an available Codex model from the provider catalog.');validateModelOptions(run.schedule,model);
@@ -159,11 +160,11 @@ export class CodexProvider {
   const native=await client.request('config/read',{includeLayers:true});const existing={};for(const layer of native.layers||[])Object.assign(existing,layer.config?.mcp_servers||{});
   Object.assign(existing,native.config?.mcp_servers||{});
   const plugins={};for(const layer of native.layers||[])Object.assign(plugins,layer.config?.plugins||{});Object.assign(plugins,native.config?.plugins||{});
-  const selected=managed?{...Object.fromEntries(Object.entries(run.schedule.mcpServers||{}).filter(([name])=>!managed.disabledLegacyMcp.includes(name))),...managed.mcpServers}:run.schedule.mcpServers||{};
+  const selected=mergeManagedServers(managed?{...Object.fromEntries(Object.entries(run.schedule.mcpServers||{}).filter(([name])=>!managed.disabledLegacyMcp.includes(name))),...managed.mcpServers}:run.schedule.mcpServers||{},managedMcp);
   if(run.schedule.skillDirectories?.length && snapshot?.includeDefaults!==false)throw new Error('For Codex, select individual skills from the context list; legacy skill directories are not supported.');
   const mcp=Object.fromEntries(Object.keys(existing).map(name=>[name,{enabled:false}]));
   for(const [name,def] of Object.entries(selected)){
-    const answer=await ask({type:'permission',question:`Connect selected ${name} server for this Codex turn?`,details:{kind:'mcp-connect',serverName:name,toolName:'*',intention:`Connect the selected ${name} MCP server. Individual tool calls retain their own permissions.`,readOnly:false}});
+    const answer=Object.hasOwn(managedMcp,name)?'approve-auto':await ask({type:'permission',question:`Connect selected ${name} server for this Codex turn?`,details:{kind:'mcp-connect',serverName:name,toolName:'*',intention:`Connect the selected ${name} MCP server. Individual tool calls retain their own permissions.`,readOnly:false}});
     if(!['approve','approve-auto'].includes(answer))throw new Error('Selected MCP server declined: '+name);
     if(def.type==='sse')throw new Error('Codex requires streamable HTTP for remote MCP servers. Update the selected server transport first.');
     if(def.type==='http')mcp[name]={enabled:true,url:def.url,...(def.headers?{http_headers:def.headers}:{})};
@@ -263,6 +264,12 @@ export class CodexProvider {
        if(!name||p.message!==expected||!meta.tool_params||typeof meta.tool_params!=='object'||Array.isArray(meta.tool_params)||p.requestedSchema?.type!=='object'||Object.keys(p.requestedSchema.properties||{}).length||!p.threadId||!p.turnId||p.turnId!==active.turnId)throw new Error('Unsupported or stale MCP tool approval envelope. No user decision was requested.');
        if(definition.tools?.length&&!definition.tools.includes('*')&&!definition.tools.includes(name))throw new Error('This MCP tool is outside the selected tool set.');
        assertAppToolActive();
+       // Only our ephemeral bridge bypasses the native duplicate prompt; the owner
+       // still checks the actual catalog and current run policy before executing.
+       if(Object.hasOwn(managedMcp,p.serverName)){
+        if(p.threadId!==run.providerSessionId)throw Error('Managed MCP delegation requires a separate captured owner lease.');
+        client.respond(msg.id,{action:'accept',content:{}});return;
+       }
        const beforeApproval=JSON.stringify(permissionProfile?.());
        const readOnly=permissionProfile?.()?.readOnlyTools===true&&await codexMcpReadOnly(client,p.threadId,p.serverName,name);
        assertPendingApprovalCurrent();assertAppToolActive();

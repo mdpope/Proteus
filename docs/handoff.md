@@ -1,3 +1,15 @@
+## Nov 5 managed broker checkpoint
+
+Managed runtime/HTTP transport, per-run native MCP bridge and Codex/Copilot attachment pass the
+full suite (1,583 pass/four skips) and static checks. Owner composition, actual connector setup,
+maintenance and UI still remain. No candidate exists. Public discovery confirms Atlassian's two
+paths use different issuers; HC reports unknown legacy audience/cache protection and no separately
+verified getJiraIssue or server annotations. Preserve working authentication until replacement passes.
+
+Operator selected new Build Mac key rotation, then explicitly required Build Mac to be
+source of truth and signer for all built software. Implement that sole-authority transition;
+builders only return unsigned tested artifacts. No key custody operation has occurred yet.
+
 ## Nov 5 managed MCP foundation checkpoint
 
 Full Work Mac handoff is captured in docs/managed-mcp-connections.md. Added internal registry,

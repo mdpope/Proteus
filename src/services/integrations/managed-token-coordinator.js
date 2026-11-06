@@ -43,6 +43,9 @@ export class ManagedTokenCoordinator {
   let result;
   try{result=await adapter.refresh({binding:structuredClone(binding),credential:structuredClone(state.credential)});}
   catch{throw error('RENEWAL_FAILED','Connection renewal failed. Review authentication status before retrying.');}
+  // Keep any rotated credential durably quarantined even when identity/token
+  // validation fails. It must never be issued, but must not be silently lost.
+  if(result?.credential)await this.vault.write(binding.credentialRef,{bindingKey:key,phase:'unverified',credential:result.credential});
   if(!result||typeof result.accessToken!=='string'||!result.accessToken||!Number.isFinite(result.expiresAt)||result.expiresAt<=this.now()+this.marginMs||!result.credential||result.verified?.principal!==binding.expected.principal||result.verified?.tenant!==binding.expected.tenant||result.verified?.audience!==binding.expected.audience||!Array.isArray(result.verified?.scopes)||!binding.expected.scopes.every(s=>result.verified.scopes.includes(s)))throw error('IDENTITY_MISMATCH','Renewal did not verify the expected account, audience and scopes.');
   await this.vault.write(binding.credentialRef,{bindingKey:key,phase:'ready',credential:result.credential});
   if(this.closed)throw error('CLOSED','Connection authentication is closed.');

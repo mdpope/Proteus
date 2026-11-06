@@ -1,5 +1,7 @@
 ## Nov 5 — managed MCP foundations (not yet connected)
 
+- Nov 5 source: managed MCP shared transport, run-scoped provider bridge, actual-catalog permissions, optional outage handling and strict HTTP non-replay. Vendor setup, UI and installed acceptance remain in progress.
+
 - Add internal revision-pinned connection bindings, encrypted credential storage and serialized
   token-renewal foundations. Provider/UI integration and live connector acceptance remain pending.
 

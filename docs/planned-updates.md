@@ -1,3 +1,11 @@
+## Nov 5 managed MCP execution checkpoint
+
+Shared runtime/health, owner HTTP transport and Codex/Copilot bridge source tests pass (1,583/four
+skips). Portable schedule requirements and captured permission identity are implemented; connector
+setup, owner UI/runtime composition and installed acceptance remain open. See
+[the contract](managed-mcp-connections.md). Build Mac sole signing authority and new-key
+rotation are now explicit operator decisions; builders return unsigned accepted artifacts.
+
 ## Nov 5 — managed MCP scope accepted; implementation in progress
 
 The build hold is lifted. Full release scope now includes the managed connection contract for

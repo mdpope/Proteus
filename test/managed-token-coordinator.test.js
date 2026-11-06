@@ -13,7 +13,7 @@ test('concurrent consumers share one rotation and receive tokens only after dura
  let rotations=0;const {manager,writes}=setup(async()=>{rotations++;await new Promise(r=>setTimeout(r,10));return result();});
  await manager.adopt(binding(),{refreshToken:'original-secret'});
  const outputs=await Promise.all(Array.from({length:20},()=>manager.use(binding(),token=>{assert.equal(writes.at(-1).phase,'ready');assert.equal(writes.at(-1).credential.refreshToken,'rotated-secret');return token.length;})));
- assert.equal(rotations,1);assert.equal(outputs.length,20);assert.deepEqual(writes.map(v=>v.phase),['ready','refreshing','ready']);
+ assert.equal(rotations,1);assert.equal(outputs.length,20);assert.deepEqual(writes.map(v=>v.phase),['ready','refreshing','unverified','ready']);
  await manager.use(binding(),()=>{});assert.equal(rotations,1);
 });
 test('failed rotated credential persistence never releases token and restart refuses stale refresh',async()=>{
@@ -28,7 +28,9 @@ test('wrong identity and foreign owner fail without exposing adapter error or pu
  const {manager,writes}=setup(async()=>({...result(),verified:{...binding().expected,principal:'other'}}));
  await manager.adopt(binding(),{refreshToken:'original-secret'});
  await assert.rejects(manager.use(binding(),()=>assert.fail()),{code:'IDENTITY_MISMATCH'});
- assert.equal(writes.at(-1).phase,'refreshing');
+ assert.equal(writes.at(-1).phase,'unverified');
+ assert.equal(writes.at(-1).credential.refreshToken,'rotated-secret','retain the rotated credential in protected quarantine');
+ await assert.rejects(manager.use(binding(),()=>assert.fail()),{code:'ROTATION_UNCERTAIN'});
  await assert.rejects(manager.use({...binding(),ownerId:'foreign',credentialOwnerId:'foreign'},()=>{}),{code:'OWNER_MISMATCH'});
 });
 test('refresh failures retain uncertainty and suppress raw secret-bearing provider errors',async()=>{

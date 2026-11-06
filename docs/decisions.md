@@ -3272,3 +3272,16 @@ A client's page can redirect for reasons private to that device: cookies, user a
 ## 2026-11-03 — state crosses the wire as patches, not snapshots
 
 Owner state is replaceable and about 1.4 MB, so resending it per change was the largest source of traffic. Clients opt in through `sync` and keep their own baseline; a gap resynchronizes, and older clients keep whole snapshots at a batched cadence. State stays out of the replay journal, which exists for events a reconnect must not miss.
+
+
+## Nov 5 — native managed MCP bridge and publisher authority
+
+Use one owner transport with per-turn MCP stdio bridges for Codex/Copilot. Each call receives the
+actual catalog's annotations and current run permission; native approval forwarding never grants
+upstream authority. Capture account/configuration revisions in permission identity and preserve
+prior turn pins. Do not give the HTTP SDK an OAuth provider that can replay a mutation or widen
+consent on its own. Safe retries belong to the owner and require explicit idempotent read metadata.
+
+The operator chose publisher key rotation on Build Mac and reaffirmed its sole source/signing
+authority for all platforms. Native builders must return unsigned tested payloads; key custody,
+trust transition and signing/publication belong to Build Mac.

@@ -1,8 +1,9 @@
 # Managed MCP connections — Nov 5
 
-Status: implementation in progress. The registry, encrypted credential persistence and renewal
-coordinator are source foundations, not an installed connection manager. Provider brokerage,
-initial connector qualification, owner configuration UI, schedule integration and live acceptance
+Status: implementation in progress. Registry, encrypted credential persistence, renewal, shared
+transport/health, run-scoped stdio bridge and Codex/Copilot attachment are source-tested. The
+HTTP transport uses the official MCP SDK with host-only credential injection. Production owner
+composition, qualified connector authentication/setup, maintenance, UI and installed acceptance
 remain required. Do not migrate a workflow based on this document alone.
 
 ## Ownership and portable contract
@@ -125,3 +126,41 @@ target, manifest digest, validation receipts and migration/rollback notes. HC co
 bytes through a separate purpose:update coordinator; it does not build. Notify its workflow owner
 when schema is stable and when the candidate is installable. Source tests, synthetic probes and
 model completion never constitute installed/workflow acceptance.
+
+
+## Provider bridge source checkpoint
+
+Portable schedule requirements have the shape `managedConnections: [{name, capabilities, required}]`.
+Names are lowercase logical identifiers; capabilities are explicit semantic IDs; required is a
+boolean. The host captures connection ID, owner/workspace and configuration revision before the
+turn. These pins participate in permission identity. A new turn after configuration changes retains
+the earlier pins in history. Missing optional bindings and failed optional readiness leave independent
+work runnable with an explicit gap notice. Required failures stop before model execution.
+
+Each provider receives an ephemeral stdio bridge to an owner loopback endpoint. Its capability is
+run-scoped and never an upstream OAuth token. The owner provides the actual connected catalog and
+checks current permission on every invocation. Native duplicate approval forwarding applies only
+to that bridge; unknown/write operations still require their existing exact rule or human approval
+at the owner. Native Codex delegated threads are rejected for this route until they have separate
+captured leases. A competing native definition with the same name fails migration explicitly.
+
+Shared checks and transports survive one waiter's cancellation. Reconnecting a read retires a
+transport only after other in-flight operations settle. Only catalog-annotated idempotent reads can
+retry once after an authentication/session failure. The official HTTP transport has automatic
+OAuth/consent and SSE reconnect disabled, strict endpoint/redirect checks and bounded bodies.
+No mutation is automatically resent. Tools/list alone never marks account/resource access ready.
+
+Public unauthenticated qualification on November 5 confirms `/v1/mcp` challenges under the legacy
+`https://mcp.atlassian.com` issuer (`/v1/token`). `/v1/mcp/authv2` advertises a different issuer under
+`https://auth.atlassian.com`, its exact resource URL, PKCE S256 and public-client registration.
+This is discovery evidence, not authenticated compatibility or permission to transfer credentials.
+The workflow owner confirms its old helper omits explicit audience/resource parameters, its actual
+Jira lookup used `searchJiraIssuesUsingJql`, separate `getJiraIssue` acceptance remains unverified,
+and server read-only/idempotent annotations were not recorded. Existing corporate CLI cache
+protection is unknown. Preserve both working auth paths until replacement verification; do not
+adopt that cache on an assumption of protected storage.
+
+Validation: 1,583 Node tests pass, four skip, zero fail; static checks pass. New tests include a
+real SDK stdio consumer through the owner bridge, both provider configuration seams, optional
+outages, captured permission changes, cancellation isolation and uncertain-write non-replay.
+These remain synthetic source tests, not native provider/vendor authorization or installed success.
