@@ -1,3 +1,27 @@
+## Installed authv2 setup: discovery and evidence limits
+
+The protected-resource discovery document is
+`https://mcp.atlassian.com/.well-known/oauth-protected-resource/v1/mcp/authv2`.
+Its `resource` and sole `authorization_servers` entry must match the pinned profile in
+`managed-atlassian-oauth.js`; the SDK also validates the authorization-server metadata.
+The November 6 public check advertised `read:me`, `read:account`, `read:jira-work`,
+`offline_access` and `email`, alongside unrelated write/Confluence/Compass scopes.
+This is availability evidence, not an approved grant or a per-tool minimum. Neither discovery
+document maps individual MCP tools to required scopes. A minimal identity/resources/Jira grant
+remains unqualified until documented or tested with owner-approved consent. Do not copy a legacy
+grant, request every advertised scope or treat an empty scope array as a narrow default.
+
+The definition uses `expected.scopes`, an explicit array of distinct strings. The owner enters
+approved values one per line in Engine Room → Accounts & Integrations → Managed connections.
+Configure exact workspace/account/site and approved minimal probes, save, then separately Sign in.
+Verify identity/site, separate issue read and bounded search before retiring legacy helpers.
+No additional scope is silently approved by source selection or successful tools/list.
+
+The installed agent surface has no create/save/sign-in action. The UI uses its authenticated
+`/api/managed-connections` boundary and fresh `expectedRevision`; that internal route is not a
+standalone agent CLI or authority to extract session credentials. Owner UI setup is the current
+reviewable path. No new credential endpoint is required by this clarification.
+
 # Managed MCP connections — Nov 5
 
 Status: implementation in progress. Registry, encrypted credential persistence, renewal, shared

@@ -1,3 +1,18 @@
+## Installed Work Mac acceptance checkpoint
+
+Workflow owner reports the exact candidate installed and healthy, with zero navigation differences.
+Independent inbox catalog refresh and revision/hash-bound source reconciliation preserved enabled
+state, history and notifications. Its first actual scheduled Codex Terra-low run completed without
+prompts against an empty inbox; second-run acceptance remains pending. Planning/digest configuration
+and working authentication are preserved pending managed connection qualification.
+
+Installed P4 diagnostics are accessible: 24 records / 16,496 receipt bytes, zero pending, no capacity
+warning or over-budget state; storage bytes 269,689,104. All records are classified unknown-legacy.
+These current aggregates do not establish historical cause or physical reclamation. Effective
+permissions still include inherited workspace RW folders; explicit read entries do not establish
+read-only repository isolation. Atlassian minimal scopes remain unqualified; the supported public
+discovery and owner setup path are documented in managed-mcp-connections.md.
+
 ## Mac candidate 1 accepted for private delivery
 
 Source `fc0b318cded97cda7fdec613261bf34b579f7b31`; build
