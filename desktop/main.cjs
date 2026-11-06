@@ -1,3 +1,4 @@
+const {browserUpdateActivity,browserUpdateBlockers}=require('./browser/browser-update-activity.cjs');
 const { app, BrowserWindow, ipcMain, shell, dialog, clipboard, Tray, Menu, nativeImage, screen, safeStorage, Notification, powerMonitor, powerSaveBlocker } = require('electron');
 const path = require('node:path');
 const { BrowserTabs } = require('./browser/browser.cjs');
@@ -393,7 +394,8 @@ else {
     }
     service.updateUIHealth=async()=>{for(const ctx of windows.contexts.values()){if(ctx.window.isDestroyed()||ctx.window.webContents.isLoading()||!await ctx.window.webContents.executeJavaScript("!!(document.querySelector('#topbar-home')&&document.querySelector('#main')&&window.desktop)"))return false;}return windows.contexts.size>0;};
     service.windowCount=()=>[...windows.contexts.values()].filter(ctx=>!ctx.window.isDestroyed()&&!ctx.window.webContents.isLoading()).length;
-    service.updates=new Updates(service,{packaged:app.isPackaged&&!desktopPreview,installation,freshHome,browserHome:app.getPath('userData'),quit:()=>app.quit(),blockers:()=>terminals.updateBlockers().concat([...browser.tabs.values()].some(tab=>tab.agentActions||tab.downloads?.size)?['A browser operation or download is active.']:[])});
+    service.browserUpdateActivity=()=>browserUpdateActivity(browser.tabs.values());
+    service.updates=new Updates(service,{packaged:app.isPackaged&&!desktopPreview,installation,freshHome,browserHome:app.getPath('userData'),quit:()=>app.quit(),blockers:()=>terminals.updateBlockers().concat(browserUpdateBlockers(service.browserUpdateActivity()))});
     service.onUpdateResumed=runId=>{const ctx=service.windowForChat(runId);if(ctx)windows.run(ctx.id,()=>{showWindow();ctx.window.webContents.send('proteus:notification-open',{runId});});};
     const mac = process.platform === 'darwin';
     const icon = nativeImage.createFromPath(path.join(__dirname, mac ? 'trayTemplate.png' : 'icon.png')).resize({ width: mac ? 18 : 24, height: mac ? 18 : 24 });

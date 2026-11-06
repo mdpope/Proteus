@@ -18,3 +18,14 @@ test('execution ownership without a listed chat still blocks idle',()=>{
  const engine={listRuns:()=>[],running:new Map([['unlisted',{}]]),backgroundRuns:new Map([['lane',{id:'background'}]])};
  assert.deepEqual(updateIdleBlockers(engine,{}).map(row=>row.chatId),['unlisted','background']);
 });
+
+test('browser idle observations distinguish progressing downloads and stalled actions without mutation',async()=>{
+ const {browserUpdateActivity,browserUpdateBlockers,STALL_MS}=await import('../desktop/browser/browser-update-activity.cjs');
+ const states=['progressing','paused','interrupted','completed','cancelled'];
+ const tabs=states.map((state,index)=>({id:String(index),title:state,downloads:new Set([{getState:()=>state==='paused'?'progressing':state,isPaused:()=>state==='paused'}])}));
+ tabs.push({id:'hung',title:'Hung action',agentActions:1,lastAgentProgressAt:100},{id:'active',title:'Current action',agentActions:1,lastAgentProgressAt:100+STALL_MS});
+ const rows=browserUpdateActivity(tabs,100+STALL_MS);assert.deepEqual(rows.filter(r=>r.blocking).map(r=>r.tabId),['0','active']);
+ assert.equal(rows.find(r=>r.tabId==='hung').state,'stalled');assert.equal(tabs.at(-2).agentActions,1);
+ assert.match(browserUpdateBlockers(rows)[0],/download.*progressing.*0/);
+ assert.equal(tabs.every(t=>!t.downloads||t.downloads.size===1),true);
+});

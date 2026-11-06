@@ -1,3 +1,41 @@
+## Current delivery order — Mac digest candidate first
+
+The operator now holds Linux, Windows and iOS builds until the Mac candidate is delivered to
+Work Mac and its digest workflow is exercised. Build/sign the current validated Mac source and
+use a separate receiving-owner update coordinator. Keep the release open for further additions
+and fixes before the full build/publication. Web P1/P2, Linux rollback attention reconciliation,
+historical window-closure attribution and other-platform installed acceptance remain tracked;
+they do not delay this expressly prioritized Mac candidate. No new platform builds are dispatched.
+
+Navigation verification now records bounded expected/found differences and hashed inventories
+for the exact update job, including failed preservation checks. Status restores this diagnostic
+after restart. The acceptance gate and old rollback outcome are unchanged.
+
+## Nov 5 updater and provider prerequisites
+
+Maintenance accepts an optional stable operationId and returns a durable inspection receipt;
+maintenance-status reads it by id. Repeated IDs do not repeat work, interrupted receipts do not
+silently restart, and completion retains the exact maintenance plan for the existing digest-bound
+apply flow. Status exposes active/queued inspection and busy state. Shutdown waits for receipt
+persistence. Existing synchronous callers remain compatible.
+
+Windows builder jobs now own protected temporary directories and set TEMP/TMP/TMPDIR only in
+the child environment. Source tests use four workers and a two-minute per-test timeout. Native
+Windows acceptance remains required. Claude rate_limit explains provider/model/sign-in scope,
+separates unknown throttling from provider-reported exhaustion and copies only fresh reset evidence.
+It does not select another provider. Electron is pinned to patched 44.10.2; the remaining upstream
+ADO/Zod 3 advisory is constrained by the managed adapter's explicit input/collection limits, not
+claimed fixed upstream. Actual managed ADO acceptance still requires approved owner Entra setup.
+
+## Nov 5 browser update idle rules
+
+Only progressing, unpaused downloads block update idle. Paused, interrupted, completed and
+cancelled items remain untouched. Browser agent activity carries a progress timestamp; after five
+minutes without observed progress it is reported stalled and stops blocking idle. Current input or
+a new operation resumes progress tracking. Owner status exposes browserActivity with tab ID/title,
+kind and state, and blocking messages name the tab. Running chats, terminals and other idle guards
+remain unchanged; no operation is cancelled or counter cleared by observation.
+
 ## Nov 5 message display and refresh recovery
 
 Accepted composer sends update the chat from the owner receipt before refreshing the overview.

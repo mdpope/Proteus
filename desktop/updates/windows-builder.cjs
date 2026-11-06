@@ -25,7 +25,9 @@ function prepareBuildEnvironment(policy,directory,environment=process.env,platfo
  const command='@echo off\r\nsetlocal DisableDelayedExpansion\r\n'+quote(policy.node)+' '+quote(policy.npmCli)+' %*\r\nexit /b %errorlevel%\r\n';
  const bin=path.join(directory,'toolchain');ensurePrivateHome(bin);
  fs.writeFileSync(path.join(bin,'npm.cmd'),command,{flag:'wx',mode:0o600});
- return {...env,PATH:bin+';'+env.PATH};
+ const temporary=path.join(directory,'private-temp');ensurePrivateHome(temporary);
+ const scoped=Object.fromEntries(Object.entries(env).filter(([key])=>!['temp','tmp','tmpdir'].includes(key.toLowerCase())));
+ return {...scoped,PATH:bin+';'+env.PATH,TEMP:temporary,TMP:temporary,TMPDIR:temporary};
 }
 function readPolicy(root){
  const file=path.join(root,'windows-builder.json');

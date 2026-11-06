@@ -60,7 +60,7 @@
   "devDependencies": {
     "@electron/packager": "20.3.0",
     "@electron/rebuild": "4.2.0",
-    "electron": "44.5.1",
+    "electron": "44.10.2",
     "electron-builder": "26.15.3"
   },
   "overrides": {

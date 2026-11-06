@@ -29,6 +29,7 @@ test('a private npm launcher is bound to configured paths and cannot overwrite e
  const root=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-npm-launcher-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
  const policy={node:'C:\\Private Tools\\node.exe',npmCli:'C:\\npm cache\\100% !\\npm-cli.js',git:'C:\\Git\\cmd\\git.exe'},original={Path:'C:\\Windows\\System32'};
  const env=builder.prepareBuildEnvironment(policy,root,original,'win32');
+ assert.equal(env.TEMP,path.join(root,'private-temp'));assert.equal(env.TMP,env.TEMP);assert.equal(env.TMPDIR,env.TEMP);assert.ok(fs.statSync(env.TEMP).isDirectory());
  const file=path.join(root,'toolchain','npm.cmd'),bytes=fs.readFileSync(file,'utf8');
  assert.equal(env.PATH.split(';')[0],path.dirname(file));assert.deepEqual(original,{Path:'C:\\Windows\\System32'});
  assert.match(bytes,/DisableDelayedExpansion/);assert.ok(bytes.includes('"C:\\Private Tools\\node.exe" "C:\\npm cache\\100%% !\\npm-cli.js" %*'));

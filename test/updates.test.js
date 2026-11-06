@@ -138,6 +138,10 @@ test('preservation records the completed renderer checkpoint before helper hando
  assert.equal(f.controller.verifyPreservation(readJob(f.controller.file)).navigation.tabs,1);
  descriptor={...descriptor,chatId:'other-chat'};
  assert.throws(()=>f.controller.verifyPreservation(readJob(f.controller.file)),/Saved tab membership/,'a real association change must still fail preservation');
+ const failed=f.controller.status().navigationVerification;assert.ok(failed.totalDifferences>0);
+ delete f.controller.navigationVerificationJobId;delete f.controller.navigationVerification;
+ assert.deepEqual(f.controller.status().navigationVerification,failed,'restart can recover the bounded comparison from its job receipt');
+ assert.equal(f.controller.navigationStatus({...readJob(f.controller.file),id:'other-job'}),null,'another job cannot inherit the comparison');
 });
 test('a failed final renderer checkpoint leaves the app open and releases the barrier',async t=>{
  const f=fixture(t);f.service.prepareUpdateCheckpoint=async()=>{throw Error('Synthetic renderer did not save');};
@@ -292,4 +296,16 @@ test('live idle diagnostics follow statuses and lane-owned work without losing c
  f.engine.backgroundRuns.clear();f.run.capacityRetry={nextAttemptAt:'2026-11-04T00:00:00Z'};live=f.controller.status().job;assert.equal(live.idle.blockers[0].reasons[0].code,'capacity-retry');
  delete f.run.capacityRetry;f.controller.newInput();live=f.controller.status().job;assert.equal(live.phase,'prepared');assert.equal(live.idle.checkpointReviewRequired,true);assert.match(live.idle.nextStep,/Ending a turn alone/);assert.equal(f.calls.length,0);
  await handoff(f,live);live=f.controller.status().job;assert.equal(live.idle.checkpointReviewRequired,false);assert.deepEqual(live.idle.blockers,[]);await f.controller.advance();assert.ok(f.calls.includes('quit'));
+});
+
+test('maintenance operation receipts coalesce retries and expose busy state without blocking status',async t=>{
+ const f=fixture(t),id='751ca392-cc14-4f17-8ab3-ed70ed0d4841';let complete,calls=0;
+ f.controller.packageWork=async()=>{calls++;return new Promise(resolve=>{complete=resolve;});};
+ const first=await f.controller.handle({action:'maintenance',operationId:id});assert.equal(first.state,'running');
+ assert.equal(f.controller.status().operation.busy,true);assert.equal(f.controller.status().operation.maintenance.id,id);
+ assert.deepEqual(await f.controller.handle({action:'maintenance',operationId:id}),first);assert.equal(calls,1);
+ assert.equal((await f.controller.handle({action:'maintenance-status',id})).state,'running');
+ complete({planDigest:'synthetic-plan',canApply:false});await f.controller.maintenanceTask;
+ const done=await f.controller.handle({action:'maintenance-status',id});assert.equal(done.state,'complete');assert.equal(done.result.planDigest,'synthetic-plan');
+ assert.equal(f.controller.status().operation.busy,false);assert.equal((await f.controller.handle({action:'maintenance',operationId:id})).state,'complete');assert.equal(calls,1);
 });

@@ -8,7 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {once} from 'node:events';
 import {execFileSync} from 'node:child_process';
-import {ClaudeProvider,ClaudeRPC,claudeModel,claudeMcpConfig,stopClaudeProcess,claudeAccountAvailable,claudeQuota} from '../src/providers/claude.js';
+import {claudeAllowanceError,ClaudeProvider,ClaudeRPC,claudeModel,claudeMcpConfig,stopClaudeProcess,claudeAccountAvailable,claudeQuota} from '../src/providers/claude.js';
 import {normalizeProviderUsage,ProviderUsageCache} from '../src/services/telemetry/usage.js';
 import {providerUsageSummary} from '../public/features/settings/usage.js';
 const model={value:'test',displayName:'Synthetic',supportedEffortLevels:['low','high'],supportsFastMode:true};
@@ -383,4 +383,9 @@ test('Claude default steering read mid-turn finishes with the single combined re
  let client,inputs=0;const p=new ClaudeProvider({clientFactory:()=>{client=new Fake(()=>{inputs++;if(inputs===1)client.emit('message',{type:'system',session_id:'native-test'});else client.emit('message',{...client.userMessage,session_id:'native-test'});});client.request=async()=>{assert.fail('no interrupt');};return client;}});
  const args=runArgs(),task=p.run(args);for(let i=0;i<100&&!inputs;i++)await new Promise(r=>setTimeout(r,2));
  await p.steer(args.run,'Correction');await new Promise(r=>setTimeout(r,5));result(client);await task;assert.equal(args.run.usage.inputTokens,10);
+});
+
+test('Claude allowance failures identify provider scope without inventing reset or account data',()=>{
+ const unknown=claudeAllowanceError('test');assert.equal(unknown.code,'PROVIDER_RATE_LIMIT');assert.match(unknown.message,/did not distinguish/);assert.match(unknown.message,/Reset time was not supplied/);assert.match(unknown.message,/not a Proteus release hold/);
+ const known=claudeAllowanceError('test',[{remainingPercent:0,resetAt:'2026-11-06T12:00:00Z'}]);assert.match(known.message,/exhausted allowance/);assert.match(known.message,/2026-11-06T12:00:00Z/);
 });

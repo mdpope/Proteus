@@ -1,3 +1,19 @@
+## Nov 5 candidate preparation
+
+- Persist per-job navigation preservation differences without relaxing the acceptance gate.
+- Prioritize the Mac digest candidate; other platform builds and full publication remain held.
+
+## Nov 5 update monitoring and runtime prerequisites
+
+- Add pollable maintenance receipts and visible active/queued inspection state.
+- Isolate Windows build temporary storage and bound source-test execution.
+- Explain Claude provider allowance failures using only reported evidence; update Electron to 44.10.2.
+
+## Nov 5 browser update readiness
+
+- Block updates only for progressing, unpaused downloads and browser actions with recent progress.
+  Name active and stalled browser work in owner status without cancelling it.
+
 ## Nov 5 message display recovery
 
 - Show accepted messages before the overview refresh completes; preserve message IDs across

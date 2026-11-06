@@ -718,3 +718,28 @@ capability/own-process observation. It does not authorize shell, website content
 foreign owners or desktop input. Protected approval requests remain human decisions. Older grants
 retain their original update-only scope; bootstrap them through the updater boundary. Both direct
 Update and remote initiation still capture receiving-device Engine Room defaults.
+
+## Nov 5 browser update idle rules
+
+Only progressing, unpaused downloads block update idle. Paused, interrupted, completed and
+cancelled items remain untouched. Browser agent activity carries a progress timestamp; after five
+minutes without observed progress it is reported stalled and stops blocking idle. Current input or
+a new operation resumes progress tracking. Owner status exposes browserActivity with tab ID/title,
+kind and state, and blocking messages name the tab. Running chats, terminals and other idle guards
+remain unchanged; no operation is cancelled or counter cleared by observation.
+
+## Nov 5 updater and provider prerequisites
+
+Maintenance accepts an optional stable operationId and returns a durable inspection receipt;
+maintenance-status reads it by id. Repeated IDs do not repeat work, interrupted receipts do not
+silently restart, and completion retains the exact maintenance plan for the existing digest-bound
+apply flow. Status exposes active/queued inspection and busy state. Shutdown waits for receipt
+persistence. Existing synchronous callers remain compatible.
+
+Windows builder jobs now own protected temporary directories and set TEMP/TMP/TMPDIR only in
+the child environment. Source tests use four workers and a two-minute per-test timeout. Native
+Windows acceptance remains required. Claude rate_limit explains provider/model/sign-in scope,
+separates unknown throttling from provider-reported exhaustion and copies only fresh reset evidence.
+It does not select another provider. Electron is pinned to patched 44.10.2; the remaining upstream
+ADO/Zod 3 advisory is constrained by the managed adapter's explicit input/collection limits, not
+claimed fixed upstream. Actual managed ADO acceptance still requires approved owner Entra setup.
