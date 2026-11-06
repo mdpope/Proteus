@@ -78,7 +78,7 @@ export class ManagedConnectionOwner {
   if(args.action==='atlassian-setup-status')return this.onboarding.status();
   if(args.action==='atlassian-setup-cancel'){this.onboarding.cancel(args.setupId);return this.onboarding.status();}
   const current=this.registry.read();if(current.revision!==args.expectedRevision)throw Error('Managed connections changed. Refresh before acting.');
-  if(args.action==='atlassian-setup-start')return this.onboarding.start();
+  if(args.action==='atlassian-setup-start')return this.onboarding.start({accessMode:args.accessMode});
   if(args.action==='atlassian-setup-confirm'){const result=await this.onboarding.confirm(args);this.service.notify();return result;}
   const definition=current.connections.find(c=>c.id===args.connectionId);
   if(args.action==='save'){

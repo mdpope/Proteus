@@ -1,3 +1,21 @@
+## Nov 5 Jira ticket read/write and callback diagnostics
+
+The operator explicitly requests read/write access to any Jira ticket the selected account can
+access. New Atlassian enrollment defaults to read/write and adds `write:jira-work`; a clearly
+labeled read-only choice remains. Existing connections and grants are unchanged. The selected
+site/workspace binding and each run's tool permissions still apply. Health-check issue IDs are
+samples only, not runtime ticket allowlists. Setup never mutates a ticket; writes are not retried
+when their outcome is uncertain. Actual service-side Jira permissions remain authoritative.
+
+The operator's next callback reached account-discovery, establishing that token exchange and
+protected storage completed, but not proving account/site access. Old timeout handling replaced
+the failure message with expired. Failures now retain stage/code and bounded diagnostics, appear
+when returning to Accounts & Integrations, and are shown directly on the callback page. No OAuth
+codes, tokens, callback URLs or remote error bodies are included. Discovery now accepts declared
+JSON Schema draft-07 as well as 2020-12 while retaining argument validation; a new regression
+failed before this compatibility correction. The original live failure's exact subtype is unknown,
+so this source correction is not claimed as authenticated acceptance. Deployment remains held.
+
 ## Nov 5 Atlassian registration compatibility correction
 
 The operator reproduced `client-registration / CONFIGURATION_MISMATCH` before any approval page.

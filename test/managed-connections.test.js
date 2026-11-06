@@ -98,3 +98,15 @@ test('expired upstream evidence is stale and a new session is acquired before th
  const connect=f.service.adapters.test.connect;f.service.adapters.test.connect=async(...args)=>{expired=false;return connect(...args);};
  const lease=f.service.lease({runId:'a',bindings:[binding],isActive:()=>true,authorize:async()=>true});await lease.call('example','read',{});assert.equal(f.connections(),2);assert.equal(f.closeCount(),1);
 });
+
+test('a health-check issue does not restrict authorized Jira reads/writes to that sample ticket',async t=>{
+ const f=fixture(t),calls=[];
+ f.service.registry.resolve=()=>({...definition,expected:{...definition.expected,resource:'https://fixture.atlassian.net'},probes:[{id:'jira-issue',capability:'issue.read',parameters:{issueIdOrKey:'SAMPLE-1'}}]});
+ f.client.listTools=async()=>[{name:'getJiraIssue',inputSchema:{type:'object'},annotations:{readOnlyHint:true,idempotentHint:true}},{name:'editJiraIssue',inputSchema:{type:'object'},annotations:{readOnlyHint:false}}];
+ f.client.callTool=async(name,args)=>{calls.push({name,args});return content;};
+ const readOnly=f.service.lease({runId:'reader',bindings:[binding],isActive:()=>true,authorize:async request=>request.readOnly});
+ await readOnly.call('example','getJiraIssue',{cloudId:'tenant',issueIdOrKey:'OTHER-2'});
+ await assert.rejects(readOnly.call('example','editJiraIssue',{cloudId:'tenant',issueIdOrKey:'OTHER-2',fields:{summary:'Fixture'}}),{code:'PERMISSION_DENIED'});
+ const writer=f.service.lease({runId:'writer',bindings:[binding],isActive:()=>true,authorize:async request=>request.tool.name==='editJiraIssue'&&request.arguments.cloudId==='tenant'});
+ await writer.call('example','editJiraIssue',{cloudId:'tenant',issueIdOrKey:'OTHER-2',fields:{summary:'Fixture'}});assert.equal(calls.length,2);assert.ok(calls.every(call=>call.args.issueIdOrKey==='OTHER-2'));
+});

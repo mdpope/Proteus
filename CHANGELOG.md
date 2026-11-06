@@ -1,3 +1,8 @@
+## Nov 5 Jira access and callback handling
+
+- Add explicit Jira read/write enrollment with a read-only option; sample health reads do not restrict access to other tickets.
+- Retain callback failure diagnostics across timeout/navigation and accept declared draft-07 MCP tool schemas without weakening validation.
+
 ## Nov 5 Atlassian registration correction
 
 - Accept Atlassian's explicit public-client registration response even when it includes an unused secret; discard that secret and retain PKCE/auth method none.

@@ -1,6 +1,7 @@
+import Ajv from 'ajv';
 import Ajv2020 from 'ajv/dist/2020.js';
 import {atlassianOAuthProfile} from './managed-atlassian-oauth.js';
-const fail=code=>Object.assign(Error('The selected Atlassian identity, site or tool capability is not verified.'),{code});
+const fail=(code,detail)=>Object.assign(Error('The selected Atlassian identity, site or tool capability is not verified.'),{code,...(detail?{detail}:{})});
 const issuePattern=/^(?:[A-Z][A-Z0-9_]{0,63}-[1-9][0-9]{0,15}|[1-9][0-9]{0,19})$/;
 export const atlassianCapabilities=Object.freeze({
  'atlassian.resources.read':'getAccessibleAtlassianResources',
@@ -9,10 +10,10 @@ export const atlassianCapabilities=Object.freeze({
  'jira.issue.search':'searchJiraIssuesUsingJql'
 });
 const json=result=>{
- if(result?.isError)throw fail('ACCESS_DENIED');
+ if(result?.isError)throw fail('ACCESS_DENIED','TOOL_RESULT_ERROR');
  if(result?.structuredContent!==undefined)return result.structuredContent;
- if(!Array.isArray(result?.content)||result.content.some(c=>c.type!=='text'))throw fail('CAPABILITY_MISMATCH');
- try{return JSON.parse(result.content.map(c=>c.text).join('\n'));}catch{throw fail('CAPABILITY_MISMATCH');}
+ if(!Array.isArray(result?.content)||result.content.some(c=>c.type!=='text'))throw fail('CAPABILITY_MISMATCH','RESULT_SHAPE_UNSUPPORTED');
+ try{return JSON.parse(result.content.map(c=>c.text).join('\n'));}catch{throw fail('CAPABILITY_MISMATCH','RESULT_JSON_INVALID');}
 };
 function siteURL(value){try{const url=new URL(value);if(url.protocol!=='https:'||url.username||url.password||url.search||url.hash||url.pathname!=='/')throw Error();return url.origin;}catch{throw fail('CONFIGURATION_MISMATCH');}}
 export function qualifyAtlassianDefinition(definition){
@@ -53,11 +54,15 @@ export async function verifyAtlassian(definition,{call,listTools,signal,identity
 }
 
 async function discoveryReader({call,listTools,signal}){
- const tools=await listTools({signal}),catalog=new Map(tools.map(t=>[t.name,t])),ajv=new Ajv2020({strict:false,validateFormats:false,logger:false});
+ const tools=await listTools({signal}),catalog=new Map(tools.map(t=>[t.name,t])),options={strict:false,validateFormats:false,logger:false},modern=new Ajv2020(options),legacy=new Ajv(options);
  const used=new Set();
  const read=async(name,args)=>{
-  const tool=catalog.get(name);if(!tool||tool.annotations?.destructiveHint===true)throw fail('CAPABILITY_MISMATCH');
-  try{if(!ajv.compile(tool.inputSchema)(args))throw Error();}catch{throw fail('CAPABILITY_MISMATCH');}
+  const tool=catalog.get(name);if(!tool)throw fail('CAPABILITY_MISMATCH','TOOL_MISSING');
+  if(tool.annotations?.destructiveHint===true)throw fail('CAPABILITY_MISMATCH','TOOL_DECLARED_DESTRUCTIVE');
+  const dialect=tool.inputSchema?.$schema;
+  if(dialect&&!['http://json-schema.org/draft-07/schema#','https://json-schema.org/draft-07/schema','https://json-schema.org/draft-07/schema#','https://json-schema.org/draft/2020-12/schema'].includes(dialect))throw fail('CAPABILITY_MISMATCH','INPUT_SCHEMA_UNSUPPORTED');
+  let validate;try{const schema=structuredClone(tool.inputSchema);if(dialect?.includes('draft-07'))schema.$schema='http://json-schema.org/draft-07/schema#';validate=(dialect?.includes('draft-07')?legacy:modern).compile(schema);}catch{throw fail('CAPABILITY_MISMATCH','INPUT_SCHEMA_INVALID');}
+  if(!validate(args))throw fail('CAPABILITY_MISMATCH','INPUT_ARGUMENTS_REJECTED');
   signal?.throwIfAborted();const result=json(await call(name,args,{signal}));used.add(name);return result;
  };
  return {read,used,catalog};
@@ -65,10 +70,13 @@ async function discoveryReader({call,listTools,signal}){
 // Explicit owner onboarding approves only these two bounded identity/resource reads.
 // No model permission is inferred from tool names or the returned account labels.
 export async function discoverAtlassian(context){
- const {read}=await discoveryReader(context);
- const identity=await read('atlassianUserInfo',{}),resources=await read('getAccessibleAtlassianResources',{});
+ context.onStage?.('tool-catalog');const {read}=await discoveryReader(context);
+ context.onStage?.('account-read');const identity=await read('atlassianUserInfo',{});
+ context.onStage?.('site-list');const resources=await read('getAccessibleAtlassianResources',{});
+ context.onStage?.('discovery-validation');
  const text=(value,max=512)=>typeof value==='string'&&value.length>0&&value.length<=max&&!/[\x00-\x1f\x7f]/.test(value);
- if(!text(identity?.account_id)||!Array.isArray(resources)||resources.length>100)throw fail('CAPABILITY_MISMATCH');
+ if(!text(identity?.account_id))throw fail('CAPABILITY_MISMATCH','IDENTITY_MISSING');
+ if(!Array.isArray(resources)||resources.length>100)throw fail('CAPABILITY_MISMATCH','RESOURCES_MALFORMED');
  const sites=resources.filter(r=>Array.isArray(r.scopes)&&r.scopes.includes('read:jira-work')).map(r=>{
   if(!text(r.id)||!text(r.name))throw fail('CAPABILITY_MISMATCH');
   return {id:r.id,name:r.name,url:siteURL(r.url)};

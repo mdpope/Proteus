@@ -34,3 +34,11 @@ test('identity-only renewal verification does not ingest issue data or claim Jir
 test('health probes cannot inject arbitrary JQL or mutate an unrelated endpoint',()=>{
  for(const changed of [{...definition(),transport:{type:'http',endpoint:'https://mcp.atlassian.com/v1/mcp'}},{...definition(),probes:[{id:'jira-search',capability:'jira.issue.search',parameters:{issueIdOrKey:'FIXTURE-1 OR project=OTHER'}}]}])assert.throws(()=>qualifyAtlassianDefinition(changed),{code:'CONFIGURATION_MISMATCH'});
 });
+
+test('discovery accepts declared draft-07 input schemas from MCP tools and still rejects missing required arguments',async()=>{
+ const {discoverAtlassian}=await import('../src/services/integrations/managed-atlassian-probes.js');
+ const tools=['atlassianUserInfo','getAccessibleAtlassianResources'].map(name=>({name,inputSchema:{$schema:'http://json-schema.org/draft-07/schema#',type:'object',properties:{},additionalProperties:false}}));
+ const call=async name=>({content:[{type:'text',text:JSON.stringify(name==='atlassianUserInfo'?{account_id:'fixture',name:'Fixture'}:[{id:'site',name:'Site',url:'https://fixture.atlassian.net',scopes:['read:jira-work']}])}]});
+ assert.equal((await discoverAtlassian({listTools:async()=>tools,call})).account.id,'fixture');
+ tools[0].inputSchema.required=['unexpected'];await assert.rejects(discoverAtlassian({listTools:async()=>tools,call}),e=>e.code==='CAPABILITY_MISMATCH'&&e.detail==='INPUT_ARGUMENTS_REJECTED');
+});

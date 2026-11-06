@@ -1,3 +1,16 @@
+## Jira read/write and discovery follow-up
+
+Operator-authorized read/write enrollment requests write:jira-work, with read-only still selectable;
+existing connections/grants and per-run write authority are preserved. Sample issue probes do not
+restrict runtime ticket IDs. Setup performs no mutation. Callback failures retain sanitized
+stage/code across expiry/navigation; identity discovery supports declared draft-07 schemas.
+
+Validation: 1,663 tests passed/four skipped; static checks and disposable Electron acceptance
+passed. The draft-07 regression failed before correction. Live old-preview status confirms the
+failed attempt reached account-discovery, but its original subtype was overwritten by expiry.
+No successful live account/site discovery or Jira write is claimed; revised consent and actual
+managed-path acceptance remain pending. Production deployment remains held.
+
 ## Atlassian public-client registration correction
 
 Reproduced the operator's client-registration failure against live authv2 DCR: successful public

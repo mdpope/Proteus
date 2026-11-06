@@ -3,18 +3,18 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';import os from 'node:os';import path from 'node:path';
 import {ManagedAtlassian} from '../src/services/integrations/managed-atlassian.js';
 import {ManagedConnectionRegistry} from '../src/services/integrations/managed-connection-registry.js';
-import {AtlassianOnboarding,atlassianSetupScopes} from '../src/services/integrations/managed-atlassian-onboarding.js';
+import {AtlassianOnboarding,atlassianSetupScopes,atlassianReadScopes} from '../src/services/integrations/managed-atlassian-onboarding.js';
 import {discoverAtlassian} from '../src/services/integrations/managed-atlassian-probes.js';
 import {atlassianOAuthProfile as p} from '../src/services/integrations/managed-atlassian-oauth.js';
 function fixture(t,{locked=false,failWrite=false}={}){
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'atlassian-setup-')),registry=new ManagedConnectionRegistry(dir,{ownerId:'owner'}),rows=new Map(),calls=[],opened=[];let flow;
  const vault={requireAvailable:()=>{if(locked)throw Error('locked');},read:ref=>rows.get(ref),write:(ref,data)=>{if(failWrite)throw Error('private failure');rows.set(ref,structuredClone(data));}};
- const oauth={begin:async value=>{calls.push('begin');flow={...value,clientInformation:{client_id:'fixture-client'},authorizationUrl:new URL('https://auth.atlassian.com/authorize')};return flow;},exchange:async()=>{calls.push('exchange');return {accessToken:'private-access',expiresAt:Date.now()+3600000,credential:{issuer:p.issuer,resource:p.endpoint,clientInformation:flow.clientInformation,refreshToken:'private-refresh',scopes:[...atlassianSetupScopes]}};}};
+ const oauth={begin:async value=>{calls.push('begin');flow={...value,clientInformation:{client_id:'fixture-client'},authorizationUrl:new URL('https://auth.atlassian.com/authorize')};return flow;},exchange:async()=>{calls.push('exchange');return {accessToken:'private-access',expiresAt:Date.now()+3600000,credential:{issuer:p.issuer,resource:p.endpoint,clientInformation:flow.clientInformation,refreshToken:'private-refresh',scopes:[...flow.scopes]}};}};
  const tools=['atlassianUserInfo','getAccessibleAtlassianResources'].map(name=>({name,inputSchema:{type:'object',additionalProperties:false}}));
  const transport=options=>({connect:async definition=>({verify:async context=>options.verify(definition,{...context,listTools:async()=>tools,call:async name=>{calls.push(name);assert.equal(await options.withToken(definition,token=>token),'private-access');return {structuredContent:name==='atlassianUserInfo'?{account_id:'person',name:'Fixture User'}:[{id:'site-a',name:'First site',url:'https://first.atlassian.net',scopes:['read:jira-work']},{id:'site-b',name:'Second site',url:'https://second.atlassian.net',scopes:['read:jira-work']}]};}}),close:async()=>{}})});
  const auth=new ManagedAtlassian({registry,vault,oauth,transport,openExternal:async url=>opened.push(url)}),setup=new AtlassianOnboarding(auth,{workspaces:()=>[{id:'workspace'}]});
  t.after(async()=>{setup.close();await auth.close();fs.rmSync(dir,{recursive:true,force:true});});
- return {auth,setup,registry,rows,calls,opened,callback:state=>flow.redirectUri+'?code=fixture-code&state='+(state||flow.state),confirm:()=>({setupId:setup.status().id,expectedRevision:registry.read().revision,siteId:'site-b',workspaceIds:['workspace'],name:'fixture-atlassian',label:'Fixture Jira',issue:'FIXTURE-1'})};
+ return {auth,setup,registry,rows,calls,opened,flow:()=>flow,callback:state=>flow.redirectUri+'?code=fixture-code&state='+(state||flow.state),confirm:()=>({setupId:setup.status().id,expectedRevision:registry.read().revision,siteId:'site-b',workspaceIds:['workspace'],name:'fixture-atlassian',label:'Fixture Jira',issue:'FIXTURE-1'})};
 }
 test('browser-first setup discovers account/sites but cannot be captured until explicit selection; refresh credentials protected and runtime identity pinned',async t=>{
  const f=fixture(t);await f.setup.start();assert.equal(f.opened.length,1);assert.equal(f.registry.read().connections.length,0);
@@ -39,4 +39,13 @@ test('discovery validates actual schemas, safe HTTPS sites and bounded minimal p
 });
 test('browser launch failure exposes only the stage; no new attempt without owner action',async t=>{
  const f=fixture(t);f.auth.openExternal=async()=>{throw Error('private-url');};await assert.rejects(f.setup.start(),/browser-open/);assert.equal(f.setup.status().state,'failed');assert.ok(!JSON.stringify(f.setup.status()).includes('private-url'));assert.equal(f.calls.length,1);
+});
+
+test('Jira read/write selection requests explicit write scope; read-only stays read-only and confirmation cannot expand it',async t=>{
+ const write=fixture(t);await write.setup.start();assert.equal(write.setup.status().accessMode,'read-write');assert.ok(write.flow().scopes.includes('write:jira-work'));await fetch(write.callback());await write.setup.confirm(write.confirm());assert.ok(write.registry.read().connections[0].expected.scopes.includes('write:jira-work'));
+ const read=fixture(t);await read.setup.start({accessMode:'read-only'});assert.deepEqual(read.flow().scopes,[...atlassianReadScopes]);await fetch(read.callback());await assert.rejects(read.setup.confirm({...read.confirm(),accessMode:'read-write'}));await read.setup.confirm(read.confirm());assert.equal(read.registry.read().connections[0].expected.scopes.includes('write:jira-work'),false);
+});
+test('callback denial and discovery failure show sanitized stage/code on the page and in retained owner status',async t=>{
+ const denied=fixture(t);await denied.setup.start();const url=new URL(denied.callback());url.searchParams.delete('code');url.searchParams.set('error','access_denied');url.searchParams.set('error_description','private provider data');const response=await fetch(url);assert.equal(response.status,400);const text=await response.text();assert.match(text,/consent-response.*CONSENT_DENIED/);assert.ok(!text.includes('private'));assert.equal(denied.calls.includes('exchange'),false);
+ const failed=fixture(t);failed.auth.transport=()=>({connect:async()=>{throw Object.assign(Error('private transport response'),{code:'CAPABILITY_MISMATCH'});}});await failed.setup.start();const bad=await fetch(failed.callback());assert.match(await bad.text(),/account-discovery.*CAPABILITY_MISMATCH/);assert.equal(failed.setup.status().code,'CAPABILITY_MISMATCH');assert.equal(failed.setup.status().state,'failed');assert.equal(failed.registry.read().connections.length,0);
 });

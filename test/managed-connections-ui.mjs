@@ -68,7 +68,7 @@ try{
  });
  await page.getByRole('button',{name:'Add connection',exact:true}).click();
  assert.equal(await page.getByLabel('Expected Atlassian account ID').count(),0);assert.equal(await page.getByLabel('Approved OAuth scopes (one per line)').count(),0);
- await page.getByRole('button',{name:'Connect Atlassian',exact:true}).click();await page.getByRole('button',{name:'Try again',exact:true}).waitFor();
+ assert.equal(await page.getByLabel('Jira access',{exact:true}).inputValue(),'read-write');await page.getByRole('button',{name:'Connect Atlassian',exact:true}).click();await page.getByRole('button',{name:'Try again',exact:true}).waitFor();assert.equal(await page.evaluate(()=>onboard.calls.find(c=>c.action==='atlassian-setup-start').accessMode),'read-write');
  await page.getByRole('button',{name:'Back to setup',exact:true}).click();assert.equal(await page.getByRole('button',{name:'Try again',exact:true}).evaluate(node=>document.activeElement===node),true);assert.equal(await page.evaluate(()=>onboard.calls.filter(c=>c.action==='atlassian-setup-start').length),1,'Returning to setup must not register or retry');
  await page.evaluate(()=>{onboard.failStart=false;onboard.state=null;});await page.getByRole('button',{name:'Try again',exact:true}).click();await page.getByRole('heading',{name:'Signed in as Fixture Person'}).waitFor();
  await page.getByLabel('Connection name',{exact:true}).fill('Retained Jira draft');await page.getByRole('button',{name:'Back to setup',exact:true}).click();assert.equal(await page.getByLabel('Connection name',{exact:true}).inputValue(),'Retained Jira draft');
