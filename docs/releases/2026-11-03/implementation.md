@@ -5,6 +5,13 @@ Version: 0.2.42
 Mnemosyne work is excluded. Status below separates source, package and live evidence. Nothing here
 claims an installed fix or sustained live stability.
 
+## Final operational checkpoint
+
+The rollout ledger now records the completed relay deployment, Mac/Windows publication and
+installed owner checks. Earlier statements below about an un-deployed relay or un-tested Windows
+reflect source-stage checkpoints; use the final rollout audit for current operational evidence.
+No Nov 5 implementation has been merged into this release.
+
 ## N4 — state traffic
 
 Live diagnostics on the coordinating Mac recorded 43 GB sent in about 7.4 hours: 9,518 state pushes

@@ -8,17 +8,20 @@ import {startServer} from '../src/server.js';
 import {startRelay} from '../relay/server.js';
 import {secret} from '../src/services/remote/remote-crypto.js';
 import {atomicJSON} from '../src/shared/files.js';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import {BrowserRemoteClient,parsePairing} from '../web/resources/js/remote-client.js';
 import {createVisibleChatWatch} from '../web/resources/js/chat-watch.js';
 import {mergeChatHistory} from '../public/features/chats/chat-history.js';
 import {until} from './remote-client.mjs';
 
 async function fixture(t){
- const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-web-chat-delta-')),workspace=path.join(home,'workspace');fs.mkdirSync(workspace);
+ const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-web-chat-delta-')),workspace=path.join(home,'workspace');fs.mkdirSync(workspace);
+ let relay,app;const clients=[];
+ // Register cleanup before anything can fail, so a startup rejection cannot leave the relay listening.
+ t.after(async()=>{clients.forEach(client=>client.close());if(app)await app.close();if(relay)await relay.close();fs.rmSync(home,{recursive:true,force:true});});
  atomicJSON(path.join(home,'settings.json'),{schemaVersion:1,provider:'rehearsal',model:'',timezone:'UTC',workspace:{cwd:workspace,additionalDirectories:[]},skillDirectories:[],mcpServers:{}});
- const token=secret(),relay=await startRelay({port:0,token,allowedClientOrigins:['https://example.test']}),app=await startServer({home,port:0,timers:false}),clients=[];
+ const token=secret();relay=await startRelay({port:0,token,allowedClientOrigins:['https://example.test']});app=await startServer({home,port:0,timers:false});
  const url=`ws://127.0.0.1:${relay.port}`;await app.remote.configure({enabled:true,mode:'external',relayURL:url,publicURL:url,relayToken:token});await until(()=>app.remote.status==='online');
- t.after(async()=>{clients.forEach(client=>client.close());await app.close();await relay.close();fs.rmSync(home,{recursive:true,force:true});});
  const connect=async saved=>{const capsule=saved?null:parsePairing((await app.remote.pairing()).code),host=saved||{hostId:capsule.hostId,relay:url,inviteKey:capsule.key,label:'Synthetic owner'};const client=new BrowserRemoteClient(host,{socketFactory:url=>new WebSocket(url,{headers:{Origin:'https://example.test'}})});clients.push(client);await client.connect();return client;};
  const create=()=>{
   const run=app.engine.createRun({...app.engine.schedules.list()[0],prompt:'Synthetic streaming acceptance'},'chat',null,{deferStart:true});

@@ -1,3 +1,14 @@
+## Nov 3 closed — Nov 5 digest-first preparation
+
+Nov 3 / 0.2.42 is merged to main, published for accepted Mac/Windows targets and closed with
+Linux deferred and explicit acceptance limits. See [closeout](releases/2026-11-03/closeout.md).
+The [Nov 5 plan](2026-11-05-release-plan.md) retains all carry-over scope; digest source remains
+on its isolated branch. No Nov 5 build or version reservation has started.
+
+## Nov 5 planning — build hold active
+
+The [Nov 5 release plan](2026-11-05-release-plan.md) replaces the Nov 4 plan and preserves its queued scope. Nov 3 / 0.2.42 remains open: no Nov 5 build or version reservation until its closeout is verified. Await the daily-digest improvement chat's instructions and the operator's explicit hold release. An explicitly reported blocker from that chat is a narrow exception for that required change only; it never bypasses Nov 3 closeout. The automation audit handoff is recorded under P6; it explicitly is not a hard blocker requiring a build. Source changes remain isolated on nov5-schedule-visibility. Planning migration only; no implementation or build started.
+
 ## Nov 5 scoped schedule controls — implementation complete, build held
 
 Source now includes manifest/export reconciliation, scoped Codex command execution, true catalog

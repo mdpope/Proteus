@@ -1,3 +1,7 @@
+## Nov 5 — planning only, build held
+
+- Migrated the Nov 4 queue to [Nov 5](docs/2026-11-05-release-plan.md), retaining all scope. Await Nov 3 closeout, daily-digest instructions and the operator's hold release; the documented digest-blocker exception does not bypass Nov 3 closeout. No version reserved or implementation/build performed.
+
 ## Nov 5 scoped controls — source only
 
 - Reconcile source-owned schedule exports with pinned hashes, caller revision and preview digest while preserving enabled state and history.

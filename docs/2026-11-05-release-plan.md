@@ -2,7 +2,13 @@
 
 Migrated from the Nov 4 plan on November 5, 2026. All queued scope and historical observation dates below are preserved. Planning only; no version is reserved and no build is authorized.
 
-## Operator hold — November 5, 2026
+## Current release prerequisite — November 5 closeout
+
+Nov 3 is now closed; see [its closeout](releases/2026-11-03/closeout.md). Its release prerequisite
+is satisfied. The following hold text records earlier instructions; the digest blocker exception
+remains the first proposed build scope. No unrelated feature build is authorized by closure.
+
+## Historical operator hold — November 5, 2026
 
 - **Nov 3 must close first.** Nov 3 / 0.2.42 remains open. Do not build Nov 5 changes or open/reserve the next release until Nov 3 closeout is verified. The November 5 operator follow-up authorizes finishing Nov 3 publication, installation checks and closeout; it does not mark them complete.
 - **Wait for the daily-digest improvement chat.** Hold pending further instructions from that chat; capture any needed Proteus changes here as queued scope when its handoff arrives. The automation audit handoff has been received; its scoped unattended-execution requirement is now explicitly a hard blocker for fully automated synthesis. Only that blocker scope may use the narrow exception after Nov 3 closeout; no build starts while Nov 3 remains open.
