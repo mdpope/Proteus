@@ -1,3 +1,26 @@
+## Nov 6 updater repair — signed and published
+
+Source `7180447eb2b2e6c999c9d7234d1f198831f1917c` produced signed Mac arm64 build
+`7180447eb2b2+src.18dd918fd000`, fingerprint
+`18dd918fd0005047792b14feded3d54b85e35fb49144c3b86bfb56b8367fa599`.
+Release `0.2.43-darwin-arm64-1c335633beccd8efeaf59746`, manifest digest
+`8462d863e9af50ee262b598bf17013846da48f149d66b6ba51d154c51ea18965`.
+1,696 source tests pass, four skip, zero fail; static and native startup tests pass.
+Signed successful-update and injected pre-install failure rehearsals verify renderer health,
+one continuation, prior events/configuration and full Back/Forward history. Signed/extracted
+startup gating yields without an owner lock, connection file, application-data writes or modal.
+All 29 public download/catalog/page paths verify; hosting configuration/unrelated content and
+Windows/Linux bytes are unchanged. No new bounded server-log error/warning categories.
+
+Build Mac's previous attempt ended in terminal attention before replacement. Its 7,691-file
+copy matches the original snapshot hash; 7,680 was a progress checkpoint. The original changing
+writer is unknown. Its job, candidate and 2,202,340,063-byte failed snapshot remain preserved.
+The existing owner API supports a fresh signed attempt after terminal attention; a new unassigned
+coordinator is preparing this repair. Automatic pre-install origin feedback is disabled to avoid
+resetting the legacy owner's idle handoff. Ordinary idle and preservation checks remain required.
+Installation and live acceptance are pending; retain the old failed-copy exception until a new
+verified recovery and supported retention review. No raw journal changes or cancellation occurred.
+
 ## Nov 6 browser correction — signed and published
 
 Mac arm64 build `7932e29cfa88+src.344f85175946`, source
