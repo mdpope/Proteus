@@ -1,6 +1,6 @@
 const {randomUUID,X509Certificate}=require('node:crypto');
 function identity(address,certificate,error){
- const url=new URL(address);if(url.protocol!=='https:'||url.username||url.password)throw Error('Invalid HTTPS address.');
+ const url=new URL(address);if(!['https:','wss:'].includes(url.protocol)||url.username||url.password)throw Error('Invalid HTTPS address.');
  const cert=new X509Certificate(certificate.data);
  return {url:url.href,origin:url.origin,hostname:url.hostname,error:String(error).slice(0,200),fingerprint:cert.fingerprint256,subject:cert.subject,issuer:cert.issuer,validFrom:cert.validFrom,validTo:cert.validTo,subjectAltName:cert.subjectAltName||'',serialNumber:cert.serialNumber};
 }

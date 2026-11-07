@@ -1,3 +1,10 @@
+## Nov 6 browser correction checkpoint
+
+DevTools callback/session collision and root-domain context reuse are corrected in source with
+native snapshot, console, network and backend-switch regressions. Same-profile explicitly accepted
+HTTPS certificates now qualify the corresponding secure WebSocket check. Native synthetic console
+connection passes. Live Proxmox code-1006 acceptance, Slack typing and whole-page hangs remain open.
+
 ## Bounded field diagnostics — source work
 
 Work Mac's corrected explicit-value fill still reports retained:false on the actual Slack

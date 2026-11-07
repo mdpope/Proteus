@@ -1,3 +1,10 @@
+## Nov 6 corrective scope — browser inspection and VNC
+
+Implemented native per-client CDP sessions and explicit-certificate reuse for secure WebSockets.
+Native inspection/console/network/backend-handoff and synthetic HTTPS/WSS acceptance pass.
+Full validation, package publication and installed live Proxmox acceptance are recorded separately.
+Slack typing and whole-page responsiveness remain distinct unresolved work.
+
 ## Bounded field diagnostics — source work
 
 Work Mac's corrected explicit-value fill still reports retained:false on the actual Slack

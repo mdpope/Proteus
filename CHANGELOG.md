@@ -1,3 +1,9 @@
+## Nov 5 corrective source — Nov 6 browser inspection
+
+- Use independent native CDP sessions so DevTools inspection does not strand callbacks or lose console/network events after switching backends.
+- Reuse explicit same-profile HTTPS host/certificate acceptance for secure WebSocket console checks, preserving changed-certificate/host/profile isolation.
+- Native synthetic acceptance passes; live Proxmox and Slack outcomes remain unverified.
+
 ## Bounded field diagnostics — source work
 
 Work Mac's corrected explicit-value fill still reports retained:false on the actual Slack

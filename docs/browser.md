@@ -1,3 +1,19 @@
+## Browser inspector sessions and secure console connections — Nov 6
+
+The private CDP bridge now uses independent native sessions for the primary page and secondary
+DevTools attachments. Reusing one synthetic session ID stranded Puppeteer callbacks; sharing
+the Electron root domains also lost execution-context replay after a backend switch and dropped
+console/network evidence. The native regression reproduces the old snapshot timeout, then
+verifies snapshots, captured console errors, network requests and the return to ordinary browser
+control with distinct sessions. Sessions and events stay inside the selected WebContents.
+
+A secure WebSocket certificate check may reuse the same profile's explicitly accepted HTTPS
+host/certificate/error decision. Unknown or changed certificates, hosts and profiles remain blocked;
+a WebSocket cannot create a new acceptance prompt or silently add trust. Synthetic native HTTPS
+plus WSS and certificate-isolation regressions pass. This is a qualified connector correction,
+not proof that the observed Proxmox code-1006 failure has the same cause. Live Proxmox and Slack
+acceptance remain open; no whole-page hang or Slack typing fix is claimed.
+
 ## Nov 5 corrective follow-up — scheduled background interaction
 
 Scheduled/manual workflows can allocate a stable existing owner window when their chat is not

@@ -1,3 +1,11 @@
+## Nov 6 — isolate embedded CDP client sessions
+
+Each embedded automation client uses a native CDP session, including its primary page attachment.
+The Electron root debugger is shared with passive certificate observers; reusing its enabled domains
+does not replay existing execution contexts for a reconnecting client. Secondary attachments must
+never reuse the primary session ID. Forward only events from sessions owned by this single-tab
+bridge, and retire those sessions on disconnect without changing unrelated debugger leases.
+
 ## November 6 — shared Mnemosyne observer, desktop configuration
 
 One renderer and stylesheet implement the desktop/web operations design. Paired web clients get
