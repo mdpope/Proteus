@@ -199,6 +199,21 @@ test('all selected MCP servers use saved scoped rules across transports and pres
  f.rpc.notice('turn/completed',{turn:{status:'completed'}});await task;await f.provider.close();
 });
 
+test('native Codex read-only MCP policy covers connection and only annotated calls on the selected server',async t=>{
+ const root=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'codex-ro-mcp-')));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+ const f=fixture(),store=new PermissionStore(root),profile={mode:'custom',readOnlyTools:true,rules:[],folders:[]},requests=[];
+ f.provider.context.providerContext=()=>({instructionText:'',customAgents:[],disabledLegacyMcp:[],disabledSkills:[],mcpServers:{tracker:{command:'/synthetic/not-executed'}}});
+ f.args.permissionProfile=()=>profile;f.args.ask=async request=>{requests.push(request);return store.decide(f.run.schedule,request.details,profile).allowed?'approve-auto':'decline';};
+ const nativeRequest=f.rpc.request.bind(f.rpc);f.rpc.request=async(method,args)=>{if(method==='mcpServerStatus/list'){assert.equal(args.threadId,'thread');assert.equal(args.serverName,'tracker');return {data:[{name:'tracker',runtimeStatus:'connected',tools:{lookup:{name:'lookup',annotations:{readOnlyHint:true}},modify:{name:'modify',annotations:{readOnlyHint:false}}}}]};}return nativeRequest(method,args);};
+ try{
+  const task=f.provider.run(f.args);await until(()=>f.rpc.turn===1);assert.equal(requests[0].details.kind,'mcp-connect');
+  for(const [id,name,expected]of [[801,'lookup','accept'],[802,'modify','decline'],[803,'unknown','decline']]){
+   f.rpc.emit('request',{id,method:'mcpServer/elicitation/request',params:{threadId:'thread',turnId:'turn-1',serverName:'tracker',mode:'form',message:'Allow the tracker MCP server to run tool "'+name+'"?',_meta:{codex_approval_kind:'mcp_tool_call',tool_params:{}},requestedSchema:{type:'object',properties:{}}}});
+   await until(()=>f.rpc.responses.some(row=>row.id===id));assert.equal(f.rpc.responses.find(row=>row.id===id).result.action,expected);
+  }
+  f.rpc.notice('turn/completed',{turn:{status:'completed'}});await task;
+ }finally{await f.provider.close();}
+});
 test('Codex verified child approvals use the parent policy and unverified threads report an adapter rejection',async()=>{
  const f=fixture(),requests=[],errors=[];f.rpc.write=message=>errors.push(message);f.args.ask=async request=>{requests.push(request);return 'approve-auto';};
  try{
@@ -219,5 +234,21 @@ test('Codex verified child approvals use the parent policy and unverified thread
 test('explicit schedule MCP servers survive excluded defaults without enabling unrelated native defaults',async()=>{
  const f=fixture();f.run.schedule.mcpServers={scoped:{command:'/synthetic/not-executed'},blocked:{command:'never-start'}};f.provider.context.providerContext=()=>({instructionText:'selected only',customAgents:[],disabledLegacyMcp:['blocked','unselected'],disabledSkills:[],mcpServers:{}});
  const approvals=[];f.args.ask=async request=>{approvals.push(request);return 'approve';};
- try{const task=f.provider.run(f.args);await until(()=>f.rpc.turn===1);const config=f.rpc.calls.find(call=>call.method==='thread/start').params.config.mcp_servers;assert.equal(config.scoped.command,'/synthetic/not-executed');assert.equal(config.unselected.enabled,false);assert.equal(config.blocked,undefined);assert.deepEqual(approvals.filter(request=>request.details?.kind==='mcp').map(request=>request.details.serverName),['scoped']);f.rpc.notice('turn/completed',{turn:{status:'completed'}});await task;}finally{await f.provider.close();}
+ try{const task=f.provider.run(f.args);await until(()=>f.rpc.turn===1);const config=f.rpc.calls.find(call=>call.method==='thread/start').params.config.mcp_servers;assert.equal(config.scoped.command,'/synthetic/not-executed');assert.equal(config.unselected.enabled,false);assert.equal(config.blocked,undefined);assert.deepEqual(approvals.filter(request=>request.details?.kind==='mcp-connect').map(request=>request.details.serverName),['scoped']);f.rpc.notice('turn/completed',{turn:{status:'completed'}});await task;}finally{await f.provider.close();}
+});
+
+test('Codex attaches only the owner bridge and leaves actual managed tool authorization to that bridge',async()=>{
+ const f=fixture(),asked=[];f.args.ask=async request=>{asked.push(request);return 'approve';};
+ const server={type:'stdio',command:process.execPath,args:['synthetic-owner-client'],env:{PROTEUS_MANAGED_MCP_CAPABILITY:'synthetic'}};
+ f.args.managedMcp={example:server};
+ try{
+  const task=f.provider.run(f.args);await until(()=>f.provider.active?.turnId);
+  const config=f.rpc.calls.find(c=>c.method==='thread/start').params.config.mcp_servers.example;
+  assert.equal(config.command,process.execPath);assert.deepEqual(config.env,server.env);assert.equal(asked.length,0);
+  f.rpc.emit('request',{id:992,method:'mcpServer/elicitation/request',params:{threadId:'thread',turnId:'turn-1',serverName:'example',mode:'form',message:'Allow the example MCP server to run tool "write"?',requestedSchema:{type:'object',properties:{}},_meta:{codex_approval_kind:'mcp_tool_call',tool_params:{value:'synthetic'}}}});
+  await until(()=>f.rpc.responses.some(r=>r.id===992));assert.equal(f.rpc.responses.find(r=>r.id===992).result.action,'accept');assert.equal(asked.length,0,'the downstream owner lease enforces the operation once');
+  f.rpc.notice('turn/completed',{turn:{status:'completed'}});await task;
+ }finally{await f.provider.close();}
+ const conflict=fixture();conflict.run.schedule.mcpServers={example:{command:'competing'}};
+ await assert.rejects(conflict.provider.run({...conflict.args,managedMcp:{example:server}}),/competing/);await conflict.provider.close();
 });

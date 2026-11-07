@@ -35,14 +35,33 @@ async function run(){try{
  const expiredInvite=await apps[0].remote.pairing(),expiredCapsule=JSON.parse(Buffer.from(new URL(expiredInvite.code).searchParams.get('data'),'base64url'));expiredCapsule.expiresAt='2000-01-01T00:00:00Z';const expiredCode='proteus://pair?data='+Buffer.from(JSON.stringify(expiredCapsule)).toString('base64url');await page.locator('#remote-pair-panel').evaluate(node=>node.open=true);await page.locator('#remote-pair-code').fill(expiredCode);await page.locator('#remote-pair-form button').click();await page.getByText('Pairing expired or is invalid. Generate a fresh code on the computer.',{exact:true}).waitFor();assert.equal(await page.locator('#remote-pair-code').inputValue(),expiredCode);
  apps[0].liveBrowser=new LiveBrowser({list:()=>[{id:'synthetic-tab',title:'Synthetic live page',agentControlling:true}],current:()=>true,capture:async()=>({revision:1,width:800,height:600,image:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII='})});
  await pair(0,'Studio Desktop',true);apps[0].remote.setBrowserAccess(apps[0].remote.config.devices[0].id,true);
+ if(process.env.PROTEUS_TEST_MNEMOSYNE_ONLY==='1'){
+  for(const [index,owner]of apps.entries()){
+   const pipelineRoot=path.join(home,'mnemosyne-'+index);fs.mkdirSync(pipelineRoot);owner.omi.getSettings=()=>({...owner.omi.defaults,pipelineRoot,workerPath:path.join(pipelineRoot,'missing-worker'),configPath:path.join(pipelineRoot,'missing-config'),automationRoot:path.join(pipelineRoot,'automations'),workflowRoot:path.join(pipelineRoot,'policy')});owner.omi.launchdProbe=async()=>({state:index?'unloaded':'loaded'});
+   fs.writeFileSync(path.join(pipelineRoot,'status.json'),JSON.stringify({pending:index+2,secret:'SYNTHETIC-PRIVATE-NOT-FOR-RELAY'}));
+  }
+  await page.locator('[data-shell-nav=transcription]').click();await page.getByRole('heading',{name:'Mnemosyne',exact:true}).waitFor();await page.getByText('Independent native processing',{exact:true}).waitFor();
+  await page.getByRole('tab',{name:'Configuration',exact:true}).click();await page.getByText('Read-only from web.',{exact:false}).waitFor();assert.equal(await page.getByRole('button',{name:'Configure on this desktop'}).count(),0);
+  await page.getByRole('tab',{name:'Services',exact:true}).click();assert.equal(await page.getByText('loaded',{exact:true}).count(),3);
+  await page.goto(origin+'/remote?view=connections');await pair(1,'Travel Laptop');await page.locator('[data-shell-nav=transcription]').click();await selectHost(page,apps[1].remote.config.hostId);await page.getByRole('tab',{name:'Services',exact:true}).click();assert.equal(await page.getByText('unloaded',{exact:true}).count(),3);
+  assert.doesNotMatch(await page.locator('#remote-content').textContent(),/SYNTHETIC-PRIVATE/);assert.deepEqual(errors,[]);
+  console.log(JSON.stringify({passed:true,scope:'Mnemosyne authenticated Laravel / encrypted relay / two owners',checks:['shared navigation','read-only web config','owner isolation','sanitized observations']}));return;
+ }
  if(process.env.PROTEUS_TEST_QUESTIONS_ONLY==='1'){
   await page.goto(origin+'/remote?view=connections');await pair(1,'Travel Laptop');await selectHost(page,apps[0].remote.config.hostId);await page.waitForFunction(()=>document.querySelector('#remote-status').textContent==='Studio Desktop · Connected');
   const app=apps[0],schedule=await app.buildChatSchedule({name:'Structured web questions',prompt:'Synthetic question history',provider:'copilot',model:'synthetic'}),run=app.engine.createRun(schedule,'chat',null,{deferStart:true});
   run.status='completed';delete run.deferredStart;delete run.nextPrompt;
   app.engine.providers.copilot.run=async({emit,attachments=[]})=>{if(attachments.length)app.syntheticAttachmentDeliveries.push(attachments.map(item=>({name:item.name,mediaType:item.mediaType,bytes:Buffer.from(item.bytes)})));emit('assistant','Synthetic answer accepted. No external provider.');};
   app.engine.event(run,'assistant','Web destination?\nWeb instructions?\nShow the relevant file.',{providerItemId:'web-question-item',userQuestions:[{title:'Web destination?',options:['Web A','Web B']},{title:'Web instructions?'},{title:'Show the relevant file.'}]});
+  for(let index=0;index<340;index++)app.engine.event(run,'assistant','Synthetic history row '+index+' — '+'. '.repeat(60));
+  const executeBeforeHistory=app.remote.execute.bind(app.remote);let historyStarted=false,releaseHistory;const historyGate=new Promise(resolve=>releaseHistory=resolve);
+  app.remote.execute=async(peer,method,args)=>{if(method==='chat.get'&&args.id===run.id&&args.beforeEvent>0&&!historyStarted){historyStarted=true;await historyGate;}return executeBeforeHistory(peer,method,args);};
   await page.reload();await page.locator(`[data-run="${run.id}"]`).first().click();await page.locator('.user-question-queue summary').waitFor();
-  await page.locator('.user-question-queue summary').click();await page.getByRole('button',{name:'Web destination?',exact:true}).click();await page.getByRole('button',{name:'Web B',exact:true}).click();
+  for(let attempt=0;attempt<8&&!historyStarted;attempt++){await page.locator('.remote-messages').evaluate(pane=>{pane.scrollTop=0;pane.dispatchEvent(new WheelEvent('wheel',{deltaY:-100}));pane.dispatchEvent(new Event('scroll'));});await new Promise(resolve=>setTimeout(resolve,150));}
+  assert.equal(historyStarted,true,'An earlier remote history read is in flight before the question click');
+  await page.locator('.user-question-queue summary').click();await page.getByRole('button',{name:'Web destination?',exact:true}).click();releaseHistory();
+  await page.waitForFunction(id=>document.activeElement?.closest('[data-question-id]')?.dataset.questionId===id,run.userQuestions[0].id);
+  app.remote.execute=executeBeforeHistory;await page.getByRole('button',{name:'Web B',exact:true}).click();
   await until(()=>run.userQuestions[0].status==='answered');await until(()=>run.status==='completed');
   await page.locator('.user-question-queue summary').waitFor();await page.locator(`[data-question-id="${run.userQuestions[1].id}"] textarea`).fill('Custom web answer');
   assert.equal(await page.locator(`[data-question-id="${run.userQuestions[1].id}"] h4`).textContent(),'Web instructions?','Multiple answer fields retain their own distinct question labels');
@@ -55,6 +74,9 @@ async function run(){try{
   await card.locator('input[type=file]').setInputFiles({name:'question-evidence.txt',mimeType:'text/plain',buffer:fileBytes});await card.locator('textarea').fill('Review the attached evidence');
   await page.setViewportSize({width:390,height:844});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
   assert.equal(await card.locator('.attachment-chip').count(),1);assert.equal(await card.locator('.attachment-controls').evaluate(node=>getComputedStyle(node).display),'flex');
+  assert.equal(await page.locator('.shared-draft-status').count(),1,'Repeated history/answer renders retain one draft status and binding');
+  assert.ok(await page.locator('.remote-messages').evaluate(node=>node.clientHeight>=80),'Composer must leave the question transcript usable');
+  if(process.env.PROTEUS_UI_ARTIFACTS){await page.screenshot({path:path.join(process.env.PROTEUS_UI_ARTIFACTS,'question-web-narrow.png')});console.log(JSON.stringify(await card.evaluate(node=>{const rect=el=>{const r=el.getBoundingClientRect();return {x:r.x,y:r.y,w:r.width,h:r.height,scroll:el.scrollTop,sh:el.scrollHeight,ch:el.clientHeight};};return {questionGeometry:{card:rect(node),button:rect(node.querySelector('[type=submit]')),pane:rect(document.querySelector('.remote-messages')),composer:rect(document.querySelector('#remote-composer')),main:rect(document.querySelector('.remote-chat-main'))}};})));}
   await card.getByRole('button',{name:'Send answer',exact:true}).click();const consent=page.locator('dialog.attachment-confirm[open]');await consent.waitFor();
   assert.match(await consent.innerText(),/Studio Desktop · Structured web questions/);assert.match(await consent.innerText(),/Copilot/);assert.equal(commands.length,0);
   // Navigation while confirmation is open must not move the upload or answer.

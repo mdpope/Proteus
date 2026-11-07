@@ -1,3 +1,4 @@
+import {validateManagedRequirements} from '../integrations/managed-requirements.js';
 import fs from 'node:fs';
 import {AsyncLocalStorage} from 'node:async_hooks';
 import path from 'node:path';
@@ -181,7 +182,7 @@ export class ChatControl {
     }
   }
   taskFor(actor,id){const task=this.tasks.get(id);if(!task||(actor!=='operator'&&task.actor!==actor))throw Error('Task not found in this originating scope.');return task;}
-  taskView(task,includeFeedback=true){return {taskId:task.id,...pick(task,['id','operationId','originChatId','hostId','chatId','action','state','status','createdAt','updatedAt','error','notify','deliveryError']),...(includeFeedback&&task.feedback?{feedback:task.feedback}:{}),...(task.sendModelOptions?{modelSelection:{scope:'next-turn',provider:task.sendProvider,options:task.sendModelOptions,state:'requested'}}:{}),externalOutcomeVerified:false};}
+  taskView(task,includeFeedback=true){return {taskId:task.id,...pick(task,['id','operationId','originChatId','hostId','chatId','action','state','status','createdAt','updatedAt','error','notify','deliveryError','recaptureHistory']),...(includeFeedback&&task.feedback?{feedback:task.feedback}:{}),...(task.sendModelOptions?{modelSelection:{scope:'next-turn',provider:task.sendProvider,options:task.sendModelOptions,state:'requested'}}:{}),externalOutcomeVerified:false};}
   async models(hostId,provider){
     if(provider==='rehearsal')return {available:true,models:[{id:'',name:'Local rehearsal',controls:{}}],rehearsal:true};
     if(typeof provider!=='string'||!/^[-a-z0-9]{1,64}$/.test(provider))throw Error('Choose an advertised provider.');
@@ -210,6 +211,11 @@ export class ChatControl {
     const signature=digest(args),existing=[...this.tasks.values()].find(t=>t.actor===actor&&t.operationId===args.operationId);
     if(existing){if(existing.digest!==signature)throw Error('operationId was already used with different arguments.');return this.perform(existing);}
     if([...this.tasks.values()].filter(t=>t.actor===actor&&!terminal.has(t.status)&&!['rejected'].includes(t.state)).length>=32)throw Error('At most 32 unfinished tasks per originating scope.');
+    if(args.managedConnections!==undefined||args.managedConnectionWorkspaceId!==undefined){
+      if(args.action!=='create'||args.purpose==='update')throw Error('Managed connection selection belongs only to a new ordinary or build chat.');
+      validateManagedRequirements(args.managedConnections);
+      if(args.hostId!==this.localId()&&!(await this.connection(args.hostId)).capabilities.includes('chat.managed-connections.v1'))throw Error('This destination needs managed connection selection support.');
+    }
     if(args.modelScope!==undefined&&args.action!=='send')throw Error('modelScope belongs only to a queued send; future schedules require a separate owner update.');
     if(['reply','cancel'].includes(args.action)&&(['provider',...sendOptionKeys].some(key=>args[key]!==undefined)))throw Error('Replies and cancellation cannot change model settings.');
     let baseline=0,actualProjectId=projectId,sendModelOptions,sendProvider;
@@ -253,7 +259,7 @@ export class ChatControl {
     if(task.state==='accepted'){await this.authorizeTask(task);return this.taskView(task);}
     if(task.action==='send'&&hasSendOptions(task.args)&&!task.sendModelOptions)throw Error('This older task did not capture model settings. Inspect the prior outcome before submitting a new operation.');
     const args=task.args,method={create:'chat.start',send:'chat.send',reply:'chat.reply',cancel:'chat.cancel'}[task.action];
-    const payload=task.action==='create'?{...pick(args,['purpose','name','prompt','provider','model','reasoningEffort','contextTier','serviceTier','workspaceId','projectId','selectedIds','includeDefaults','agentId','updateRelease']),...(args.purpose==='update'?{operationId:args.operationId}:args.purpose==='build'?{}:{reasoningEffort:args.reasoningEffort||'',contextTier:args.contextTier||'default',serviceTier:args.serviceTier||''})}:
+    const payload=task.action==='create'?{...pick(args,['purpose','name','prompt','provider','model','reasoningEffort','contextTier','serviceTier','workspaceId','projectId','selectedIds','includeDefaults','agentId','updateRelease','managedConnections','managedConnectionWorkspaceId']),...(args.purpose==='update'?{operationId:args.operationId}:args.purpose==='build'?{}:{reasoningEffort:args.reasoningEffort||'',contextTier:args.contextTier||'default',serviceTier:args.serviceTier||''})}:
       task.action==='send'?{id:task.chatId,prompt:args.prompt,mode:args.mode||'queue',messageId:task.id,...(task.sendModelOptions?{modelOptions:task.sendModelOptions,modelScope:'next-turn',expectedProvider:task.sendProvider}:{})}:
       task.action==='reply'?{id:task.chatId,answer:args.answer,requestId:args.requestId}:{id:task.chatId};
     if(task.action!=='create'){payload.agentControl=true;payload.expectedProjectId=task.projectId||null;}
@@ -363,6 +369,18 @@ export class ChatControl {
       const page=tasks.slice().reverse().slice(prior.offset,prior.offset+limit);
       return {tasks:await Promise.all(page.map(async t=>{try{await this.authorizeTask(t);return this.taskView(t,false);}catch{return {taskId:t.id,state:'unavailable',error:'Destination no longer authorized.'};}})),nextCursor:prior.offset+page.length<tasks.length?encode({snapshot,offset:prior.offset+page.length}):null};
     }
+    if(args.action==='recapture'){
+      const task=this.taskFor(actor,args.taskId);
+      if(task.action!=='create'||task.args.purpose||!uuid.test(args.operationId||''))throw Error('Choose an ordinary create task and a stable recapture operationId.');
+      this.assertAccess(actor,task.hostId,'dispatch',undefined,task.projectId);
+      if(task.chatId&&task.state==='accepted')return this.taskView(task);
+      if(task.hostId!==this.localId()&&!(await this.connection(task.hostId)).capabilities.includes('chat.recapture.v1'))throw Error('The destination needs source recapture support.');
+      const payload={...pick(task.args,['purpose','name','prompt','provider','model','reasoningEffort','contextTier','serviceTier','workspaceId','projectId','selectedIds','includeDefaults','agentId','updateRelease','managedConnections','managedConnectionWorkspaceId']),reasoningEffort:task.args.reasoningEffort||'',contextTier:task.args.contextTier||'default',serviceTier:task.args.serviceTier||''};
+      const result=await this.request(task.hostId,'chat.recapture',{originalTaskId:task.id,originalDigest:task.digest,originalPayload:payload},{id:args.operationId,issuedAt:new Date().toISOString()});
+      this.assertAccess(actor,task.hostId,'dispatch',undefined,task.projectId);
+      task.recaptureHistory??=[];task.recaptureHistory.push({operationId:args.operationId,priorError:task.error,at:new Date().toISOString(),sourceHashes:result.sourceHashes});
+      task.chatId=result.runId;task.state='accepted';task.status='accepted';delete task.error;task.updatedAt=new Date().toISOString();this.save(task);return {...this.taskView(task),recaptured:true};
+    }
     if(args.action==='retry')return this.perform(this.taskFor(actor,args.taskId));
     if(['create','send','reply','cancel'].includes(args.action))return this.submit(actor,args);
     if(args.action==='read')return this.read(actor,args.hostId,args.chatId,args);
@@ -370,6 +388,11 @@ export class ChatControl {
     if(args.action==='list'){
       const page=await this.page(args.hostId,args);this.assertAccess(actor,args.hostId,'read',args.chatId,args.projectId);
       return {...page,hostId:args.hostId,items:page.items.filter(r=>this.permitted(actor,args.hostId,'read',r.id,r.projectId))};
+    }
+    if(args.action==='diagnostics'){
+      this.assertAccess(actor,args.hostId,'read');
+      if(args.hostId!==this.localId()&&!(await this.connection(args.hostId)).capabilities.includes('remote.diagnostics.v1'))throw Error('This owner needs remote diagnostics support.');
+      const result=await this.request(args.hostId,'remote.diagnostics');this.assertAccess(actor,args.hostId,'read');return result;
     }
     if(args.action==='update-releases'){
       if(args.hostId!==this.localId()&&!(await this.connection(args.hostId)).capabilities.includes('chat.update-release.v1'))throw Error('This computer needs pinned update-release support.');

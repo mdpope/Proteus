@@ -52,7 +52,10 @@ function copyRecovery(source,destination,{manifestFile,expectedHash,recoveryCach
   if(manifest.verified%64===0)atomic(manifestFile,manifest);
   afterFile?.({relative,copied,reused});
  }
- if(tree(destination,options).hash!==snapshot.hash||tree(source,options).hash!==snapshot.hash)throw Error('Recovery verification failed; source and partial snapshot were preserved.');
+ const destinationHash=tree(destination,options).hash,sourceHash=tree(source,options).hash;
+ manifest.verification={destinationMatches:destinationHash===snapshot.hash,sourceUnchanged:sourceHash===snapshot.hash,destinationHash,sourceHash,checkedAt:new Date().toISOString()};
+ atomic(manifestFile,manifest); // Final count and both sides survive a failed gate.
+ if(!manifest.verification.destinationMatches||!manifest.verification.sourceUnchanged)throw Error('Recovery verification failed ('+(!manifest.verification.destinationMatches?'destination differs':'source changed')+'); source and snapshot were preserved.');
  manifest.complete=true;manifest.completedAt=new Date().toISOString();atomic(manifestFile,manifest);
  return {hash:snapshot.hash,bytes:snapshot.bytes,files:snapshot.files,copied,reused};
 }

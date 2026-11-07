@@ -1,3 +1,23 @@
+## Nov 5 — document origin survives window restore
+
+Document placement is separate from its original chat authorization. A stale window snapshot
+that omits `chatId` or `associationChatId` must retain the existing field for the same document
+identity. Shared synchronization and the owner use the same merge rule; omission does not mean
+reassociation. Explicit supplied bindings still pass through the existing validation boundary.
+Saved-window projection and renderer synchronization hydrate document aliases from the owner,
+including historical descriptors that carry only `chatId`. No binding is inferred from a parent.
+
+`proteus_open_document` prefers an existing descriptor in its destination when historical aliases
+exist in several scopes. It refreshes the origin from the validated chat/path identity and leaves
+other aliases intact. Current-root, path, source-placement and remote document approval checks
+remain in force. This does not migrate or silently repair lost live registry data.
+
+`test/document-preservation.test.js` reproduces the lossy snapshot and duplicate-destination
+failures, verifies the real updater preservation comparison, revision stability, aliases, drafts,
+selection, tombstones and idempotent reopening. `test/document-preservation-ui.mjs` uses a
+disposable Electron profile to verify both document aliases through startup, Reload Window and
+cold restart. Source acceptance is separate from release packaging and installed acceptance.
+
 ## R13 — shared setup slots and composer text
 
 The operator confirmed syncing both setup text and ordinary unsent replies. Shared project and

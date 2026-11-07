@@ -20,6 +20,7 @@ export async function findPublishedWindows({version,sourceCommit,channel='stable
 }
 export async function buildWindowsDistribution(argv){
  const {values}=parseArgs({args:argv,options:{'source-commit':{type:'string'},output:{type:'string'},channel:{type:'string',default:'stable'},'build-if-missing':{type:'boolean'},key:{type:'string'},'npm-cli':{type:'string'},'dependencies-ready':{type:'boolean'}}});
+ if(values.key)throw Error('Builders cannot sign. Return accepted unsigned payloads to Build Mac.');
  if(process.platform!=='win32'||process.arch!=='x64')throw Error('Run native distribution on the designated Windows x64 build machine.');
  const root=fs.realpathSync(fileURLToPath(new URL('..',import.meta.url))),metadata=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
  const git=(...args)=>execFileSync('git',args,{cwd:root,encoding:'utf8',windowsHide:true}).trim();
@@ -46,7 +47,7 @@ export async function buildWindowsDistribution(argv){
   if(!path.isAbsolute(npmCmd)||!fs.statSync(npmCmd).isFile())throw Error('A local Node/npm build toolchain is required on the designated builder.');
   if(!values['dependencies-ready'])await run('dependencies',process.execPath,[npmCmd,'ci']);
   await run('electron-runtime',process.execPath,['scripts/prepare-electron.mjs']);
-  await run('source-tests',process.execPath,[npmCmd,'test']);
+  await run('source-tests',process.execPath,['--test','--test-timeout=120000','--test-concurrency=4',...fs.readdirSync(path.join(root,'test')).filter(name=>name.endsWith('.test.js')).sort().map(name=>'test/'+name)]);
   await run('static-checks',process.execPath,[npmCmd,'run','check']);
   await run('package',process.execPath,[npmCmd,'run','package:windows']);
   const bundle=path.join(output,'package','win-unpacked'),candidate=packages.inspectPackage(bundle),names=fs.readdirSync(path.dirname(bundle));
@@ -64,12 +65,13 @@ export async function buildWindowsDistribution(argv){
   if(packages.inspectPackage(bundle).installationHash!==candidate.installationHash)throw Error('Frozen application changed during acceptance.');
   receipt.artifacts={bundle,archive,installer:setup,sourceFingerprint:candidate.sourceFingerprint,packageHash:candidate.hash,archiveSha256:artifact.sha256,installerSha256:candidate.installer.sha256};
   receipt.qualification='Source suite and exact extracted package acceptance. Installer/update/rollback behavior requires separate release qualification when its recipe or transition behavior changes; no live registration was touched.';
-  if(values.key){
-   await run('publisher-signature',process.execPath,['scripts/sign-desktop-release.mjs','--bundle',bundle,'--archive',archive,'--installer',setup,'--key',values.key,'--channel',values.channel,'--out',path.join(output,'package','release.json')]);
-   const signed=verifyRelease(JSON.parse(fs.readFileSync(path.join(output,'package','release.json'),'utf8')),{platform:'win32',arch:'x64',channel:values.channel});
-   if(signed.sourceCommit!==sourceCommit||signed.packageHash!==candidate.hash)throw Error('Signed release differs from accepted source/package.');
-   receipt.release=signed;
-  }
+  // A native builder exports exact accepted bytes; only Build Mac signs them.
+  const payload=path.join(output,'package','publisher-payload.json');
+  await run('publisher-payload',process.execPath,['scripts/create-desktop-payload.mjs','--bundle',bundle,'--archive',archive,'--installer',setup,'--source-commit',sourceCommit,'--channel',values.channel,'--out',payload]);
+  const companion=path.join(output,'package','Proteus-'+metadata.version+'-source.tar.gz');
+  await run('source-companion',process.execPath,['scripts/package-source.mjs','--root',root,'--output',path.join(output,'package'),'--provenance',path.join(bundle,'resources','app','build-source.json')]);
+  receipt.publisher={state:'unsigned-awaiting-authority',payload,payloadSHA256:packages.fileDigest(payload),sourceCommit};
+  receipt.artifacts.sourceCompanion={file:companion,sha256:packages.fileDigest(companion),bytes:fs.statSync(companion).size};
   fs.rmSync(extracted,{recursive:true});record('complete',{completedAt:new Date().toISOString(),published:false,installed:false});return receipt;
  }catch(error){record('failed',{error:error.message});throw error;}
 }

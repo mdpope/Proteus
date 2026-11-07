@@ -22,14 +22,17 @@ export async function openChatDocument(service,args,runId){
   service.contentTabs.key(placement.scope,placement.id);
   if(!['chat','workspace'].includes(placement.scope))throw new Error('Choose a chat or workspace document destination.');
   if(placement.scope==='workspace')service.context.scope(placement.id);
-  const existing=service.contentTabs.list({type:'document'}).find(tab=>tab.documentId===documentId);
+  const matches=service.contentTabs.list({type:'document'}).filter(tab=>tab.documentId===documentId);
+  // Historical windows may retain this identity in both chat and destination
+  // scopes. Reuse the destination first; do not move/close another saved alias.
+  const existing=matches.find(tab=>tab.scope===placement.scope&&tab.scopeId===placement.id)||matches[0];
   if(existing&&(existing.scope!==placement.scope||existing.scopeId!==placement.id)){
     const target=service.contentTabs.get(placement.scope,placement.id);
     await service.contentTabs.moveAsync({scope:existing.scope,id:existing.scopeId,tabId:existing.id,expectedRevision:existing.revision,destination:{scope:placement.scope,id:placement.id,expectedRevision:target.revision}});
   }
   service.contentTabs.authorizeDocumentPlacement(documentId,placement.scope,placement.id);
   const current=service.contentTabs.get(placement.scope,placement.id);
-  await service.contentTabs.mutateAsync({scope:placement.scope,id:placement.id,expectedRevision:current.revision,operations:[{action:'open',tab:existing||{id:'document:'+documentId,type:'document',documentId,chatId:runId,title:path.basename(file),openedAt:new Date().toISOString(),lastTouchedAt:new Date().toISOString()}}]});
+  await service.contentTabs.mutateAsync({scope:placement.scope,id:placement.id,expectedRevision:current.revision,operations:[{action:'open',tab:{...(existing||{id:'document:'+documentId,type:'document',documentId,title:path.basename(file),openedAt:new Date().toISOString(),lastTouchedAt:new Date().toISOString()}),chatId:runId,associationChatId:runId}}]});
   // Project deletion during the await only changes presentation. Retain the
   // document's originating chat and authorization scope while resolving its home.
   if(service.desktopPreview)placement=remapPreviewBrowserPlacement(placement,service.desktopPreview.read());

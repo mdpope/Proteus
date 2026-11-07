@@ -1,12 +1,359 @@
+## Nov 6 updater repair
+
+Bounded quiescent recovery capture, live-owner exclusion, final source/destination verification
+diagnostics, stale-lock baseline recovery and a pre-owner startup gate are implemented in source.
+Use a fresh ordinary supervised attempt after a terminal pre-install attention failure, retaining
+its original job/copy. Source and native tests precede packaging; installed acceptance is separate.
+
+## Nov 6 corrective scope — browser inspection and VNC
+
+Implemented native per-client CDP sessions and explicit-certificate reuse for secure WebSockets.
+Native inspection/console/network/backend-handoff and synthetic HTTPS/WSS acceptance pass.
+Full validation, package publication and installed live Proxmox acceptance are recorded separately.
+Slack typing and whole-page responsiveness remain distinct unresolved work.
+
+## Bounded field diagnostics — source work
+
+Work Mac's corrected explicit-value fill still reports retained:false on the actual Slack
+contenteditable div/combobox. Missing-value rejection and own-tab cleanup work. Generic and
+Quill editor fills succeed locally; neither reproduces Slack. General Playwright evaluation
+is not granted by the schedule policy. Added optional fixed target-only `fill diagnostics:true`
+without caller code or text export, automatic retry, Enter or broader authority. Native tests
+exercise retained input, cancellation, editor reset and target replacement. Full suite: 1,688 passed,
+four skipped, zero failures; static checks and the native diagnostic fixture pass. Live diagnosis and
+Slack acceptance remain open; no new artifact or installed diagnostic is claimed.
+
+Track whole-page Slack hangs separately: responsiveness, renderer stalls, background lifecycle
+and verified recovery after refresh/reload. Successful load or a generic input fixture is not
+proof of restored interaction. No root cause for the whole-page hangs is established.
+
+## Nov 6 — all-device build and rollout authorized
+
+The operator explicitly requests building and deploying all current changes to all devices through
+the update process. This lifts earlier build/platform/deployment holds for Nov 5 / 0.2.43.
+Freeze the implemented source, build once per native target, validate and sign on Build Mac,
+publish accepted artifacts, and use fresh unassigned purpose:update coordinators on all included
+desktops. Preserve idle barriers, unrelated work, recovery generations and post-install acceptance.
+iOS uses the established Mac-coordinated preservation workflow; web uses its release workflow.
+Unimplemented guided full-account ADO and standalone Mnemosyne work remain open, not silently
+represented as shipped. Source acceptance: 1,677 pass/four skip, static and desktop/web checks pass.
+
+## Mnemosyne operations — implemented in Nov 5 source
+
+The operator lifted the Mnemosyne implementation deferral for this release. Desktop/web now
+share Overview, Activity and execution detail, Schedules, Services, Logs and Configuration views.
+Core runtime setup remains desktop-only; web receives sanitized read-only status and retains its
+existing schedule controls. Native owners and working schedules are unchanged. Bounded receipt
+projection preserves claim/event lineage and applied/not-applicable/delegated outcomes.
+See [scope, contract and acceptance](mnemosyne-operations.md). Independent native-core extraction,
+additional source/watchers and iOS-library expansion remain explicitly open. Deployment is held.
+
+## Guided ADO scope expansion
+
+The operator requests guided authentication and discovery with all account-accessible ADO
+capabilities across projects: repositories, pipelines, work items, wikis and related features.
+This supersedes the work-item-only setup target. Explicit work-item read/write PAT scopes are
+supported in source without upgrading existing read-only definitions. Full-account guided setup
+and CLI-assisted optional PAT issuance remain open; no successful authentication is claimed.
+See docs/managed-ado-guided-setup.md for the qualified Microsoft API constraints and acceptance.
+Deployment remains held.
+
+## Nov 5 current checkpoint — site discovery and client features
+
+The operator completed sign-in in the corrected Authentication Preview and confirmed that the
+site appears. This establishes live site discovery in that preview; connection confirmation,
+managed Jira reads/writes, silent renewal and organization workflows acceptance remain separate checks. Preserve
+the open Authentication Preview. No real Jira ticket was modified by these tests.
+
+The file-browser, image-viewer, Markdown properties/wiki links, larger overview, web navigation
+and completion-notification corrections are implemented and validated as described in
+[the client acceptance matrix](nov5-client-feature-acceptance.md). Full source suite: 1,671 passed, four skipped, zero failed;
+static checks pass. Electron file/Connections tests, Chromium and WebKit phone/tablet fixtures,
+authenticated Laravel/WebCrypto/two-owner web acceptance and one-tap answer focus on iPhone/iPad
+simulators pass. Web assets were rebuilt. Design Preview is open separately.
+
+Deployment remains held. No new packaged Mac candidate was produced by this feature checkpoint;
+Linux/Windows/iOS production builds remain deferred. Native workspace-file navigation, physical
+APNs delivery, production-network performance and full managed-auth workflow acceptance remain
+open; do not label the release fully verified. Earlier checkpoints below are historical.
+
+## Nov 5 Jira ticket read/write and callback diagnostics
+
+The operator explicitly requests read/write access to any Jira ticket the selected account can
+access. New Atlassian enrollment defaults to read/write and adds `write:jira-work`; a clearly
+labeled read-only choice remains. Existing connections and grants are unchanged. The selected
+site/workspace binding and each run's tool permissions still apply. Health-check issue IDs are
+samples only, not runtime ticket allowlists. Setup never mutates a ticket; writes are not retried
+when their outcome is uncertain. Actual service-side Jira permissions remain authoritative.
+
+The operator's next callback reached account-discovery, establishing that token exchange and
+protected storage completed, but not proving account/site access. Old timeout handling replaced
+the failure message with expired. Failures now retain stage/code and bounded diagnostics, appear
+when returning to Accounts & Integrations, and are shown directly on the callback page. No OAuth
+codes, tokens, callback URLs or remote error bodies are included. Discovery now accepts declared
+JSON Schema draft-07 as well as 2020-12 while retaining argument validation; a new regression
+failed before this compatibility correction. The original live failure's exact subtype is unknown,
+so this source correction is not claimed as authenticated acceptance. Deployment remains held.
+
+## Nov 5 Atlassian registration compatibility correction
+
+The operator reproduced `client-registration / CONFIGURATION_MISMATCH` before any approval page.
+A bounded live check found authv2 DCR returns HTTP 201 and `token_endpoint_auth_method: none`
+alongside an unused `client_secret`. Proteus rejected that otherwise valid public client.
+The adapter now retains only public client fields and explicitly keeps auth method none; the
+unused secret is discarded, never persisted or sent during code exchange/refresh. Missing or
+confidential auth methods still fail closed. A subsequent live adapter check passed registration,
+PKCE S256 and the pinned authorization endpoint/resource; no browser, consent or token grant was
+performed by that diagnostic. Full authenticated identity/Jira acceptance remains pending.
+
+While an editor is open, Add connection now reads Back to setup and scrolls/focuses the existing
+controls without resetting drafts or retrying authentication. Startup errors load the saved failed
+setup state with an explicit Try again button. Deployment remains held.
+
+## Nov 5 — browser-first Atlassian setup
+
+New Atlassian connections start with Connect Atlassian, not manual account/cloud IDs or scope
+strings. The owner approves read identity/Jira plus offline renewal, reviews the discovered
+account, explicitly chooses a returned Jira site and authorizes workspaces. No registry binding
+exists before confirmation. Existing connections keep their exact account pins and advanced edit
+form; no migration or sign-in is performed automatically. Deployment remains held.
+
+## ADO alternatives source implementation
+
+The operator requests both explicit CLI and PAT adapters without new app registration.
+[Schema, migration and qualification limits](managed-ado-alternatives.md) are recorded.
+CLI performs pinned process acquisition, signed token and exact resource validation, but rejects
+macOS/Linux before acquisition because cache isolation is unqualified. PAT uses the distinct
+pinned Basic path, protected owner entry, exact user/organization verification and expiry guidance.
+No live credentials, consent, PAT issuance or workstation.example.test schedules changed. Deployment remains held.
+
+## Local login testing authorization
+
+The operator now authorizes testing ADO/Jira login locally before another package or Work Mac delivery.
+Use the separate protected-storage Authentication Preview, not the mock-keychain Design Preview.
+The fresh Atlassian setup form is open; no connection definition, consent or credential has yet
+been supplied. ADO alternatives now have source implementation; live qualification remains pending. Local testing does not lift
+the deployment hold or authorize modifying workstation.example.test schedules/authentication.
+
+## Current operator scope — feature expansion; build/test only
+
+The operator authorizes the additions below and explicitly holds ALL further deployments. This
+supersedes the prior digest-first feature restriction and iterative installation authorization.
+Continue on the single nov5-release branch. Build/test isolated desktop, web and iPhone/iPad
+previews; do not publish, install over production apps, change live schedules/auth or dispatch
+updates. Mac candidate 2 is signed locally but not uploaded/delivered/installed. Candidate 1 stays
+on Work Mac. The earlier idle-blocker question is historical, not new deployment authorization.
+
+| ID | Requested work | Acceptance |
+| --- | --- | --- |
+| N1 | iPhone/iPad browser performance | Measure WebKit scrolling/input/frame and payload costs on representative remote views; fix reproduced choppiness and record device/simulator limits. |
+| N2 | Remote chat/tab control reliability and speed | Lost-response/reconnect/rapid-selection fixtures, stable IDs, exact-once mutations, no stale state overwrites. |
+| N3 | Relay data efficiency | Measure method/byte/serialization costs; scope state and send necessary deltas only; no unrelated chats, full histories or repeated media on idle. |
+| N4 | Remote update approvals | Verify purpose:update captures narrow future-operation authority once, without per-tool/chat reapproval; retain idle barrier and never approve unrelated pending requests. |
+| N5 | Web feature/style/fix parity | Compare desktop and web against an explicit feature matrix; local authenticated acceptance before any later deployment. |
+| N6 | iPhone feature/fix parity | Compare native mobile actions/state/recovery against desktop; shared simulators and isolated synthetic owner tests. |
+| N7 | Larger desktop/web tab overview | More usable viewport area and legible previews, responsive layouts, keyboard/touch navigation. |
+| N8 | Project/workspace card parity | Match desktop hierarchy, formatting and sizing across web/remote, with responsive mobile adaptation. |
+| N9 | One completion notification reaching iPhone | Deduplicate by actual run completion event through owner/relay/APNs paths; verify foreground/background boundaries without claiming simulator proof of physical push. |
+| N10 | File viewer images and Obsidian Markdown | Extend the existing viewer/authorization boundary for standalone filesystem image links; structured frontmatter, Markdown and wiki links with safe scoped resolution and no ambiguity guessing. |
+| N11 | Workspace file browser tab | Configured workspace folders/sources only; lazy directory drilldown and bounded cancellable filter search; filename/type/size/created/modified columns and icons; open supported images/Markdown; compact margins and right-side selected-file preview; release preview on selection change and stop work when unloaded/idle. |
+| N12 | Restore Proteus Design Preview | Separate data/browser identity, synthetic fixtures for new features, no production changes; validate the actual UI and retain a reviewable preview. |
+| N13 | Accounts & Integrations design | Managed MCP first, generous card spacing, bundled service logos, clear account/health/actions, responsive shared styling and isolated preview verification; no deployment. |
+| N14 | Reliable question navigation | First click waits for existing history loads, reveals the selected question and focuses its answer; later navigation/input cancels stale focus. Desktop and remote shared behavior. |
+| N15 | iOS Answer question navigation failure | Operator reports tapping Answer question does not navigate to the question in its chat. One tap must open the correct chat, load/reveal the exact question (including older paged history), and focus its answer field. Preserve drafts and reading state; cancel stale jumps after another navigation. Verify on iPhone/iPad; desktop/web N14 evidence does not establish native iOS acceptance. |
+
+### Current source checkpoints
+
+See [the client feature matrix and evidence](nov5-client-feature-acceptance.md) for the new
+file browser, image viewer, Properties/wiki links, larger overviews, completion notification
+correction and native question focus. WebKit phone/tablet engine checks and native iPhone/iPad
+question tests pass. Physical push and native workspace-file parity remain explicitly open.
+
+
+N15 is implemented and passes one-tap answer-focus tests on the existing iPhone and iPad
+simulators. Older-history/cancellation source paths preserve the exact request identity.
+Physical-device acceptance remains separate. Deployment remains held.
+
+N13 Connections redesign is implemented and exercised in disposable Electron at desktop/tablet/phone
+widths; local web build and static checks pass. The final regression suite including the question
+fix passed 1,641 tests with four skips using a short canonical temporary root. A default Mac temporary path
+run exposed fixture alias/socket-length assumptions; no production guard was weakened.
+Design Preview is open independently on Accounts & Integrations. Populated cards were tested
+with synthetic accounts; no live connection or authentication changed. This is the earlier
+checkpoint; the current N1–N12 source and acceptance distinctions are in the matrix above.
+
+The operator confirms no new Entra public-client registration will be available. It is no longer a
+waiting prerequisite for this workflow. [ADO alternative qualification](ado-authentication-alternatives.md)
+records the explicit CLI/no-fallback route, cache protection/isolation caveats, and the pinned
+server's distinct PAT/Basic path. Neither alternative is installed or live accepted; auth and
+all further deployment remain held.
+
+N14 first-click navigation passes desktop and authenticated web relay fixtures with an earlier
+history read already in flight. Later input cancels stale focus; drafts, attachment consent and
+uncertain-answer delivery identity are preserved. A second reproduced defect accumulated draft
+status rows and polling timers on keyed web renders; replacement now retains exactly one binding.
+The phone-width transcript remains usable. Long-history desktop acceptance passed 2,507 events.
+These are synthetic source/UI checks, not installed acceptance; deployment remains held.
+
+### Audit of prior scope at expansion
+
+P3 publisher custody, P4 journal diagnostics/compaction, P5 send-display recovery, P6–P10 source
+reconcile/scoped execution/catalog recapture/status and P11 allowance explanation have source
+implementation and tests. Idle download rules, pollable maintenance, private Windows TEMP and
+navigation difference receipts are implemented. This does not imply all-platform installed proof.
+Linux document association/reopen fixes are integrated; rollback attention review and historical
+window-closure attribution remain open. Windows installed terminal rendering/UIA acceptance is
+unresolved. Web P1 authenticated acceptance and P2 reusable retention remain open.
+
+P12 managed connections are implemented but NOT fully accepted: Work Mac candidate1 is healthy;
+two scheduled Terra-low empty-inbox runs passed without prompts and preserved enabled/history.
+Optional missing connections allowed provider continuation, but a chat-only auto-approval later
+released the integration-list fixture; that is not saved-policy prompt-free acceptance. Managed
+Atlassian startup failed before the browser, with cause swallowed by candidate1; candidate2 adds
+sanitized diagnostics but is now held from deployment. A direct operator click also produced no
+browser or popup. Correction acceptance requires visible startup stage/error feedback and a
+verified browser launch, with secret-free diagnostics and no automatic sign-in retries. ADO public-client registration is unavailable; alternative CLI/PAT qualification is tracked above. Nonempty inbox, managed planning/digest and complete repeated-evidence
+acceptance remain open. Track captured initial gaps separately from later registry state.
+
+## Earlier delivery order — superseded by the build/test-only hold
+
+The operator now holds Linux, Windows and iOS builds until the Mac candidate is delivered to
+Work Mac and its digest workflow is exercised. Build/sign the current validated Mac source and
+use a separate receiving-owner update coordinator. Keep the release open for further additions
+and fixes before the full build/publication. Web P1/P2, Linux rollback attention reconciliation,
+historical window-closure attribution and other-platform installed acceptance remain tracked;
+they do not delay this expressly prioritized Mac candidate. No new platform builds are dispatched.
+
+Navigation verification now records bounded expected/found differences and hashed inventories
+for the exact update job, including failed preservation checks. Status restores this diagnostic
+after restart. The acceptance gate and old rollback outcome are unchanged.
+
+## Nov 5 updater and provider prerequisites
+
+Maintenance accepts an optional stable operationId and returns a durable inspection receipt;
+maintenance-status reads it by id. Repeated IDs do not repeat work, interrupted receipts do not
+silently restart, and completion retains the exact maintenance plan for the existing digest-bound
+apply flow. Status exposes active/queued inspection and busy state. Shutdown waits for receipt
+persistence. Existing synchronous callers remain compatible.
+
+Windows builder jobs now own protected temporary directories and set TEMP/TMP/TMPDIR only in
+the child environment. Source tests use four workers and a two-minute per-test timeout. Native
+Windows acceptance remains required. Claude rate_limit explains provider/model/sign-in scope,
+separates unknown throttling from provider-reported exhaustion and copies only fresh reset evidence.
+It does not select another provider. Electron is pinned to patched 44.10.2; the remaining upstream
+ADO/Zod 3 advisory is constrained by the managed adapter's explicit input/collection limits, not
+claimed fixed upstream. Actual managed ADO acceptance still requires approved owner Entra setup.
+
+## Nov 5 browser update idle rules
+
+Only progressing, unpaused downloads block update idle. Paused, interrupted, completed and
+cancelled items remain untouched. Browser agent activity carries a progress timestamp; after five
+minutes without observed progress it is reported stalled and stops blocking idle. Current input or
+a new operation resumes progress tracking. Owner status exposes browserActivity with tab ID/title,
+kind and state, and blocking messages name the tab. Running chats, terminals and other idle guards
+remain unchanged; no operation is cancelled or counter cleared by observation.
+
+## Nov 5 message display and refresh recovery
+
+Accepted composer sends update the chat from the owner receipt before refreshing the overview.
+An overview failure reports that the message was accepted, retaining visible history. Concurrent
+send clicks coalesce; an uncertain response retains the same message ID/payload for retry within
+the current renderer session. A proven pre-delivery rejection releases that attempt for editing;
+a recorded uncertain delivery does not. Reload recovery still uses the owner's durable receipt.
+Same-view state projections wait for the in-flight generation before capturing a newer one;
+renderer refresh callers share one request. Content-free error codes and active queue counts are
+exposed in performance diagnostics, distinguishing cache pressure, churn, worker timeout/exit and
+assembly failure. The historical live cause remains unproven until installed diagnostics observe it.
+
+## Nov 5 remote journal capacity source work
+
+Owner-wide scoped chat diagnostics expose aggregate receipt bytes/counts by method, pending
+counts, capacity warning and next expiry without keys or payloads. Older owners report unsupported;
+no credential extraction or private-file inspection is required. Legacy methods remain unknown.
+Completed large receipts now use integrity-checked lossless compression in the journal transaction,
+including existing completed records at startup. Exact outcomes and unknown fields replay; unresolved
+claims and retention windows remain intact. Older SQLite readers see an uncertain receipt and cannot
+repeat its effect. Downgrade therefore limits replay of compacted results; retain the current reader
+or use the normal verified recovery snapshot. Compaction is not secure erasure or disk-space recovery.
+Work Mac live measurements and candidate installation remain pending.
+
+## Nov 5 optional connection compatibility
+
+Source fixes persist optional readiness exceptions and denied/missing selections as sanitized
+coverage gaps exposed in selected-run integration status. Empty workspace categories capture
+identity/revision without evaluating unrelated defaults. organization workflows reports 105 source tests passing;
+live schedules/authentication remain untouched. Signed candidate and installed two-run acceptance
+remain pending. See the managed connection contract for the unchanged export schema.
+
+## Agent communication preference — instruction update
+
+The operator selected guidance rather than forced automatic delivery. Shared agent orientation
+and the chat tool describe explicit steering as the preferred choice for relevant updates to
+running, steer-capable chats. Queue separate/deferred work, idle/unsupported destinations and
+next-turn model changes. Preserve pending human approvals and uncertain-delivery receipts.
+Source guidance is updated; runtime defaults, mode enum and feedback routing are unchanged.
+
+## Nov 5 managed ADO source checkpoint
+
+Both initial adapters now have owner controls and scoped runtime paths. ADO uses protected MSAL
+public-client credentials and the pinned server envvar mode, never a CLI/developer-account fallback.
+Exact corporate identity/organization and bounded capability probes are required. Full suite:
+1,627 pass/four skip/zero fail; static checks and disposable Electron UI acceptance pass. Real SDK
+protocol and server catalog fixtures pass without corporate credentials or business data.
+Remaining: dependency advisory qualification, complete remaining release plan, signed candidate,
+then actual organization workflows acceptance. Work Mac has no documented approved Entra public-client registration;
+owner/admin approval is a live setup prerequisite. No package or installation exists.
+
+
 # Nov 5 release plan
 
-Migrated from the Nov 4 plan on November 5, 2026. All queued scope and historical observation dates below are preserved. Planning only; no version is reserved and no build is authorized.
+Migrated from the Nov 4 plan on November 5, 2026. All queued scope and historical observation dates below are preserved. The operator lifted the build hold on November 5; the current authorization below supersedes historical holds.
+
+## Current operator authorization — build and digest acceptance iterations
+
+The operator explicitly lifts the Nov 5 build hold. Include every item already in this plan plus
+the consolidated additional requirements from the Work Mac digest workflow. Nov 3 is closed.
+Coordinate directly with that workflow owner, complete implementation and required checks, build
+and publish accepted signed artifacts, deliver the Mac release through a separate receiving-owner
+update coordinator, and iterate on defects or missing capabilities until the workflow passes.
+Further unrelated feature additions wait until this digest acceptance cycle is complete.
+
+Use the single nov5-release branch in the primary checkout. No additional worktree is needed
+unless delegated work requires one. Existing privacy, signing, source/test, preservation and
+receiving-owner installation requirements remain in force. The digest workflow owns its manifests,
+schedules and business data; this coordinator owns product changes and release delivery.
+
+Before freezing the package, reconcile Work Mac's consolidated handoff with this full plan. P6–P10
+and document-origin preservation have source acceptance; the other planned items are not thereby
+complete. Installation and model completion alone do not establish workflow success. Require
+actual source refresh, revision-preserving source reconcile, unchanged enabled state/history,
+captured scoped permissions, a complete prompt-free workflow, independent output checks and a
+second no-new-evidence run. Keep one version for this release and distinguish each immutable
+candidate hash and acceptance outcome. Historical holds and digest-only recommendations below
+are superseded by this authorization; Mnemosyne remains deferred.
+
+## Source integration and checkout cleanup — November 5
+
+The single release branch is `nov5-release` in the primary checkout. All four remaining older
+worktrees and two separate obsolete release clones are retired; their commits were already in
+main. Small dirty patches and historical evidence are preserved privately, with the browser-sizing
+fix confirmed already integrated. Unused dependency caches were retired after dependency-link and
+active-process checks. No additional worktree is retained.
+
+Linux document-preservation source `160b647` is integrated as `63bfa6f`: stale window snapshots
+retain the same document origin, all saved aliases regain the binding, and explicit reopening
+reuses its existing destination descriptor. The updater preservation gate and authorization remain
+unchanged. This addresses the association-loss and duplicate-destination failures below; it does
+not claim to diagnose every historical closed tombstone or add the other queued receipt controls.
+Integrated source validation passes 1,552 tests with four skips and zero failures, plus static
+checks. Disposable Mac acceptance also passes startup, Reload Window and cold restart. Packaging, Linux
+installed acceptance and the existing attention/rollback receipt remain outstanding.
 
 ## Current release prerequisite — November 5 closeout
 
 Nov 3 is now closed; see [its closeout](releases/2026-11-03/closeout.md). Its release prerequisite
-is satisfied. The following hold text records earlier instructions; the digest blocker exception
-remains the first proposed build scope. No unrelated feature build is authorized by closure.
+is satisfied. The following hold text records earlier instructions and is superseded by the
+explicit build/iteration authorization above.
 
 ## Historical operator hold — November 5, 2026
 
@@ -63,7 +410,7 @@ To resolve:
 
 Operator rule: the Build Mac, not any builder, is the authority for releasing packages. No release may depend on a Windows build, or on a Windows machine being reachable, for signing, staging or publishing.
 
-What is true today: the Ed25519 publisher private key (public key ID `92b49fc0…`) exists only on the Windows builder. The build operation configured there signs at the end of its own build, so a platform build and the release authority are the same chat. On Nov 3 an unanswered approval prompt on that machine, then a Windows build that stopped itself rather than sign, left the already built and accepted Mac package unpublishable for hours, and pushed Work Mac onto a one-off private transfer. The reason the key lives on Windows is not recorded; it appears to be history.
+Nov 3 starting state: the Ed25519 publisher private key (public key ID `92b49fc0…`) exists only on the Windows builder. The build operation configured there signs at the end of its own build, so a platform build and the release authority are the same chat. On Nov 3 an unanswered approval prompt on that machine, then a Windows build that stopped itself rather than sign, left the already built and accepted Mac package unpublishable for hours, and pushed Work Mac onto a one-off private transfer. The reason the key lives on Windows is not recorded; it appears to be history.
 
 How verification works, which constrains the fix: installed apps and the website verify a release manifest against public keys bundled inside them (`resources/desktop-release-keys.json` and the app's own copy). An app only trusts keys it already shipped with, so a new key cannot be used until a release containing it has been installed everywhere that must verify the next one.
 
@@ -73,7 +420,21 @@ Target design:
 3. **Hand-over is a private draft with hash checks,** as the Nov 3 HC transfer did, not text in a chat. Chat-returned base64 corrupted a signed envelope on Nov 2.
 4. **Platforms publish independently.** Today staging a subset gives every other platform an empty catalog, so one late builder blanks everyone else's updates. Replace that with an explicit "pending" state per platform that keeps the previous valid entry, so consumers can neither select a superseded version silently nor lose updates entirely.
 
-Key custody, a decision for the operator before any change:
+Key custody decision: the operator chose Option 2 (new Build Mac key), then reaffirmed that
+Build Mac is source authority and signer for all built software. Builders must not remain
+signing authorities. Complete a trust-preserving transition with signing on Build Mac; any
+legacy-key transfer is a protected one-time custody operation, never chat text or Git. The older
+options below explain the tradeoff, not an outstanding approval request.
+
+Current source/custody checkpoint: both Mac keys pass signing proofs and protected local recovery
+readback. Windows active legacy key and signing reference are removed with a verified owner receipt;
+its installed old builder fails closed. Unsigned builder exports and Mac-only signing helpers pass
+source tests. Pending platform catalogs retain explicitly supplied prior signed artifacts without
+changing their bytes, and the UI requires an explicit previous-version choice. Full suite: 1,589
+pass/four skip, static checks and disposable Electron acceptance pass. A full signed release and
+consumer transition remain pending; these checks do not establish installation acceptance.
+
+Original options:
 - **Option 1, move the existing key.** A one-time, operator-authorized move of the current private key to this Mac's protected storage (an owner-only file outside every checkout, with a Bitwarden recovery record), then verify it signs a test manifest that the existing trust accepts, then retire the Windows copy and record that it was removed. No release needed and no trust change. The cost is that the key travels once, and copying a signing key is exactly the risk to avoid.
 - **Option 2, rotate to a new key generated on this Mac.** The private key never leaves it. Ship the new public key in a release signed by the old key (one last use of Windows or of Option 1), wait until every target runs that release, sign with the new key from then on, and retire the old one. Nothing is copied, but there is a transition period and a release to ship first.
 - Recommendation: Option 2 if the old key can be used once more under supervision, because it ends with a key that has only ever existed on the authority machine. Choose Option 1 only if rotation cannot wait.
@@ -324,3 +685,26 @@ the displayed cause, account/model context and provider-supplied reset/retry det
 subscription exhaustion from temporary request throttling. Preserve retry identity and completed
 external work. Provider fallback must be explicitly selected/authorized, never silent. Keep
 this diagnostic work outside the digest-only first package unless needed for its acceptance.
+
+## P12 — Managed MCP connections and authentication
+
+The digest workflow handoff adds a provider-neutral connection manager. Proteus owns versioned
+connection definitions, credential adapters, auth renewal, bounded reconnection and health;
+organization workflows declares portable logical names, required semantic capabilities and expected account/resource
+bindings. Initial connections are ADO and Atlassian; Slack remains browser-only.
+
+Required product boundaries: immutable connection IDs separate from labels; explicit owner/workspace/
+account binding; captured configuration revisions; pinned connector launches; a host-managed
+authenticated transport actually used by both Codex and Copilot; per-chat tool policy isolation;
+no token tools or secrets in prompts, logs, argv or ordinary configuration; no replay of uncertain
+writes; OS-protected storage by default with optional Bitwarden, failing closed when unavailable;
+serialized rotation and durable rotated-token save before publishing a new access token;
+separate per-owner grants or an explicit single writer for cross-machine refresh credentials.
+
+Expose connection, identity, authentication, capability and resource-access evidence separately
+in visible status. Use bounded/coalesced health work and actionable human sign-in requirements.
+Preserve current working credentials during local adoption or verified new consent. Do not
+retire organization workflows helpers until the managed route passes live acceptance. No credentials or business
+evidence transfer to the release coordinator is needed. The full Work Mac handoff is reconciled in [the managed-connection contract](managed-mcp-connections.md),
+including connector-specific, migration and outage/repeat-run acceptance criteria. Existing integrations documentation describes older capabilities and does
+not establish that this manager is already implemented.

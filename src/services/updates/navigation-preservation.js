@@ -18,6 +18,23 @@ export function captureNavigation(service){
  });
  return {schemaVersion:1,workspaces,projects:projectRows,projectDefaults:hash(projects.defaultProjectIds||{}),memberships:hash(projects.memberships||{}),scopes,windows};
 }
+export function navigationComparison(before,after){
+ const counts=value=>({workspaces:value?.workspaces?.length||0,projects:value?.projects?.length||0,scopes:value?.scopes?.length||0,tabs:(value?.scopes||[]).reduce((n,row)=>n+row.tabs.length,0),windows:value?.windows?.length||0});
+ const differences=[];let total=0;const add=(kind,id,detail)=>{total++;if(differences.length<100)differences.push({kind,id,detail});};
+ if(!after||before.schemaVersion!==1)add('inventory','navigation','unavailable');
+ else{
+  for(const key of ['workspaces','projects','windows'])for(const row of before[key]){const found=after[key].find(current=>current.id===row.id);if(!found||found.hash!==row.hash)add(key,row.id,found?'state-changed':'missing');}
+  for(const key of ['projectDefaults','memberships'])if(before[key]!==after[key])add(key,key,'changed');
+  for(const row of before.scopes){
+   const current=after.scopes.find(scope=>scope.id===row.id);if(!current){add('scope',row.id,'missing');continue;}
+   if(current.closed!==row.closed)add('scope',row.id,'closed-identities-changed');
+   const known=new Set(row.tabs.map(tab=>tab.id)),found=current.tabs.filter(tab=>known.has(tab.id));
+   for(const tab of row.tabs){const actual=found.find(item=>item.id===tab.id);if(!actual||actual.hash!==tab.hash)add('tab',tab.id,actual?'descriptor-changed':'missing');}
+   if(JSON.stringify(found.map(tab=>tab.id))!==JSON.stringify(row.tabs.map(tab=>tab.id)))add('scope',row.id,'tab-order-or-membership-changed');
+  }
+ }
+ return {verified:total===0,expected:counts(before),found:counts(after),differences,totalDifferences:total,truncated:total>differences.length};
+}
 export function verifyNavigation(before,after){
  if(!after||before.schemaVersion!==1)throw Error('Navigation preservation inventory is unavailable. Keep the recovery generation.');
  for(const key of ['workspaces','projects','windows'])for(const row of before[key])if(!after[key].some(current=>current.id===row.id&&current.hash===row.hash))throw Error('A saved '+key+' identity, assignment or state changed during upgrade. Keep the recovery generation for review.');

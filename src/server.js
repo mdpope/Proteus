@@ -1,3 +1,4 @@
+import {validateManagedRequirements,managedWorkspace} from './services/integrations/managed-requirements.js';
 import {ScheduleControl} from './services/scheduling/schedule-control.js';
 import {clearQuestionFromQueue} from './services/chats/user-questions.js';
 import {localInputOrigin} from './services/chats/input-origin.js';
@@ -26,6 +27,7 @@ import { PerformanceDiagnostics } from './services/telemetry/performance-diagnos
 import {BrowserHistory,browserHistorySettings,historyWithSavedIcons} from './services/browser/browser-history.js';
 import {BrowserProfiles} from './services/browser/browser-profiles.js';
 import { SessionProvider } from './providers/session-provider.js';
+import {ManagedConnectionOwner} from './services/integrations/managed-connection-owner.js';
 import { IntegrationHealth } from './services/integrations/integrations.js';
 import { ActivityStore } from './services/telemetry/activity.js';
 import { AppAccount } from './services/remote/app-account.js';
@@ -45,8 +47,11 @@ import { Engine } from './engine.js';
 import { CopilotProvider } from './providers/copilot.js';
 import { CodexProvider } from './providers/codex.js';
 import { ClaudeProvider } from './providers/claude.js';
+import {MnemosyneOperations} from './services/mnemosyne/operations.js';
 import { OmiIntegration, isOmiSchedule } from './services/tools/omi.js';
 import { LifeStore } from './services/life/life.js';
+import {WorkspaceExplorer} from './services/workspaces/workspace-explorer.js';
+import {readFilePreview} from './services/workspaces/workspace-preview.js';
 import { WorkspaceFiles } from './services/workspaces/workspace-files.js';
 import { SettingsStore } from './services/settings/settings.js';
 import { ContextStore } from './services/workspaces/context.js';
@@ -123,6 +128,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   const browserProfiles=new BrowserProfiles(home,account);
   const activity = new ActivityStore(home, { identity: () => life.api.identity(), publish: (item, identity, kind='notifications') => account.request({ path:'/'+kind, method:'POST', body:item, identity }) });
   const workspaceFiles = new WorkspaceFiles(() => context.config());
+  const workspaceExplorer = new WorkspaceExplorer(() => context.config());
   const attachments = new ChatAttachmentStore(home);
   // MTPLX is a local Apple-silicon model server. The Mac app registers it so it is
   // available when the server is running; status reports it unavailable otherwise.
@@ -137,6 +143,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   if(browser)browser.desktopControl=desktopControl;
   const performanceDiagnostics = new PerformanceDiagnostics({home});
   const stateProjection = new StateProjectionClient();
+  let stateDisplayFailure=null;
   engine.performanceDiagnostics = performanceDiagnostics;
   activity.performanceDiagnostics=performanceDiagnostics;attachments.performanceDiagnostics=performanceDiagnostics;
   for(const adapter of Object.values(adapters)){adapter.questionInputs=(id,requestId)=>engine.readQuestionAttachments(id,requestId);adapter.attachmentInputs=id=>engine.turnAttachments.get(id);}
@@ -249,6 +256,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
     let requestedMcpServers=value.mcpServers;
     const defaults=settings.get();
     const updateCoordinator=value.purpose==='update',buildCoordinator=value.purpose==='build';
+    if((updateCoordinator||value.chatType==='internet')&&(value.managedConnections?.length||value.managedConnectionWorkspaceId!==undefined))throw Error('Choose an ordinary workspace chat for managed connections.');
     if(updateCoordinator&&value.chatType==='internet')throw Error('Update coordinators require an ordinary unassigned chat.');
     if(updateCoordinator){
       requestedMcpServers={};
@@ -274,8 +282,15 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
     }
     const snapshot=context.capture({workspaceId:value.workspaceId,workspace:value.workspace||(!value.workspaceId?defaults.workspace:undefined),selectedIds:value.selectedIds,agentId:value.agentId,includeDefaults:value.includeDefaults});
     if(updateCoordinator)Object.assign(snapshot,{workspaceId:null,workspaceName:null,workspace:structuredClone(defaults.workspace),baseWorkspace:structuredClone(defaults.workspace),includeDefaults:false,selectedIds:[],agentId:null,entries:[]});
+    const managedConnections=validateManagedRequirements(value.managedConnections);
+    if(value.managedConnectionWorkspaceId!==undefined&&!managedConnections.length)throw Error('Select named connections together with their workspace binding.');
+    if(managedConnections.length){
+      const provider=adapters[value.provider||defaults.provider];
+      if(!provider?.supportsManagedConnections&&!provider?.metadata?.supportsManagedConnections)throw Error('The selected provider does not support managed connections.');
+      managedWorkspace({context:snapshot,managedConnectionWorkspaceId:value.managedConnectionWorkspaceId});
+    }
     const chatTitle=typeof value.name==='string'?value.name.trim():'';
-    const schedule=validateSchedule({schemaVersion:1,id:`chat-${Date.now()}-${randomBytes(4).toString('hex')}`,name:chatTitle||'Workspace chat',chatType:value.chatType==='internet'?'internet':'user',chatTitleManual:!!chatTitle,...(buildCoordinator?{purpose:'build'}:{}),...(updateCoordinator?{purpose:'update',updateAuthorization:{tool:'proteus_update',scopeVersion:2,hostId:remote.info().hostId,grantedAt:new Date().toISOString()}}:{}),enabled:false,cron:'0 9 * * 1-5',timezone:value.timezone||defaults.timezone,provider:value.provider||defaults.provider,model:value.model||defaults.model,reasoningMode:value.reasoningMode,reasoningEffort:value.reasoningEffort??((value.model||defaults.model)===defaults.model&&(value.provider||defaults.provider)===defaults.provider?defaults.reasoningEffort:undefined),contextTier:value.contextTier??((value.model||defaults.model)===defaults.model&&(value.provider||defaults.provider)===defaults.provider?defaults.contextTier:undefined),serviceTier:value.serviceTier??((value.model||defaults.model)===defaults.model&&(value.provider||defaults.provider)===defaults.provider?defaults.serviceTier:undefined),workspace:snapshot.workspace,context:snapshot,skillDirectories:value.skillDirectories||defaults.skillDirectories,mcpServers:requestedMcpServers??(snapshot.includeDefaults===false?{}:value.mcpServers||defaults.mcpServers),editorContext:value.editorContext,misfire:'skip',prompt:attachmentOnly&&!value.prompt?.trim()?attachmentPrompt:value.prompt});
+    const schedule=validateSchedule({schemaVersion:1,id:`chat-${Date.now()}-${randomBytes(4).toString('hex')}`,name:chatTitle||'Workspace chat',chatType:value.chatType==='internet'?'internet':'user',chatTitleManual:!!chatTitle,...(buildCoordinator?{purpose:'build'}:{}),...(updateCoordinator?{purpose:'update',updateAuthorization:{tool:'proteus_update',scopeVersion:2,hostId:remote.info().hostId,grantedAt:new Date().toISOString()}}:{}),enabled:false,cron:'0 9 * * 1-5',timezone:value.timezone||defaults.timezone,provider:value.provider||defaults.provider,model:value.model||defaults.model,reasoningMode:value.reasoningMode,reasoningEffort:value.reasoningEffort??((value.model||defaults.model)===defaults.model&&(value.provider||defaults.provider)===defaults.provider?defaults.reasoningEffort:undefined),contextTier:value.contextTier??((value.model||defaults.model)===defaults.model&&(value.provider||defaults.provider)===defaults.provider?defaults.contextTier:undefined),serviceTier:value.serviceTier??((value.model||defaults.model)===defaults.model&&(value.provider||defaults.provider)===defaults.provider?defaults.serviceTier:undefined),workspace:snapshot.workspace,context:snapshot,skillDirectories:value.skillDirectories||defaults.skillDirectories,mcpServers:requestedMcpServers??(snapshot.includeDefaults===false?{}:value.mcpServers||defaults.mcpServers),...(managedConnections.length?{managedConnections,managedConnectionWorkspaceId:value.managedConnectionWorkspaceId||snapshot.workspaceId}:{}),editorContext:value.editorContext,misfire:'skip',prompt:attachmentOnly&&!value.prompt?.trim()?attachmentPrompt:value.prompt});
     if(attachmentOnly&&!value.prompt?.trim())schedule.prompt='';return schedule;
   }
   const token = randomBytes(32).toString('hex'); let origin; let remote; const schedulerErrors = []; const eventClients = new Set();
@@ -324,7 +339,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       }
       if (url.pathname === '/api/project-follow' && req.method === 'POST') return json(200, service.projectFollow.handle(await body(req)));
       // Local authenticated diagnostics expose counters only, never command payloads or keys.
-      if (url.pathname === '/api/performance/diagnostics' && req.method === 'GET') return json(200, { ...performanceDiagnostics.snapshot(), scheduler: engine.schedulerWorker?.diagnostics() || {status:'not-started'}, stateProjection: stateProjection.diagnostics() });
+      if (url.pathname === '/api/performance/diagnostics' && req.method === 'GET') return json(200, { ...performanceDiagnostics.snapshot(), scheduler: engine.schedulerWorker?.diagnostics() || {status:'not-started'}, stateProjection: {...stateProjection.diagnostics(),lastDisplayFailure:stateDisplayFailure} });
       if (url.pathname === '/api/remote/diagnostics' && req.method === 'GET') return json(200, await remote.commandDiagnostics());
       if (url.pathname === '/api/remote' && req.method === 'POST') {
         const value = await body(req);
@@ -334,6 +349,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         if (value.action === 'revoke') return json(200, remote.revoke(value.id));
         if (value.action === 'resource-access') return json(200, remote.setResourceAccess(value.id, value.enabled));
         if (value.action === 'browser-access') return json(200, remote.setBrowserAccess(value.id, value.enabled));
+        if (value.action === 'workspace-file-access') return json(200, remote.setWorkspaceFileAccess(value.id,value.workspaceIds));
         if (value.action === 'document-access') return json(200, remote.setDocumentAccess(value.id, value.enabled));
         if (value.action === 'document-review') return json(200, remote.reviewDocument(value.requestId,value.approved));
         throw new Error('Unknown remote action.');
@@ -449,9 +465,17 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         // paths, hashes permission contexts and serializes the complete response.
         return performanceDiagnostics.measure('http.state.project',()=>performanceDiagnostics.measureSync('http.state.transfer',()=>stateProjection.serialize({...projection,state})));
         }); }
-        catch { return json(503,{error:'State display is temporarily unavailable. Retry the refresh.'}); }
+        catch(error) {
+          const codes=['STATE_PROJECTION_FAILED','STATE_WORKER_UNAVAILABLE','STATE_PROJECTION_BUSY','STATE_PROJECTION_TIMEOUT','STATE_WORKER_ERROR','STATE_WORKER_EXIT','STATE_CACHE_BUSY','STATE_CHANGED'];
+          const code=codes.includes(error.code)?error.code:'STATE_ASSEMBLY_FAILED';
+          stateDisplayFailure={code,at:new Date().toISOString(),activeProjections:stateProjection.pending.size,activeSnapshots:stateCache.active.size};
+          activity.log('warning','state.display-failed','State display projection failed.',stateDisplayFailure);
+          return json(503,{error:'State display is temporarily unavailable. Retry the refresh.',code,retryAfterMs:1000});
+        }
         res.writeHead(200,{'Content-Type':'application/json'});res.end(body);return;
       }
+      if (url.pathname === '/api/mnemosyne' && req.method === 'GET') return json(200, await service.mnemosyne.snapshot());
+      if (url.pathname === '/api/mnemosyne/logs' && req.method === 'GET') return json(200, service.mnemosyne.logs(url.searchParams.get('job'),url.searchParams.get('stream')||'out'));
       if (['/api/omi','/api/transcription'].includes(url.pathname) && req.method === 'GET') return json(200, { ...await omi.status(), schedules: engine.schedules.list().filter(isOmiSchedule) });
       if (['/api/omi/settings','/api/transcription/settings'].includes(url.pathname) && req.method === 'POST') {
         const value = await body(req); const saved = await omi.saveSettings(value.settings, value.expectedRevision); notify(); return json(200, saved);
@@ -467,6 +491,12 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       if (url.pathname === '/api/life/data' && req.method === 'POST') { const value = await body(req); return json(200, await life.data(value.section, value.query || {})); }
       if (url.pathname === '/api/life/action' && req.method === 'POST') { const value = await body(req, 30 * 1024 * 1024); const result = await life.action(value.action, value.input || {}, value.idempotencyKey, value.identity); notify(); return json(200, result); }
       if (url.pathname === '/api/life/evidence' && req.method === 'POST') { const value=await body(req); return json(200, await life.evidence(value.attachmentId, value.identity)); }
+      if (url.pathname.startsWith('/api/workspace-explorer/') && req.method === 'POST') {
+        const value=await body(req),action=url.pathname.split('/').at(-1);
+        if(!['roots','browse','preview'].includes(action))throw Error('Unknown file browser action.');
+        const controller=new AbortController();res.once('close',()=>controller.abort());
+        return json(200,await workspaceExplorer[action](value,{signal:controller.signal}));
+      }
       if (url.pathname === '/api/workspace-files/roots' && req.method === 'GET') return json(200, workspaceFiles.roots());
       if (url.pathname === '/api/workspace-files/list' && req.method === 'POST') return json(200, workspaceFiles.list(await body(req)));
       if (url.pathname === '/api/workspace-files/folder' && req.method === 'POST') return json(200, workspaceFiles.createFolder(await body(req)));
@@ -690,6 +720,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
           return json(200,await engine.recovery.command(id,value));
         }
         if (action === 'send') {
+          try {
           const run = engine.getRun(id);
           if (value.modelOptions && value.mode !== 'steer') {
             const options = chatModelOptions(value.modelOptions);
@@ -709,6 +740,10 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
             catch(error){await remote.attachmentConsents.releaseProof(prepared.proofId).catch(()=>{});throw error;}
           }
           return json(200, await sendHumanMessage(id, value.prompt, value.mode, value.messageId, value.modelOptions,undefined,undefined,value.inputOrigin));
+          }catch(error){
+            const recorded=engine.getRun(id).events.some(event=>event.data?.delivery?.id===value.messageId);
+            return json(400,{error:error.message,code:recorded?'SEND_UNCONFIRMED':'SEND_REJECTED'});
+          }
         }
         if (action === 'edit-queued') return json(200,engine.editQueued(id,value.messageId,value.prompt,value.expectedPrompt));
         if (action === 'steer-queued') return json(200,await engine.steerQueued(id,value.messageId));
@@ -729,6 +764,10 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
           return json(200, engine.resume(id, value.prompt,{inputOrigin:value.inputOrigin}));
         }
         engine.cancel(id); return json(200, { ok: true });
+      }
+      if(url.pathname==='/api/managed-connections'){
+        if(req.method==='GET')return json(200,service.managedConnections.snapshot());
+        if(req.method==='POST')return json(200,await service.managedConnections.action(await body(req)));
       }
       if (url.pathname === '/api/integrations') {
         if(req.method==='GET')return json(200,integrations.snapshot());
@@ -769,8 +808,8 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       if (url.pathname === '/api/markdown' && req.method === 'POST') {
         const { file, image } = await body(req);
         const roots = [...context.roots(), ...context.config().documents.map(doc => path.dirname(doc.path)), settings.get().workspace.cwd, ...settings.get().workspace.additionalDirectories, ...engine.schedules.list().filter(s => !s.error).flatMap(s => [s.workspace.cwd, ...s.workspace.additionalDirectories])];
-        if (typeof file !== 'string' || !/\.md$/i.test(file) || !isWithin(file, roots)) throw new Error('Choose a Markdown file inside a configured workspace.');
-        const document=readMarkdownFile(file);
+        if (typeof file !== 'string' || !/\.(md|png|jpe?g|gif|webp)$/i.test(file) || !isWithin(file, roots)) throw new Error('Choose a Markdown file inside a configured workspace.');
+        const document=readFilePreview(file,roots);
         return json(200, image ? readImage({ source: image, texts: [document.content], cwd: path.dirname(file), roots }) : document);
       }
       if (req.method === 'GET' && assets[url.pathname]) {
@@ -790,7 +829,8 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   origin = `http://127.0.0.1:${server.address().port}`;
   atomicJSON(path.join(home, 'connection.json'), { origin, token, pid: process.pid });
   const timer = timers ? setInterval(() => { void performanceDiagnostics.measure('scheduler.tick', () => engine.tick()).catch(error => engine.emit('scheduler-error', { error: error.message, at: new Date().toISOString() })); }, 1000) : null;
-  const service = { readChatAttachment, desktopControl,workspaceProjects:preview, desktopPreview:desktopPreview?preview:null, performanceDiagnostics, notify, desktopAttention:()=>[...(service.browserAttention?.()||[]),...remote.documents.list().filter(item=>!item.approvedAt).map(item=>({id:'document:'+item.requestId,kind:'document',title:item.deviceName+' requests '+item.title,requestId:item.requestId,path:item.path,at:new Date(Date.parse(item.expiresAt)-600000).toISOString()})),...service.attention()], attention:()=>[...integrations.consumers().filter(item=>['needs-auth','failed'].includes(item.connection)).map(item=>({id:'integration:'+item.id,kind:'connection',title:(item.profile.label||item.server)+' needs attention',section:'integrations',at:item.checkedAt})),...activity.notifications().items.filter(item=>!item.readAt).map(item=>({id:'notification:'+item.id,notificationId:item.id,kind:'notification',title:item.title,body:item.body,chatId:item.chatId,silent:item.silent===true,...(item.browserIssue?{browserIssue:item.browserIssue,silent:item.silent===true}:{}),at:item.createdAt}))], browserProfiles, integrations, engine, settings, context, standup, omi, life, account, activity, workspaceFiles, attachments, buildChatSchedule, usage, catalog, catalogs, origin, token, home, url: `${origin}/?token=${token}`, async close() {
+  const service = { readChatAttachment, mnemosyne:new MnemosyneOperations({omi,engine}), desktopControl,workspaceProjects:preview, desktopPreview:desktopPreview?preview:null, performanceDiagnostics, notify, desktopAttention:()=>[...(service.browserAttention?.()||[]),...remote.documents.list().filter(item=>!item.approvedAt).map(item=>({id:'document:'+item.requestId,kind:'document',title:item.deviceName+' requests '+item.title,requestId:item.requestId,path:item.path,at:new Date(Date.parse(item.expiresAt)-600000).toISOString()})),...service.attention()], attention:()=>[...integrations.consumers().filter(item=>['needs-auth','failed'].includes(item.connection)).map(item=>({id:'integration:'+item.id,kind:'connection',title:(item.profile.label||item.server)+' needs attention',section:'integrations',at:item.checkedAt})),...activity.notifications().items.filter(item=>!item.readAt).map(item=>({id:'notification:'+item.id,notificationId:item.id,kind:'notification',title:item.title,body:item.body,chatId:item.chatId,silent:item.silent===true,...(item.browserIssue?{browserIssue:item.browserIssue,silent:item.silent===true}:{}),at:item.createdAt}))], browserProfiles, integrations, engine, settings, context, standup, omi, life, account, activity, workspaceFiles, workspaceExplorer, attachments, buildChatSchedule, usage, catalog, catalogs, origin, token, home, url: `${origin}/?token=${token}`, async close() {
+    clearInterval(managedTimer);lifeOptions.powerMonitor?.removeListener?.('resume',managedWake);await service.managedConnections?.close();
     await stateProjection.close();await service.updates?.close();await service.scheduleControl?.close();await service.chatControl?.close();await desktopControl?.close();
     activity.log('info','app.stopping','Proteus is shutting down.');clearInterval(integrationTimer);await integrations.close(); if(activityTimer)clearInterval(activityTimer); if (timer) clearInterval(timer); if (catalogTimer) clearInterval(catalogTimer); await Promise.all(Object.values(catalogs).map(c => c.pending)); await providerAuth.close(); await service.sharedInference.close(); await remote.close(); let engineCloseError; try { await engine.close(); } catch (error) { engineCloseError=error; } await attachments.close(); await copilot.close(); await codex.close(); await claude.close(); await life.close?.(); await service.browserHistory?.close(); await service.sharedDrafts?.close(); let activityCloseError; try { await activity.close(); } catch (error) { activityCloseError=error; }
     for (const client of eventClients) client.end(); eventClients.clear();
@@ -837,6 +877,10 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   service.previews=new ChatPreviews(service);
   sharedInference=service.sharedInference=new SharedInference(service);
   remote = service.remote = new RemoteHost(service); activity.attach(engine,()=>remote.info().hostId,()=>remote.info().label); activity.log('info','app.started','Proteus started.'); await remote.start();
+  service.managedConnections=new ManagedConnectionOwner(service,{storage:lifeOptions.managedSafeStorage??lifeOptions.safeStorage,openExternal});
+  integrations.managed=service.managedConnections;for(const adapter of Object.values(adapters))adapter.managedConnections=service.managedConnections.manager;
+  const managedWake=()=>void service.managedConnections.tick(),managedTimer=timers?setInterval(managedWake,30000):null;
+  lifeOptions.powerMonitor?.on?.('resume',managedWake);
   service.chatControl=new ChatControl(service);
   service.scheduleControl=new ScheduleControl(service);
   for(const adapter of Object.values(adapters))adapter.chatControl=service.chatControl;

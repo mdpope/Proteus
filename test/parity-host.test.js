@@ -117,3 +117,13 @@ test('notifications name the chat and computer and show the latest reply as plai
  run.status='awaiting_input';run.pending={id:'p1',type:'permission',details:{kind:'write',fileName:'/tmp/minutes.md'}};engine.emit('change',run);
  const review=store.notifications().items.find(entry=>entry.type==='review.required');assert.equal(review.title,'Approval required · HOA fee schedule');assert.equal(review.body,'Edit file: /tmp/minutes.md');
 });
+
+test('completion alerts are visible but soundless in quiet mode and deduplicate each turn',async t=>{
+ const folder=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-completion-notifications-')),store=new ActivityStore(folder);t.after(async()=>{await store.close();fs.rmSync(folder,{recursive:true,force:true});});
+ const detail={hostId:'host',chatId:'chat',turnId:'turn-1'};
+ const first=store.add('chat.completed',detail),again=store.add('chat.completed',detail);
+ assert.equal(first.id,again.id);assert.equal(first.silent,false);assert.equal(first.sound,false);
+ assert.notEqual(store.add('chat.completed',{...detail,turnId:'turn-2'}).id,first.id);
+ store.data.preferences['chat.completed']=false;
+ assert.equal(store.add('chat.completed',{...detail,turnId:'turn-3'}).silent,true);
+});

@@ -6,6 +6,10 @@
     {
       "id": "92b49fc0e69763fbd06099e2",
       "publicKey": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAwT+sxMklEnazH6XEJ3LUNvZ4qCiylAlyfKg5LxFyicU=\n-----END PUBLIC KEY-----\n"
+    },
+    {
+      "id": "705abc96f9f4d01b07488fac",
+      "publicKey": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAZDGTIwC+P97rb0Rq+Fc6h/NwgCPU6gyRurgDJGX1kJc=\n-----END PUBLIC KEY-----\n"
     }
   ]
 }

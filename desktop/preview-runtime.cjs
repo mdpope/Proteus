@@ -21,8 +21,7 @@ function initializePreviewRoot(root, { userHome = os.homedir(), sourceRoot = pat
     path.join(userHome, 'Library/Application Support/Proteus')];
   if (forbidden.some(base => root === base || root.startsWith(base + path.sep))) {
     // A private sibling in Application Support is allowed; never a child of production data or this checkout.
-    if (root !== path.join(userHome, 'Library/Application Support', PREVIEW_NAME) &&
-        !root.startsWith(path.join(userHome, 'Library/Application Support', PREVIEW_NAME) + path.sep)) {
+    if (![PREVIEW_NAME,'Proteus Authentication Preview'].some(name=>root===path.join(userHome,'Library/Application Support',name)||root.startsWith(path.join(userHome,'Library/Application Support',name)+path.sep))) {
       throw new Error('Choose a separate preview directory outside production data, Codex data and the checkout.');
     }
   }
@@ -53,16 +52,28 @@ function initializePreviewRoot(root, { userHome = os.homedir(), sourceRoot = pat
 
 function configureDesktopPreview(app, { env = process.env, metadata = require('../package.json'), userHome = os.homedir() } = {}) {
   if (env.PROTEUS_DESKTOP_PREVIEW !== '1' && metadata.desktopPreview !== true) return null;
-  const locations = initializePreviewRoot(env.PROTEUS_PREVIEW_HOME || path.join(userHome, 'Library/Application Support', PREVIEW_NAME), { userHome });
-  app.setName(PREVIEW_NAME);
+  const protectedCredentials=env.PROTEUS_PREVIEW_CREDENTIALS==='protected';
+  const name=protectedCredentials?'Proteus Authentication Preview':PREVIEW_NAME;
+  const locations = initializePreviewRoot(env.PROTEUS_PREVIEW_HOME || path.join(userHome, 'Library/Application Support', name), { userHome });
+  // Never reopen mock-encrypted data as protected (or protected data with a mock key).
+  const modeFile=path.join(locations.root,'.credential-mode.json');
+  const mode=protectedCredentials?'protected':'mock';
+  if(fs.existsSync(modeFile)){
+    if(fs.lstatSync(modeFile).isSymbolicLink()||JSON.parse(fs.readFileSync(modeFile,'utf8')).mode!==mode)throw new Error('Preview credential mode differs. Use a separate fresh preview directory.');
+  }else{
+    if(protectedCredentials&&[locations.home,locations.userData].some(folder=>fs.readdirSync(folder).length))throw new Error('Protected authentication testing requires a fresh preview directory.');
+    fs.writeFileSync(modeFile,JSON.stringify({schemaVersion:1,mode})+'\n',{mode:0o600,flag:'wx'});
+  }
+  app.setName(name);
   app.setPath('userData', locations.userData);
   app.setPath('sessionData', locations.userData);
   // This synthetic-data preview never accesses the installed app's Safe Storage item.
-  app.commandLine.appendSwitch('use-mock-keychain');
-  return { ...locations, name: PREVIEW_NAME };
+  if(!protectedCredentials)app.commandLine.appendSwitch('use-mock-keychain');
+  return { ...locations, name, protectedCredentials };
 }
 
 function stageCodexAuthentication(locations, { env = process.env, userHome = os.homedir() } = {}) {
+  if(env.PROTEUS_PREVIEW_AUTH==='none'||env.PROTEUS_PREVIEW_CREDENTIALS==='protected')return {available:false,reused:false,disabled:true};
   const source = path.join(env.CODEX_HOME || path.join(userHome, '.codex'), 'auth.json');
   const target = path.join(locations.codexHome, 'auth.json');
   if (fs.existsSync(target)) {
@@ -82,6 +93,8 @@ function preparePreviewFixtures(locations) {
     fs.mkdirSync(path.join(folder.path,'docs'),{recursive:true,mode:0o700});
     write(path.join(folder.path,'README.md'),`# ${folder.name} — synthetic workspace\n\nDisposable design-preview files. Changes here do not affect production projects.\n`);
     write(path.join(folder.path,'docs/design-notes.md'),'# Design review\n\nExplore projects, chats, sources and approvals in this separate preview.\n');
+    write(path.join(folder.path,'docs/properties-demo.md'),'---\ntitle: Workspace file preview\nstatus: Rehearsal\ntags: [design, navigation]\n---\n# Properties and links\n\nThis is synthetic preview content. Open [[design-notes|Design notes]], or [the sample image](preview-image.png).\n');
+    write(path.join(folder.path,'docs/preview-image.png'),fs.readFileSync(path.join(__dirname,'icon.png')));
   }
   const studio=workFolders[0].path;
   write(path.join(studio,'package.json'),JSON.stringify({name:'proteus-synthetic-studio',private:true,type:'module',scripts:{test:'node --test example.test.js'}},null,2)+'\n');

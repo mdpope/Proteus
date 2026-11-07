@@ -2,8 +2,13 @@
 // Several window-local view IDs can represent one owner descriptor. Count that
 // identity once when comparing order with a deduplicated synchronization snapshot.
 export const contentTabOrder=ids=>[...new Set(ids.filter(Boolean))];
-// Saved renderer checkpoints must retain the document's original chat binding,
-// including after its presentation moves into a project or Team surface.
+// Older owner descriptors carry only chatId. Project placement is not the
+// document's source: restore the original binding, never infer it from a parent.
+export function documentAssociationMetadata(descriptor){
+ const chatId=descriptor.associationChatId||descriptor.chatId;
+ return /^[a-zA-Z0-9_:.\-]{1,256}$/.test(chatId||'')?{associationChatId:chatId}:{};
+}
+// Saved checkpoints retain origin after presentation moves to a project or Team.
 export function documentSessionMetadata(tab){
  return {file:tab.markdown?.file||tab.file,...(tab.associationChatId?{associationChatId:tab.associationChatId}:{})};
 }
@@ -60,7 +65,7 @@ export function normalizeContentTabDescriptor(value){
   else if(tab.type==='document'){
     tab.documentId=value.documentId;tab.id='document:'+value.documentId;
     if(/^[a-zA-Z0-9_:.\-]{1,256}$/.test(value.chatId||''))tab.chatId=value.chatId;
-    tab.mediaType=value.mediaType==='text/html'?'text/html':'text/markdown';
+    tab.mediaType=['text/html','image/png','image/jpeg','image/gif','image/webp'].includes(value.mediaType)?value.mediaType:'text/markdown';
   }
   return tab;
 }
@@ -94,6 +99,11 @@ const activityPublishMs=60_000;
 export function mergeContentTabMetadata(previous,incoming){
  if(!previous)return incoming;
  const tab={...incoming};
+ // Saved windows and older clients may omit registry-only document bindings.
+ // Omission is not reassociation; retain each field for this exact source identity.
+ if(previous.type==='document'&&incoming.type==='document'&&previous.id===incoming.id&&previous.documentId===incoming.documentId){
+  for(const field of ['chatId','associationChatId'])if(previous[field]&&!incoming[field])tab[field]=previous[field];
+ }
  if(previous.openedAt)tab.openedAt=previous.openedAt;
  if(previous.lastTouchedAt&&!(Date.parse(incoming.lastTouchedAt)>=Date.parse(previous.lastTouchedAt)+activityPublishMs))tab.lastTouchedAt=previous.lastTouchedAt;
  if(previous.lastActivityAt&&!(Date.parse(incoming.lastActivityAt)>=Date.parse(previous.lastActivityAt)+activityPublishMs))tab.lastActivityAt=previous.lastActivityAt;

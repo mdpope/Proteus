@@ -1,3 +1,6 @@
+import {managedWorkspace} from '../integrations/managed-requirements.js';
+import {reconciliationPlan} from './source-reconciliation.js';
+import {inspectSchedule,scheduleSources,refreshScheduleCatalog} from './schedule-inspection.js';
 import {scheduleAccessScope} from '../settings/schedule-access-rule.js';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -9,7 +12,7 @@ const active=new Set(['queued','running','awaiting_input']),uuid=/^[a-f0-9]{8}-[
 const canonical=value=>Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,canonical(value[key])])):value;
 const digest=value=>createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex');
 const pick=(value,keys)=>Object.fromEntries(keys.filter(key=>value[key]!==undefined).map(key=>[key,value[key]]));
-const editable=['name','cron','timezone','provider','model','reasoningMode','reasoningEffort','contextTier','serviceTier','prompt','misfire','contextSelection','workspaceSources','executionPermissions','notifications'];
+const editable=['name','cron','timezone','provider','model','reasoningMode','reasoningEffort','contextTier','serviceTier','prompt','misfire','contextSelection','workspaceSources','executionPermissions','managedConnections','managedConnectionWorkspaceId','notifications'];
 
 // This tool owns schedule/test intents only. Native services and their takeover
 // gates remain with their existing owners. No operation resolves tool approvals.
@@ -30,9 +33,16 @@ export class ScheduleControl {
   this.service.chatControl.assertCaller();const grant={id:randomUUID(),actor,contextId,scope,createdAt:new Date().toISOString()};this.access.grants.push(grant);atomicJSON(this.accessFile,this.access);return {granted:true,grant};
  }
  current(args){const schedule=this.service.engine.schedules.get(args.scheduleId);if(!args.expectedRevision||revision(schedule)!==args.expectedRevision)throw Error('Schedule changed. Read the current revision before proceeding.');return schedule;}
- view(schedule){return {...pick(schedule,['id','name','enabled','cron','timezone','provider','model','reasoningMode','reasoningEffort','contextTier','serviceTier','prompt','misfire','contextSelection','workspaceSources','executionPermissions','notifications','source','error']),prompt:String(schedule.prompt||'').slice(0,24000),promptTruncated:String(schedule.prompt||'').length>24000,revision:revision(schedule),mcpServerNames:Object.keys(schedule.mcpServers||{}),capturedSources:(schedule.context?.entries||[]).map(entry=>pick(entry,['id','name','kind','hash'])),availableMcpServerNames:[...new Set([...Object.keys(this.service.settings.get().mcpServers||{}),...Object.keys(schedule.mcpServers||{})])]};}
+ view(schedule){return {executionPermissions:schedule.executionPermissions||null,...pick(schedule,['id','name','enabled','cron','timezone','provider','model','reasoningMode','reasoningEffort','contextTier','serviceTier','prompt','misfire','contextSelection','workspace','workspaceSources','executionPermissions','managedConnections','managedConnectionWorkspaceId','notifications','source','error']),prompt:String(schedule.prompt||'').slice(0,24000),promptTruncated:String(schedule.prompt||'').length>24000,revision:schedule.revision||revision(schedule),mcpServerNames:Object.keys(schedule.mcpServers||{}),capturedSources:(schedule.context?.entries||[]).map(entry=>pick(entry,['id','name','kind','hash'])),availableMcpServerNames:[...new Set([...Object.keys(this.service.settings.get().mcpServers||{}),...Object.keys(schedule.mcpServers||{})])]};}
+ validateChanges(actor,args){
+     if(!args.changes||typeof args.changes!=='object'||Array.isArray(args.changes)||Object.keys(args.changes).some(key=>![...editable,'mcpServerNames'].includes(key)))throw Error('Choose supported schedule settings.');
+     if(args.changes.executionPermissions!==undefined||args.changes.workspaceSources?.some(ref=>ref.categories?.includes('permissions')))this.check(actor,args,'schedule-configure-permissions');
+     const rules=args.changes.executionPermissions?.rules;
+     if(rules!==undefined&&(!Array.isArray(rules)||rules.some(rule=>!rule||!['shell','mcp','custom-tool','url','chat-access'].includes(rule.kind)||rule.kind==='shell'&&(typeof rule.command!=='string'||Object.keys(rule).some(key=>!['kind','command'].includes(key))||/^(?:cat|python[\d.]*|node|bash|sh|zsh|pwsh|powershell)(?:\.exe)?$/i.test(rule.command.trim()))||['mcp','custom-tool'].includes(rule.kind)&&(!rule.tool||rule.tool==='*'||rule.action==='*'||rule.kind==='mcp'&&(!rule.server||rule.server==='*')))))throw Error('Use exact commands or constrained tool/action rules, not broad shell or tool approvals.');
+     if(args.changes.executionPermissions?.mode==='autopilot')throw Error('This tool cannot introduce blanket automatic permissions. Use constrained tools/action rules.');
+ }
  save(){atomicJSON(this.file,this.records);}
- runView(run,{results=true}={}){let budget=24000;const events=results?run.events.slice(-20).reverse().map(event=>{const text=String(event.text||'').slice(0,Math.max(0,Math.min(6000,budget)));budget-=text.length;return {role:event.role,at:event.at,text};}).reverse():undefined;return {runId:run.id,scheduleId:run.schedule.id,scheduleRevision:run.scheduleTest?.scheduleRevision||run.scheduleRevision,futureScheduleRevision:run.scheduleTest?.futureScheduleRevision||null,runRevision:revision(run.schedule),operationId:run.scheduleTest?.operationId||null,status:run.status,pending:run.pending?{id:run.pending.id,type:run.pending.type,question:String(run.pending.question||'').slice(0,2000),humanApprovalRequired:run.pending.type==='permission'}:null,createdAt:run.createdAt,updatedAt:run.updatedAt,captured:pick(run.schedule,['provider','model','reasoningMode','reasoningEffort','contextTier','serviceTier']),...(results?{sourceHashes:(run.schedule.context?.entries||[]).slice(0,200).map(entry=>pick(entry,['id','hash','kind'])),usage:pick(run.usage||{},['inputTokens','outputTokens','cachedInputTokens','totalTokens','observed']),events}:{}),outcome:run.status==='completed'?'model-turn-completed':'not-completed',externalOutcomeVerified:false};}
+ runView(run,{results=true}={}){let budget=24000;const events=results?run.events.slice(-20).reverse().map(event=>{const text=String(event.text||'').slice(0,Math.max(0,Math.min(6000,budget)));budget-=text.length;return {role:event.role,at:event.at,text};}).reverse():undefined;return {runId:run.id,scheduleId:run.schedule.id,scheduleRevision:run.scheduleTest?.scheduleRevision||run.scheduleRevision,futureScheduleRevision:run.scheduleTest?.futureScheduleRevision||null,runRevision:revision(run.schedule),operationId:run.scheduleTest?.operationId||null,status:run.status,pending:run.pending?{id:run.pending.id,type:run.pending.type,question:String(run.pending.question||'').slice(0,2000),humanApprovalRequired:run.pending.type==='permission'}:null,createdAt:run.createdAt,updatedAt:run.updatedAt,capturedConfiguration:run.scheduleTest?.configuration||null,captured:pick(run.schedule,['provider','model','reasoningMode','reasoningEffort','contextTier','serviceTier']),...(results?{sourceHashes:(run.schedule.context?.entries||[]).slice(0,200).map(entry=>pick(entry,['id','hash','kind'])),usage:pick(run.usage||{},['inputTokens','outputTokens','cachedInputTokens','totalTokens','observed']),events}:{}),outcome:run.status==='completed'?'model-turn-completed':'not-completed',externalOutcomeVerified:false};}
  targetRun(args){const run=this.service.engine.getRun(args.runId);if(run.schedule.id!==args.scheduleId||!['manual','scheduled'].includes(run.trigger))throw Error('Choose an exact run of this schedule.');if(run.schedule.provider==='local-process')throw Error('Native service runs keep their existing control boundary.');return run;}
  idle(run){if(active.has(run.status)||this.service.engine.running.has(run.id))throw Error('Wait for the captured run to finish before changing its sources.');}
  async preflight(schedule,{captured=false}={}){
@@ -50,8 +60,17 @@ export class ScheduleControl {
   if(Object.keys(prepared.mcpServers||{}).some(name=>managed.disabledLegacyMcp?.includes(name)))throw Error('A selected MCP source is disabled on this owner.');
   const definitions={...prepared.mcpServers,...managed.mcpServers};
   for(const definition of Object.values(definitions))if(!definition||typeof definition!=='object'||(!definition.command&&!definition.url))throw Error('A selected MCP tool definition is unavailable.');
+  const managedReadiness=[];
+  if(prepared.managedConnections?.length){
+   const workspaceId=managedWorkspace(prepared),owner=this.service.managedConnections,provider=engine.providers[prepared.provider];
+   if(!owner||!provider?.supportsManagedConnections&&!provider?.metadata?.supportsManagedConnections)throw Error('The selected owner/provider does not support managed connections.');
+   for(const requirement of prepared.managedConnections){
+    try{const [binding]=owner.registry.capture({ownerId:owner.registry.ownerId,workspaceId,names:[requirement.name]}),definition=owner.manager.definition(binding);if(!requirement.capabilities.every(capability=>definition.capabilities.includes(capability)))throw Error();managedReadiness.push(owner.manager.status(binding));}
+    catch{if(requirement.required)throw Error('A required managed connection has no matching configured workspace binding/capability.');managedReadiness.push({name:requirement.name,state:'configuration-mismatch',required:false});}
+   }
+  }
   const profile=engine.permissions.describe(prepared);
-  return {prepared,summary:{captured:pick(prepared,['provider','model','reasoningMode','reasoningEffort','contextTier','serviceTier']),sourceHashes:(prepared.context?.entries||[]).map(entry=>pick(entry,['id','hash','kind'])),mcpServerNames:Object.keys(definitions),toolConfigurationChecked:true,approvalMode:profile.mode,permissionsRequireHumanWhenNotPreauthorized:true}};
+  return {prepared,summary:{managedReadiness,configuration:inspectSchedule(this.service,prepared,{prepared:true}),captured:pick(prepared,['provider','model','reasoningMode','reasoningEffort','contextTier','serviceTier']),sourceHashes:(prepared.context?.entries||[]).map(entry=>pick(entry,['id','hash','kind'])),mcpServerNames:Object.keys(definitions),toolConfigurationChecked:true,approvalMode:profile.mode,permissionsRequireHumanWhenNotPreauthorized:true}};
  }
  async start(actor,args){
   this.check(actor,args,'schedule-test');if(!uuid.test(args.operationId||''))throw Error('Supply a stable UUID operationId.');
@@ -72,7 +91,7 @@ export class ScheduleControl {
    this.records.operations.push(receipt);this.save();
    // The receipt is durable before creation; the initial run write includes its
    // linkage before provider execution. A crash can reconcile either side.
-   const run=this.service.engine.createRun(prepared,'manual',null,{prepared:true,scheduleTest:{receiptId:receipt.receiptId,operationId:args.operationId,scheduleRevision:revision(prepared),futureScheduleRevision:args.expectedRevision,settingsScope:args.settingsScope,retryOf:args.retryOf||null}});
+   const run=this.service.engine.createRun(prepared,'manual',null,{prepared:true,scheduleTest:{receiptId:receipt.receiptId,operationId:args.operationId,scheduleRevision:revision(prepared),futureScheduleRevision:args.expectedRevision,settingsScope:args.settingsScope,retryOf:args.retryOf||null,configuration:summary.configuration}});
    receipt.runId=run.id;receipt.acceptedAt=new Date().toISOString();this.save();return {taskId:receipt.receiptId,state:'accepted',preflight:summary,...this.runView(run)};
   }finally{this.locks.delete(args.scheduleId);}})();
   this.inflight.set(key,{signature,promise});try{return await promise;}finally{this.inflight.delete(key);}
@@ -89,9 +108,16 @@ export class ScheduleControl {
     let offset=0;if(args.cursor){let cursor;try{cursor=JSON.parse(Buffer.from(args.cursor,'base64url').toString());}catch{throw Error('Invalid schedule cursor.');}if(cursor.snapshot!==snapshot||!Number.isSafeInteger(cursor.offset)||cursor.offset<0)throw Error('Schedule inventory changed. Restart paging.');offset=cursor.offset;}
     const limit=Math.max(1,Math.min(100,Math.floor(Number(args.limit)||50))),schedules=rows.slice(offset,offset+limit);return {schedules,total:rows.length,snapshot,nextCursor:offset+schedules.length<rows.length?Buffer.from(JSON.stringify({snapshot,offset:offset+schedules.length})).toString('base64url'):null};
    }
-   const permission={read:'schedule-read',status:'schedule-read',update:'schedule-update',enable:'schedule-update',disable:'schedule-update',preflight:'schedule-test','start-test':'schedule-test','retry-test':'schedule-test','stop-test':'schedule-stop','refresh-sources':'schedule-refresh'}[args.action];if(!permission)throw Error('Unknown schedule action.');this.check(actor,args,permission);
-   if(args.action==='read')return this.view(this.service.engine.schedules.get(args.scheduleId));
-   if(args.action==='status'){if(args.runId)return this.runView(this.targetRun(args));return {runs:[...this.service.engine.runs.values()].filter(run=>run.schedule.id===args.scheduleId).slice(-100).map(run=>this.runView(run,{results:false}))};}
+   const permission={read:'schedule-read',sources:'schedule-read',preview:'schedule-test','preview-reconcile':'schedule-test',reconcile:'schedule-update','refresh-catalog':'schedule-refresh',status:'schedule-read',update:'schedule-update',enable:'schedule-update',disable:'schedule-update',preflight:'schedule-test','start-test':'schedule-test','retry-test':'schedule-test','stop-test':'schedule-stop','refresh-sources':'schedule-refresh'}[args.action];if(!permission)throw Error('Unknown schedule action.');this.check(actor,args,permission);
+   if(args.action==='read'){
+    const schedule=this.service.engine.schedules.get(args.scheduleId),view=this.view(schedule);
+    try{return {...view,resolved:inspectSchedule(this.service,schedule)};}catch{return {...view,resolved:null,resolutionError:'Configuration could not be resolved. Use preflight for diagnostics.'};}
+   }
+   if(args.action==='sources')return scheduleSources(this.service,this.service.engine.schedules.get(args.scheduleId),args);
+   if(args.action==='status'){if(args.runId)return this.runView(this.targetRun(args));const rows=[...this.service.engine.runs.values()].filter(run=>run.schedule.id===args.scheduleId).sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||''))||b.id.localeCompare(a.id)),snapshot=digest(rows.map(run=>[run.id,run.updatedAt,run.status]));
+    let offset=0;if(args.cursor){let cursor;try{cursor=JSON.parse(Buffer.from(args.cursor,'base64url').toString());}catch{throw Error('Invalid run cursor.');}if(cursor.snapshot!==snapshot||!Number.isSafeInteger(cursor.offset)||cursor.offset<0)throw Error('Run history changed. Restart paging.');offset=cursor.offset;}
+    const limit=Math.max(1,Math.min(100,Math.floor(Number(args.limit)||50))),runs=rows.slice(offset,offset+limit).map(run=>this.runView(run,{results:false}));
+    return {runs,total:rows.length,snapshot,nextCursor:offset+runs.length<rows.length?Buffer.from(JSON.stringify({snapshot,offset:offset+runs.length})).toString('base64url'):null};}
    if(['start-test','retry-test'].includes(args.action))return this.start(actor,args);
    if(args.action==='stop-test'){
     if(!uuid.test(args.operationId||''))throw Error('Supply a stable stop operationId.');
@@ -102,30 +128,53 @@ export class ScheduleControl {
     const record={key,receiptId:randomUUID(),signature,action:'stop-test',actor,runId:run.id,scheduleId:args.scheduleId,preparedAt:new Date().toISOString()};this.records.operations.push(record);this.save();
     if(active.has(run.status))this.service.engine.cancel(run.id);record.acceptedAt=new Date().toISOString();this.save();return {taskId:record.receiptId,state:'accepted',stopRequestedAt:record.acceptedAt,...this.runView(run)};
    }
+   if(args.action==='reconcile'){
+    this.check(actor,args,'schedule-configure-permissions');
+    const prior=this.records.operations.find(record=>record.key===actor+':'+args.operationId);
+    if(prior){if(prior.signature!==digest(args))throw Error('operationId belongs to different reconciliation arguments.');
+     const current=this.service.engine.schedules.get(args.scheduleId);
+     if(prior.resultRevision!==revision(current))throw Error('Reconciliation outcome requires review; current schedule differs from its retained receipt.');
+     return {applied:true,taskId:prior.receiptId,reconciled:true,...this.view(current)};}
+   }
    const schedule=this.current(args);
+   if(['preview-reconcile','reconcile'].includes(args.action)){
+    if(args.settingsScope!=='future-runs')throw Error('Reconciliation requires future-runs scope.');
+    this.check(actor,args,'schedule-configure-permissions');
+    const plan=reconciliationPlan(schedule,args.sourceExport);
+    this.validateChanges(actor,{...args,changes:pick(plan.next,editable)});
+    const preflight=await this.preflight(plan.next);this.check(actor,args,permission);this.check(actor,args,'schedule-configure-permissions');this.current(args);
+    if(reconciliationPlan(schedule,args.sourceExport).planDigest!==plan.planDigest)throw Error('Source evidence changed during validation.');
+    if(args.action==='preview-reconcile')return {applied:false,planDigest:plan.planDigest,revision:args.expectedRevision,enabled:schedule.enabled,configuration:preflight.summary.configuration,source:plan.source,foreignManifestValidation:'workflow-owned'};
+    if(!uuid.test(args.operationId||'')||args.planDigest!==plan.planDigest)throw Error('Supply a stable operationId and the unchanged preview planDigest.');
+    const receipt={key:actor+':'+args.operationId,signature:digest(args),receiptId:randomUUID(),action:'reconcile',scheduleId:schedule.id,resultRevision:plan.resultRevision,source:plan.source,preparedAt:new Date().toISOString()};
+    this.records.operations.push(receipt);this.save();
+    const saved=this.service.engine.schedules.save(plan.next,args.expectedRevision);receipt.acceptedAt=new Date().toISOString();this.save();this.service.engine.emit('change');
+    return {applied:true,taskId:receipt.receiptId,...this.view(saved)};
+   }
+   if(args.action==='refresh-catalog'){
+    await refreshScheduleCatalog(this.service,schedule);
+    this.check(actor,args,permission);this.current(args);
+    return {refreshed:true,scheduleRevision:args.expectedRevision,...scheduleSources(this.service,schedule,args)};
+   }
    if(args.action==='preflight'){const result=await this.preflight(schedule);this.check(actor,args,permission);this.current(args);return result.summary;}
-   if(['enable','disable','update'].includes(args.action)){
+   if(['enable','disable','update','preview'].includes(args.action)){
     if(args.settingsScope!=='future-runs')throw Error('Schedule changes require explicit future-runs scope. Captured runs remain unchanged.');
-    if(schedule.source?.manifest&&args.action!=='disable')throw Error('Repository-owned schedules must be updated through their source workflow.');
+    if(schedule.source?.manifest&&!['disable','preview'].includes(args.action))throw Error('Repository-owned schedules must be updated through their source workflow.');
     let next={...schedule};
-    if(args.action==='update'){
-     if(!args.changes||typeof args.changes!=='object'||Array.isArray(args.changes)||Object.keys(args.changes).some(key=>![...editable,'mcpServerNames'].includes(key)))throw Error('Choose supported schedule settings.');
-     if(args.changes.executionPermissions!==undefined||args.changes.workspaceSources?.some(ref=>ref.categories?.includes('permissions')))this.check(actor,args,'schedule-configure-permissions');
-     const rules=args.changes.executionPermissions?.rules;
-     if(rules!==undefined&&(!Array.isArray(rules)||rules.some(rule=>!rule||!['shell','mcp','custom-tool','url','chat-access'].includes(rule.kind)||rule.kind==='shell'&&(typeof rule.command!=='string'||Object.keys(rule).some(key=>!['kind','command'].includes(key))||/^(?:cat|python[\d.]*|node|bash|sh|zsh|pwsh|powershell)(?:\.exe)?$/i.test(rule.command.trim()))||['mcp','custom-tool'].includes(rule.kind)&&(!rule.tool||rule.tool==='*'||rule.action==='*'||rule.kind==='mcp'&&(!rule.server||rule.server==='*')))))throw Error('Use exact commands or constrained tool/action rules, not broad shell or tool approvals.');
-     if(args.changes.executionPermissions?.mode==='autopilot')throw Error('This tool cannot introduce blanket automatic permissions. Use constrained tools/action rules.');
+    if(['update','preview'].includes(args.action)){
+     this.validateChanges(actor,args);
      next={...next,...pick(args.changes,editable)};
      if(args.changes.mcpServerNames!==undefined){const available={...this.service.settings.get().mcpServers,...schedule.mcpServers},names=args.changes.mcpServerNames;if(!Array.isArray(names)||names.length>100||names.some(name=>typeof name!=='string'||!Object.hasOwn(available,name)))throw Error('Select existing owner MCP server names.');next.mcpServers=Object.fromEntries(names.map(name=>[name,available[name]]));}
     }else next.enabled=args.action==='enable';
     if(next.provider==='local-process')throw Error('Native replacement schedule settings keep their existing owner controls.');
-    if(args.action==='disable')validateSchedule(next);else {const preflight=await this.preflight(next);if((args.changes?.executionPermissions!==undefined||args.changes?.workspaceSources?.some(ref=>ref.categories?.includes('permissions')))&&preflight.summary.approvalMode==='autopilot')throw Error('Use constrained permissions instead of introducing blanket automatic approval.');}this.check(actor,args,permission);this.current(args);const saved=this.service.engine.schedules.save(next,args.expectedRevision);this.service.engine.emit('change');return this.view(saved);
+    if(args.action==='disable')validateSchedule(next);else {const preflight=await this.preflight(next);if((args.changes?.executionPermissions!==undefined||args.changes?.workspaceSources?.some(ref=>ref.categories?.includes('permissions')))&&preflight.summary.approvalMode==='autopilot')throw Error('Use constrained permissions instead of introducing blanket automatic approval.');if(args.action==='preview'){this.check(actor,args,permission);this.current(args);return {applied:false,revision:args.expectedRevision,sourceManaged:!!schedule.source?.manifest,configuration:preflight.summary.configuration,preflight:preflight.summary};}}this.check(actor,args,permission);this.current(args);const saved=this.service.engine.schedules.save(next,args.expectedRevision);this.service.engine.emit('change');return this.view(saved);
    }
    if(args.action==='refresh-sources'){
     if(schedule.provider==='local-process')throw Error('Native services keep their existing owner controls.');
     if(!['future-runs','existing-run'].includes(args.settingsScope))throw Error('Choose future-runs or existing-run source refresh.');
     let run,before;
     if(args.settingsScope==='existing-run'){run=this.targetRun(args);this.idle(run);before=revision(run.schedule);if(args.expectedRunRevision!==before)throw Error('Captured run settings changed.');}
-    await this.service.context.refreshAsync({workspaceId:(run?.schedule||schedule).context?.workspaceId});this.check(actor,args,permission);this.current(args);
+    await refreshScheduleCatalog(this.service,run?.schedule||schedule);this.check(actor,args,permission);this.current(args);
     if(run){this.idle(run);if(revision(run.schedule)!==before)throw Error('Captured settings changed during refresh.');}
     const base=run?.schedule||schedule,selection=base.contextSelection||{selectedIds:base.context?.selectedIds||[],agentId:base.context?.agentId,includeDefaults:base.context?.includeDefaults??false};
     const prepared=this.service.engine.prepareSchedule({...base,contextSelection:selection},'manual');

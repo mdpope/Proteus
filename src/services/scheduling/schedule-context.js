@@ -1,7 +1,11 @@
+import {revision} from './schedules.js';
+import {validateScopedExecution} from './scoped-execution.js';
 import {permissionRuleId} from '../settings/permissions.js';
 export const workspaceSourceCategories=['folders','permissions','instructions','agents','skills','mcps'];
 export function validateScheduleSources(schedule){
  if(schedule.workspaceSources!==undefined&&(!Array.isArray(schedule.workspaceSources)||schedule.workspaceSources.some(ref=>typeof ref?.workspaceId!=='string'||!ref.workspaceId||!Array.isArray(ref.categories)||ref.categories.some(category=>!workspaceSourceCategories.includes(category)))))throw Error('Choose valid workspace references and configuration categories.');
+ if(schedule.managedConnectionWorkspaceId!==undefined&&(typeof schedule.managedConnectionWorkspaceId!=='string'||! /^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,127}$/.test(schedule.managedConnectionWorkspaceId)))throw Error('Choose an explicit managed connection workspace ID.');
+ validateScopedExecution(schedule);
  const p=schedule.executionPermissions;
  if(p===undefined)return;
  if(!p||typeof p!=='object'||Array.isArray(p))throw Error('Choose valid schedule filesystem and approval settings.');
@@ -17,6 +21,13 @@ export function resolveScheduleContext(schedule,context,permissions){
  const entries=new Map(base.entries.map(entry=>[entry.id,entry])),roots=new Set([base.workspace.cwd,...base.workspace.additionalDirectories]);
  const sourceWorkspaces=[],profiles=[],agentIDs=new Set(base.agentId?[base.agentId]:[]);const kinds={instructions:'instruction',agents:'agent',skills:'skill',mcps:'mcp'};
  for(const ref of schedule.workspaceSources||[]){
+  // Identity-only references must not resolve defaults, files or native MCPs.
+  if(!ref.categories.length){
+   const profile=context.scope(ref.workspaceId);
+   if(profile.id!==ref.workspaceId)throw Error('Referenced workspace is missing: '+ref.workspaceId);
+   sourceWorkspaces.push({workspaceId:profile.id,workspaceName:profile.name,configurationRevision:revision(profile),categories:[]});
+   continue;
+  }
   const snapshot=context.capture({workspaceId:ref.workspaceId});
   if(!snapshot.workspaceId||snapshot.workspaceId!==ref.workspaceId)throw Error('Referenced workspace is missing: '+ref.workspaceId);
   const categories=[...new Set(ref.categories)],allowed=new Set(categories.map(category=>kinds[category]).filter(Boolean));

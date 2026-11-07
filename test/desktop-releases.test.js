@@ -191,3 +191,43 @@ test('public retirement preserves current packages and requires unchanged verifi
  fs.writeFileSync(path.join(output,'downloads/proteus/current.json'),'Corrupt new discovery');
  assert.throws(()=>desktopPublicationPlan(output,receipt),/Verify every new public file/);assert.ok(fs.existsSync(old),'failed verification cannot retire any previous package');
 });
+
+
+test('subset publication preserves signed prior platform bytes and marks them pending without retiring them',async t=>{
+ const {root,inputs}=distributionInputs(t),file=path.join(inputs[0],'release.json');
+ const value=JSON.parse(Buffer.from(JSON.parse(fs.readFileSync(file)).payload,'base64url'));value.version='1.2.4';fs.writeFileSync(file,JSON.stringify(envelope(value)));
+ const output=path.join(root,'partial'),receipt=stageDesktopDistribution([inputs[0]],output,{keys},{retainedInputs:inputs.slice(1)});
+ assert.equal(receipt.releases.length,1);assert.equal(receipt.retainedReleases.length,2);
+ const current=JSON.parse(fs.readFileSync(path.join(output,'downloads/proteus/current.json')));assert.equal(current.targets.length,1);assert.equal(current.pendingTargets.length,2);
+ for(const platform of ['linux','win32']){
+  const catalogFile=path.join(output,'downloads/proteus/stable/'+platform+'-'+process.arch+'.json'),bytes=fs.readFileSync(catalogFile);
+  const feed=new DesktopReleaseFeed({fetch:async()=>new Response(bytes)}),catalog=await feed.catalog({platform,arch:process.arch});
+  assert.deepEqual(catalog.publication,{state:'pending',version:'1.2.4',availableVersion:'1.2.3'});
+  const signed=JSON.parse(fs.readFileSync(path.join(root,platform,'release.json')));assert.deepEqual(catalog.releases,[signed]);
+  assert.deepEqual(await feed.releases({platform,arch:process.arch}),[signed]);
+  assert.equal(verifyRelease(signed,{keys,platform,arch:process.arch}).version,'1.2.3');
+  assert.deepEqual(fs.readFileSync(path.join(output,'downloads/proteus/releases/synthetic-'+platform+'/release.json')),fs.readFileSync(path.join(root,platform,'release.json')));
+  const folder=platform==='win32'?'windows':'linux';assert.match(fs.readFileSync(path.join(output,'downloads/proteus',folder,process.arch,'index.html'),'utf8'),/1.2.4 is pending.*retained verified 1.2.3/);
+ }
+ const obsolete=path.join(output,'downloads/proteus/releases/obsolete');fs.mkdirSync(obsolete);fs.writeFileSync(path.join(obsolete,'old'),'old');
+ const plan=desktopPublicationPlan(output,receipt);assert.deepEqual(plan.retired.map(row=>row.id),['obsolete']);
+ retireDesktopPublications(output,receipt,plan.planDigest);assert.deepEqual(plan.retained,['synthetic-darwin','synthetic-linux','synthetic-win32']);
+ for(const retained of receipt.retainedReleases)assert.ok(fs.existsSync(path.join(output,'downloads/proteus/releases',retained.updateRelease.releaseId)));
+});
+
+test('retained platform inputs cannot bypass signature, expiry, target or version checks',t=>{
+ const {root,inputs}=distributionInputs(t),output=path.join(root,'rejected');
+ assert.throws(()=>stageDesktopDistribution([inputs[0]],output,{keys},{retainedInputs:[inputs[0]]}),/one release/);
+ assert.throws(()=>stageDesktopDistribution([inputs[0]],output,{keys},{retainedInputs:[inputs[1]]}),/precede/);
+ const file=path.join(inputs[1],'release.json'),value=JSON.parse(Buffer.from(JSON.parse(fs.readFileSync(file)).payload,'base64url'));
+ value.version='1.2.2';value.expiresAt=new Date(0).toISOString();fs.writeFileSync(file,JSON.stringify(envelope(value)));
+ assert.throws(()=>stageDesktopDistribution([inputs[0]],output,{keys},{retainedInputs:[inputs[1]]}),/expired/);assert.equal(fs.existsSync(output),false);
+});
+
+test('publication hints are bounded metadata and never mutate signed envelopes',async()=>{
+ const signed=envelope(hostedManifest());
+ for(const publication of [{state:'ready',version:'1.2.4',availableVersion:'1.2.3'},{state:'pending',version:'<script>',availableVersion:'1.2.3'},{state:'pending',version:'1.2.4',availableVersion:{}}]){
+  const feed=new DesktopReleaseFeed({fetch:async()=>Response.json({schemaVersion:1,publication,releases:[signed]})});
+  await assert.rejects(feed.catalog({platform:'win32',arch:process.arch}),/publication state/);
+ }
+});

@@ -1,3 +1,6 @@
+import {mountMnemosyne} from '../../../public/features/mnemosyne/operations.js';
+import '../../../public/features/mnemosyne/operations.css';
+import {navigateQuestion} from '../../../public/features/chats/question-navigation.js';
 import {createVisibleChatWatch} from './chat-watch.js';
 import {updateWebState,applyLifecycleState,updateRunSummary,onlyChatIndexChanges} from './remote-state.js';
 import {acceptRemoteState,coalesceRender,draftSubmission,acknowledgeDraft} from "./remote-updates.js";
@@ -53,7 +56,7 @@ const chatTabs = new Map();
 const reviewedChats=new Map();
 function currentChatStatus(hostId,run){const key=hostId+':'+run.id,reviewed=reviewedChats.get(key);if(!reviewed)return run;if(run.failureEventAt&&reviewed.failureEventAt&&run.failureEventAt!==reviewed.failureEventAt&&Date.parse(run.failureEventAt)>Date.parse(reviewed.failureEventAt)){reviewedChats.delete(key);return run;}return ['failed','interrupted'].includes(run.status)&&(Date.parse(run.updatedAt||0)<=Date.parse(reviewed.updatedAt||0)||(run.failureEventAt&&run.failureEventAt===reviewed.failureEventAt))?{...run,attentionRequired:reviewed.attentionRequired,failureReviewedAt:reviewed.failureReviewedAt}:run;}
 let appPreferences = {defaultMacId:null,timezone:'UTC'};
-const sectionNames = ['chats', 'schedules', 'workspaces', 'connections'];
+const sectionNames = ['chats', 'schedules', 'workspaces', 'connections', 'transcription'];
 const initialQuery=new URLSearchParams(location.search);
 const initialView = initialQuery.get('view');
 let attentionPanel='chats';
@@ -61,7 +64,7 @@ let attentionOnly=initialQuery.get('attention')==='1',transcriptionOnly=initialQ
 let chatMode=initialQuery.has('new')?'new':'index';
 let newInternet=initialQuery.get('type')==='internet';
 selectChatType(newInternet?'internet':'user');
-let active = '', view = sectionNames.includes(initialView) ? initialView : 'chats', switching = 0;
+let active = '', view = transcriptionOnly ? 'transcription' : sectionNames.includes(initialView) ? initialView : 'chats', switching = 0;
 const chatTabKey='proteus.chat-tabs.v1.'+root.dataset.account;
 const childTabKey='proteus.chat-child-tabs.v1.'+root.dataset.account;
 const chatTabTitle=value=>typeof value==='string'?value.replace(/[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/g,' ').replace(/\s+/g,' ').trim().slice(0,120)||'Chat':'Chat';
@@ -322,7 +325,7 @@ function render() {
     destinationOptions(); renderUsage();renderChatTabs();renderRecentChats();
     const management=view==='connections';
     root.querySelector('.remote-heading').hidden=!management;root.querySelector('.remote-connection-guide').hidden=!management;
-    root.querySelector('.remote-destinations').hidden=!(management||view==='schedules');
+    root.querySelector('.remote-destinations').hidden=!(management||view==='schedules'||view==='transcription');
     root.querySelectorAll('.remote-destinations button').forEach(button=>button.hidden=!management);
     $('remote-pair-panel').hidden=!management;root.querySelector('.remote-privacy').hidden=!management;
     if(management){$('remote-content').innerHTML='<p>computer connection keys remain separate. <a href="/engine-room?tab=connections">Choose the Default computer in Engine Room</a>.</p>';return;}
@@ -332,6 +335,7 @@ function render() {
     if(view==='workspaces'&&(!workspaces.active||online)){workspaces.render($('remote-content'));return;}
     if (!current?.state || !online) {current?.previewApprovals?.clear(); const loaded=!ended&&!suspended&&view==='chats'&&current?.documents?.get(current.selected+':'+current.activeChatPanel);if(loaded?.content){$('remote-content').innerHTML=`<section class="card remote-chat-document"><h2>${escape(loaded.title||'Document')}</h2><p>Offline copy from ${escape(current.host.label)} · Last read ${escape(dateTime(loaded.readAt,appPreferences.timezone))}. Reconnect for a fresh authorized read.</p><div id="remote-offline-document"></div></section>`;mountMarkdown($('remote-offline-document'),loaded.content,{copy:value=>navigator.clipboard.writeText(value)});return;}
         $('remote-content').innerHTML = `<section class="card"><h2>${active ? 'Connect ' + escape(hosts.get(active)?.label) : 'Choose a paired computer'}</h2><p>${active ? 'Remote content is hidden while disconnected. The selected computer reconnects automatically unless you disconnect it. Use Connect to retry now.' : 'Use a fresh pairing code from each computer. Each authorized computer keeps separate keys, drafts and event cursors.'}</p>${view==='chats'?`<h3>Last authorized chat index</h3>${aggregateChats().map(run=>`<p>${escape(run.title||'Chat')} · ${escape(run.hostLabel)} · ${run.cached?'cached '+escape(dateTime(run.lastSyncAt,appPreferences.timezone)):'online'}</p>`).join('')||'<p>No cached chat index.</p>'}`:''}</section>`; return; }
+    if (view === 'transcription') { renderMnemosyne(current); return; }
     if (view === 'chats') renderChats(current); else if (view === 'schedules') renderSchedules(current); else renderWorkspaces(current);
     if(view==='chats'){const details=root.querySelector('.remote-chat-details'),children=root.querySelector('.remote-inner-scroll');if(details){if(viewPosition.hadDetails)details.open=viewPosition.detailsOpen;details.scrollTop=viewPosition.details;}if(children)children.scrollLeft=viewPosition.children;for(const item of expanded){const parent=[...root.querySelectorAll('[data-event-anchor]')].find(element=>element.dataset.eventAnchor===item.key);parent?.querySelectorAll('details')?.[item.index]&&(parent.querySelectorAll('details')[item.index].open=true);}window.scrollTo({top:viewPosition.page,behavior:'instant'});}
     // Restore after disclosure/layout state; restoring before it can clamp the pane's scroll.
@@ -656,12 +660,14 @@ function renderChats(current) {
     const historyPane=root.querySelector('.remote-messages');
     historyPane?.addEventListener('scroll',()=>{if(earlier&&renderStart-eventStart<40&&historyPane.scrollTop<historyPane.clientHeight*2)prefetchHistory();},{passive:true});
     async function loadEarlier(){
-        if(current.loadingEarlier||!earlier||current.run?.id!==run.id)return;
+        if(current.loadingEarlier)return current.historyLoadTask;
+        if(!earlier||current.run?.id!==run.id)return;
         const pane=root.querySelector('.remote-messages'),status=$('remote-earlier-status');if(!pane)return;
         const oldHeight=pane.scrollHeight,oldTop=pane.scrollTop;current.loadingEarlier=true;current.earlierError=false;if(status)status.textContent='Loading earlier messages…';
-        try{if(renderStart>eventStart){current.historyWindows.set(run.id,eventStart+chatHistoryWindowStart(run.events||[],renderStart-eventStart));}else{const older=await prefetchHistory(true);current.historyPrefetch=null;current.historyPrefetchFailedAt=null;if(current.run?.id!==run.id)return;current.historyWindows.set(run.id,(older.eventStart||0)+chatHistoryWindowStart(older.events||[]));current.run=mergeChatHistory(current.run,older);}render();const next=root.querySelector('.remote-messages');if(next){next.scrollTop=oldTop+next.scrollHeight-oldHeight;current.scroll ||= new Map();current.scroll.set(run.id,next.scrollTop);}
-        }catch(error){current.earlierError=true;if(status){status.innerHTML='<button id="remote-earlier-retry" type="button">Retry loading earlier messages</button>';$('remote-earlier-retry').onclick=()=>void loadEarlier();}notice(error.message);}finally{current.loadingEarlier=false;}
+        const task=(async()=>{try{if(renderStart>eventStart){current.historyWindows.set(run.id,eventStart+chatHistoryWindowStart(run.events||[],renderStart-eventStart));}else{const older=await prefetchHistory(true);current.historyPrefetch=null;current.historyPrefetchFailedAt=null;if(current.run?.id!==run.id)return;current.historyWindows.set(run.id,(older.eventStart||0)+chatHistoryWindowStart(older.events||[]));current.run=mergeChatHistory(current.run,older);}render();const next=root.querySelector('.remote-messages');if(next){next.scrollTop=oldTop+next.scrollHeight-oldHeight;current.scroll ||= new Map();current.scroll.set(run.id,next.scrollTop);}
+        }catch(error){current.earlierError=true;if(status){status.innerHTML='<button id="remote-earlier-retry" type="button">Retry loading earlier messages</button>';$('remote-earlier-retry').onclick=()=>void loadEarlier();}notice(error.message);}finally{current.loadingEarlier=false;}})();current.historyLoadTask=task;return task;
     }
+    current.questionHistory={runId:run?.id,start:renderStart,loadEarlier};
     requestAnimationFrame(()=>{const pane=root.querySelector('.remote-messages');if(pane&&run&&current.run?.id===run.id&&!current.earlierError&&pane.scrollHeight<=pane.clientHeight+80)void loadEarlier();});
     if(run&&historyPane){
         // File consent can remain open while navigation changes. Every stage belongs
@@ -670,13 +676,11 @@ function renderChats(current) {
         // The transcript owns this queue's bounds. Reusing the pending-input grid
         // row would overlap the existing answer/permission form in docked chats.
         let queue=historyPane.querySelector(':scope>.user-question-queue');if(!queue){queue=document.createElement('div');queue.className='user-question-queue';historyPane.prepend(queue);}
-        mountQuestionQueue(queue,run,{answer:answerQuestion,notify:notice,jump:async question=>{
-            const card=[...root.querySelectorAll('[data-question-id]')].find(node=>node.dataset.questionId===question.id);
-            if(card){card.scrollIntoView({block:'center'});card.querySelector('textarea')?.focus({preventScroll:true});return;}
-            const before=current.historyWindows?.get(run.id)??renderStart;await loadEarlier();
-            const after=current.historyWindows?.get(run.id)??renderStart;
-            if(after<before){await root.querySelector('.user-question-queue')?.questionActions.jump(question);}else notice('Load earlier messages to view this question.');
-        }});
+        mountQuestionQueue(queue,run,{answer:answerQuestion,notify:notice,jump:question=>navigateQuestion({owner:current,
+            current:()=>session()===current&&view==='chats'&&current.run?.id===run.id&&current.selected===run.id,
+            locate:()=>[...root.querySelectorAll('[data-question-id]')].find(node=>node.dataset.questionId===question.id),
+            loadEarlier:async()=>{const history=current.questionHistory;if(history?.runId!==run.id||current.earlierError)return false;const before=history.start;await history.loadEarlier();return current.questionHistory?.runId===run.id&&current.questionHistory.start<before;},
+            position:()=>{const pane=root.querySelector('.remote-messages');if(pane){current.scroll ||=new Map();current.scroll.set(run.id,pane.scrollTop);}},notify:notice})});
         const questions=chatQuestions(run),ids=new Set(questions.map(question=>question.id)),questionCounts=new Map();
         for(const question of questions)questionCounts.set(question.eventIndex,(questionCounts.get(question.eventIndex)||0)+1);
         for(const card of root.querySelectorAll('.user-question-card'))if(!ids.has(card.dataset.questionId))card.remove();
@@ -695,6 +699,13 @@ function renderChats(current) {
     root.querySelectorAll('[data-steer-queued]').forEach(button=>button.onclick=async()=>{try{await command('chat.steer-queued',{id:run.id,messageId:button.dataset.steerQueued});await openChat(run.id);}catch(error){notice(error.message);}});
     root.querySelectorAll('[data-edit-queued]').forEach(button=>button.onclick=()=>editQueuedMessage(current,run,run.queuedMessages.find(m=>m.id===button.dataset.editQueued)));
     root.querySelectorAll('[data-unqueue]').forEach(button => button.onclick = async () => { try { await command('chat.remove-queued', { id: run.id, messageId: button.dataset.unqueue }); await openChat(run.id); } catch (error) { notice(error.message); } });
+}
+function renderMnemosyne(current){
+ const host=$('remote-content');
+ if(!current.state.capabilities?.includes('mnemosyne.operations.v1')){host.innerHTML='<section class="card"><h2>Mnemosyne</h2><p>Update the owning desktop to view its operations. Existing schedules remain available under Schedules.</p></section>';return;}
+ if(host.querySelector('[data-mn-owner]')?.dataset.mnOwner===current.host.hostId)return;
+ host.innerHTML='<div data-mn-owner></div>';const target=host.firstElementChild;target.dataset.mnOwner=current.host.hostId;
+ mountMnemosyne(target,{ownerLabel:current.host.label,readSnapshot:()=>commandForHost(current,'mnemosyne.snapshot',{}),readLogs:(job,stream)=>commandForHost(current,'mnemosyne.logs',{job,stream}),openSchedule:id=>openSchedule(id,current.host.hostId),openRun:id=>openChat(id,current.host.hostId),onError:error=>notice(error.message)});
 }
 function renderSchedules(current) {
     const schedules=(current.state.schedules||[]).filter(item=>!transcriptionOnly||item.integration?.type==='omi'||item.provider==='local-process');

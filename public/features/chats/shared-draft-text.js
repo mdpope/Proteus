@@ -1,11 +1,14 @@
 // Only composer text crosses this boundary. Tab descriptors carry an empty setup
 // marker; attachment bytes, provider/source choices and approvals never enter it.
+const bindings=new WeakMap();
 export function bindSharedDraftText({input,identity,request,storage=localStorage,changed=()=>{},notify=()=>{}}){
  if(!input)return {stop(){},sync:async()=>{}};
+ // Keyed web renders keep the input alive. Replace its old observer/timer before rebinding.
+ bindings.get(input)?.stop();
  const key='shared-text:'+JSON.stringify(identity),status=document.createElement('div');status.className='note shared-draft-status';status.setAttribute('role','status');
  // Draft state belongs with the chat heading; the composer is for message entry.
  const setupHeading=input.closest('.new-chat-tab-panel')?.querySelector(':scope > h2');
- const chatHeading=input.closest('#main')?.querySelector(':scope > .heading > div');
+ const chatHeading=input.closest('#main')?.querySelector(':scope > .heading > div')||input.closest('.remote-chat-view')?.querySelector('.remote-chat-heading-copy');
  if(setupHeading)setupHeading.after(status);
  else if(chatHeading){chatHeading.querySelectorAll('.shared-draft-status').forEach(node=>node.remove());chatHeading.append(status);}
  else input.after(status);
@@ -48,6 +51,6 @@ export function bindSharedDraftText({input,identity,request,storage=localStorage
   finally{busy=false;}
  }
  const edited=()=>{lastInput=Date.now();};input.addEventListener('input',edited);
- function stop(){closed=true;clearInterval(timer);input.removeEventListener('input',edited);surface?.removeEventListener('submit',guardSend,true);surface?.removeEventListener('click',guardSend,true);status.remove();}
- timer=setInterval(()=>void tick(),1500);paint();void tick();return {stop,sync:tick};
+ function stop(){if(closed)return;closed=true;if(bindings.get(input)?.stop===stop)bindings.delete(input);clearInterval(timer);input.removeEventListener('input',edited);surface?.removeEventListener('submit',guardSend,true);surface?.removeEventListener('click',guardSend,true);status.remove();}
+ const binding={stop,sync:tick};bindings.set(input,binding);timer=setInterval(()=>void tick(),1500);paint();void tick();return binding;
 }

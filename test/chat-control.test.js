@@ -34,6 +34,21 @@ async function fixture(t){
  return {root,origin,owner,hostId,control,caller,grant,command,create,start};
 }
 
+test('explicit recapture rescans an owner-proven rejected create and cannot duplicate delivery',async t=>{
+ const f=await fixture(t),{owner,control,caller,command}=f;f.grant();
+ const file=path.join(owner.settings.get().workspace.cwd,'AGENTS.md');fs.writeFileSync(file,'old source');await owner.context.refreshAsync();
+ const source=owner.context.get().entries.find(entry=>entry.path===fs.realpathSync(file));fs.writeFileSync(file,'updated source');
+ const task=await control.handle(command('create',{provider:'copilot',model:'fixture',prompt:'synthetic recapture',selectedIds:[source.id],includeDefaults:false}),caller.id);
+ assert.equal(task.state,'uncertain');assert.match(task.error,/Instructions changed/);assert.equal(task.chatId,null);
+ await owner.context.refreshAsync();assert.match((await control.handle({action:'retry',taskId:task.taskId},caller.id)).error,/Instructions changed/);
+ const recapture={action:'recapture',taskId:task.taskId,operationId:randomUUID()},request=control.request.bind(control);let drop=true;
+ control.request=async(...args)=>{const result=await request(...args);if(args[1]==='chat.recapture'&&drop){drop=false;throw Error('Synthetic lost recapture reply');}return result;};
+ await assert.rejects(control.handle(recapture,caller.id),/lost recapture/);
+ const recovered=await control.handle(recapture,caller.id);assert.equal(recovered.state,'accepted');assert.ok(recovered.chatId);
+ const again=await control.handle({action:'recapture',taskId:task.taskId,operationId:randomUUID()},caller.id);assert.equal(again.chatId,recovered.chatId);
+ assert.equal([...owner.engine.runs.values()].filter(run=>run.schedule.prompt==='synthetic recapture').length,1);
+ assert.equal(owner.engine.getRun(recovered.chatId).schedule.context.entries.find(entry=>entry.id===source.id).content,'updated source');
+});
 test('remote update coordinators use destination defaults even when the controller has different defaults',async t=>{
  const f=await fixture(t),{origin,owner,control,caller,command}=f;f.grant();
  const save=(app,defaults)=>app.settings.save({...app.settings.get(),updateCoordinator:defaults},app.settings.get().revision);
@@ -368,4 +383,23 @@ test('executing owner revalidates model policy and rechecks the target project a
  owner.workspaceProjects.projects({action:'create',workspaceId:project.workspaceId,name:'Preflight move',expectedRevision:owner.workspaceProjects.read().revision},owner.engine);const other=owner.workspaceProjects.read().projects.find(p=>p.name==='Preflight move');
  owner.workspaceProjects.projects({action:'move-chat',chatId:run.id,projectId:other.id,expectedRevision:owner.workspaceProjects.read().revision,expectedUpdatedAt:run.updatedAt},owner.engine);release();await rejected;assert.equal(run.queuedMessages?.length||0,0);
  catalog.get=original;
+});
+
+test('managed connection create selection survives remote delivery and rejects old owners or running-chat retargeting',async t=>{
+ const f=await fixture(t),{owner,control,caller,command,hostId}=f;f.grant();owner.engine.providers.copilot.supportsManagedConnections=true;
+ const workspaceId=owner.context.config().defaultWorkspaceId,managedConnections=[{name:'fixture-managed',capabilities:['jira.issue.search'],required:false}];
+ const task=await control.handle(command('create',{provider:'copilot',model:'fixture',prompt:'synthetic managed selection capture only',workspaceId,managedConnections,managedConnectionWorkspaceId:workspaceId}),caller.id);
+ assert.equal(task.state,'accepted',JSON.stringify(task));const run=owner.engine.getRun(task.chatId);
+ assert.deepEqual(run.schedule.managedConnections,managedConnections);assert.equal(run.schedule.managedConnectionWorkspaceId,workspaceId);
+ await assert.rejects(control.handle(command('send',{chatId:run.id,prompt:'do not retarget',managedConnections:[]}),caller.id),/new ordinary/);
+ const connection=await control.connection(hostId);connection.capabilities=connection.capabilities.filter(cap=>cap!=='chat.managed-connections.v1');
+ await assert.rejects(control.handle(command('create',{provider:'copilot',model:'fixture',prompt:'unsupported',workspaceId,managedConnections}),caller.id),/selection support/);
+});
+
+test('owner diagnostics require whole-owner read authority and return counters without receipt contents',async t=>{
+ const f=await fixture(t);
+ f.grant(['read'],{chatIds:[f.caller.id]});
+ await assert.rejects(f.control.handle(f.command('diagnostics',{chatId:f.caller.id}),f.caller.id),/not authorized/);
+ f.grant(['read']);const d=await f.control.handle(f.command('diagnostics'),f.caller.id);
+ assert.equal(typeof d.records,'number');assert.ok(Array.isArray(d.byMethod));assert.ok(!JSON.stringify(d).includes('hold origin'));
 });

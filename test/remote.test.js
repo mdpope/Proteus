@@ -46,6 +46,7 @@ test('encrypted reply measurements identify fixed read methods at actual wire se
  assert.ok(traffic.sentReplies.sync.bytes>Buffer.byteLength(JSON.stringify(snapshot)),'wire count includes encrypted encoding');
  assert.equal(traffic.sentReplies['tabs.get'].packets,1);
  assert.ok(traffic.sentKinds.reply.bytes>=traffic.sentReplies.sync.bytes+traffic.sentReplies['tabs.get'].bytes);
+ t.diagnostic(JSON.stringify({synthetic:true,syncWireBytes:traffic.sentReplies.sync.bytes,tabReadWireBytes:traffic.sentReplies['tabs.get'].bytes,tabReadPackets:traffic.sentReplies['tabs.get'].packets}));
 });
 test('relay registration rejection remains actionable during retry and clears after a successful connection', async t => {
   const { app } = await fixture(t);
@@ -388,4 +389,25 @@ test('remote starting-folder selection tolerates missing siblings without author
  await assert.rejects(start(missing),/ENOENT|existing starting folder/);
  const file=path.join(home,'not-a-folder');fs.writeFileSync(file,'synthetic');
  await assert.rejects(start(file),/existing starting folder/);
+});
+
+test('workspace file browsing needs its own exact grant and rechecks revocation before returning bytes',async t=>{
+ const {app,connect,workspace}=await fixture(t),client=await connect(),workspaceId=app.context.get().defaultWorkspaceId;
+ fs.writeFileSync(path.join(workspace,'file-preview.md'),'# Synthetic file');
+ await assert.rejects(client.request('files.roots',{workspaceId}),/file|workspace/i);
+ app.remote.setDocumentAccess(client.device.id,true);
+ await assert.rejects(client.request('files.roots',{workspaceId}),/file|workspace/i);
+ app.remote.setWorkspaceFileAccess(client.device.id,[workspaceId]);
+ const roots=await client.request('files.roots',{workspaceId}),rootId=roots.roots.find(root=>root.path===workspace).id;
+ const result=await client.request('files.preview',{workspaceId,rootId,file:'file-preview.md'});
+ assert.equal(result.content,'# Synthetic file');assert.equal(result.relativePath,'file-preview.md');
+ await assert.rejects(client.request('files.preview',{workspaceId:'ungranted',rootId,file:'file-preview.md'}));
+ await assert.rejects(client.request('files.preview',{workspaceId,rootId,file:'../file-preview.md'}));
+ const original=app.workspaceExplorer.preview.bind(app.workspaceExplorer);let release,started;
+ const began=new Promise(resolve=>started=resolve);
+ app.workspaceExplorer.preview=async args=>{started();await new Promise(resolve=>release=resolve);return original(args);};
+ const pending=client.request('files.preview',{workspaceId,rootId,file:'file-preview.md'});
+ await began;app.remote.setWorkspaceFileAccess(client.device.id,[]);release();
+ await assert.rejects(pending,/file|workspace/i);
+ assert.equal(app.remote.config.devices.find(row=>row.id===client.device.id).documentAccess,true);
 });

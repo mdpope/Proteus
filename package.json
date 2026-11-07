@@ -1,6 +1,6 @@
 {
   "name": "proteus",
-  "version": "0.2.42",
+  "version": "0.2.43",
   "buildRevision": "source",
   "private": true,
   "description": "A local control room for scheduled AI work and resumable conversations.",
@@ -33,6 +33,8 @@
     "package:windows": "node scripts/package-windows.mjs"
   },
   "dependencies": {
+    "@azure-devops/mcp": "2.11.0",
+    "@azure/msal-node": "7.2.0",
     "@ghostery/adblocker-electron": "2.20.1",
     "@github/copilot-sdk": "1.0.28",
     "@modelcontextprotocol/sdk": "1.32.2",
@@ -58,16 +60,29 @@
   "devDependencies": {
     "@electron/packager": "20.3.0",
     "@electron/rebuild": "4.2.0",
-    "electron": "44.5.1",
+    "electron": "44.10.2",
     "electron-builder": "26.15.3"
   },
   "overrides": {
     "electron-chrome-web-store": {
       "adm-zip": "0.6.1"
+    },
+    "@azure-devops/mcp": {
+      "@azure/msal-node": "7.2.0"
+    },
+    "@github/copilot-sdk": {
+      "zod": "4.6.7"
+    },
+    "@modelcontextprotocol/sdk": {
+      "zod": "4.6.7",
+      ".": "$@modelcontextprotocol/sdk"
+    },
+    "@electron/get": {
+      "undici": "7.30.1"
     }
   },
   "updatesProtocol": 1,
   "dataCompatibility": 1,
-  "releaseDate": "2026-11-03",
-  "releaseName": "Nov 3"
+  "releaseDate": "2026-11-05",
+  "releaseName": "Nov 5"
 }

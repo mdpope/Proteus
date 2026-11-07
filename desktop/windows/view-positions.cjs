@@ -2,11 +2,14 @@ const {atomicRename}=require('../../src/shared/atomic-rename.cjs');
 const fs=require('node:fs');
 const path=require('node:path');
 const {positions:artifactPositions}=require('../documents/artifact-scroll.cjs');
-const MAX_BYTES=512*1024,MAX_ENTRIES=200;
+const MAX_BYTES=512*1024,MAX_ENTRIES=200,MAX_VIEW_POSITIONS=256;
 function normalizePosition(value){
-  if(!Array.isArray(value)||value.length>32)throw Error('Invalid reading position.');
-  return value.map(([locator,entry])=>{
-    if(typeof locator!=='string'||locator.length>2048||!entry||![entry.top,entry.left].every(n=>Number.isFinite(n)&&Math.abs(n)<100_000_000))throw Error('Invalid reading position.');
+  if(!Array.isArray(value))throw Error('Invalid reading position: expected position array.');
+  if(value.length>MAX_VIEW_POSITIONS)throw Error('Reading-position capacity exceeded ('+value.length+'/'+MAX_VIEW_POSITIONS+'). Original state preserved.');
+  return value.map(row=>{
+    if(!Array.isArray(row)||row.length!==2)throw Error('Invalid reading position: malformed row.');
+    const [locator,entry]=row;
+    if(typeof locator!=='string'||locator.length>2048||!entry||![entry.top,entry.left].every(n=>Number.isFinite(n)&&Math.abs(n)<100_000_000))throw Error('Invalid reading position: locator length or numeric offset.');
     const anchor=entry.anchor;
     const artifact=entry.artifact;
     if(artifact&&(!/^[a-f0-9]{64}$/.test(artifact.version||'')))throw Error('Invalid document position version.');
@@ -25,4 +28,4 @@ class ViewPositions {
     fs.mkdirSync(path.dirname(this.file),{recursive:true});const temp=this.file+'.tmp';fs.writeFileSync(temp,JSON.stringify(data)+'\n',{mode:0o600});atomicRename(temp,this.file);return {saved:true};
   }
 }
-module.exports={ViewPositions,normalizePosition};
+module.exports={ViewPositions,normalizePosition,MAX_VIEW_POSITIONS};

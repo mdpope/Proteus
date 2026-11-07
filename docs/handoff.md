@@ -1,17 +1,165 @@
+## Nov 6 — all-device build and rollout authorized
+
+The operator explicitly requests building and deploying all current changes to all devices through
+the update process. This lifts earlier build/platform/deployment holds for Nov 5 / 0.2.43.
+Freeze the implemented source, build once per native target, validate and sign on Build Mac,
+publish accepted artifacts, and use fresh unassigned purpose:update coordinators on all included
+desktops. Preserve idle barriers, unrelated work, recovery generations and post-install acceptance.
+iOS uses the established Mac-coordinated preservation workflow; web uses its release workflow.
+Unimplemented guided full-account ADO and standalone Mnemosyne work remain open, not silently
+represented as shipped. Source acceptance: 1,677 pass/four skip, static and desktop/web checks pass.
+
+## Mnemosyne operations — implemented in Nov 5 source
+
+The operator lifted the Mnemosyne implementation deferral for this release. Desktop/web now
+share Overview, Activity and execution detail, Schedules, Services, Logs and Configuration views.
+Core runtime setup remains desktop-only; web receives sanitized read-only status and retains its
+existing schedule controls. Native owners and working schedules are unchanged. Bounded receipt
+projection preserves claim/event lineage and applied/not-applicable/delegated outcomes.
+See [scope, contract and acceptance](mnemosyne-operations.md). Independent native-core extraction,
+additional source/watchers and iOS-library expansion remain explicitly open. Deployment is held.
+
+## Nov 5 current checkpoint — site discovery and client features
+
+The operator completed sign-in in the corrected Authentication Preview and confirmed that the
+site appears. This establishes live site discovery in that preview; connection confirmation,
+managed Jira reads/writes, silent renewal and organization workflows acceptance remain separate checks. Preserve
+the open Authentication Preview. No real Jira ticket was modified by these tests.
+
+The file-browser, image-viewer, Markdown properties/wiki links, larger overview, web navigation
+and completion-notification corrections are implemented and validated as described in
+[the client acceptance matrix](nov5-client-feature-acceptance.md). Full source suite: 1,671 passed, four skipped, zero failed;
+static checks pass. Electron file/Connections tests, Chromium and WebKit phone/tablet fixtures,
+authenticated Laravel/WebCrypto/two-owner web acceptance and one-tap answer focus on iPhone/iPad
+simulators pass. Web assets were rebuilt. Design Preview is open separately.
+
+Deployment remains held. No new packaged Mac candidate was produced by this feature checkpoint;
+Linux/Windows/iOS production builds remain deferred. Native workspace-file navigation, physical
+APNs delivery, production-network performance and full managed-auth workflow acceptance remain
+open; do not label the release fully verified. Earlier checkpoints below are historical.
+
+## Nov 5 managed ADO source checkpoint
+
+Both initial adapters now have owner controls and scoped runtime paths. ADO uses protected MSAL
+public-client credentials and the pinned server envvar mode, never a CLI/developer-account fallback.
+Exact corporate identity/organization and bounded capability probes are required. Full suite:
+1,627 pass/four skip/zero fail; static checks and disposable Electron UI acceptance pass. Real SDK
+protocol and server catalog fixtures pass without corporate credentials or business data.
+Remaining: dependency advisory qualification, complete remaining release plan, signed candidate,
+then actual organization workflows acceptance. Work Mac has no documented approved Entra public-client registration;
+owner/admin approval is a live setup prerequisite. No package or installation exists.
+
+## Nov 5 managed selection checkpoint
+
+Chat create and schedule tools now carry explicit named connections and captured workspace bindings.
+Older remote owners reject before delivery; send/reply cannot retarget an existing run. Source
+recapture retains original bindings. Cached preflight performs no auth/network work. Full suite:
+1,609 pass/four skip/zero fail; static checks pass. ADO and remaining full plan work continue.
+No package, installation or authenticated HC workflow acceptance is claimed.
+
+## Nov 5 managed Atlassian owner checkpoint
+
+Full suite 1,608 pass/four skip/zero fail; static checks and disposable Electron Connections UI pass.
+Owner composition now supplies the shared native broker, protected OAuth flow, actual identity/site
+and separate Jira probes, scoped integration API and model-free maintenance. Public authv2 discovery
+succeeded without credentials. No actual HC sign-in/data read, package or installation exists.
+Next: finish chat-create and schedule-tool selection plumbing, implement/qualify ADO protected
+identity and pinned server, complete remaining full release plan, then signed candidate delivery.
+Standalone schedules need managedConnectionWorkspaceId in captured sourceWorkspaces; never bind
+by folder/default account. New sources and schema are in services/integrations and schemas.
+
+## Nov 5 publisher custody and pending platforms
+
+Build Mac now holds both the new publisher key and imported legacy transition key, with
+verified signing proofs and local protected Keychain recovery. Windows active key/reference removal
+is verified; its installed old builder fails closed until the unsigned workflow is installed.
+Historical backups were not erased. Keep legacy public trust until transition consumer acceptance.
+Partial platform publication retains explicitly supplied prior signed packages and labels them
+pending; the UI requires explicit old-version selection. Full suite 1,589 pass/four skip, static
+checks and disposable Electron acceptance pass. No Nov5 package/publication/install exists.
+Continue remaining full plan and managed MCP owner/adapter/UI implementation before freezing.
+
+## Nov 5 sole Mac publisher authority checkpoint
+
+Operator explicitly requires Build Mac source truth and signer for all built software and chose
+new-key rotation. New public key 705abc96f9f4d01b07488fac is bundled alongside the legacy trust.
+Windows builds now export unsigned accepted payloads/source companions and receive no signing key;
+signing CLIs run only on Mac. Protected encrypted legacy custody transfer is in progress, with no
+Windows key deletion yet. Full tests 1,586 pass/four skip; static checks pass. Private custody/draft
+receipts are outside Git. Do not build before remaining full plan/digest implementation is ready.
+
+## Nov 5 managed broker checkpoint
+
+Managed runtime/HTTP transport, per-run native MCP bridge and Codex/Copilot attachment pass the
+full suite (1,583 pass/four skips) and static checks. Owner composition, actual connector setup,
+maintenance and UI still remain. No candidate exists. Public discovery confirms Atlassian's two
+paths use different issuers; HC reports unknown legacy audience/cache protection and no separately
+verified getJiraIssue or server annotations. Preserve working authentication until replacement passes.
+
+Operator selected new Build Mac key rotation, then explicitly required Build Mac to be
+source of truth and signer for all built software. Implement that sole-authority transition;
+builders only return unsigned tested artifacts. No key custody operation has occurred yet.
+
+## Nov 5 managed MCP foundation checkpoint
+
+Full Work Mac handoff is captured in docs/managed-mcp-connections.md. Added internal registry,
+protected encrypted vault and serialized rotation coordinator plus eleven regressions. Full suite
+passes 1,563/four skips and static checks; final adapter isolation passes focused tests. These
+modules are not wired to runtime, providers, schedules or UI. No package exists.
+
+Next: qualify an ADO route without credential fallback (official 2.11.0 azcli uses a default
+credential chain), qualify Atlassian endpoint/OAuth with protected storage, implement shared
+per-run broker and actual Codex/Copilot attachment, health lifecycle, configuration UI/tool schema,
+then safe HC migration/acceptance. Complete other current Nov5 plan items before freezing.
+A signing-key rotation-versus-move choice is pending with the operator; source work can continue.
+No HC credentials or business source data are needed on this builder.
+
+## Nov 5 build hold lifted — full plan plus digest requirements
+
+The operator authorizes full current Nov5 scope, consolidated Work Mac digest requirements, signed
+release delivery and two-way fix/update/test iterations until workflow acceptance. Additional
+unrelated features wait. Nov3 is closed. Contacted the active digest workflow owner for its
+consolidated handoff. Source is on the single nov5-release branch; no package has been built.
+See the current authorization in [the plan](2026-11-05-release-plan.md). Older hold text below
+is historical.
+
 ## Nov 3 closed — Nov 5 digest-first preparation
 
 Nov 3 / 0.2.42 is merged to main, published for accepted Mac/Windows targets and closed with
 Linux deferred and explicit acceptance limits. See [closeout](releases/2026-11-03/closeout.md).
-The [Nov 5 plan](2026-11-05-release-plan.md) retains all carry-over scope; digest source remains
-on its isolated branch. No Nov 5 build or version reservation has started.
+The [Nov 5 plan](2026-11-05-release-plan.md) retains all carry-over scope; digest source is consolidated
+on the primary nov5-release branch. No Nov 5 build or version reservation has started.
 
 ## Nov 5 preparation — one release branch
 
 The primary checkout uses nov5-release. Nov 3 is closed and its worktrees/branches are retired.
 The Nov 5 plan preserves the carried-over requests and prepared digest controls. The narrow
 digest-blocker build scope is first; no version reservation, package or installation has started.
-The Linux owner is implementing the document-preservation fix for review and integration into
-this same branch. No additional worktrees are needed outside explicitly delegated work.
+The Linux document-preservation fix is integrated as 63bfa6f in this same branch; source and
+disposable Mac restore/reload/restart acceptance pass (1,552 tests, four skips, static checks).
+Installed acceptance remains pending. All older local worktrees/clones and unused dependency
+caches are retired; only the primary release checkout remains. No additional worktrees are needed outside explicitly delegated work.
+
+## Nov 5 scoped schedule controls — implementation complete, build held
+
+Source now includes manifest/export reconciliation, scoped Codex command execution, true catalog
+rescan, owner-proven unsent-create recapture and newest-first bounded status. See the
+[configuration guide](schedule-tool-configuration.md) and [release plan](2026-11-05-release-plan.md).
+Scoped execution and source reconciliation are explicit hard workflow blockers. Nov 3 is closed;
+no Nov 5 build or deployment has started. Real organization workflows acceptance belongs to the workflow owner after authorized update.
+Final validation: 1,548 tests pass, four skip, zero fail; npm run check passes. Native Mac
+sandbox and MCP-catalog probes use only synthetic data and start no model turn. The sandbox
+probe verifies scoped writes and denies outside reads/writes, symlink escape, protected metadata
+writes and network access. The catalog probe accepts annotated reads and rejects writes/unknown tools.
+
+## Nov 5 schedule tooling — source only, build held
+
+The automation audit requested supported configuration guidance and missing inspection/preview
+capabilities. Its later acceptance handoff confirms scoped execution and source reconciliation as hard workflow blockers. See the
+[Nov 5 plan](2026-11-05-release-plan.md) and [tool configuration guide](schedule-tool-configuration.md).
+Source work is consolidated on nov5-release in the primary checkout; the digest-blocker scope
+is the proposed first package after completed Nov 3 closeout. No live workflow schedules, permissions, enabled states or runs
+were changed. P6 passes ten focused tests, the full suite (1,542 pass/four skip) and static checks. P7/P8 are now implemented in the isolated source branch; see the newer checkpoint above. Their installed workflow acceptance remains outstanding.
 
 ## R31 live General accepted / R32 traffic validation
 

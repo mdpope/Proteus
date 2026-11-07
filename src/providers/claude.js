@@ -87,6 +87,15 @@ function privateClaudeMcpConfig(selected,cwd){
   }
   catch(error){fs.rmSync(directory,{recursive:true,force:true});throw error;}
 }
+// Runtime allowance evidence is distinct from Proteus scheduling limits. Never
+// infer an account email, quota window or reset timestamp the provider omitted.
+export function claudeAllowanceError(model,windows=[]){
+ const exhausted=windows.filter(window=>window.remainingPercent===0||window.status==='rejected');
+ const reset=exhausted.map(window=>window.resetAt).filter(value=>typeof value==='string'&&Number.isFinite(Date.parse(value))).sort()[0];
+ const reason=exhausted.length?'Claude reports an exhausted allowance window.':'Claude returned rate_limit; it did not distinguish subscription exhaustion from temporary throttling.';
+ return Object.assign(new Error(`${reason} Model: ${model||'provider default'}. Account: this computer’s Claude Code sign-in. ${reset?'Provider-reported reset: '+reset+'.':'Reset time was not supplied.'} This is a provider limit, not a Proteus release hold. Retry when available; switching providers requires an explicit choice.`),{code:'PROVIDER_RATE_LIMIT'});
+}
+
 export function claudeAccountAvailable(account={}) {
   // Current authenticated CLI initialization reports profile fields instead of
   // tokenSource/apiKeySource. Never store or expose the profile to the UI.
@@ -338,7 +347,7 @@ export class ClaudeProvider {
       if(agents.claude(m))return;
       if(m.type==='stream_event'){const event=m.event;if(event?.type==='message_start')currentId=event.message.id;if(event?.type==='content_block_delta'&&event.delta?.type==='text_delta')stream(currentId,event.delta.text);}
       if(m.type==='assistant'){
-        if(m.error){reject(new Error(`Claude ${m.error}`));return;}
+        if(m.error){reject(m.error==='rate_limit'?claudeAllowanceError(run.schedule.model,Date.now()-Date.parse(this.rateLimitsObservedAt)<60000?[...(this.rateLimits?.values()||[])]:[]):new Error(`Claude ${m.error}`));return;}
         for(const block of m.message?.content||[]){if(block.type==='text'){if(run.liveMessages)delete run.liveMessages[m.message.id];emit('assistant',block.text);}if(block.type==='tool_use'){
           const tool={callId:block.id,name:block.name,summary:toolSummary(block.name,block.input),arguments:displayText(block.input,6000),status:'running',startedAt:new Date().toISOString()};calls.set(block.id,tool);emit('tool',tool.summary,{tool});}}
       }

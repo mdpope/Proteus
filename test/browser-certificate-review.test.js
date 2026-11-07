@@ -21,3 +21,12 @@ test('subframes, replaced error documents and other frame senders grant nothing'
  const f=fixture();f.wc.mainFrame={};f.fail();const current=f.page('https://consolefixture:8006/');f.wc.emit('ipc-message',{senderFrame:{}},'proteus:certificate-accept',current);assert.equal(f.navigations.length,0);
  f.wc.emit('ipc-message',{senderFrame:f.wc.mainFrame},'proteus:certificate-accept',current);await Promise.resolve();assert.equal(f.navigations.length,1);
 });
+
+test('secure WebSocket certificate reuse requires prior explicit HTTPS acceptance of the same certificate and host',async()=>{
+ const f=fixture(),socket='wss://consolefixture:8006/console';assert.equal(f.fail(socket,undefined,false),false);assert.equal(f.page(socket),null);
+ f.fail();const token=f.page('https://consolefixture:8006/');await f.review.accept(f.tab,token);
+ assert.equal(f.fail(socket,undefined,false),true);
+ assert.equal(f.fail(socket,{data:rootCertificates[1]},false),false);
+ assert.equal(f.fail('wss://different:8006/console',undefined,false),false);
+ assert.equal(f.fail('ws://consolefixture:8006/console',undefined,false),false);
+});

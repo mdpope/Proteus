@@ -301,7 +301,7 @@ struct ChatPermissionsView: View {
     private var chatScopeAvailable: Bool { store.state["capabilities"].array.contains(.string("chat.permissions.chat.v1")) }
     var body: some View {
         if context != .null {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 14) {
                 Text("Tool approvals").font(.headline)
                 Text("Current: \(names[context["mode"].string] ?? context["mode"].string) · \(context["source"].string == "chat" ? "this chat only" : "workspace setting")").font(.caption)
                 Text("\(run["automaticApprovals"].int) tool requests approved automatically").font(.caption).foregroundStyle(.secondary)
@@ -327,14 +327,15 @@ struct ChatPermissionsView: View {
                 }
                 if chatScopeAvailable {
                     if context["source"].string == "chat" {
-                        Button("Revoke chat-only auto-approval") { applyChat("inherit") }.disabled(busy || !store.connected).accessibilityIdentifier("revoke-chat-auto-approval")
+                        Button("Revoke chat-only auto-approval") { applyChat("inherit") }.buttonStyle(.bordered).disabled(busy || !store.connected).accessibilityIdentifier("revoke-chat-auto-approval")
                     } else {
                         Button("Auto-approve this chat and future continuations") { applyChat("autopilot") }.disabled(busy || !store.connected).accessibilityIdentifier("chat-only-auto-approval")
                     }
                     Text("This chat-only choice survives app restart, applies to pending tools and this chat’s future turns, and is revoked when its provider, roots or integrations change. It uses existing granted resources and keeps mandatory approval and sandbox rules.").font(.caption).foregroundStyle(.secondary)
                 }
-                Picker("Workspace approval mode", selection: $selected) { ForEach(modes, id: \.self) { Text(names[$0]!).tag($0) } }.accessibilityIdentifier("permission-mode")
-                Button("Apply to workspace") { applyWorkspace() }.disabled(busy || !store.connected || selected.isEmpty).accessibilityIdentifier("apply-permissions")
+                Divider()
+                Picker("Workspace approval mode", selection: $selected) { ForEach(modes, id: \.self) { Text(names[$0]!).tag($0) } }.pickerStyle(.menu).accessibilityIdentifier("permission-mode")
+                Button("Apply to workspace") { applyWorkspace() }.buttonStyle(.bordered).disabled(busy || !store.connected || selected.isEmpty).accessibilityIdentifier("apply-permissions")
                 Text("Workspace mode applies to other chats and schedules with this same permission context. Saved rules only covers individual grants; trusted and auto-approve modes can authorize broader tools within their existing boundaries. Questions and enterprise-required approvals still pause.").font(.caption).foregroundStyle(.secondary)
                 if store.state["capabilities"].array.contains(.string("chat.permissions.folders.v1")) {
                     DisclosureGroup("Trust a folder in this chat") {
@@ -627,21 +628,19 @@ struct NativeChatUsageView: View {
         return usage["observed"].bool && usage[key] != .null ? usage[key].int.formatted(.number) : "—"
     }
     private func metric<Content: View>(_ label: String, @ViewBuilder value: () -> Content) -> some View {
-        VStack(spacing: 6) {
-            Text(label).font(.caption).foregroundStyle(.secondary)
-            value().monospacedDigit().frame(maxWidth: .infinity).padding(12)
-                .background(NativeTheme.background, in: RoundedRectangle(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(NativeTheme.line))
-        }.frame(maxWidth: .infinity)
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .firstTextBaseline) { Text(label).foregroundStyle(.secondary); Spacer(minLength: 12); value().monospacedDigit() }
+            VStack(alignment: .leading, spacing: 6) { Text(label).foregroundStyle(.secondary); value().monospacedDigit() }
+        }.font(.subheadline).padding(.vertical, 6).frame(maxWidth: .infinity, alignment: .leading)
     }
     var body: some View {
         VStack(spacing: 12) {
-            metric("Total AI runtime") { RuntimeTimerView(turns: run["turns"].array, total: true, showTitle: false, prominent: true, partial: run["timingPartial"].bool) }
+            metric("Total AI runtime") { RuntimeTimerView(turns: run["turns"].array, total: true, showTitle: false, prominent: false, partial: run["timingPartial"].bool) }
             metric("Input tokens" + (partialClaudeInput ? " · partial" : "")) { Text(tokenValue("inputTokens")).font(.system(size: 18, weight: .medium)) }
             metric("Output tokens") { Text(tokenValue("outputTokens")).font(.system(size: 18, weight: .medium)) }
             if partialClaudeInput { Text("Earlier Claude input counts may omit cached tokens. This partial total has not been estimated or backfilled.").font(.caption).foregroundStyle(.secondary) }
             Text(run["usage"]["observed"].bool ? "Observed provider usage." : "Provider usage unavailable.").font(.caption).foregroundStyle(.secondary)
-        }.multilineTextAlignment(.center).accessibilityIdentifier("chat-usage-summary")
+        }.multilineTextAlignment(.leading).accessibilityIdentifier("chat-usage-summary")
     }
 }
 
@@ -756,5 +755,35 @@ struct NativeFusionAttribution: View {
         } label: {
             Text(NativeFusion.summary(run, turn)).font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.leading)
         }.accessibilityIdentifier("fusion-attribution-" + turn["fusionId"].string)
+    }
+}
+
+// One visual vocabulary for chat metadata; sections do not change authority or state.
+struct ChatDetailSection<Content: View>: View {
+    let title: String
+    let icon: String
+    @ViewBuilder let content: () -> Content
+    init(_ title: String, icon: String, @ViewBuilder content: @escaping () -> Content) {
+        self.title = title; self.icon = icon; self.content = content
+    }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label(title, systemImage: icon).font(.subheadline.weight(.semibold))
+            Divider()
+            content().font(.subheadline)
+        }.padding(14).frame(maxWidth: .infinity, alignment: .leading)
+            .background(NativeTheme.surface, in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(NativeTheme.line))
+    }
+}
+struct ChatDetailRow: View {
+    let label: String
+    let value: String
+    init(_ label: String, value: String) { self.label = label; self.value = value }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label).font(.caption).foregroundStyle(.secondary)
+            Text(value.isEmpty ? "Provider default" : value).font(.subheadline).textSelection(.enabled)
+        }.frame(maxWidth: .infinity, alignment: .leading)
     }
 }

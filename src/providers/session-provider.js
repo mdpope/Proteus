@@ -1,3 +1,4 @@
+import {prepareManagedRun} from '../services/integrations/managed-run.js';
 // Metadata queries have their own runtime. Each executing chat owns a separate
 // adapter, so adapter-global cancellation and approval listeners stay local.
 export class SessionProvider {
@@ -90,13 +91,22 @@ export class SessionProvider {
     const entry = { adapter: this.create(), turn: true, readers: 0 };
     this.locks.add(key);
     this.sessions.set(run.id, entry);
-    try { return await entry.adapter.run(args); }
+    let managed;
+    try {
+      if(run.schedule?.managedConnections?.length){
+        if(!entry.adapter.supportsManagedConnections)throw Error('This provider does not support host-managed MCP connections.');
+        managed=await prepareManagedRun(this.managedConnections,args);
+      }
+      return await entry.adapter.run({...args,...(managed?{managedMcp:managed.servers}:{})});
+    }
     finally {
+      try { await managed?.close(); } finally {
       entry.turn = false;
       this.locks.delete(key);
       if (!entry.readers && this.sessions.get(run.id) === entry) {
         this.sessions.delete(run.id);
         try { await this.retire(entry.adapter); } finally { this.onIdle?.(); }
+      }
       }
     }
   }

@@ -5,7 +5,7 @@ export async function renderUpdates(container,ui,active){
  const esc=ui.escape;let releases=[];
  container.innerHTML=`<section class="card"><h2>Updates</h2><div data-update-status role="status">Checking this installation…</div><div data-update-error role="status"></div><div data-update-controls hidden>
  <div class="actions"><button data-update-check>Check for updates</button><button data-update-import>Choose offline release</button></div>
- <label>Available releases<select data-update-release><option value="">Check for updates first</option></select></label><button data-update-stage disabled>Start update in a new chat</button>
+ <p data-update-publication role="status"></p><label>Available releases<select data-update-release><option value="">Check for updates first</option></select></label><button data-update-stage disabled>Start update in a new chat</button>
  <p class="note">Each upgrade creates its own chat named for the release, using the provider defaults below. That chat prepares, tests and verifies the update through restart. Existing chats keep their work.</p>
  <div class="actions"><button data-update-open-chat hidden>Open update chat</button><button data-update-cancel disabled>Cancel pending update</button></div></div></section>`;
  const find=selector=>container.querySelector(selector);
@@ -32,10 +32,13 @@ export async function renderUpdates(container,ui,active){
   await ui.openUpdateChat?.(run);
  };
  find('[data-update-check]').onclick=action(async()=>{
-  find('[data-update-error]').textContent='';releases=(await ui.api('/api/updates',{action:'releases',channel:'stable'})).releases;
-  find('[data-update-release]').innerHTML=releases.length?releases.map(release=>`<option value="${esc(release.id)}">${esc(release.version)} · ${esc(release.buildRevision)}</option>`).join(''):'<option value="">No published releases available</option>';
-  find('[data-update-stage]').disabled=!releases.length;
+  find('[data-update-error]').textContent='';const catalog=await ui.api('/api/updates',{action:'releases',channel:'stable'});releases=catalog.releases;
+  const pending=catalog.publication?.state==='pending';
+  find('[data-update-publication]').textContent=pending?'Version '+catalog.publication.version+' is pending for this computer.'+(releases.length?' The previous verified release remains available; select it explicitly if needed.':''):'';
+  find('[data-update-release]').innerHTML=(pending?'<option value="">Waiting for the new version — choose a previous release explicitly</option>':'')+(releases.length?releases.map(release=>`<option value="${esc(release.id)}">${esc(release.version)} · ${esc(release.buildRevision)}${pending?' · previous release':''}</option>`).join(''):'<option value="">No published releases available</option>');
+  find('[data-update-stage]').disabled=pending||!releases.length;
  });
+ find('[data-update-release]').onchange=()=>{find('[data-update-stage]').disabled=!releases.some(row=>row.id===find('[data-update-release]').value);};
  find('[data-update-stage]').onclick=action(async()=>{const release=releases.find(item=>item.id===find('[data-update-release]').value);if(!release)throw Error('Choose an available release.');await start({channel:'stable',releaseId:release.id,manifestDigest:release.manifestDigest});});
  find('[data-update-import]').onclick=action(async()=>{const [manifest]=await window.desktop.choosePaths({kind:'update-release'});if(manifest)await start({manifest,channel:'stable'});});
  find('[data-update-cancel]').onclick=action(async()=>{const {job}=await refresh();await ui.api('/api/updates',{action:'cancel',id:job.id,expectedRevision:job.revision});});

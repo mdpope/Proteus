@@ -42,7 +42,8 @@ export class RemoteCommandJournal {
       catch (error) { this.requests.delete(id); this.metrics.failures++; if (!this.requests.size) this.worker.unref(); reject(error); }
     });
   }
-  claim(key, digest, issuedAt) { return this.request('claim', key, digest, issuedAt); }
+  lookup(key) { return this.request('lookup',key); }
+  claim(key, digest, issuedAt, method) { return this.request('claim', key, digest, issuedAt, undefined, method); }
   complete(key, digest, outcome) { return this.request('complete', key, digest, outcome); }
   async diagnostics() { return { ...await this.request('diagnostics'), ...this.metrics, activeRequests: this.requests.size, worker: 'ready' }; }
   async close() {

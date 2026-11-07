@@ -1,3 +1,4 @@
+import {mergeManagedServers} from '../services/integrations/managed-run.js';
 import {fusionJournal,fusionAvailability,fusionModel,fusionSessionOptions,fusionMessageData,FUSION_MODEL_ID} from './copilot-fusion.js';
 import {subagentJournal} from '../services/chats/subagents.js';
 import {questionAttachmentTools} from '../services/chats/question-attachments.js';
@@ -25,7 +26,7 @@ export class CopilotProvider {
     // SDK empty mode disables Keychain and can silently select a different gh
     // account. A fresh quota process must retain the conversation's auth options.
     this.quotaClientFactory=quotaClientFactory || (baseDirectory => this.clientFactory({...this.options,baseDirectory,logLevel:'none'}));
-    this.quotaTimeoutMs=quotaTimeoutMs;this.quotaStopTimeoutMs=quotaStopTimeoutMs;this.quotaPending=null;this.quotaProbe=null; this.client = null; this.starting = null; this.sessions = new Map(); this.authSessions = new Map(); this.acceptedMediaTypes=Object.freeze(['image/png','image/jpeg','image/gif','image/webp','application/pdf','text/plain']);this.acceptedSteeringMediaTypes=this.acceptedMediaTypes; }
+    this.quotaTimeoutMs=quotaTimeoutMs;this.quotaStopTimeoutMs=quotaStopTimeoutMs;this.quotaPending=null;this.quotaProbe=null; this.client = null; this.starting = null; this.sessions = new Map(); this.authSessions = new Map(); this.acceptedMediaTypes=Object.freeze(['image/png','image/jpeg','image/gif','image/webp','application/pdf','text/plain']);this.acceptedSteeringMediaTypes=this.acceptedMediaTypes;this.supportsManagedConnections=true; }
   dataDirectory() { return this.settings?.get().copilotDataDirectory || this.options.baseDirectory || process.env.COPILOT_HOME || path.join(os.homedir(), '.copilot'); }
   async connect(baseDirectory = this.dataDirectory()) {
     if (this.client && this.baseDirectory !== baseDirectory) await this.close();
@@ -180,12 +181,15 @@ export class CopilotProvider {
     if (!session) throw new Error('Copilot is still starting. Queue this message or try steering again.');
     await session.send({ prompt, mode: 'immediate',attachments:copilotMessageAttachments(attachments,this.acceptedMediaTypes) });
   }
-  async run({ run, prompt, attachments=[], emit, ask, update, signal, stream, permissionProfile }) {
+  async run({ run, prompt, attachments=[], emit, ask, update, signal, stream, permissionProfile, managedMcp={} }) {
     const nativeAttachments=copilotMessageAttachments(attachments,this.acceptedMediaTypes);
     let turn;
     const askUser = async request => { turn?.pause(); try { return await ask(request); } finally { turn?.resume(); } };
     const decisions = new Map();
     const permission = request => {
+      // The actual call must traverse our run-scoped owner bridge, which obtains
+      // permission from the connected catalog. This avoids two prompts per write.
+      if(request.kind==='mcp'&&Object.hasOwn(managedMcp,request.serverName))return Promise.resolve({kind:'approve-once'});
       // The runtime can ask separately for path access and the read operation,
       // presenting the same request twice for one tool call. Reuse only that
       // identical in-flight decision, never a grant for another operation.
@@ -225,7 +229,7 @@ export class CopilotProvider {
       workingDirectory: run.schedule.workspace.cwd,
       additionalDirectories,
       skillDirectories: includeLegacy ? run.schedule.skillDirectories || [] : [],
-      mcpServers: managed ? { ...Object.fromEntries(Object.entries(includeLegacy ? run.schedule.mcpServers || {} : {}).filter(([name]) => !managed.disabledLegacyMcp.includes(name))), ...managed.mcpServers } : run.schedule.mcpServers || {},
+      mcpServers: mergeManagedServers(managed ? { ...Object.fromEntries(Object.entries(includeLegacy ? run.schedule.mcpServers || {} : {}).filter(([name]) => !managed.disabledLegacyMcp.includes(name))), ...managed.mcpServers } : run.schedule.mcpServers || {},managedMcp),
       ...(managed ? { skipCustomInstructions: true, enableConfigDiscovery: false, enableOnDemandInstructionDiscovery: false, enableSkills: includeLegacy && !!run.schedule.skillDirectories?.length, disabledSkills: managed.disabledSkills, enableFileHooks: false, customAgents: managed.customAgents.map(agent=>({...agent,...(agent.tools==null?{}:{tools:[...new Set([...agent.tools,...appTools.map(tool=>tool.name)])]})})), agent: managed.agent, availableTools: [...new Set([...selectedAgentToolScope(managed),...appTools.map(tool=>tool.name)])] } : {}),
       tools: appTools,
       systemMessage: { mode: 'append', content: `${appInstructions}\nProteus workspace roots (${managed ? 'use the explicitly selected context below; do not automatically load other instruction/skill/agent files' : 'read relevant AGENTS.md and .github/copilot-instructions.md before work'}):\n${[run.schedule.workspace.cwd, ...additionalDirectories].join('\n')}\n${this.browser ? 'Embedded browser access is available through proteus_browser. Use it for visible authenticated website reads. The user can interact with those same tabs; ask for sign-in if needed.' : 'Embedded browser access is unavailable in this server-only session.'}\nEditor context supplied by the user: ${JSON.stringify(run.schedule.editorContext || null)}\n${managed?.instructionText || ''}` },

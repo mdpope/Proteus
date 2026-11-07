@@ -1,3 +1,445 @@
+## Nov 6 updater repair
+
+Bounded quiescent recovery capture, live-owner exclusion, final source/destination verification
+diagnostics, stale-lock baseline recovery and a pre-owner startup gate are implemented in source.
+Use a fresh ordinary supervised attempt after a terminal pre-install attention failure, retaining
+its original job/copy. Source and native tests precede packaging; installed acceptance is separate.
+
+## Nov 6 browser correction checkpoint
+
+DevTools callback/session collision and root-domain context reuse are corrected in source with
+native snapshot, console, network and backend-switch regressions. Same-profile explicitly accepted
+HTTPS certificates now qualify the corresponding secure WebSocket check. Native synthetic console
+connection passes. Live Proxmox code-1006 acceptance, Slack typing and whole-page hangs remain open.
+
+## Bounded field diagnostics — source work
+
+Work Mac's corrected explicit-value fill still reports retained:false on the actual Slack
+contenteditable div/combobox. Missing-value rejection and own-tab cleanup work. Generic and
+Quill editor fills succeed locally; neither reproduces Slack. General Playwright evaluation
+is not granted by the schedule policy. Added optional fixed target-only `fill diagnostics:true`
+without caller code or text export, automatic retry, Enter or broader authority. Native tests
+exercise retained input, cancellation, editor reset and target replacement. Full suite: 1,688 passed,
+four skipped, zero failures; static checks and the native diagnostic fixture pass. Live diagnosis and
+Slack acceptance remain open; no new artifact or installed diagnostic is claimed.
+
+Track whole-page Slack hangs separately: responsiveness, renderer stalls, background lifecycle
+and verified recovery after refresh/reload. Successful load or a generic input fixture is not
+proof of restored interaction. No root cause for the whole-page hangs is established.
+
+## Nov 6 request — remote Allow and remember reliability
+
+N6-02 in [the Nov 6 plan](2026-11-06-release-plan.md#n6-02--reliable-remote-allow-and-remember)
+tracks a human approval dialog remaining visible on a remote chat. Verify owner-side permission
+persistence, exact request resolution, acknowledgment and remote dismissal separately, including
+applicable scopes, uncertainty/reconnect and journal-capacity failure. Requested only; no live
+approval or implementation is claimed.
+
+## Nov 6 — protected journal capacity and live Slack follow-up
+
+Installed browser correction `578a509` passed native fixture and owner health/preservation checks.
+Live Slack opened Search, but Query fill did not persist according to the workflow snapshots;
+Enter selected a suggestion. A one-item count change has an unverified read-state effect.
+The workflow stopped browser input and unloaded its own tab successfully. Live Search acceptance
+has failed; generic native-input tests do not qualify Slack's actual editor. Current fill calls
+Playwright locator.fill then returns a body ARIA snapshot without target persistence acknowledgment.
+Saved evidence identifies combobox Query; actual DOM tag/contenteditable remains unknown. A second fill used text instead of value, which the shipped code converts to empty content. Missing string value now fails before input. Fill returns sanitized target type and a direct DOM retained boolean after a bounded settling interval; no entered text is copied into the acknowledgment. A real hidden contenteditable fixture retains text omitted from ARIA snapshots, and editor-reverted content reports retained:false. This is DOM evidence, not application-level commit or live Slack acceptance. No additional live browser retries are authorized here.
+
+Supported owner diagnostics measured 5,545 protected receipts / 268,475,508 bytes against a
+268,435,456-byte budget, with zero pending or expired receipts. tabs.mutate accounts for
+268,306,828 bytes across 5,457 entries. These aggregates attribute storage, not the historical
+cause or individual payload sizes. Both workflow follow-up and coordinator diagnostic dispatch
+were rejected as uncertain; preserve their operation IDs and reconcile before any retry.
+
+Source correction lowers lossless completed-receipt compression eligibility from 64 KiB to
+4 KiB. The original threshold excluded ordinary snapshots; a disposable sub-64-KiB fixture
+reproduces admission failure and now recovers capacity on startup. Exact outcomes, unknown
+fields, timestamps, full retention and unresolved claims are unchanged. No limit increase,
+receipt deletion, live-journal edit or forced restart is used. This does not reduce relay payload
+size or explain why tab mutations recur; investigate those independently. Validation passed 1,688 tests, four skips, zero failures; static checks and real hidden native-input/contenteditable UI tests pass, including an editor that discards text. This correction is not built or installed. Old-owner remote mutation admission remains
+blocked until legitimate expiry or a separately authorized supported owner update installs it.
+
+## Scheduled browser corrections — source validation
+
+Scheduled/manual runs can allocate a stable native owner window without the chat being visible,
+while keeping canonical own-chat placement, sharing/profile checks and human focus/selection.
+Hidden browser pages receive usable native and CSS viewports, and native selection restores
+ordinary metrics. Real background click/fill/Enter and CSS-sized screenshots pass the isolated
+multiwindow regression; stale coordinates remain rejected. Explicit unload releases only the
+caller's idle lease and still refuses other active runs/actions, downloads, Persisted/audio/pop-out
+or unsaved work. No schedule/tool schema or credential change is required.
+
+The regression reproduced all three failures before their respective corrections. Existing
+sharing/revocation/restart and local-origin/mirror/override tests pass. The older origin test's
+sidebar assertion was updated for already-shipped project recents; production navigation was
+not changed to satisfy that assertion. Full validation passed 1,687 tests/four skips/zero failures and static checks. This follow-up is
+not yet packaged or installed. Live Slack recovery remains unverified.
+
+## ADO PAT capability verification correction — installed live probes passed
+
+Installed 88367d6 can report capability-mismatch before its first ADO health read because the
+pinned official 2.11.0 catalog declares JSON Schema draft-07, while the probe validator used only
+2020-12. The configured domains include core/work/work-items/search; all four exact probe tools
+are present with read-only/idempotent annotations. This reproduced with synthetic credentials,
+initialization/tools-list only and zero business calls; it is not evidence of an invalid PAT.
+
+The source correction selects draft-07 or 2020-12 by the declared schema, preserves schema and
+annotation validation, and rejects unsupported dialects. Real pinned PAT-launcher catalog tests
+now validate all four exact probe arguments against synthetic result fixtures. Existing PAT,
+expiry, scopes and connection settings need no mutation for this correction. Work Mac now runs the accepted signed `6181b45` correction. Its existing PAT passed all four
+live configured read probes, with ready/connected state, verified authentication/access and zero
+failures. A real scheduled digest started without connection prompts; complete native workflow
+and Slack acceptance remain pending. No credential, expiry or scope changes were needed.
+
+## Nov 6 planned — complete Atlassian write access
+
+The operator requests full supported Atlassian control within the signed-in identity’s access,
+including Jira ticket updates. Nov 5 requested write consent for new connections, but existing
+read-only grants and read/search-only capability reporting need an explicit upgrade and end-to-end
+write acceptance. See [the Nov 6 plan](2026-11-06-release-plan.md). Planned only; Nov 5 remains the active release.
+
+## Nov 5 Windows publication provenance correction
+
+Release-operation helpers now accept the Windows packager's complete source commit without
+inventing missing gitHead/dirty fields. Every tracked runtime/build input still must match the
+pinned Git tree, allowing only exact UTF-8 LF/CRLF representations on Windows. The sole generated
+terminal helper additionally requires its existing compiler/source/output receipt and matching
+local compiler hash; unknown generated inputs and content differences still fail. Accepted app,
+archive, installer and embedded provenance stay unchanged. Corresponding-source export uses the
+accepted provenance and retains generated runtime bytes and their manifest. A maintenance helper
+commit may differ from the frozen application pin; it never authorizes rebuilding a different tip.
+
+## Mnemosyne operations — implemented in Nov 5 source
+
+The operator lifted the Mnemosyne implementation deferral for this release. Desktop/web now
+share Overview, Activity and execution detail, Schedules, Services, Logs and Configuration views.
+Core runtime setup remains desktop-only; web receives sanitized read-only status and retains its
+existing schedule controls. Native owners and working schedules are unchanged. Bounded receipt
+projection preserves claim/event lineage and applied/not-applicable/delegated outcomes.
+See [scope, contract and acceptance](mnemosyne-operations.md). Independent native-core extraction,
+additional source/watchers and iOS-library expansion remain explicitly open. Deployment is held.
+
+## Guided ADO scope expansion
+
+The operator requests guided authentication and discovery with all account-accessible ADO
+capabilities across projects: repositories, pipelines, work items, wikis and related features.
+This supersedes the work-item-only setup target. Explicit work-item read/write PAT scopes are
+supported in source without upgrading existing read-only definitions. Full-account guided setup
+and CLI-assisted optional PAT issuance remain open; no successful authentication is claimed.
+See docs/managed-ado-guided-setup.md for the qualified Microsoft API constraints and acceptance.
+Deployment remains held.
+
+## Native chat details presentation
+
+Group chat details into labeled Activity, Loaded context, Model & session, Permissions &
+continuation, Files & connections, and Chat actions sections. Use consistent inset panels,
+compact runtime/token rows, readable label/value pairs, collapsible provider diagnostics and
+bordered actions. Preserve permission behavior, lifecycle guards and provider-reported values.
+Authentication Preview was reopened at the explicit ADO PAT setup; no credentials were entered
+and no ADO connection was saved. Deployment remains held.
+
+## Nov 5 client features and local validation
+
+Workspace files, scoped remote file browsing, image tabs, Properties/wiki links, larger overviews,
+completion-event deduplication and native answer focus are implemented in source.
+[Acceptance matrix and limits](nov5-client-feature-acceptance.md) distinguishes local tests from
+physical push, native file-browser parity and installed acceptance. Deployment remains held.
+
+## Nov 5 Atlassian site discovery
+
+The local Authentication Preview reached authenticated account review but displayed no sites.
+Discovery incorrectly filtered every resource without the exact classic `read:jira-work` scope
+label. Retain bounded, validated resource candidates regardless of optional scope metadata;
+deduplicate repeated IDs only when their origin agrees and reject conflicting origins. Resource
+discovery does not establish Jira capability or grant mutation authority. Exact identity/site
+verification and distinct Jira probes remain required.
+
+Owner setup status exposes only resource/site counts and unchecked Jira access alongside the
+existing account/site projection. Empty-list guidance now distinguishes successful account
+authentication from missing resource discovery. Regression tests cover absent/granular/other-product
+scope metadata, duplicate identities, empty results and conflicting sites. The original live
+response was not retained, so filtering is a confirmed code defect, not yet a proven explanation
+of that specific empty list. After restarting the corrected local preview, the operator confirmed
+that the site appears. All 23 Atlassian tests and the disposable Electron connection UI test pass.
+Connection confirmation and actual Jira read/write acceptance remain separate; deployment remains held.
+
+## Nov 5 Jira ticket read/write and callback diagnostics
+
+The operator explicitly requests read/write access to any Jira ticket the selected account can
+access. New Atlassian enrollment defaults to read/write and adds `write:jira-work`; a clearly
+labeled read-only choice remains. Existing connections and grants are unchanged. The selected
+site/workspace binding and each run's tool permissions still apply. Health-check issue IDs are
+samples only, not runtime ticket allowlists. Setup never mutates a ticket; writes are not retried
+when their outcome is uncertain. Actual service-side Jira permissions remain authoritative.
+
+The operator's next callback reached account-discovery, establishing that token exchange and
+protected storage completed, but not proving account/site access. Old timeout handling replaced
+the failure message with expired. Failures now retain stage/code and bounded diagnostics, appear
+when returning to Accounts & Integrations, and are shown directly on the callback page. No OAuth
+codes, tokens, callback URLs or remote error bodies are included. Discovery now accepts declared
+JSON Schema draft-07 as well as 2020-12 while retaining argument validation; a new regression
+failed before this compatibility correction. The original live failure's exact subtype is unknown,
+so this source correction is not claimed as authenticated acceptance. Deployment remains held.
+
+## Nov 5 Atlassian registration compatibility correction
+
+The operator reproduced `client-registration / CONFIGURATION_MISMATCH` before any approval page.
+A bounded live check found authv2 DCR returns HTTP 201 and `token_endpoint_auth_method: none`
+alongside an unused `client_secret`. Proteus rejected that otherwise valid public client.
+The adapter now retains only public client fields and explicitly keeps auth method none; the
+unused secret is discarded, never persisted or sent during code exchange/refresh. Missing or
+confidential auth methods still fail closed. A subsequent live adapter check passed registration,
+PKCE S256 and the pinned authorization endpoint/resource; no browser, consent or token grant was
+performed by that diagnostic. Full authenticated identity/Jira acceptance remains pending.
+
+While an editor is open, Add connection now reads Back to setup and scrolls/focuses the existing
+controls without resetting drafts or retrying authentication. Startup errors load the saved failed
+setup state with an explicit Try again button. Deployment remains held.
+
+## Nov 5 — browser-first Atlassian setup
+
+New Atlassian connections start with Connect Atlassian, not manual account/cloud IDs or scope
+strings. The owner approves read identity/Jira plus offline renewal, reviews the discovered
+account, explicitly chooses a returned Jira site and authorizes workspaces. No registry binding
+exists before confirmation. Existing connections keep their exact account pins and advanced edit
+form; no migration or sign-in is performed automatically. Deployment remains held.
+
+## ADO alternatives source implementation
+
+The operator requests both explicit CLI and PAT adapters without new app registration.
+[Schema, migration and qualification limits](managed-ado-alternatives.md) are recorded.
+CLI performs pinned process acquisition, signed token and exact resource validation, but rejects
+macOS/Linux before acquisition because cache isolation is unqualified. PAT uses the distinct
+pinned Basic path, protected owner entry, exact user/organization verification and expiry guidance.
+No live credentials, consent, PAT issuance or workstation.example.test schedules changed. Deployment remains held.
+
+## Local login testing authorization
+
+The operator now authorizes testing ADO/Jira login locally before another package or Work Mac delivery.
+Use the separate protected-storage Authentication Preview, not the mock-keychain Design Preview.
+The fresh Atlassian setup form is open; no connection definition, consent or credential has yet
+been supplied. ADO alternatives now have source implementation; live qualification remains pending. Local testing does not lift
+the deployment hold or authorize modifying workstation.example.test schedules/authentication.
+
+## Current operator scope — feature expansion; build/test only
+
+The operator authorizes the additions below and explicitly holds ALL further deployments. This
+supersedes the prior digest-first feature restriction and iterative installation authorization.
+Continue on the single nov5-release branch. Build/test isolated desktop, web and iPhone/iPad
+previews; do not publish, install over production apps, change live schedules/auth or dispatch
+updates. Mac candidate 2 is signed locally but not uploaded/delivered/installed. Candidate 1 stays
+on Work Mac. The earlier idle-blocker question is historical, not new deployment authorization.
+
+| ID | Requested work | Acceptance |
+| --- | --- | --- |
+| N1 | iPhone/iPad browser performance | Measure WebKit scrolling/input/frame and payload costs on representative remote views; fix reproduced choppiness and record device/simulator limits. |
+| N2 | Remote chat/tab control reliability and speed | Lost-response/reconnect/rapid-selection fixtures, stable IDs, exact-once mutations, no stale state overwrites. |
+| N3 | Relay data efficiency | Measure method/byte/serialization costs; scope state and send necessary deltas only; no unrelated chats, full histories or repeated media on idle. |
+| N4 | Remote update approvals | Verify purpose:update captures narrow future-operation authority once, without per-tool/chat reapproval; retain idle barrier and never approve unrelated pending requests. |
+| N5 | Web feature/style/fix parity | Compare desktop and web against an explicit feature matrix; local authenticated acceptance before any later deployment. |
+| N6 | iPhone feature/fix parity | Compare native mobile actions/state/recovery against desktop; shared simulators and isolated synthetic owner tests. |
+| N7 | Larger desktop/web tab overview | More usable viewport area and legible previews, responsive layouts, keyboard/touch navigation. |
+| N8 | Project/workspace card parity | Match desktop hierarchy, formatting and sizing across web/remote, with responsive mobile adaptation. |
+| N9 | One completion notification reaching iPhone | Deduplicate by actual run completion event through owner/relay/APNs paths; verify foreground/background boundaries without claiming simulator proof of physical push. |
+| N10 | File viewer images and Obsidian Markdown | Extend the existing viewer/authorization boundary for standalone filesystem image links; structured frontmatter, Markdown and wiki links with safe scoped resolution and no ambiguity guessing. |
+| N11 | Workspace file browser tab | Configured workspace folders/sources only; lazy directory drilldown and bounded cancellable filter search; filename/type/size/created/modified columns and icons; open supported images/Markdown; compact margins and right-side selected-file preview; release preview on selection change and stop work when unloaded/idle. |
+| N12 | Restore Proteus Design Preview | Separate data/browser identity, synthetic fixtures for new features, no production changes; validate the actual UI and retain a reviewable preview. |
+| N13 | Accounts & Integrations design | Managed MCP first, generous card spacing, bundled service logos, clear account/health/actions, responsive shared styling and isolated preview verification; no deployment. |
+| N14 | Reliable question navigation | First click waits for existing history loads, reveals the selected question and focuses its answer; later navigation/input cancels stale focus. Desktop and remote shared behavior. |
+| N15 | iOS Answer question navigation failure | Operator reports tapping Answer question does not navigate to the question in its chat. One tap must open the correct chat, load/reveal the exact question (including older paged history), and focus its answer field. Preserve drafts and reading state; cancel stale jumps after another navigation. Verify on iPhone/iPad; desktop/web N14 evidence does not establish native iOS acceptance. |
+
+### Current source checkpoints
+
+N15 is newly reported and queued: native iOS reproduction, implementation and verification remain
+open. This planning update does not lift the deployment hold.
+
+N13 Connections redesign is implemented and exercised in disposable Electron at desktop/tablet/phone
+widths; local web build and static checks pass. The final regression suite including the question
+fix passed 1,641 tests with four skips using a short canonical temporary root. A default Mac temporary path
+run exposed fixture alias/socket-length assumptions; no production guard was weakened.
+Design Preview is open independently on Accounts & Integrations. Populated cards were tested
+with synthetic accounts; no live connection or authentication changed. N1–N11 remain open.
+
+The operator confirms no new Entra public-client registration will be available. It is no longer a
+waiting prerequisite for this workflow. [ADO alternative qualification](ado-authentication-alternatives.md)
+records the explicit CLI/no-fallback route, cache protection/isolation caveats, and the pinned
+server's distinct PAT/Basic path. Neither alternative is installed or live accepted; auth and
+all further deployment remain held.
+
+N14 first-click navigation passes desktop and authenticated web relay fixtures with an earlier
+history read already in flight. Later input cancels stale focus; drafts, attachment consent and
+uncertain-answer delivery identity are preserved. A second reproduced defect accumulated draft
+status rows and polling timers on keyed web renders; replacement now retains exactly one binding.
+The phone-width transcript remains usable. Long-history desktop acceptance passed 2,507 events.
+These are synthetic source/UI checks, not installed acceptance; deployment remains held.
+
+### Audit of prior scope at expansion
+
+P3 publisher custody, P4 journal diagnostics/compaction, P5 send-display recovery, P6–P10 source
+reconcile/scoped execution/catalog recapture/status and P11 allowance explanation have source
+implementation and tests. Idle download rules, pollable maintenance, private Windows TEMP and
+navigation difference receipts are implemented. This does not imply all-platform installed proof.
+Linux document association/reopen fixes are integrated; rollback attention review and historical
+window-closure attribution remain open. Windows installed terminal rendering/UIA acceptance is
+unresolved. Web P1 authenticated acceptance and P2 reusable retention remain open.
+
+P12 managed connections are implemented but NOT fully accepted: Work Mac candidate1 is healthy;
+two scheduled Terra-low empty-inbox runs passed without prompts and preserved enabled/history.
+Optional missing connections allowed provider continuation, but a chat-only auto-approval later
+released the integration-list fixture; that is not saved-policy prompt-free acceptance. Managed
+Atlassian startup failed before the browser, with cause swallowed by candidate1; candidate2 adds
+sanitized diagnostics but is now held from deployment. A direct operator click also produced no
+browser or popup. Correction acceptance requires visible startup stage/error feedback and a
+verified browser launch, with secret-free diagnostics and no automatic sign-in retries. ADO public-client registration is unavailable; alternative CLI/PAT qualification is tracked above. Nonempty inbox, managed planning/digest and complete repeated-evidence
+acceptance remain open. Track captured initial gaps separately from later registry state.
+
+## Atlassian sign-in startup diagnostic correction
+
+Installed candidate 1's generic owner-review message is not a human-click restriction. Native
+owner UI routes to the local controller, but its startup catch discarded discovery, registration,
+loopback and browser-opening failures. Work Mac's existing next-action status confirms that catch
+was reached; the original cause remains unknown. Do not repeat sign-in as an owner-routing fix.
+
+Source now preserves fixed stage/error codes and bounded HTTP status in the UI error and owner
+status, excluding OAuth bodies, credentials and authorization URLs. Regression fixtures cover
+discovery/registration/browser failures, released loopback flows and exactly one attempted start.
+No automatic registration retry, changed grants, new credential endpoint or authentication bypass
+is introduced. This diagnostic correction does not yet establish or fix the underlying vendor
+failure; a new accepted Mac candidate and one deliberate owner attempt remain necessary.
+
+## Earlier delivery order — superseded by the build/test-only hold
+
+The operator now holds Linux, Windows and iOS builds until the Mac candidate is delivered to
+Work Mac and its digest workflow is exercised. Build/sign the current validated Mac source and
+use a separate receiving-owner update coordinator. Keep the release open for further additions
+and fixes before the full build/publication. Web P1/P2, Linux rollback attention reconciliation,
+historical window-closure attribution and other-platform installed acceptance remain tracked;
+they do not delay this expressly prioritized Mac candidate. No new platform builds are dispatched.
+
+Navigation verification now records bounded expected/found differences and hashed inventories
+for the exact update job, including failed preservation checks. Status restores this diagnostic
+after restart. The acceptance gate and old rollback outcome are unchanged.
+
+## Nov 5 updater and provider prerequisites
+
+Maintenance accepts an optional stable operationId and returns a durable inspection receipt;
+maintenance-status reads it by id. Repeated IDs do not repeat work, interrupted receipts do not
+silently restart, and completion retains the exact maintenance plan for the existing digest-bound
+apply flow. Status exposes active/queued inspection and busy state. Shutdown waits for receipt
+persistence. Existing synchronous callers remain compatible.
+
+Windows builder jobs now own protected temporary directories and set TEMP/TMP/TMPDIR only in
+the child environment. Source tests use four workers and a two-minute per-test timeout. Native
+Windows acceptance remains required. Claude rate_limit explains provider/model/sign-in scope,
+separates unknown throttling from provider-reported exhaustion and copies only fresh reset evidence.
+It does not select another provider. Electron is pinned to patched 44.10.2; the remaining upstream
+ADO/Zod 3 advisory is constrained by the managed adapter's explicit input/collection limits, not
+claimed fixed upstream. Actual managed ADO acceptance still requires approved owner Entra setup.
+
+## Nov 5 browser update idle rules
+
+Only progressing, unpaused downloads block update idle. Paused, interrupted, completed and
+cancelled items remain untouched. Browser agent activity carries a progress timestamp; after five
+minutes without observed progress it is reported stalled and stops blocking idle. Current input or
+a new operation resumes progress tracking. Owner status exposes browserActivity with tab ID/title,
+kind and state, and blocking messages name the tab. Running chats, terminals and other idle guards
+remain unchanged; no operation is cancelled or counter cleared by observation.
+
+## Nov 5 message display and refresh recovery
+
+Accepted composer sends update the chat from the owner receipt before refreshing the overview.
+An overview failure reports that the message was accepted, retaining visible history. Concurrent
+send clicks coalesce; an uncertain response retains the same message ID/payload for retry within
+the current renderer session. A proven pre-delivery rejection releases that attempt for editing;
+a recorded uncertain delivery does not. Reload recovery still uses the owner's durable receipt.
+Same-view state projections wait for the in-flight generation before capturing a newer one;
+renderer refresh callers share one request. Content-free error codes and active queue counts are
+exposed in performance diagnostics, distinguishing cache pressure, churn, worker timeout/exit and
+assembly failure. The historical live cause remains unproven until installed diagnostics observe it.
+
+## Nov 5 remote journal capacity source work
+
+Owner-wide scoped chat diagnostics expose aggregate receipt bytes/counts by method, pending
+counts, capacity warning and next expiry without keys or payloads. Older owners report unsupported;
+no credential extraction or private-file inspection is required. Legacy methods remain unknown.
+Completed large receipts now use integrity-checked lossless compression in the journal transaction,
+including existing completed records at startup. Exact outcomes and unknown fields replay; unresolved
+claims and retention windows remain intact. Older SQLite readers see an uncertain receipt and cannot
+repeat its effect. Downgrade therefore limits replay of compacted results; retain the current reader
+or use the normal verified recovery snapshot. Compaction is not secure erasure or disk-space recovery.
+Work Mac live measurements and candidate installation remain pending.
+
+## Nov 5 optional connection compatibility
+
+Source fixes persist optional readiness exceptions and denied/missing selections as sanitized
+coverage gaps exposed in selected-run integration status. Empty workspace categories capture
+identity/revision without evaluating unrelated defaults. organization workflows reports 105 source tests passing;
+live schedules/authentication remain untouched. Signed candidate and installed two-run acceptance
+remain pending. See the managed connection contract for the unchanged export schema.
+
+## Nov 5 agent communication guidance
+
+Prefer explicit steering for relevant updates to running, steer-capable chats; agents choose
+queue for separate/deferred tasks, idle/unsupported destinations and model changes. Shared
+orientation and tool guidance are updated. No forced runtime default or new delivery mode.
+
+## Nov 5 managed ADO source checkpoint
+
+Both initial adapters now have owner controls and scoped runtime paths. ADO uses protected MSAL
+public-client credentials and the pinned server envvar mode, never a CLI/developer-account fallback.
+Exact corporate identity/organization and bounded capability probes are required. Full suite:
+1,627 pass/four skip/zero fail; static checks and disposable Electron UI acceptance pass. Real SDK
+protocol and server catalog fixtures pass without corporate credentials or business data.
+Remaining: dependency advisory qualification, complete remaining release plan, signed candidate,
+then actual organization workflows acceptance. Work Mac has no documented approved Entra public-client registration;
+owner/admin approval is a live setup prerequisite. No package or installation exists.
+
+## Nov 5 managed selection checkpoint
+
+Chat create and schedule tools now carry explicit named connections and captured workspace bindings.
+Older remote owners reject before delivery; send/reply cannot retarget an existing run. Source
+recapture retains original bindings. Cached preflight performs no auth/network work. Full suite:
+1,609 pass/four skip/zero fail; static checks pass. ADO and remaining full plan work continue.
+No package, installation or authenticated HC workflow acceptance is claimed.
+
+## Nov 5 managed Atlassian owner checkpoint
+
+The selected authv2 route, protected OAuth lifecycle, real account/site and separate Jira probes,
+shared native-provider transport, owner Connections panel and scoped integration tools now have
+source acceptance. Standalone schedules require an explicit captured workspace binding. Full suite
+1,608 pass/four skip and disposable Electron UI checks pass. ADO and remaining plan work continue;
+no installed authenticated/workflow success is claimed.
+
+## Nov 5 platform publication checkpoint
+
+Partial platform staging now retains explicitly supplied verified prior packages with a visible
+pending version; the update UI requires deliberate previous-version selection. Public cleanup
+keeps those payloads until replacement. Source/fixture acceptance is distinct from live publication.
+Mac publisher custody proofs and local protected recovery pass; Windows active key/reference
+retirement is verified. Full source checks and disposable Electron publication selection pass.
+
+## Nov 5 publisher authority checkpoint
+
+New Mac public trust and unsigned Windows builder handoff pass source validation (1,586/four
+skips). Production signing CLIs require Mac. Legacy key custody transfer/retirement, signed
+transition rollout and independent platform pending-publication acceptance remain outstanding.
+
+## Nov 5 managed MCP execution checkpoint
+
+Shared runtime/health, owner HTTP transport and Codex/Copilot bridge source tests pass (1,583/four
+skips). Portable schedule requirements and captured permission identity are implemented; connector
+setup, owner UI/runtime composition and installed acceptance remain open. See
+[the contract](managed-mcp-connections.md). Build Mac sole signing authority and new-key
+rotation are now explicit operator decisions; builders return unsigned accepted artifacts.
+
+## Nov 5 — managed MCP scope accepted; implementation in progress
+
+The build hold is lifted. Full release scope now includes the managed connection contract for
+ADO/Atlassian, shared Codex/Copilot authentication, secure storage, visible status and installed
+digest acceptance. Registry/vault/renewal foundations are implemented but not wired to runtime
+providers or UI. See [the contract](managed-mcp-connections.md) and current release implementation.
+Slack remains browser-only. No managed connection or release installation is claimed.
+
 ## Nov 3 closed — Nov 5 digest-first preparation
 
 Nov 3 / 0.2.42 is merged to main, published for accepted Mac/Windows targets and closed with
@@ -12,6 +454,39 @@ The Nov 5 plan preserves the carried-over requests and prepared digest controls.
 digest-blocker build scope is first; no version reservation, package or installation has started.
 The Linux owner is implementing the document-preservation fix for review and integration into
 this same branch. No additional worktrees are needed outside explicitly delegated work.
+
+## Nov 5 scoped schedule controls — implementation complete, build held
+
+Source now includes manifest/export reconciliation, scoped Codex command execution, true catalog
+rescan, owner-proven unsent-create recapture and newest-first bounded status. See the
+[configuration guide](schedule-tool-configuration.md) and [release plan](2026-11-05-release-plan.md).
+Scoped execution and source reconciliation are explicit hard workflow blockers. Nov 3 is closed;
+no Nov 5 build or deployment has started. Real organization workflows acceptance belongs to the workflow owner after authorized update.
+Final validation: 1,548 tests pass, four skip, zero fail; npm run check passes. Native Mac
+sandbox and MCP-catalog probes use only synthetic data and start no model turn. The sandbox
+probe verifies scoped writes and denies outside reads/writes, symlink escape, protected metadata
+writes and network access. The catalog probe accepts annotated reads and rejects writes/unknown tools.
+
+## Nov 5 schedule tooling — source only, build held
+
+The automation audit requested supported configuration guidance and missing inspection/preview
+capabilities. Its later acceptance handoff confirms scoped execution and source reconciliation as hard workflow blockers. See the
+[Nov 5 plan](2026-11-05-release-plan.md) and [tool configuration guide](schedule-tool-configuration.md).
+Source work is consolidated on nov5-release in the primary checkout; the digest-blocker scope
+is the proposed first package after completed Nov 3 closeout. No live workflow schedules, permissions, enabled states or runs
+were changed. P6 passes ten focused tests, the full suite (1,542 pass/four skip) and static checks. P7/P8 are now implemented in the isolated source branch; see the newer checkpoint above. Their installed workflow acceptance remains outstanding.
+
+## Nov 5 — Linux document preservation correction
+
+Integrated on nov5-release as 63bfa6f: prevent saved-window synchronization from stripping
+registry-only document chat associations, hydrate every document alias when restoring, and prefer
+the existing destination when reopening a document with historical aliases in multiple scopes.
+The updater preservation gate stays unchanged; no live stores or recovery generations are edited.
+Regression tests reproduce both reported failures on the previous source. Disposable Linux
+Electron acceptance passes startup, Reload Window and cold restart with stable project descriptors
+and revisions. See [workspace contract and tests](workspaces.md#nov-5--document-origin-survives-window-restore).
+Disposable Mac startup, reload and cold-restart acceptance also passes after integration.
+Packaging and installed acceptance remain with the release coordinator.
 
 ## Nov 2 closed — Nov 3 follow-up queue
 
@@ -11896,3 +12371,27 @@ password manager connection; Windows/Linux package acceptance remains separate.
 ## October 27 — follow-up publication acceptance
 
 Fresh version-named update coordinators, resilient provider defaults, inline question attachments, provider-supported queued attachment steering and guarded recovery supersession are implemented and tested. Corrected Mac build `abac31955b11+src.25f29d666329` is published and installed through a new unassigned coordinator: full HTTPS archive, publisher trust, official extraction, exact source, live health and preserved chat/configuration/state checks pass. Installed page-specific UI acceptance remains limited by background-only navigation; exact-package UI tests pass. Physical iPhone/iPad 2610.27.2 installation, protected data, launch, destinations and two-generation retention pass. Both Personal and Work Macs' existing Proteus identity verifies as HTTP/HTTPS defaults, including after the Personal update and HC's separate fresh read-only acceptance. Windows installation and actual historical-recovery reconciliation remain unverified. See [the evidence ledger](2026-10-27-release-evidence.md).
+
+## Nov 5 reading-position checkpoint correction (source only)
+
+The renderer now excludes unscrolled overflow-visible layout descendants and includes actual
+vertical/horizontal scrollports and containers with nonzero offsets. Renderer and owner both
+permit at most 256 positions per view, retaining the existing locator, numeric and total-store
+bounds. A long element ID falls back to the structural locator. Oversized/invalid captures fail
+explicitly before replacing saved state; positions are not sliced to satisfy the limit.
+Owner errors distinguish capacity from malformed rows and invalid locators/offsets without
+including view contents. Rollback must use the updater's matching pre-upgrade data snapshot;
+older layout readers still enforce the old 32-position bound.
+
+Validation: 1,682 source tests passed, four skipped; static checks passed. Disposable Electron
+tests exercise normal document navigation/reload/cold restart, then the actual owner
+checkpointForQuit path used by update preflight with forty independent synthetic scrollports
+and sixty overflowing layout nodes. All forty captured offsets restore. This does not prove
+successful live Work Mac checkpoint or full installed update acceptance.
+
+The already-installed renderer fails before binary replacement. No supported automatic repair
+has yet been established on Work Mac. Native tooling rejected the visible developer-menu
+diagnostic request; no expression ran and no state was changed. Keep its prepared job and
+original recovery data. Do not force quit, edit the store, suppress flush failures or claim
+a new binary alone resolves the bootstrap. A supported live diagnosis and preserving recovery
+path remain release blockers; signed corrective delivery follows that qualification.

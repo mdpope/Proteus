@@ -1,3 +1,4 @@
+const {browserUpdateActivity,browserUpdateBlockers}=require('./browser/browser-update-activity.cjs');
 const { app, BrowserWindow, ipcMain, shell, dialog, clipboard, Tray, Menu, nativeImage, screen, safeStorage, Notification, powerMonitor, powerSaveBlocker } = require('electron');
 const path = require('node:path');
 const { BrowserTabs } = require('./browser/browser.cjs');
@@ -37,16 +38,28 @@ else {
   app.on('open-url',(event,url)=>{event.preventDefault();receiveURL(url);});
   if(process.platform!=='darwin')process.argv.filter(raw=>webURL(raw)||protocolURL([raw])).forEach(receiveURL);
   app.on('activate', showWindow);
-  app.whenReady().then(async () => {
-    const updateBridge={handle:(value,runId)=>service.updates?.handle(value,runId)||Promise.reject(Error('Supervised updates are not ready.'))};
-    const appIcon = nativeImage.createFromPath(path.join(__dirname, 'icon.png'));
-    app.dock?.setIcon(appIcon);
-    const { startServer } = await import('../src/server.js');
+  void (async () => {
     const { isWithin,defaultHome } = await import('../src/shared/files.js');
     const {Updates,pendingUpdate}=await import('../src/services/updates/updates.js');
     const freshHome=!require('node:fs').existsSync(defaultHome());
     const installation=app.isPackaged?(process.platform==='darwin'?path.resolve(app.getAppPath(),'../../..'):path.resolve(app.getAppPath(),'../..')):null;
-    const pendingRecovery=installation&&!desktopPreview?pendingUpdate(defaultHome(),installation):null;if(pendingRecovery)process.env.PROTEUS_UPDATE_JOB=pendingRecovery;
+    const pendingRecovery=installation&&!desktopPreview?pendingUpdate(defaultHome(),installation):null;
+    if(pendingRecovery){
+      const {readJob}=require('./updates/update-package.cjs'),{supervisorOwnsCapture}=require('./updates/pre-owner-gate.cjs');
+      const alive=pid=>{try{process.kill(pid,0);return true;}catch(error){if(error.code==='ESRCH')return false;throw error;}};
+      if(supervisorOwnsCapture(readJob(pendingRecovery),{home:require('node:fs').realpathSync(defaultHome()),installation:require('node:fs').realpathSync(installation),alive})){
+        // A modal would hold the single-instance lock and block the helper's
+        // replacement launch. Yield immediately without initializing data.
+        console.warn('Proteus update is in progress. This launch yielded to the supervisor; Proteus will reopen automatically.');
+        app.quit();return;
+      }
+      process.env.PROTEUS_UPDATE_JOB=pendingRecovery;
+    }
+    await app.whenReady();
+    const updateBridge={handle:(value,runId)=>service.updates?.handle(value,runId)||Promise.reject(Error('Supervised updates are not ready.'))};
+    const appIcon = nativeImage.createFromPath(path.join(__dirname, 'icon.png'));
+    app.dock?.setIcon(appIcon);
+    const { startServer } = await import('../src/server.js');
     const { CredentialBroker } = await import('../src/services/integrations/credentials.js');
     const { TerminalStore } = await import('../src/services/tools/terminals.js');
     if(desktopPreview){
@@ -60,7 +73,7 @@ else {
       stageCodexAuthentication(desktopPreview);
     }
     // The provider only receives this bounded interface, never Electron or a CDP endpoint.
-    service = await startServer({updateRecovery:!!pendingRecovery, ...(desktopPreview?{home:desktopPreview.home,port:0,desktopPreview:{codexHome:desktopPreview.codexHome},withSeed:false}:{port:Number(process.env.PORT || 4317)}), openExternal:url=>require('./link-routing/preferred-browser.cjs').openPreferredBrowser(url,{preference:service?.settings.get().preferences?.clickedLinks,system:value=>shell.openExternal(value),embedded:browser?async value=>{authWindowId=windows.current()?.id;const info=await browser.create(value,null,null,{explicitParent:true});browser.actions.send({type:'select-tab',info});showWindow();}:null}), browser: {terminal:(args,runId)=>{if(!terminals)throw Error('Terminal service is not ready.');return terminals.agentAccess.handle(args,runId);},updates:updateBridge, projects:true,preview:!!desktopPreview,manageTabs:(args,runId)=>service.tabManagement.handle(args,runId),agent:async(value,runId)=>{if(!windows?.contexts.size)await createAppWindow();return browser.agent(value,runId);}, openDocument:async(args,runId)=>(await import('../src/services/chats/document-tools.js')).openChatDocument(service,args,runId) }, background: true, lifeOptions: { safeStorage, Notification, powerMonitor,client:'desktop',callbackURL:'proteus-desktop://life-oauth/callback',openExternal:async url=>{authWindowId=windows?.current()?.id;if(service.settings.get().preferences?.clickedLinks==='system')return shell.openExternal(url);const info=await browser.create(url);browser.actions.send({type:'select-tab',info});} } });
+    service = await startServer({updateRecovery:!!pendingRecovery, ...(desktopPreview?{home:desktopPreview.home,port:0,desktopPreview:{codexHome:desktopPreview.codexHome},withSeed:false}:{port:Number(process.env.PORT || 4317)}), openExternal:url=>require('./link-routing/preferred-browser.cjs').openPreferredBrowser(url,{preference:service?.settings.get().preferences?.clickedLinks,system:value=>shell.openExternal(value),embedded:browser?async value=>{authWindowId=windows.current()?.id;const info=await browser.create(value,null,null,{explicitParent:true});browser.actions.send({type:'select-tab',info});showWindow();}:null}), browser: {terminal:(args,runId)=>{if(!terminals)throw Error('Terminal service is not ready.');return terminals.agentAccess.handle(args,runId);},updates:updateBridge, projects:true,preview:!!desktopPreview,manageTabs:(args,runId)=>service.tabManagement.handle(args,runId),agent:async(value,runId)=>{if(!windows?.contexts.size)await createAppWindow();return browser.agent(value,runId);}, openDocument:async(args,runId)=>(await import('../src/services/chats/document-tools.js')).openChatDocument(service,args,runId) }, background: true, lifeOptions: { managedSafeStorage:require('./services/managed-credential-storage.cjs').managedCredentialStorage(app,safeStorage), safeStorage, Notification, powerMonitor,client:'desktop',callbackURL:'proteus-desktop://life-oauth/callback',openExternal:async url=>{authWindowId=windows?.current()?.id;if(service.settings.get().preferences?.clickedLinks==='system')return shell.openExternal(url);const info=await browser.create(url);browser.actions.send({type:'select-tab',info});} } });
     if (lifeCallback) { const value=lifeCallback; lifeCallback=null; void service.life.callback(value).catch(()=>{}); }
     keepAwake.onChange=enabled=>{const saved=service.settings.get();service.settings.save({...saved,preferences:{...saved.preferences,keepScreenAwake:enabled}},saved.revision);};
     try{keepAwake.setEnabled(service.settings.get().preferences?.keepScreenAwake===true);}catch(error){console.warn('Keep Screen Awake: '+error.message);}
@@ -242,25 +255,30 @@ else {
       let result;for(const ctx of matches){const answer=await windows.run(ctx.id,()=>windowRuntime(value));if(answer!==undefined)result=answer;}return result;
     };
     try{service.contentTabs.seedWorkspace(workspaceSession.get());}catch(error){service.activity.log('warning','tabs.restore-failed',error.message);}
+    const {readFilePreview}=await import('../src/services/workspaces/workspace-preview.js');
     service.contentTabDocument = value => {
       if(!['chat','workspace','project','main','team'].includes(value.scope)||!/^[a-f0-9]{64}$/.test(value.documentId||''))throw new Error('Choose a host-bound chat document.');
       if(value.scope==='chat')service.engine.getRun(value.id);else if(value.scope==='workspace')service.context.scope(value.id);else if(value.scope==='project')projects.projectFor({projectId:value.id});
       const file=service.contentTabs.documentSource(value.id,value.documentId,value.scope),descriptor=service.contentTabs.get(value.scope,value.id).tabs.find(tab=>tab.documentId===value.documentId);
-      for(const root of service.workspaceFiles.roots().roots.filter(root=>root.available)){const relative=path.relative(root.path,file);if(relative&&!relative.startsWith('..'+path.sep)&&relative!=='..'&&!path.isAbsolute(relative)){const document=value.metadataOnly===true?{file:service.workspaceFiles.resolve(root.id,relative).resolved}:service.workspaceFiles.read({rootId:root.id,file:relative});return {...document,title:descriptor.title,mediaType:'text/markdown'};}}
+      for(const root of service.workspaceFiles.roots().roots.filter(root=>root.available)){const relative=path.relative(root.path,file);if(relative&&!relative.startsWith('..'+path.sep)&&relative!=='..'&&!path.isAbsolute(relative)){const document=value.metadataOnly===true?{file:service.workspaceFiles.resolve(root.id,relative).resolved}:readFilePreview(file,[root.path]);return {...document,title:descriptor.title,mediaType:document.mediaType||descriptor.mediaType};}}
       throw new Error('Document is outside a currently authorized workspace.');
     };
     const {chatResourcePlacement}=await import('../public/features/chats/chat-resource-placement.js');
     const {agentWindow}=require('./windows/agent-origin.cjs');
+    const scheduledBrowserWindows=new Map();
     const agentWindowFor=(runId,explicitWindowId)=>{
       const run=service.engine.getRun(runId),destination=browserDestination(service,runId,undefined,{preview:!!projects});
-      return agentWindow({contexts:[...windows.contexts.values()],origin:run.turnOrigin,currentId:windows.current()?.id,runId,parentId:destination.parentId,explicitWindowId});
+      const scheduled=['scheduled','manual','schedule'].includes(run.trigger);
+      const result=agentWindow({contexts:[...windows.contexts.values()],origin:run.turnOrigin,currentId:windows.current()?.id,runId,parentId:destination.parentId,explicitWindowId,scheduled,allocatedWindowId:scheduledBrowserWindows.get(runId)});
+      if(scheduled)scheduledBrowserWindows.set(runId,result.id);
+      return result;
     };
     browser.options.agentWindow=agentWindowFor;
     service.windowForChat=runId=>windows.contexts.get(agentWindowFor(runId).id);
     service.agentTabInventory=runId=>{const target=agentWindowFor(runId);return {window:target,tabs:service.tabInventory().filter(tab=>tab.windowId===target.id)};};
     service.chatResourcePlacement=run=>{const ctx=service.windowForChat(run.id),saved=ctx?.session.get();return {...(projects?previewChatResourcePlacement(service,run,saved):chatResourcePlacement(run.id,saved,{workspaceId:Object.hasOwn(run,'workspaceId')?run.workspaceId:run.schedule.context?.workspaceId})),windowId:ctx?.id};};
     service.onDocumentOpened=value=>{const ctx=windows.contexts.get(value.placement?.windowId)||service.windowForChat(value.runId);if(ctx&&!ctx.window.isDestroyed())ctx.window.webContents.send('proteus:open-document',value);};
-    service.engine.releaseBrowser=runId=>browser.releaseRun(runId).catch(()=>{});
+    service.engine.releaseBrowser=runId=>browser.releaseRun(runId).catch(()=>{}).finally(()=>scheduledBrowserWindows.delete(runId));
     const sampleProcesses=createProcessSampler();
     service.resources={
       list:async()=>{
@@ -393,7 +411,8 @@ else {
     }
     service.updateUIHealth=async()=>{for(const ctx of windows.contexts.values()){if(ctx.window.isDestroyed()||ctx.window.webContents.isLoading()||!await ctx.window.webContents.executeJavaScript("!!(document.querySelector('#topbar-home')&&document.querySelector('#main')&&window.desktop)"))return false;}return windows.contexts.size>0;};
     service.windowCount=()=>[...windows.contexts.values()].filter(ctx=>!ctx.window.isDestroyed()&&!ctx.window.webContents.isLoading()).length;
-    service.updates=new Updates(service,{packaged:app.isPackaged&&!desktopPreview,installation,freshHome,browserHome:app.getPath('userData'),quit:()=>app.quit(),blockers:()=>terminals.updateBlockers().concat([...browser.tabs.values()].some(tab=>tab.agentActions||tab.downloads?.size)?['A browser operation or download is active.']:[])});
+    service.browserUpdateActivity=()=>browserUpdateActivity(browser.tabs.values());
+    service.updates=new Updates(service,{packaged:app.isPackaged&&!desktopPreview,installation,freshHome,browserHome:app.getPath('userData'),quit:()=>app.quit(),blockers:()=>terminals.updateBlockers().concat(browserUpdateBlockers(service.browserUpdateActivity()))});
     service.onUpdateResumed=runId=>{const ctx=service.windowForChat(runId);if(ctx)windows.run(ctx.id,()=>{showWindow();ctx.window.webContents.send('proteus:notification-open',{runId});});};
     const mac = process.platform === 'darwin';
     const icon = nativeImage.createFromPath(path.join(__dirname, mac ? 'trayTemplate.png' : 'icon.png')).resize({ width: mac ? 18 : 24, height: mac ? 18 : 24 });
@@ -427,7 +446,7 @@ else {
     await firstWindow.loadURL(service.url).catch(()=>windows.contexts.get(firstRecord.id).recovery.failed('initial-load-failed'));if(firstRecord.maximized)firstWindow.maximize();
     for(const record of records.slice(1))await createAppWindow(record);
     externalLinksStarted=true;void externalURLs.drain();
-  }).catch(error => { console.error(error.message); app.quit(); });
+  })().catch(error => { console.error(error.message); app.quit(); });
   app.on('window-all-closed', () => {});
   app.on('before-quit', event => {
     keepAwake.dispose();linkRouter?.close();

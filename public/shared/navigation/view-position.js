@@ -1,4 +1,11 @@
 const positions = new Map();
+// Kept in contract tests with the synchronous native window-layout validator.
+export const MAX_VIEW_POSITIONS=256,MAX_POSITION_LOCATOR=2048;
+function checkedPositions(values){
+ if(values.size>MAX_VIEW_POSITIONS)throw Error('Reading-position capacity exceeded ('+values.size+'/'+MAX_VIEW_POSITIONS+'). Current reading state was not replaced.');
+ for(const [key,entry]of values)if(key.length>MAX_POSITION_LOCATOR||![entry.top,entry.left].every(n=>Number.isFinite(n)&&Math.abs(n)<100_000_000))throw Error('Reading-position capture contains an invalid locator or offset. Current reading state was not replaced.');
+ return values;
+}
 const observed=new WeakMap(),liveViews=new Set(),storageKey='proteus.view-positions.v1';
 let initialized=false,initializing;
 const writes=new Set();
@@ -33,16 +40,24 @@ export function rememberArtifactPosition(key,version,rows){
  if(!key||!Array.isArray(rows)||rows.length>24||typeof version!=='string'||!/^[a-f0-9]{64}$/.test(version))return;
  const values=new Map(positions.get(key)||[]),previous=values.get('artifact')?.artifact;
  const merged=new Map((previous?.version===version?previous.positions:[]).map(row=>[row.path,row]));for(const row of rows)merged.set(row.path,row);
- values.set('artifact',{top:0,left:0,artifact:{version,positions:[...merged.values()].slice(-24)}});positions.set(key,values);persist(key,values);
+ values.set('artifact',{top:0,left:0,artifact:{version,positions:[...merged.values()].slice(-24)}});checkedPositions(values);positions.set(key,values);persist(key,values);
 }
 globalThis.window?.addEventListener('pagehide',()=>{for(const {root,key} of liveViews)if(root.isConnected&&(!root.dataset.viewKey||root.dataset.viewKey===key))rememberView(root,key);});
 const candidates = '[data-key], [data-chat-index], .message, .resource-row, .card, h2, h3';
 function scrollables(root) {
-  return [root,...root.querySelectorAll('*')].filter(node => node.scrollHeight > node.clientHeight + 2 && node.clientHeight > 0 && getComputedStyle(node).overflowY !== 'hidden');
+  return [root,...root.querySelectorAll('*')].filter(node => {
+    if(node.clientHeight<=0)return false;
+    const style=getComputedStyle(node);
+    // Visible overflow contributes layout height but is not a scrolling viewport.
+    // Include horizontal-only and programmatically scrolled hidden containers.
+    return node.scrollTop!==0||node.scrollLeft!==0||
+      (node.scrollHeight>node.clientHeight+2&&/^(auto|scroll|overlay)$/.test(style.overflowY))||
+      (node.scrollWidth>node.clientWidth+2&&/^(auto|scroll|overlay)$/.test(style.overflowX));
+  });
 }
 function locator(root,node) {
   if(node===root)return 'root';
-  if(node.id)return '#'+CSS.escape(node.id);
+  if(node.id){const id='#'+CSS.escape(node.id);if(id.length<=MAX_POSITION_LOCATOR)return id;}
   const path=[];while(node&&node!==root){path.unshift([...node.parentElement.children].indexOf(node));node=node.parentElement;}return path.join('.');
 }
 function find(root,key){
@@ -63,7 +78,7 @@ export function rememberView(root,key){
   if(root.dataset.positionLoading===key)return;
   const values=new Map();for(const node of scrollables(root))values.set(locator(root,node),{top:node.scrollTop,left:node.scrollLeft,conversation:node.matches('.conversation'),follow:node.matches('.conversation')&&node.scrollHeight-node.clientHeight-node.scrollTop<48,anchor:anchorFor(node)});
   const artifact=positions.get(key)?.get('artifact');if(artifact)values.set('artifact',artifact);
-  positions.set(key,values);
+  checkedPositions(values);positions.set(key,values);
   persist(key,values);
 }
 export function restoreView(root,key){

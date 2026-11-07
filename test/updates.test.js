@@ -138,6 +138,10 @@ test('preservation records the completed renderer checkpoint before helper hando
  assert.equal(f.controller.verifyPreservation(readJob(f.controller.file)).navigation.tabs,1);
  descriptor={...descriptor,chatId:'other-chat'};
  assert.throws(()=>f.controller.verifyPreservation(readJob(f.controller.file)),/Saved tab membership/,'a real association change must still fail preservation');
+ const failed=f.controller.status().navigationVerification;assert.ok(failed.totalDifferences>0);
+ delete f.controller.navigationVerificationJobId;delete f.controller.navigationVerification;
+ assert.deepEqual(f.controller.status().navigationVerification,failed,'restart can recover the bounded comparison from its job receipt');
+ assert.equal(f.controller.navigationStatus({...readJob(f.controller.file),id:'other-job'}),null,'another job cannot inherit the comparison');
 });
 test('a failed final renderer checkpoint leaves the app open and releases the barrier',async t=>{
  const f=fixture(t);f.service.prepareUpdateCheckpoint=async()=>{throw Error('Synthetic renderer did not save');};
@@ -219,7 +223,7 @@ test('snapshot failure restarts the unchanged baseline and reports failure throu
  const f=fixture(t);await handoff(f,await prepare(f));await f.controller.advance();const job=writeJob(f.controller.file,{ownerPid:99999999});
  const server=net.createServer();await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(path.join(f.home,'unknown.sock'),resolve);});t.after(()=>new Promise(resolve=>server.close(resolve)));
  let launches=0,verified=0,resumes=0;
- await supervise(job.file,{inspect:f.inspect,launchApp:()=>{launches++;assert.equal(fs.readFileSync(path.join(f.installation,'identity'),'utf8'),'old');return {};},verify:async(j,identity)=>{verified++;assert.equal(identity.hash,job.previous.hash);assert.equal(j.failedBeforeReplacement,true);return {at:new Date().toISOString()};},resumeChat:async(j,outcome)=>{
+ await supervise(job.file,{inspect:bundle=>{if(bundle===f.installation)fs.writeFileSync(path.join(f.home,'runner.lock'),'99999999');return f.inspect(bundle);},launchApp:()=>{launches++;assert.equal(fs.readFileSync(path.join(f.installation,'identity'),'utf8'),'old');return {};},verify:async(j,identity)=>{verified++;assert.equal(identity.hash,job.previous.hash);assert.equal(j.failedBeforeReplacement,true);return {at:new Date().toISOString()};},resumeChat:async(j,outcome)=>{
   resumes++;assert.equal(outcome,'rollback');assert.match(j.checkpoint,/failed before application replacement.*unknown.sock/);
   const args={action:'resume',id:j.id,secret:j.secret,outcome};await f.controller.recovery(args);await f.controller.recovery(args);
   return writeJob(j.file,{phase:'complete',outcome});
@@ -292,4 +296,21 @@ test('live idle diagnostics follow statuses and lane-owned work without losing c
  f.engine.backgroundRuns.clear();f.run.capacityRetry={nextAttemptAt:'2026-11-04T00:00:00Z'};live=f.controller.status().job;assert.equal(live.idle.blockers[0].reasons[0].code,'capacity-retry');
  delete f.run.capacityRetry;f.controller.newInput();live=f.controller.status().job;assert.equal(live.phase,'prepared');assert.equal(live.idle.checkpointReviewRequired,true);assert.match(live.idle.nextStep,/Ending a turn alone/);assert.equal(f.calls.length,0);
  await handoff(f,live);live=f.controller.status().job;assert.equal(live.idle.checkpointReviewRequired,false);assert.deepEqual(live.idle.blockers,[]);await f.controller.advance();assert.ok(f.calls.includes('quit'));
+});
+
+test('maintenance operation receipts coalesce retries and expose busy state without blocking status',async t=>{
+ const f=fixture(t),id='751ca392-cc14-4f17-8ab3-ed70ed0d4841';let complete,calls=0;
+ f.controller.packageWork=async()=>{calls++;return new Promise(resolve=>{complete=resolve;});};
+ const first=await f.controller.handle({action:'maintenance',operationId:id});assert.equal(first.state,'running');
+ assert.equal(f.controller.status().operation.busy,true);assert.equal(f.controller.status().operation.maintenance.id,id);
+ assert.deepEqual(await f.controller.handle({action:'maintenance',operationId:id}),first);assert.equal(calls,1);
+ assert.equal((await f.controller.handle({action:'maintenance-status',id})).state,'running');
+ complete({planDigest:'synthetic-plan',canApply:false});await f.controller.maintenanceTask;
+ const done=await f.controller.handle({action:'maintenance-status',id});assert.equal(done.state,'complete');assert.equal(done.result.planDigest,'synthetic-plan');
+ assert.equal(f.controller.status().operation.busy,false);assert.equal((await f.controller.handle({action:'maintenance',operationId:id})).state,'complete');assert.equal(calls,1);
+});
+
+test('a terminal pre-install attention failure permits a fresh supervised candidate without editing its evidence',async t=>{
+ const f=fixture(t),first=await prepare(f);const failed=writeJob(f.controller.file,{phase:'attention',error:'Recovery verification failed; source and partial snapshot were preserved.',recovery:path.join(f.controller.root,'recoveries',first.id),helperPid:null});fs.mkdirSync(failed.recovery,{recursive:true});fs.writeFileSync(path.join(failed.recovery,'copy-0.json'),'preserved failure metadata');const original=fs.readFileSync(failed.file);
+ const next=await prepare(f);assert.notEqual(next.id,failed.id);assert.equal(next.phase,'prepared');assert.deepEqual(fs.readFileSync(failed.file),original);assert.equal(fs.readFileSync(path.join(failed.recovery,'copy-0.json'),'utf8'),'preserved failure metadata');assert.equal(fs.readFileSync(path.join(f.installation,'identity'),'utf8'),'old');
 });

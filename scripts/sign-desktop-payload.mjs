@@ -27,6 +27,7 @@ export function signDesktopPayload({payload,expectedHash,sourceCommit,keyFile,ou
 }
 
 if(process.argv[1]&&import.meta.url===pathToFileURL(path.resolve(process.argv[1])).href){
+ if(process.platform!=='darwin')throw Error('Publisher signing belongs to Build Mac. Builders return unsigned accepted payloads.');
  const options={};
  for(let i=2;i<process.argv.length;i+=2){const name=process.argv[i];if(!['--payload','--sha256','--source-commit','--key','--out'].includes(name)||!process.argv[i+1]||options[name])throw Error('Use --payload, --sha256, --source-commit, --key and --out once.');options[name]=process.argv[i+1];}
  const payloadFile=options['--payload'];if(!path.isAbsolute(payloadFile||''))throw Error('Use an absolute payload file.');

@@ -1,7 +1,7 @@
 // Repair an expired provider-managed Node reference without redesignating the
-// builder, accepting an arbitrary executable, or changing its source/key/npm.
+// builder, accepting an arbitrary executable, or changing its source/npm.
 import fs from 'node:fs';import path from 'node:path';import {execFileSync} from 'node:child_process';import {parseArgs} from 'node:util';import {pathToFileURL} from 'node:url';
-import packages from '../desktop/updates/update-package.cjs';import builder from '../desktop/updates/windows-builder.cjs';import {ensurePrivateHome,hasPrivatePermissions} from '../src/shared/private-paths.cjs';
+import packages from '../desktop/updates/update-package.cjs';import builder from '../desktop/updates/windows-builder.cjs';import {ensurePrivateHome} from '../src/shared/private-paths.cjs';
 const uuid=/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
 export function refreshPlan(policy,observation){
  const {root,home,installation,priorBytes,expectedPolicyHash,node,nodeVersion,nodeSha256,publisher,oldNodeExists,build}=observation;
@@ -23,14 +23,13 @@ export function runRefresh(argv){
  const {values}=parseArgs({args:argv,options:{home:{type:'string'},installation:{type:'string'},'expected-policy-sha256':{type:'string'},apply:{type:'string'},'operation-id':{type:'string'}}});
  if(!/^[a-f0-9]{64}$/.test(values['expected-policy-sha256']||''))throw Error('Supply the independently observed policy SHA-256.');
  const home=fs.realpathSync(values.home),installation=fs.realpathSync(values.installation),root=path.join(path.dirname(home),'Proteus Updates',packages.digest(home+'\0'+installation).slice(0,24)),file=path.join(root,'windows-builder.json');
- const policy=builder.readPolicy(root),priorBytes=fs.readFileSync(file),node=fs.realpathSync(process.execPath),receipt=values['operation-id']&&path.join(root,'builder-toolchain',values['operation-id']+'.json');
+ builder.readPolicy(root);const priorBytes=fs.readFileSync(file),policy=JSON.parse(priorBytes),node=fs.realpathSync(process.execPath),receipt=values['operation-id']&&path.join(root,'builder-toolchain',values['operation-id']+'.json');
  if(values['operation-id']&&!uuid.test(values['operation-id']))throw Error('Use a stable UUID operation ID.');
  if(receipt&&fs.existsSync(receipt)){
   const old=JSON.parse(fs.readFileSync(receipt));if(old.phase==='complete'&&old.priorPolicyHash===values['expected-policy-sha256']&&old.node===node&&(!values.apply||old.planDigest===values.apply)&&packages.fileDigest(file)===old.nextPolicyHash)return {reconciled:true,phase:old.phase,operationId:old.operationId,planDigest:old.planDigest,priorPolicyHash:old.priorPolicyHash,nextPolicyHash:old.nextPolicyHash,node,receipt};
   throw Error('This refresh has an earlier receipt. Inspect its intent and current policy before any further write.');
  }
- for(const key of ['source','npmCli','git','publisherKey'])if(!fs.statSync(policy[key])[key==='source'?'isDirectory':'isFile']())throw Error('Existing prerequisite is unavailable: '+key);
- if(!hasPrivatePermissions(policy.publisherKey))throw Error('The existing publisher key protection needs inspection.');
+ for(const key of ['source','npmCli','git'])if(!fs.statSync(policy[key])[key==='source'?'isDirectory':'isFile']())throw Error('Existing prerequisite is unavailable: '+key);
  if(execFileSync(policy.git,['-C',policy.source,'remote','get-url','origin'],{encoding:'utf8',windowsHide:true}).trim()!==builder.repository)throw Error('Preserve the authorized repository and account route.');
  const ps=path.join(process.env.SystemRoot,'System32','WindowsPowerShell','v1.0','powershell.exe');
  const publisher=execFileSync(ps,['-NoProfile','-NonInteractive','-Command',"$s=Get-AuthenticodeSignature -LiteralPath $env:PROTEUS_BUILDER_NODE_CHECK_PATH; if($s.Status -ne 'Valid'){throw 'Existing runtime signature is not valid'}; $s.SignerCertificate.Subject"],{env:{...process.env,PROTEUS_BUILDER_NODE_CHECK_PATH:node},encoding:'utf8',windowsHide:true}).trim();

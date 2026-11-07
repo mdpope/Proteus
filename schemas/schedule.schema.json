@@ -230,9 +230,50 @@
             },
             "additionalProperties": true
           }
+        },
+        "sandboxedCommands": {
+          "type": "boolean",
+          "description": "Codex custom-mode native sandbox autonomy within explicit folder grants. Network is disabled; out-of-scope approvals are not granted."
         }
       },
       "additionalProperties": true
+    },
+    "managedConnections": {
+      "type": "array",
+      "maxItems": 100,
+      "description": "Portable owner-managed connection requirements. Resolved in the captured workspace at each turn; credentials and transport stay with the host.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "capabilities",
+          "required"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{0,63}$"
+          },
+          "capabilities": {
+            "type": "array",
+            "maxItems": 100,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,127}$"
+            }
+          },
+          "required": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "managedConnectionWorkspaceId": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,127}$",
+      "description": "Account-binding workspace; must belong to the captured context or explicitly referenced workspace sources."
     }
   },
   "additionalProperties": true

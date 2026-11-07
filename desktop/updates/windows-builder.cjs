@@ -25,27 +25,29 @@ function prepareBuildEnvironment(policy,directory,environment=process.env,platfo
  const command='@echo off\r\nsetlocal DisableDelayedExpansion\r\n'+quote(policy.node)+' '+quote(policy.npmCli)+' %*\r\nexit /b %errorlevel%\r\n';
  const bin=path.join(directory,'toolchain');ensurePrivateHome(bin);
  fs.writeFileSync(path.join(bin,'npm.cmd'),command,{flag:'wx',mode:0o600});
- return {...env,PATH:bin+';'+env.PATH};
+ const temporary=path.join(directory,'private-temp');ensurePrivateHome(temporary);
+ const scoped=Object.fromEntries(Object.entries(env).filter(([key])=>!['temp','tmp','tmpdir'].includes(key.toLowerCase())));
+ return {...scoped,PATH:bin+';'+env.PATH,TEMP:temporary,TMP:temporary,TMPDIR:temporary};
 }
 function readPolicy(root){
  const file=path.join(root,'windows-builder.json');
  if(!fs.existsSync(file))throw Error('This installation is a release consumer. Configure the designated Windows builder once before requesting a source build.');
  if(!hasPrivatePermissions(file)||fs.statSync(file).size>16384)throw Error('Windows builder policy needs inspection.');
  const value=JSON.parse(fs.readFileSync(file,'utf8'));
- if(value.schemaVersion!==1||value.root!==root||value.repository!==repository||!['source','node','npmCli','git','publisherKey'].every(key=>typeof value[key]==='string'&&path.isAbsolute(value[key])))throw Error('Windows builder policy does not match this installation.');
- return value;
+ if(![1,2].includes(value.schemaVersion)||value.root!==root||value.repository!==repository||!['source','node','npmCli','git'].every(key=>typeof value[key]==='string'&&path.isAbsolute(value[key])))throw Error('Windows builder policy does not match this installation.');
+ const {publisherKey,...unsigned}=value;
+ return {...unsigned,signingAuthority:'external'};
 }
 function configureBuilder(root,value){
  if(process.platform!=='win32')throw Error('Configure the designated builder on Windows.');
  const home=fs.realpathSync(value.home),installation=fs.realpathSync(value.installation),expected=path.join(path.dirname(home),'Proteus Updates',digest(home+'\0'+installation).slice(0,24));
  if(root!==expected)throw Error('Builder configuration must bind the installed owner.');
- const selected=Object.fromEntries(['source','node','npmCli','git','publisherKey'].map(key=>[key,fs.realpathSync(value[key])]));
- if(!fs.statSync(selected.source).isDirectory()||!['node','npmCli','git','publisherKey'].every(key=>fs.statSync(selected[key]).isFile()))throw Error('Builder prerequisites must already exist.');
- if(!hasPrivatePermissions(selected.publisherKey))throw Error('Use the existing protected publisher key.');
+ const selected=Object.fromEntries(['source','node','npmCli','git'].map(key=>[key,fs.realpathSync(value[key])]));
+ if(!fs.statSync(selected.source).isDirectory()||!['node','npmCli','git'].every(key=>fs.statSync(selected[key]).isFile()))throw Error('Builder prerequisites must already exist.');
  const origin=execFileSync(selected.git,['-C',selected.source,'remote','get-url','origin'],{encoding:'utf8',windowsHide:true}).trim();
  if(origin!==repository)throw Error('Use the authorized Proteus repository and its existing local authentication route.');
  ensurePrivateHome(root);const file=path.join(root,'windows-builder.json');
- const next={schemaVersion:1,root,home,installation,repository,...selected};
+ const next={schemaVersion:2,root,home,installation,repository,signingAuthority:'external',...selected};
  if(fs.existsSync(file)){const prior=readPolicy(root);if(JSON.stringify(prior)!==JSON.stringify(next))throw Error('An existing builder policy differs. Inspect it before reconfiguration.');return {configured:true,alreadyConfigured:true};}
  atomic(file,next);return {configured:true,repository,source:selected.source,artifacts:path.join(root,'builds')};
 }

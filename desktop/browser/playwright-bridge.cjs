@@ -21,8 +21,8 @@ async function connectPage(contents, onInput = () => {}, {external=false}={}) {
     claimed = true;
     sockets.handleUpgrade(req, socket, head, ws => sockets.emit('connection', ws));
   });
-  const topSession = 'proteus-page';
-  const childSessions = new Set();
+  let topSession = null;
+  const childSessions = new Set(), explicitSessions = new Set();
   let disposed = false, browser;
   const cleanup = () => {
     if (disposed) return; disposed = true;
@@ -31,13 +31,34 @@ async function connectPage(contents, onInput = () => {}, {external=false}={}) {
     debug.removeListener('message', forward);
     for (const socket of sockets.clients) socket.terminate();
     sockets.close(); server.close();
+    // Other observers may retain the shared Electron debugger; retire only
+    // sessions created by this bridge before releasing its attachment lease.
+    for(const sessionId of explicitSessions)void debug.sendCommand('Target.detachFromTarget',{sessionId}).catch(()=>{});
+    explicitSessions.clear();childSessions.clear();
     lease.release();
   };
   let send = () => {};
   const forward = (_event, method, params, sessionId) => {
-    if (method === 'Target.attachedToTarget') {if(params.targetInfo?.type==='page'&&params.targetInfo.targetId!==info.targetId)return;childSessions.add(params.sessionId);}
-    if (method === 'Target.detachedFromTarget') childSessions.delete(params.sessionId);
-    send({ method, params, sessionId: sessionId || topSession });
+    if (method === 'Target.attachedToTarget') {
+      if(sessionId?!childSessions.has(sessionId):params.targetInfo?.targetId!==info.targetId)return;
+      if(params.targetInfo?.type==='page'&&params.targetInfo.targetId!==info.targetId)return;
+      childSessions.add(params.sessionId);
+      // Explicit same-page attachments are independent native CDP sessions.
+      // Reusing the emulated auto-attach ID replaces Puppeteer's session object
+      // and strands callbacks owned by the original page session.
+      if(params.targetInfo?.targetId===info.targetId&&!sessionId){
+        explicitSessions.add(params.sessionId);
+        send({method,params:{...params,targetInfo:info}});return;
+      }
+    }
+    if (method === 'Target.detachedFromTarget') {
+      childSessions.delete(params.sessionId);if(params.sessionId===topSession)topSession=null;
+      if(explicitSessions.delete(params.sessionId)){send({method,params});return;}
+    }
+    // The Electron root debugger is shared with certificate observers and may
+    // already have Runtime/Network enabled. Only native per-client sessions
+    // replay their own execution contexts and receive their own domain events.
+    if(sessionId&&childSessions.has(sessionId))send({method,params,sessionId});
   };
   debug.on('message', forward);
   debug.once('detach', cleanup);
@@ -56,18 +77,18 @@ async function connectPage(contents, onInput = () => {}, {external=false}={}) {
           else if(method==='Target.getBrowserContexts')result={browserContextIds:['proteus-tab']};
           else if(method==='Target.getTargets')result={targetInfos:[info]};
           else if(method==='Target.setDiscoverTargets'){if(params.discover)send({method:'Target.targetCreated',params:{targetInfo:info}});result={};}
-          else if(method==='Target.attachToTarget'){if(params.targetId!==info.targetId)throw new Error('Target is outside this tab.');send({method:'Target.attachedToTarget',params:{sessionId:topSession,targetInfo:info,waitingForDebugger:false}});result={sessionId:topSession};}
+          else if(method==='Target.attachToTarget'){if(params.targetId!==info.targetId)throw new Error('Target is outside this tab.');result=await debug.sendCommand(method,{targetId:info.targetId,flatten:true});childSessions.add(result.sessionId);explicitSessions.add(result.sessionId);}
           else if(method==='Target.activateTarget'){if(params.targetId!==info.targetId)throw new Error('Target is outside this tab.');result={};}
-          else if(method==='Target.detachFromTarget'){if(params.sessionId!==topSession&&!childSessions.has(params.sessionId))throw new Error('Unknown page session.');result={};}
+          else if(method==='Target.detachFromTarget'){if(params.sessionId!==topSession&&!childSessions.has(params.sessionId))throw new Error('Unknown page session.');result=await debug.sendCommand(method,{sessionId:params.sessionId});}
           else if (method === 'Target.setAutoAttach') {
-            if (params.autoAttach) send({ method: 'Target.attachedToTarget', params: { sessionId: topSession, targetInfo: info, waitingForDebugger: false } });
+            if(params.autoAttach&&!topSession){const attached=await debug.sendCommand('Target.attachToTarget',{targetId:info.targetId,flatten:true});topSession=attached.sessionId;childSessions.add(topSession);explicitSessions.add(topSession);}
             result = {};
           } else throw new Error(`Browser-wide command is unavailable: ${method}`);
         } else {
           if (sessionId !== topSession && !childSessions.has(sessionId)) throw new Error('Unknown page session.');
           if (method.startsWith('Browser.') || ['Target.createTarget','Target.getTargets','Target.attachToTarget','Target.attachToBrowserTarget','Network.getAllCookies','Network.getCookies','Storage.getCookies','Storage.getStorageKeyForFrame'].includes(method)) throw new Error('Command is outside this tab.');
           if(method==='Input.dispatchMouseEvent')onInput(params);
-          result = await debug.sendCommand(method, params, sessionId === topSession ? undefined : sessionId);
+          result = await debug.sendCommand(method, params, sessionId);
         }
         send({ id, result, ...(sessionId ? { sessionId } : {}) });
       } catch (error) {

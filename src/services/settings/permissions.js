@@ -34,7 +34,7 @@ export function canonicalPath(value, cwd) {
 function buildPermissionContext(schedule, resolvePath) {
   const cwd = resolvePath(schedule.workspace.cwd, schedule.workspace.cwd) || schedule.workspace.cwd;
   const roots = [...new Set([cwd, ...schedule.workspace.additionalDirectories.map(dir => resolvePath(dir, cwd) || dir)])].sort();
-  const context = { ...(schedule.permissionScope?.kind==='schedule'?{scheduleId:schedule.permissionScope.id}:{}),...(schedule.executionPermissions?{schedulePermissions:hash(schedule.executionPermissions)}:{}),...(schedule.context?.workspaceId ? { workspaceId: schedule.context.workspaceId } : {}), provider: schedule.provider, cwd, roots, integrations: hash({ mcp: schedule.mcpServers || {}, selectedTools: (schedule.context?.entries || []).filter(entry => ['mcp', 'skill', 'agent'].includes(entry.kind)).map(entry => ({ id: entry.id, hash: entry.hash })), skills: (schedule.skillDirectories || []).map(dir => resolvePath(dir, cwd) || dir).sort() }) };
+  const context = { ...(schedule.permissionScope?.kind==='schedule'?{scheduleId:schedule.permissionScope.id}:{}),...(schedule.executionPermissions?{schedulePermissions:hash(schedule.executionPermissions)}:{}),...(schedule.context?.workspaceId ? { workspaceId: schedule.context.workspaceId } : {}), provider: schedule.provider, cwd, roots, integrations: hash({ ...(schedule.managedConnectionBindings?.length?{managedConnections:schedule.managedConnectionBindings}:{}),mcp: schedule.mcpServers || {}, selectedTools: (schedule.context?.entries || []).filter(entry => ['mcp', 'skill', 'agent'].includes(entry.kind)).map(entry => ({ id: entry.id, hash: entry.hash })), skills: (schedule.skillDirectories || []).map(dir => resolvePath(dir, cwd) || dir).sort() }) };
   return { ...context, id: hash(context), label: schedule.name || path.basename(cwd) };
 }
 export function permissionContext(schedule) { return buildPermissionContext(schedule, canonicalPath); }
@@ -295,6 +295,12 @@ export class PermissionStore extends PermissionProjection {
   }
   decide(schedule, request, profile = this.describe(schedule)) {
     if (protectedRequest(request)) return { allowed: false, reason: 'Enterprise policy or sandbox escape requires a direct response.' };
+    // Connecting the selected server is a prerequisite for a specifically granted
+    // tool, not permission to invoke its other tools. Each invocation still gates.
+    if(request.kind==='mcp-connect'){
+      const allowed=profile.mode!=='ask'&&(profile.mode==='autopilot'||profile.readOnlyTools===true||profile.rules.some(rule=>rule.kind==='mcp'&&rule.server===request.serverName&&rule.tool&&rule.tool!=='*'));
+      return {allowed,reason:allowed?'Connect server for explicitly granted tools':'Server connection requires approval',mode:profile.mode};
+    }
     // The owner creates this request for an exact durable chat scope. A generic
     // saved tool invocation must never turn into permission to grant new scopes.
     if(request.kind==='schedule-access'){const valid=!!operationRule(request),remembered=valid&&profile.mode!=='ask'&&profile.rules.some(rule=>matchesScheduleAccess(rule,request.args.scope));return {allowed:valid&&(profile.mode==='autopilot'||remembered),reason:remembered?'Saved exact schedule scope':'Schedule scope requires approval',mode:profile.mode};}

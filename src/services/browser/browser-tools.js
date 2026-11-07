@@ -17,7 +17,7 @@ export function browserTools(browser, runId) {
       title:{type:'string',maxLength:200,description:'For open: provisional page title when source link text or a title is available, especially for hidden/unloaded tabs.'},profileId:{type:'string',description:'Profile ID from list/destinations; omitted uses the destination default.'},hidden:{type:'boolean',description:'For open: register hidden and initially unloaded.'},unloaded:{type:'boolean',description:'For open: register without fetching the page.'},
       windowId:{type:'string',description:'Explicit app-window override for a user-authorized cross-window action. Ordinary calls use the submitting window; a remote client uses an owner window with the same project.'},tabId: { type: 'string' }, url: { type: 'string' }, role: { type: 'string' }, name: { type: 'string' },
       text: { type: 'string' }, selector: { type: 'string' }, nth: { type: 'integer', minimum: 0 },
-      value: { type: 'string' }, key: { type: 'string' }, delta: { type: 'number' },captureId:{type:'string'},x:{type:'number'},y:{type:'number'},toX:{type:'number'},toY:{type:'number'},deltaX:{type:'number'},deltaY:{type:'number'},button:{type:'string',enum:['left','middle','right']}
+      diagnostics:{type:'boolean',description:'For fill only: fixed bounded field focus/event/retention metadata; no text/code export, no retry or submission. Requires the same authorized fill.'},value: { type: 'string' }, key: { type: 'string' }, delta: { type: 'number' },captureId:{type:'string'},x:{type:'number'},y:{type:'number'},toX:{type:'number'},toY:{type:'number'},deltaX:{type:'number'},deltaY:{type:'number'},button:{type:'string',enum:['left','middle','right']}
     }, additionalProperties: false },
     handler: async args => {
       try {

@@ -8,6 +8,7 @@ import {verifyRelease,windowsReleaseOrigin} from '../src/services/updates/deskto
 import {desktopReleaseId} from './release-identity.mjs';
 import {releaseSourceCommit} from './release-source.mjs';
 
+if(process.platform!=='darwin')throw Error('Publisher signing belongs to Build Mac. Native builders export unsigned payloads.');
 const args=process.argv.slice(2),options={};
 for(let index=0;index<args.length;index+=2){if(!['--bundle','--archive','--installer','--key','--channel','--out','--source-commit'].includes(args[index])||!args[index+1])throw Error('Use --bundle, --archive, --installer (Windows), --key, --channel, --out and optional --source-commit.');options[args[index].slice(2)]=args[index+1];}
 for(const name of ['bundle','archive','key','out'])if(!path.isAbsolute(options[name]||''))throw Error('Use absolute paths for release inputs and output.');

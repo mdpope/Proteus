@@ -29,6 +29,7 @@ test('a private npm launcher is bound to configured paths and cannot overwrite e
  const root=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-npm-launcher-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
  const policy={node:'C:\\Private Tools\\node.exe',npmCli:'C:\\npm cache\\100% !\\npm-cli.js',git:'C:\\Git\\cmd\\git.exe'},original={Path:'C:\\Windows\\System32'};
  const env=builder.prepareBuildEnvironment(policy,root,original,'win32');
+ assert.equal(env.TEMP,path.join(root,'private-temp'));assert.equal(env.TMP,env.TEMP);assert.equal(env.TMPDIR,env.TEMP);assert.ok(fs.statSync(env.TEMP).isDirectory());
  const file=path.join(root,'toolchain','npm.cmd'),bytes=fs.readFileSync(file,'utf8');
  assert.equal(env.PATH.split(';')[0],path.dirname(file));assert.deepEqual(original,{Path:'C:\\Windows\\System32'});
  assert.match(bytes,/DisableDelayedExpansion/);assert.ok(bytes.includes('"C:\\Private Tools\\node.exe" "C:\\npm cache\\100%% !\\npm-cli.js" %*'));
@@ -84,4 +85,13 @@ test('a launched worker that exits before its first update is reconciled without
  assert.deepEqual(JSON.parse(fs.readFileSync(file,'utf8')),original,'Inspection preserves original failed launch evidence');
  const cancelled=builder.cancelBuild(root,{operationId,buildRequestHash:requestHash});assert.equal(cancelled.job.phase,'cancelled');assert.equal(cancelled.job.priorFailure,stopped.job.error);
  assert.equal(JSON.parse(fs.readFileSync(path.join(directory,'launch.json'),'utf8')).pid,exited.pid);
+});
+
+test('legacy Windows policies remain readable but no signing reference reaches a new worker',t=>{
+ const root=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-builder-keyless-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+ const value={schemaVersion:1,root,repository:builder.repository,publisherKey:path.join(root,'never-read.pem'),...Object.fromEntries(['source','node','npmCli','git'].map(k=>[k,path.join(root,k)]))};
+ packages.atomic(path.join(root,'windows-builder.json'),value);
+ const policy=builder.readPolicy(root);assert.equal(policy.signingAuthority,'external');assert.equal(Object.hasOwn(policy,'publisherKey'),false);
+ assert.equal(JSON.parse(fs.readFileSync(path.join(root,'windows-builder.json'))).publisherKey,value.publisherKey,'inspection does not mutate existing policy or key');
+ packages.atomic(path.join(root,'windows-builder.json'),{...policy,schemaVersion:2});assert.equal(builder.readPolicy(root).signingAuthority,'external');
 });

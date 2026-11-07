@@ -1,0 +1,304 @@
+## Current installed acceptance and closeout boundary
+
+Build Mac runs signed build `7180447eb2b2+src.18dd918fd000`, with verified update health and
+zero navigation differences across eight workspaces, 19 projects, 58 scopes, 247 tabs and three
+windows. Read-only desktop discovery, permissions and real observation pass. Two verified recovery
+generations survive; unresolved legacy attention/unregistered recoveries remain preserved and prevent
+clean maintenance. Full history, source selections, individual reading anchors, pairings and migration
+details are not independently established by the navigation receipt.
+
+Work Mac runs `7932e29cfa88+src.344f85175946`, with verified health and zero navigation differences
+across three workspaces, 13 projects, 78 scopes, 290 tabs and four windows. Native inbox, digest and
+planning acceptance completed without new prompts. Actual managed Jira/ADO reads and bounded Slack
+exact-query/thread propagation pass. A separate native replay kept all 52 watched files byte-identical,
+with stable counts/cursors and successful same-tab unload/automatic reload. Planning checks pass.
+All 111 organization workflows tests and four source manifests validate. Existing schedule revisions, enabled state,
+models, permissions, notifications and working authentication remain unchanged. Historical content
+coverage remains partial; its retained backlog/quality errors are not product regressions. Three
+background snapshots completed in 3.910, 0.044 and 3.501 seconds without timeout; this is bounded
+responsiveness evidence, not a claim that future hangs are impossible.
+
+Main Windows and Linux installations have verified health/navigation receipts; Ian's Windows
+laptop still has the original prepared helper-readiness failure and is being diagnosed in its
+existing coordinator. Physical iPhone/iPad installation and protected-file checks passed; physical
+push, gestures and reconnect remain separate limitations. Web deployment and isolated authenticated
+acceptance are recorded below; production signed-in interaction remains a follow-up.
+
+The operator defers non-digest additions/fixes, explicitly Proxmox, to the Nov 6 plan. New guided
+ADO/agent-pool and Local Network source preparation is checksum-preserved outside this checkout,
+not shipped. No new feature artifact or successor version is opened. Finish current update outcomes,
+source integration and verified retention before marking Nov 5 closed. Earlier checkpoints below
+are historical and do not supersede this state.
+
+## Nov 6 updater repair — signed and published
+
+Source `7180447eb2b2e6c999c9d7234d1f198831f1917c` produced signed Mac arm64 build
+`7180447eb2b2+src.18dd918fd000`, fingerprint
+`18dd918fd0005047792b14feded3d54b85e35fb49144c3b86bfb56b8367fa599`.
+Release `0.2.43-darwin-arm64-1c335633beccd8efeaf59746`, manifest digest
+`8462d863e9af50ee262b598bf17013846da48f149d66b6ba51d154c51ea18965`.
+1,696 source tests pass, four skip, zero fail; static and native startup tests pass.
+Signed successful-update and injected pre-install failure rehearsals verify renderer health,
+one continuation, prior events/configuration and full Back/Forward history. Signed/extracted
+startup gating yields without an owner lock, connection file, application-data writes or modal.
+All 29 public download/catalog/page paths verify; hosting configuration/unrelated content and
+Windows/Linux bytes are unchanged. No new bounded server-log error/warning categories.
+
+Build Mac's previous attempt ended in terminal attention before replacement. Its 7,691-file
+copy matches the original snapshot hash; 7,680 was a progress checkpoint. The original changing
+writer is unknown. Its job, candidate and 2,202,340,063-byte failed snapshot remain preserved.
+The existing owner API supports a fresh signed attempt after terminal attention; a new unassigned
+coordinator is preparing this repair. Automatic pre-install origin feedback is disabled to avoid
+resetting the legacy owner's idle handoff. Ordinary idle and preservation checks remain required.
+Installation and live acceptance are pending; retain the old failed-copy exception until a new
+verified recovery and supported retention review. No raw journal changes or cancellation occurred.
+
+## Nov 6 browser correction — signed and published
+
+Mac arm64 build `7932e29cfa88+src.344f85175946`, source
+`7932e29cfa88deb409efc0ede86d3f76ae333728`, is signed and publicly verified. Release
+`0.2.43-darwin-arm64-cfe74682286d696116fc6fff`, manifest digest
+`baff2f31a8bbd37e8d3eb39541c512437c1bef47c6d7d83cfc76f9eb6e617e66`.
+All 29 public paths verify; hosting configuration and unrelated content are preserved,
+with no new error/warning log categories in the bounded publication window. Windows/Linux
+bytes are unchanged. Full suite: 1,689 pass, four skip, zero fail; static checks pass.
+Native source/signed/extracted DevTools inspection, cross-origin iframe, console/network
+evidence and backend handoff pass; signed synthetic HTTPS/WSS and packaged terminal/restart pass.
+
+Work Mac's previous diagnostic build is healthy with zero navigation differences and two
+verified recoveries; its new purpose:update coordinator owns this correction, installation pending.
+Build Mac remains on 0.2.42 with its earlier 88367d6 update waiting for idle. The existing
+coordinator resumes that job; this correction is a follow-on only after its health/preservation
+acceptance. No duplicate local job, cancellation or idle bypass. Live Proxmox VNC, Slack typing
+and whole-page hang acceptance remain open.
+
+## Narrow field diagnostic — published Mac artifact
+
+Source `28263bf06d4c500526cab38b462caa2f45205866` produced signed build
+`28263bf06d4c+src.9dda742481d5`, fingerprint
+`9dda742481d544360a9a7258b62d3ac73d4272863d1fa7a9068424fedafc0e02`.
+Published release `0.2.43-darwin-arm64-10c3dd5179f2f55170f39beb`, manifest digest
+`6de8acc83af5bb56be8541bf535dc1367145c598945131aadd8fbc37923eae1b`.
+Source tests: 1,688 pass/four skip; static checks pass. Signed and officially extracted
+package startup/restart/terminal and hidden editor cancellation/reset/replacement checks pass.
+HTTPS hashes and the receiving owner's signed catalog agree. The accepted source companion
+matches every recorded runtime/build input. Windows/Linux bytes were retained unchanged.
+
+One owner update coordinator was dispatched after confirming the prior job was complete.
+Installation and preservation acceptance remain pending. `fill diagnostics:true` uses the
+ordinary exact `proteus_browser`/`fill` permission; it grants no general evaluation authority
+and is not itself a fix for Slack typing failure or whole-page hangs. Workflow acceptance
+requires the bounded real-target trace after healthy installation.
+
+## Nov 6 — fill acknowledgment and protected journal correction
+
+Source `6f6243dee279191257c53d58fd6f66e0a0d4589f`, build
+`6f6243dee279+src.1a063675c55e`, is Apple/publisher-signed after 1,688 source tests
+passed (four skips), static checks and exact bundle/extracted UI, editor, terminal and restart
+acceptance. Release `0.2.43-darwin-arm64-7f9dc8f142f6d0ed76c4633e`, manifest digest
+`6c2c439a59a6bda332eb1de3c22855e0e12aa29ed5201d856586b0b32280bad4`, archive SHA-256
+`0570fc9de324c59668082b83c80630717801e9a3910c75c144887737da9fbb6e`.
+The receiving owner resolves this exact signed catalog entry; all 29 current public files passed independent HTTPS readback.
+It is not installed. The protected remote journal rejects coordination mutations; no uncertain
+send was retried. The supported local Updates UI can create the normal owner coordinator without
+remote mutation admission, preserving idle/recovery rules. Existing live credentials, schedules,
+protected receipts and uncertain operation IDs remain intact. No broad grant or limit increase.
+Live Slack exact-query retention and post-update capacity/replay remain unverified.
+
+## Nov 6 — scheduled browser correction installed and healthy
+
+Source `578a5097a3f3a429c53d30bf9e093f4ffce9a30d`, build
+`578a5097a3f3+src.7a524ec90a1a`, is built once, Apple-signed and publisher-signed.
+Release: `0.2.43-darwin-arm64-21abbd536fa147ebf0e0e6db`.
+Manifest digest: `355c13f06c7bce41569445a604fccc506f3e00b316c662f01d83c2bd38c6ceef`.
+Archive SHA-256: `690ebaeeeabb359fbd75bbb82a66051d0c4bbbcf88191e12bd6692d1e32758c1`.
+The owner catalog independently resolves this exact signed artifact. Guarded publication verified
+29 files and preserved hosting configuration and unrelated files; all 29 files also passed independent HTTPS readback.
+Windows/Linux artifact bytes are unchanged. The official extracted package passes UI, native
+terminal, restart and scheduled background browser acceptance. Work Mac installation is verified; real Slack
+interaction remains pending. The unassigned receiving-device coordinator completed installation of this exact build, verified health at 22:56:02 UTC and delivered its continuation. Its separate desktop-access verification awaits local human approval; deeper preservation checks remain with that coordinator. New input and a later context guard reset two handoffs; a fresh checkpoint on the same job succeeded without restaging or bypass. The exact changed context field was not exposed. No credential, PAT expiry or schedule schema change is required.
+
+The preceding ADO correction is live-verified: all four configured probes and actual native workflow
+reads/discovery succeeded with existing credentials. Workflow validators pass, but bounded source
+propagation/review and unchanged-evidence replay remain with the organization workflows owner. Preserve that active
+work and let the update supervisor enforce idle. ADO success is not complete workflow acceptance.
+
+## Nov 6 — corrective Mac installed and healthy
+
+The focused ADO/reading-position Mac correction is signed and published from source
+`6181b45be346108be5cee4270ff174d1f56642fb`, build `6181b45be346+src.a031869a5213`.
+Release: `0.2.43-darwin-arm64-41c563583c7f5ed2eaaba91a`.
+Manifest digest: `8c83780925e1c18f2d1d314a4d0b988bce9c9e57ab3e2860ffd82829455f4165`.
+Archive SHA-256: `e45fb9fc81aa48de4c178ef4bdd3ee7d0445ad27b4458a932c128fca2021924c`.
+All 29 current public files passed independent HTTPS hash checks. Existing Windows/Linux
+artifacts remain unchanged. Work Mac independently resolved the exact signed catalog entry.
+
+The previous Work Mac update is verified complete/healthy on the earlier `88367d6` package,
+with three workspaces, 13 projects, 73 scopes, 270 tabs and four windows preserved without
+reported navigation differences. Its planning run has completed. A new unassigned owner update
+coordinator completed the corrective installation with verified health at 22:29:52 UTC. The
+owner navigation receipt reports three workspaces, 13 projects, 75 scopes, 281 tabs and four
+windows with no differences. Fresh maintenance retained two verified recovery generations.
+Full browser history, source selections, individual reading anchors and pairings remain separately
+unverified. Desktop permission/catalog/window observation subsequently passed after the other chat released
+its lease; control was released afterward. No input was tested.
+No credentials, operator PAT expiry or schedules were changed by this update.
+
+organization workflows has received the exact artifact handoff and retains ownership of live ADO qualification
+and synthesis replay. Current-only public retention removed the superseded Mac payload after
+all current hashes verified, recovering 270,053,376 observed bytes; its manifest receipt remains.
+The browser defects remain explicitly separate, so successful ADO delivery
+will not by itself establish complete Slack or digest acceptance. The release remains open.
+
+## Nov 6 — Work Mac normal checkpoint passed
+
+The operator ran the installed owners normal Save Window Session operation for each of
+four open windows with fresh revision guards. All four returned saved:true and created named
+recovery sessions. Window zero also passed the current DOM and 99 saved-position checks.
+This establishes a current successful normal checkpoint, without raw state edits, dropped
+positions or preservation-gate bypass; it does not establish the original failure cause.
+The original update coordinator resumed the existing prepared job. Work Mac is reconnecting;
+installation and post-restart preservation remain unverified at this checkpoint. The later
+reading-position correction aef6edb is source-only and is not in the frozen 88367d6 package.
+
+## Nov 6 — all native artifacts published; Windows installation underway
+
+All accepted application artifacts remain pinned to frozen source
+`88367d6772f5356a28bb8f3882ea9affc4b32f70`. Build Mac signed the independently
+qualified Windows payload. Mac, Linux and Windows 0.2.43 are now published; all 29 public
+files pass HTTPS byte/hash verification. The superseded Windows 0.2.42 public generation was
+retired after verification, freeing 582,234,112 observed bytes. Current catalogs, unrelated hosting
+files and hosting configuration were preserved; publication logged no new Apache errors.
+
+Windows release: `0.2.43-win32-x64-00c3b5f5911e3510ecc82aca`; manifest digest
+`d2675fab0e1b06a988387591ef2709bfabcc10b9e769ae672469fccd017c0d72`.
+Native validation passed 1,675 tests/six skips, static checks, official extraction, packaged
+PTY/restart and post-startup integrity. Independent guardian compilation differs only in the
+verified PE timestamp and uniquely identified assembly MVID; every other byte matches.
+The reviewed release-helper commit `f4aa69e` exported the original accepted package without
+rebuilding or changing it. The provenance-bound native source companion includes the generated
+guardian. Separate owner update coordinators are staging this exact signed package on both
+Windows machines; installation remains unverified.
+
+Linux now runs the accepted `88367d6772f5+src.8f3c432640b0` build. Its owner reports
+complete/updated and verified health, with all 14 tabs across 10 scopes, two workspaces,
+two projects and one window preserved without differences. Additional history, pairing,
+document-association and visual-terminal checks remain unverified. The prior attention job and
+unregistered recovery remain preserved; maintenance cannot yet apply.
+
+Physical iPhone/iPad installation and web deployment remain verified within their recorded
+limits. Build Mac needs a reviewed idle handoff after coordination ends. Work Mac still runs
+candidate 1 because its reading-position flush rejects before restart. Its precise offending
+view is not exposed by installed diagnostic tools; ordinary reversible UI inspection is underway.
+Do not claim final Mac installation, managed Jira/ADO workflow acceptance, or release closeout.
+Earlier sections below are historical checkpoints.
+
+## Nov 6 — Linux publication accepted
+
+Linux x64 from frozen `88367d6` passed 1,677 source tests/four skips, static checks,
+official extraction, native package UI/restart, document preservation, terminal rehearsal and
+disposable update/rollback. Build Mac independently verified all four private transfer hashes
+and signed the exact unsigned payload. Release `0.2.43-linux-x64-1512bcd5566c895676d20003` is
+published; all 29 current distribution files pass HTTPS byte/hash verification. Mac bytes and
+prior Windows availability remain unchanged. A fresh Linux owner updater is dispatched;
+installation and live workflow acceptance remain unverified.
+
+The direct Linux packaging command produces a wrapper directory incompatible with the updater;
+the delivered archive was corrected from the identical built bundle and passed official extraction.
+Retain that packaging defect and the reading-position contract mismatch as source follow-up work.
+Do not rebuild an accepted target merely because later commits update this rollout document.
+
+## Nov 6 — physical mobile installation verified
+
+Both physical iPhone and iPad now run 0.2.43 / build 2611.5.1. Cold recovery,
+installation, before-launch protected-file comparison (373 and 194 files respectively),
+launch and four saved destinations per device pass. Two recovery generations remain per device.
+Physical question gestures, reconnect and APNs delivery are still unverified.
+
+Windows normal keyring authentication works; the sandboxed GitHub check was a false failure.
+The frozen build pin remains `88367d6`; later rollout-document commits do not replace it.
+Linux has passed source validation and reached native package acceptance. Neither native artifact
+is yet published. Build Mac requires checkpoint review after new input; Work Mac remains
+prepared after reading-position persistence rejected before restart. A synthetic long-view
+reproduction emits 41 positions to the owner's 32-entry limit. That contract mismatch is confirmed
+in source but the precise offending Work Mac view remains unverified. Preserve the original state;
+do not bypass updater preservation or label the release complete.
+
+## Nov 6 — current publication and rollout checkpoint
+
+Frozen application source: `88367d6772f5356a28bb8f3882ea9affc4b32f70`.
+The Mac arm64 package is signed and published. Exact-package terminal/restart, geometry and
+five window-restore scenarios pass. The initial archive had an extra application wrapper and
+was withdrawn after both owners rejected staging before installation. The corrected archive
+passes the production extractor and preserves the identical signed package hash. It has a new
+immutable delivery ID ending `-archive-7508041e7570`; manifest digest
+`004ffcde1beee7fd2bc620d507843a6a53301a5de617d07509d73b90be55b8d7`.
+All 27 distribution files pass independent HTTPS byte/hash verification. Fresh Mac installation
+coordinators are running; installed and preservation acceptance are not yet established.
+
+Web release `20261106T080204Z` is deployed: 9,222 files, fourteen endpoint checks and ordinary
+isolated restore pass. Current/previous server code and one verified server recovery are retained;
+five superseded items were removed. Production signed-in interaction remains unverified.
+Windows/Linux native builds await their local command approvals. Signed iOS build `2611.5.1`
+is ready; physical-device preflight stopped at locked iPhone/iPad. No mobile install is claimed.
+
+The packaged membership rehearsal initially failed because its test used obsolete footer answer
+selectors. A test-only copy using the current inline question controls passes; application bytes
+were unchanged. Keep the failed and passing receipts, and update the source test in a later
+maintenance change. Device routing, commands, exact receipts and recovery paths remain in the
+private release ledger. Historical hold/checkpoint text below does not supersede current rollout
+authorization. The release remains open.
+
+## Nov 6 — all-device build and rollout authorized
+
+The operator explicitly requests building and deploying all current changes to all devices through
+the update process. This lifts earlier build/platform/deployment holds for Nov 5 / 0.2.43.
+Freeze the implemented source, build once per native target, validate and sign on Build Mac,
+publish accepted artifacts, and use fresh unassigned purpose:update coordinators on all included
+desktops. Preserve idle barriers, unrelated work, recovery generations and post-install acceptance.
+iOS uses the established Mac-coordinated preservation workflow; web uses its release workflow.
+Unimplemented guided full-account ADO and standalone Mnemosyne work remain open, not silently
+represented as shipped. Source acceptance: 1,677 pass/four skip, static and desktop/web checks pass.
+
+## Deployment hold — expanded Nov 5 scope
+
+All new deployments/publication are held by the operator. Build/test and isolated Design Preview
+are authorized. Candidate2 diagnostics are signed locally only; candidate1 remains installed.
+See N1–N12 in the release plan. Earlier rollout authorization below is historical.
+
+# Nov 5 rollout
+
+Version: 0.2.43
+
+| Target | Stage | Evidence and remaining work |
+| --- | --- | --- |
+| Mac artifact | Signed and private-transfer verified | Candidate 1 from fc0b318; source/static/native UI and exact packaged startup/archive checks pass. Full public release waits. |
+| Work Mac digest owner | Installed; workflow acceptance underway | Owner reports exact candidate identity, healthy/navigation differences zero. Inbox source reconcile preserved enabled/history/notifications; first scheduled Codex Terra-low empty-inbox test completed without prompts, second pending. Managed planning/digest and initial owner consent remain pending. |
+| Linux / Windows / iOS | Operator hold | Do not build until the Mac candidate is delivered and digest iteration permits the full release. |
+| Web and full public release | Pending later release stage | P1/P2 acceptance/retention work remains tracked; no new deployment claimed. |
+
+organization workflows configuration and workflow tests stay with its workflow owner. Product source, artifact
+acceptance and release delivery stay with the coordinator. Model completion is not external
+workflow success. Private task/device routing and receipts stay outside Git.
+
+## Held source checkpoint — connection page and question navigation
+
+Managed-first connection cards, responsive spacing/logos, lazy configuration inventory and isolated
+Design Preview are source-verified. A synthetic owner browser-launch rejection exposes its stage
+and remains visible after refresh without initiating another sign-in. Actual workstation.example.test auth launch
+remains unverified; its direct human reproduction produced no visible window on candidate1.
+
+Question navigation now waits for an in-flight history read and focuses the answer on the first
+click. Later user input cancels delayed focus. Repeated keyed web rendering retains one draft
+sync timer/status, preserving the phone transcript and unsent text. Desktop, authenticated web
+relay, attachment/uncertain-answer and 2,507-event history fixtures pass. Full source suite:
+1,641 passed, four skipped, zero failures; static checks and local web asset build pass.
+No new package was published or installed; existing deployment hold remains in force.
+
+## Held source checkpoint — ADO CLI/PAT alternatives
+
+Both no-registration alternatives have separate source adapters and owner UI. The CLI path refuses
+macOS/Linux cache protection/isolation assumptions; PAT uses the qualified official Basic launch
+path and owner-protected entry. Source validation and remaining live boundaries are recorded in
+`docs/managed-ado-alternatives.md`. Local protected Authentication Preview is available for explicit
+operator testing; no remote delivery/installation or workstation.example.test auth/schedule change occurred.

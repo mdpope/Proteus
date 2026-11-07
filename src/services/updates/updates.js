@@ -2,7 +2,7 @@ import {updateIdleBlockers,updateBlockerText} from './idle-blockers.js';
 import {verifyRelease,extractRelease} from './desktop-releases.js';
 import {DesktopReleaseFeed} from './desktop-release-feed.js';
 import {initializeFreshRecovery} from './recovery-inventory.js';
-import {captureNavigation,verifyNavigation} from './navigation-preservation.js';
+import {captureNavigation,verifyNavigation,navigationComparison} from './navigation-preservation.js';
 import {taskFeedbackDelivery} from '../chats/task-feedback-kind.js';
 import {ensurePrivateHome} from '../../shared/private-paths.cjs';
 import fs from 'node:fs';
@@ -40,14 +40,57 @@ export class Updates {
  }
  owns(file){return typeof file==='string'&&path.isAbsolute(file)&&path.dirname(path.dirname(file))===path.join(this.root,'jobs')&&path.basename(file)==='job.json';}
  job(){return this.file?readJob(this.file):null;}
- packageWork(method,...args){if((this.packagePending||0)>=4)return Promise.reject(Error('Update inspection is busy. Wait for the current check to finish.'));this.packagePending=(this.packagePending||0)+1;const task=(this.packageQueue||Promise.resolve()).catch(()=>{}).then(()=>{if(this.closed)throw Error('The updater is closing.');return packageOperation(method,...args);}).finally(()=>{this.packagePending--;});this.packageQueue=task;return task;}
+ packageWork(method,...args){
+  if((this.packagePending||0)>=4)return Promise.reject(Error('Update inspection is busy. Wait for the current check to finish.'));
+  this.packagePending=(this.packagePending||0)+1;
+  const task=(this.packageQueue||Promise.resolve()).catch(()=>{}).then(async()=>{
+   if(this.closed)throw Error('The updater is closing.');
+   const operation=this.packageOperation={id:randomUUID(),method,startedAt:new Date().toISOString()};
+   try{return await packageOperation(method,...args);}finally{if(this.packageOperation===operation)this.packageOperation=null;}
+  }).finally(()=>{this.packagePending--;});this.packageQueue=task;return task;
+ }
+ maintenanceReceipt(id){
+  if(!/^[a-f0-9-]{36}$/i.test(id||''))throw Error('Choose an exact maintenance operation ID.');
+  const file=path.join(this.root,'inspections',id+'.json');
+  const info=fs.lstatSync(file);if(!info.isFile()||info.isSymbolicLink()||info.size>64*1024*1024)throw Error('Maintenance receipt is not a bounded ordinary file.');
+  const receipt=JSON.parse(fs.readFileSync(file,'utf8'));
+  if(receipt.id!==id||receipt.kind!=='maintenance')throw Error('Maintenance receipt identity mismatch.');
+  return {...receipt,...(receipt.state==='running'&&this.maintenanceOperation?.id!==id?{state:'interrupted',error:'The owner stopped before inspection completed. Start a new read-only inspection with a new operation ID.'}:{})};
+ }
+ startMaintenance(id){
+  if(!this.packaged)throw Error('Maintenance requires an installed desktop app.');
+  if(!/^[a-f0-9-]{36}$/i.test(id||''))throw Error('Use a stable maintenance operation ID.');
+  const directory=path.join(this.root,'inspections'),file=path.join(directory,id+'.json');
+  if(fs.existsSync(file))return this.maintenanceReceipt(id);
+  if(this.busy||this.downloading)throw Error('Another update operation is running. Inspect status before starting maintenance.');
+  ensurePrivateHome(directory);
+  const receipt={schemaVersion:1,id,kind:'maintenance',state:'running',startedAt:new Date().toISOString()};atomicJSON(file,receipt);
+  this.busy=true;this.maintenanceOperation=receipt;
+  this.maintenanceTask=this.packageWork('maintenancePlan',this.root,{home:this.ownerHome,installation:this.installation,browserHome:this.browserHome,platform:this.platform})
+   .then(result=>atomicJSON(file,{...receipt,state:'complete',completedAt:new Date().toISOString(),result}))
+   .catch(error=>atomicJSON(file,{...receipt,state:'failed',completedAt:new Date().toISOString(),error:error.message}))
+   .finally(()=>{this.busy=false;this.maintenanceOperation=null;this.service.notify?.();});
+  this.maintenanceTask.catch(()=>{});return receipt;
+ }
  inspectAsync(bundle){return this.inspect===inspectPackage?this.packageWork('inspectPackage',bundle,{platform:this.platform}):Promise.resolve().then(()=>this.inspect(bundle));}
  refreshIdentity(){if(this.runningIdentity)return Promise.resolve(this.runningIdentity);if(this.identityPending)return this.identityPending;this.identityPending=this.inspectAsync(this.installation).then(value=>{this.runningIdentity=value;this.service.notify?.();return value;}).catch(error=>{this.error=error.message;throw error;}).finally(()=>{this.identityPending=null;});return this.identityPending;}
  identity(){let packaged=this.runningIdentity;try{if(this.packaged&&!packaged){if(this.inspect!==inspectPackage)packaged=this.runningIdentity=this.inspect(this.installation);else if(!this.identityPending&&!this.closed&&!this.error)void this.refreshIdentity().catch(()=>{});}}catch(error){this.error=error.message;}return {protocol:1,sessionId:this.sessionId,platform:this.platform,arch:process.arch,pid:process.pid,packaged:this.packaged,installation:this.installation||null,home:this.ownerHome,buildRevision:packaged?.buildRevision||(this.packaged?'checking':'source'),sourceFingerprint:packaged?.sourceFingerprint||null,identityPending:!!this.identityPending,barrier:this.service.engine.updateBarrier===true,capabilities:{prepare:this.packaged&&['darwin','linux','win32'].includes(this.platform),compatibleRollback:!!packaged}};}
+ navigationStatus(job){
+  if(!job)return null;
+  if(this.navigationVerificationJobId===job.id)return this.navigationVerification||null;
+  const file=path.join(path.dirname(job.file),'navigation-verification.json');
+  try{
+   const stat=fs.lstatSync(file);if(!stat.isFile()||stat.isSymbolicLink()||stat.size>16*1024*1024)return null;
+   const row=JSON.parse(fs.readFileSync(file,'utf8'));
+   if(row.schemaVersion!==1||row.jobId!==job.id||row.preservationHash!==job.preservationHash||!row.expectedInventory||!row.foundInventory)return null;
+   this.navigationVerification=navigationComparison(row.expectedInventory,row.foundInventory);this.navigationVerificationJobId=job.id;
+   return this.navigationVerification;
+  }catch{return null;}
+ }
  status(){
   let job,resolution;try{job=this.job();if(job?.phase==='attention')resolution=require('../../../desktop/updates/attention-reconciliation.cjs').readAttentionResolution(job);}catch(error){this.error=error.message;}
   const idle=job?this.idleStatus(job):null;
-  return {identity:this.identity(),error:this.error||null,download:this.download||null,job:job?{id:job.id,revision:job.revision,phase:job.phase,runId:job.runId,version:job.candidate?.version,buildRevision:job.candidate?.buildRevision,outcome:job.outcome||null,error:job.error||job.preInstallFailure?.error||job.failureHistory?.at(-1)?.error||null,failureHistory:job.failureHistory||[],blocker:['complete','cancelled'].includes(job.phase)||resolution?null:job.phase==='waiting-for-idle'?(idle.blockers.map(updateBlockerText).join('; ')||'Waiting for the final idle check.'):job.blocker||null,idle,health:job.health?{verified:true,at:job.health.at}:null,ordinaryWorkResumedAt:job.ordinaryWorkResumedAt||null,attentionResolution:resolution?{at:resolution.at,receiptHash:resolution.receiptHash,originalError:resolution.originalError,continuationReplayed:false}:null,continuation:job.continuation||null,freeSpaceChange:job.freeSpaceAfter===undefined?null:job.freeSpaceAfter-job.freeSpaceBefore}:null};
+  return {identity:this.identity(),navigationVerification:this.navigationStatus(job),operation:{busy:!!(this.busy||this.downloading||this.packagePending),inspection:this.packageOperation||null,queuedInspections:Math.max(0,(this.packagePending||0)-(this.packageOperation?1:0)),maintenance:this.maintenanceOperation||null},browserActivity:this.service.browserUpdateActivity?.()||[],error:this.error||null,download:this.download||null,job:job?{id:job.id,revision:job.revision,phase:job.phase,runId:job.runId,version:job.candidate?.version,buildRevision:job.candidate?.buildRevision,outcome:job.outcome||null,error:job.error||job.preInstallFailure?.error||job.failureHistory?.at(-1)?.error||null,failureHistory:job.failureHistory||[],blocker:['complete','cancelled'].includes(job.phase)||resolution?null:job.phase==='waiting-for-idle'?(idle.blockers.map(updateBlockerText).join('; ')||'Waiting for the final idle check.'):job.blocker||null,idle,health:job.health?{verified:true,at:job.health.at}:null,ordinaryWorkResumedAt:job.ordinaryWorkResumedAt||null,attentionResolution:resolution?{at:resolution.at,receiptHash:resolution.receiptHash,originalError:resolution.originalError,continuationReplayed:false}:null,continuation:job.continuation||null,freeSpaceChange:job.freeSpaceAfter===undefined?null:job.freeSpaceAfter-job.freeSpaceBefore}:null};
  }
  readRecoveryPolicy(){try{return recoveryPolicy(this.policyFile,{home:this.ownerHome,installation:this.installation});}catch(error){if(error.code==='ENOENT')throw Error('The installer must inventory this installation’s existing recovery generations before supervised restart. See the Updates recovery setup instructions.');throw error;}}
  context(run){return digest(JSON.stringify({provider:run.schedule.provider,providerSessionId:run.providerSessionId,workspace:run.schedule.workspace,context:run.schedule.context,permissions:run.schedule.permissions,chatPermissionRevision:run.chatPermissionRevision,model:run.schedule.model,effort:run.schedule.reasoningEffort}));}
@@ -60,13 +103,25 @@ export class Updates {
  verifyPreservation(job){
   const file=path.join(path.dirname(job.file),'preservation.json');
   if(!job.preservationHash||fs.statSync(file).size>16*1024*1024||digest(fs.readFileSync(file))!==job.preservationHash)throw Error('The pre-restart chat preservation receipt is unavailable or changed.');
+  const info=fs.lstatSync(file);if(!info.isFile()||info.isSymbolicLink())throw Error('Preservation receipt must be an ordinary file.');
   const receipt=JSON.parse(fs.readFileSync(file,'utf8'));
   if(receipt.schemaVersion!==1||!Array.isArray(receipt.runs))throw Error('The pre-restart chat preservation receipt is invalid.');
   for(const row of receipt.runs){const run=this.service.engine.runs.get(row.id);if(!run||run.events.length<row.eventCount||digest(JSON.stringify(run.events.slice(0,row.eventCount)))!==row.eventHash||this.context(run)!==row.contextHash)throw Error('A pre-restart chat, event history or effective configuration changed. Preserve the recovery data for inspection.');}
-  return {runs:receipt.runs.length,events:receipt.runs.reduce((sum,row)=>sum+row.eventCount,0),...(receipt.navigation?{navigation:verifyNavigation(receipt.navigation,captureNavigation(this.service))}:{})};
+  const found=receipt.navigation?captureNavigation(this.service):null;
+  if(receipt.navigation){
+   const comparison=navigationComparison(receipt.navigation,found),identity=digest(JSON.stringify([job.id,receipt.navigation,found]));
+   if(this.navigationVerificationHash!==identity){
+    atomicJSON(path.join(path.dirname(job.file),'navigation-verification.json'),{schemaVersion:1,at:new Date().toISOString(),jobId:job.id,preservationHash:job.preservationHash,comparison,expectedInventory:receipt.navigation,foundInventory:found});
+    this.navigationVerificationHash=identity;
+   }
+   this.navigationVerification=comparison;this.navigationVerificationJobId=job.id;
+  }
+  return {runs:receipt.runs.length,events:receipt.runs.reduce((sum,row)=>sum+row.eventCount,0),...(receipt.navigation?{navigation:verifyNavigation(receipt.navigation,found)}:{})};
  }
  async handle(value={},runId){
   if(value.action==='status'||value.action==='identity'||!value.action)return this.status();
+  if(value.action==='maintenance-status')return this.maintenanceReceipt(value.id);
+  if(value.action==='maintenance'&&value.operationId)return this.startMaintenance(value.operationId);
   if(value.action==='build-status')return require('../../../desktop/updates/windows-builder.cjs').buildStatus(this.root);
   if(value.action==='cancel-build')return require('../../../desktop/updates/windows-builder.cjs').cancelBuild(this.root,value);
   if(value.action==='build-release'){
@@ -131,8 +186,10 @@ export class Updates {
  }
  async releases(channel='stable'){
   if(!this.packaged)throw Error('Install the desktop app to check published releases.');
-  const envelopes=await this.releaseClient.releases({channel,platform:this.platform,arch:process.arch});
-  return {releases:envelopes.map(envelope=>{const release=verifyRelease(envelope,{channel,platform:this.platform});return {...release,manifestDigest:digest(JSON.stringify(envelope))};})};
+  const target={channel,platform:this.platform,arch:process.arch},catalog=this.releaseClient.catalog?await this.releaseClient.catalog(target):{releases:await this.releaseClient.releases(target)};
+  const releases=catalog.releases.map(envelope=>{const release=verifyRelease(envelope,{channel,platform:this.platform});return {...release,manifestDigest:digest(JSON.stringify(envelope))};});
+  if(catalog.publication&&(catalog.publication.availableVersion===null?releases.length!==0:releases.length!==1||releases[0].version!==catalog.publication.availableVersion||releases[0].version===catalog.publication.version))throw Error('The pending publication differs from its signed available package.');
+  return {releases,...(catalog.publication?{publication:catalog.publication}:{})};
  }
  async resolveRelease(value){
   if(!/^\d+\.\d+\.\d+(?:[-+][A-Za-z0-9.-]+)?$/.test(value.version||'')||value.sourceFingerprint!==undefined&&!/^[a-f0-9]{64}$/.test(value.sourceFingerprint)||value.sourceCommit!==undefined&&!/^[a-f0-9]{40,64}$/.test(value.sourceCommit))throw Error('Specify the requested version and, when known, exact source fingerprint or commit.');
@@ -274,6 +331,6 @@ export class Updates {
   try{const resumed=await this.service.engine.send(run.id,prompt,'queue',job.continuationId);this.service.engine.updateBarrier=false;void this.service.engine.drain();this.service.onUpdateResumed?.(run.id);return {accepted:true,delivery:resumed.events.find(event=>event.data?.delivery?.id===job.continuationId)?.data.delivery};}
   finally{this.delivering=false;}
  }
- close(){this.closed=true;clearInterval(this.timer);return this.packageQueue?.catch(()=>{});}
+ close(){this.closed=true;clearInterval(this.timer);return Promise.allSettled([this.packageQueue,this.maintenanceTask]);}
 }
-export function updateTools(controller,runId){return controller?[{name:'proteus_update',defer:'auto',description:'Inspect this running Proteus installation or supervise its own authorized update. Use maintenance to inspect bound application/backup folders and full recovery receipts, then maintain with its unchanged planDigest to reconcile missing records and retire eligible staging/backups. No arbitrary paths or elevated shell. Resolve the exact requested version through resolve-release before building; reuse matching signed releases. List published releases, then stage the selected release ID and manifest digest, or import an offline signed release manifest. The owner verifies publisher signature, target, archive hashes and isolated UI startup. Local developer candidates retain their explicit source-fingerprint flow on Mac/Linux. Handoff records completed/remaining work and returns before shutdown: finish this turn so the idle barrier can start the independent helper. It never cancels unrelated work. Compatible restart/rollback automatically continues this same chat with one durable delivery ID. Refresh status/revision before handoff/cancel; source mode is reported honestly.',parameters:{type:'object',properties:{action:{type:'string',enum:['status','identity','reconciliation','reconcile','build-release','build-status','cancel-build','storage','maintenance','maintain','releases','resolve-release','stage-release','import-release','prepare','handoff','cancel']},channel:{type:'string',enum:['stable','preview']},operationId:{type:'string'},buildRequestHash:{type:'string'},version:{type:'string'},sourceCommit:{type:'string'},planDigest:{type:'string'},releaseId:{type:'string'},manifestDigest:{type:'string'},manifest:{type:'string'},candidate:{type:'string'},sourceFingerprint:{type:'string'},checkpoint:{type:'string'},id:{type:'string'},expectedRevision:{type:'integer'}},required:['action'],additionalProperties:false},handler:async args=>JSON.stringify(await controller.handle(args,runId))}]:[];}
+export function updateTools(controller,runId){return controller?[{name:'proteus_update',defer:'auto',description:'Inspect this running Proteus installation or supervise its own authorized update. Use maintenance with a stable operationId for a pollable inspection, then maintenance-status with its id; status names active/queued inspections. A returned running receipt is not completion. Maintenance inspects bound application/backup folders and full recovery receipts, then maintain with its unchanged planDigest to reconcile missing records and retire eligible staging/backups. No arbitrary paths or elevated shell. Resolve the exact requested version through resolve-release before building; reuse matching signed releases. List published releases, then stage the selected release ID and manifest digest, or import an offline signed release manifest. The owner verifies publisher signature, target, archive hashes and isolated UI startup. Local developer candidates retain their explicit source-fingerprint flow on Mac/Linux. Handoff records completed/remaining work and returns before shutdown: finish this turn so the idle barrier can start the independent helper. It never cancels unrelated work. Compatible restart/rollback automatically continues this same chat with one durable delivery ID. Refresh status/revision before handoff/cancel; source mode is reported honestly.',parameters:{type:'object',properties:{action:{type:'string',enum:['status','identity','reconciliation','reconcile','build-release','build-status','cancel-build','storage','maintenance','maintenance-status','maintain','releases','resolve-release','stage-release','import-release','prepare','handoff','cancel']},channel:{type:'string',enum:['stable','preview']},operationId:{type:'string'},buildRequestHash:{type:'string'},version:{type:'string'},sourceCommit:{type:'string'},planDigest:{type:'string'},releaseId:{type:'string'},manifestDigest:{type:'string'},manifest:{type:'string'},candidate:{type:'string'},sourceFingerprint:{type:'string'},checkpoint:{type:'string'},id:{type:'string'},expectedRevision:{type:'integer'}},required:['action'],additionalProperties:false},handler:async args=>JSON.stringify(await controller.handle(args,runId))}]:[];}

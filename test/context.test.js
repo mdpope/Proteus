@@ -26,6 +26,13 @@ function fixture(t, beforeRemove) {
 test('JSONC retains URL strings and quoted punctuation while accepting comments', () => {
   assert.deepEqual(parseJSONC('{/*x*/"url":"https://example.test/a,}","list":[1,],//x\n}'), { url: 'https://example.test/a,}', list: [1] });
 });
+test('partial refresh rereads a shared source retained by another discovery root',async t=>{
+ const f=fixture(t),file=path.join(f.repo,'AGENTS.md');f.write(file,'Old shared source');f.context.refresh();
+ const entry=f.context.catalog.entries.find(entry=>entry.path===file);entry.roots.push(f.library);
+ fs.writeFileSync(f.context.catalogFile,JSON.stringify(f.context.catalog));f.write(file,'Changed shared source');
+ await f.context.refreshAsync({root:f.repo});
+ const captured=f.context.capture({selectedIds:[entry.id],includeDefaults:false});assert.equal(captured.entries[0].content,'Changed shared source');assert.notEqual(captured.entries[0].hash,entry.hash);
+});
 test('missing supplemental folders skip stale sources, preserve configuration and report chat warnings', async t => {
   const f = fixture(t);
   f.write(path.join(f.repo, 'AGENTS.md'), '# Available instructions');

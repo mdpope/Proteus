@@ -1,3 +1,36 @@
+## Nov 6 — pre-install recovery failure correction
+
+Recovery capture now waits for a bounded quiet interval after graceful owner shutdown,
+checks that no live owner has reclaimed the data home, and retains strict source/destination
+hash checks. A final verification failure writes the final file count and independent source
+versus destination results before stopping; a progress checkpoint is not a missing-file count.
+Baseline recovery distinguishes a stale runner lock from a live owner without deleting the lock.
+Normal owner startup remains responsible for stale-lock reclamation.
+
+A manually reopened installed app detects an active supervisor before owner-data initialization and logs the update-in-progress state and yields immediately. Verification launches remain allowed.
+The signed candidate's helper performs these checks, allowing an older owner to use them through
+the ordinary signed stage/prepare/handoff process. The existing owner already treats attention
+as terminal: a fresh supervised attempt preserves the old failed job and snapshot unchanged.
+No raw journal edits, success overrides, cancellation or new data restoration are required.
+
+The observed failed copy matched its original snapshot hash; the live source had changed.
+The original writer/timing remains unproven. The failed snapshot is retained pending a new
+verified recovery and explicit retention reconciliation. Installed acceptance remains open.
+
+## Publisher custody — Nov 5
+
+Build Mac owns source/release authority and signs every platform's accepted manifest. Builders
+export unsigned accepted payloads and source companions; their policies no longer require a key.
+Legacy Windows policy files remain readable, but the new worker discards their key reference and
+cannot sign. The builder CLI explicitly rejects --key. Owner updater installation still requires a
+trusted signed envelope; an unsigned payload cannot be staged as a release.
+
+The operator chose rotation to a new Mac-generated key. A bounded one-time RSA-OAEP/SHA-256
+handoff, signed by the old publisher and pinned to the Mac recipient, can transfer the old key for
+transition signing on Mac. Private bytes never travel in chat, source, release packages or plaintext
+transfer assets. Verify protected import and signing proof before removing the Windows copy/reference.
+Do not retire old public trust until rollout verifies that clients have learned the new public key.
+
 ## November 1 — automatic navigation preservation and coordinated targets
 
 The private device-role register chooses builders and consumers. Build once per OS/architecture,
@@ -704,3 +737,52 @@ capability/own-process observation. It does not authorize shell, website content
 foreign owners or desktop input. Protected approval requests remain human decisions. Older grants
 retain their original update-only scope; bootstrap them through the updater boundary. Both direct
 Update and remote initiation still capture receiving-device Engine Room defaults.
+
+## Nov 5 browser update idle rules
+
+Only progressing, unpaused downloads block update idle. Paused, interrupted, completed and
+cancelled items remain untouched. Browser agent activity carries a progress timestamp; after five
+minutes without observed progress it is reported stalled and stops blocking idle. Current input or
+a new operation resumes progress tracking. Owner status exposes browserActivity with tab ID/title,
+kind and state, and blocking messages name the tab. Running chats, terminals and other idle guards
+remain unchanged; no operation is cancelled or counter cleared by observation.
+
+## Nov 5 updater and provider prerequisites
+
+Maintenance accepts an optional stable operationId and returns a durable inspection receipt;
+maintenance-status reads it by id. Repeated IDs do not repeat work, interrupted receipts do not
+silently restart, and completion retains the exact maintenance plan for the existing digest-bound
+apply flow. Status exposes active/queued inspection and busy state. Shutdown waits for receipt
+persistence. Existing synchronous callers remain compatible.
+
+Windows builder jobs now own protected temporary directories and set TEMP/TMP/TMPDIR only in
+the child environment. Source tests use four workers and a two-minute per-test timeout. Native
+Windows acceptance remains required. Claude rate_limit explains provider/model/sign-in scope,
+separates unknown throttling from provider-reported exhaustion and copies only fresh reset evidence.
+It does not select another provider. Electron is pinned to patched 44.10.2; the remaining upstream
+ADO/Zod 3 advisory is constrained by the managed adapter's explicit input/collection limits, not
+claimed fixed upstream. Actual managed ADO acceptance still requires approved owner Entra setup.
+
+## Nov 5 reading-position checkpoint correction (source only)
+
+The renderer now excludes unscrolled overflow-visible layout descendants and includes actual
+vertical/horizontal scrollports and containers with nonzero offsets. Renderer and owner both
+permit at most 256 positions per view, retaining the existing locator, numeric and total-store
+bounds. A long element ID falls back to the structural locator. Oversized/invalid captures fail
+explicitly before replacing saved state; positions are not sliced to satisfy the limit.
+Owner errors distinguish capacity from malformed rows and invalid locators/offsets without
+including view contents. Rollback must use the updater's matching pre-upgrade data snapshot;
+older layout readers still enforce the old 32-position bound.
+
+Validation: 1,682 source tests passed, four skipped; static checks passed. Disposable Electron
+tests exercise normal document navigation/reload/cold restart, then the actual owner
+checkpointForQuit path used by update preflight with forty independent synthetic scrollports
+and sixty overflowing layout nodes. All forty captured offsets restore. This does not prove
+successful live Work Mac checkpoint or full installed update acceptance.
+
+The already-installed renderer fails before binary replacement. No supported automatic repair
+has yet been established on Work Mac. Native tooling rejected the visible developer-menu
+diagnostic request; no expression ran and no state was changed. Keep its prepared job and
+original recovery data. Do not force quit, edit the store, suppress flush failures or claim
+a new binary alone resolves the bootstrap. A supported live diagnosis and preserving recovery
+path remain release blockers; signed corrective delivery follows that qualification.

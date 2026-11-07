@@ -5,6 +5,7 @@ const {spawn}=require('node:child_process');
 const {privateTemporaryDirectory}=require('../../src/shared/private-paths.cjs');
 const {atomic,tree,inspectPackage,compatible,copyTree,spaceBudget,readJob,writeJob,recoveryPolicy,digest,excluded}=require('./update-package.cjs');
 const {copyRecovery}=require('./update-storage.cjs');
+const {dataOwner,settledRecovery}=require('./recovery-quiescence.cjs');
 const {verifyCandidate}=require('./update-candidate.cjs');
 const {recordFailure}=require('./update-failure.cjs');
 const {withoutCrashpadEnvironment}=require('./helper-environment.cjs');
@@ -114,16 +115,20 @@ async function supervise(file,{inspect=inspectPackage,request=ownerRequest,launc
   job=writeJob(file,{helperPid:process.pid});
   const candidate=verifyCandidate(job,'supervise',{inspect});
   if(['stopping','backing-up'].includes(job.phase)){
-   await until(()=>!alive(job.ownerPid)&&!fs.existsSync(path.join(job.home,'runner.lock')),60000,'graceful app exit and runner lock release');
+   await until(()=>!alive(job.ownerPid)&&!dataOwner(job.home,{alive}),60000,'graceful app exit and runner lock release');
    const current=inspect(job.installation);compatible(current,candidate);if(current.hash!==job.previous.hash)throw Error('The installed application changed after acceptance.');
    const stat=fs.statfsSync(path.dirname(job.installation)),before=Number(stat.bavail)*Number(stat.bsize);
-   const roots=[...new Set([job.home,job.browserHome])].filter(root=>root&&![job.home,job.browserHome].some(parent=>parent&&parent!==root&&root.startsWith(parent+path.sep))),copyOptions=roots.map(root=>({recoveryCaches:job.recoveryCachePolicy===1&&!!job.browserHome&&(job.browserHome===root||job.browserHome.startsWith(root+path.sep)),cachePrefix:job.browserHome&&(job.browserHome===root||job.browserHome.startsWith(root+path.sep))?path.relative(root,job.browserHome).split(path.sep).join('/'):'',runtimePrefix:job.home===root||job.home.startsWith(root+path.sep)?path.relative(root,job.home).split(path.sep).join('/'):null})),sizes=roots.map((root,index)=>tree(root,{exclude:excluded,...copyOptions[index]}));
+   const roots=[...new Set([job.home,job.browserHome])].filter(root=>root&&![job.home,job.browserHome].some(parent=>parent&&parent!==root&&root.startsWith(parent+path.sep))),copyOptions=roots.map(root=>({recoveryCaches:job.recoveryCachePolicy===1&&!!job.browserHome&&(job.browserHome===root||job.browserHome.startsWith(root+path.sep)),cachePrefix:job.browserHome&&(job.browserHome===root||job.browserHome.startsWith(root+path.sep))?path.relative(root,job.browserHome).split(path.sep).join('/'):'',runtimePrefix:job.home===root||job.home.startsWith(root+path.sep)?path.relative(root,job.home).split(path.sep).join('/'):null})),sizes=await settledRecovery(roots,copyOptions.map(options=>({exclude:excluded,...options})),{released:()=>!alive(job.ownerPid)&&!dataOwner(job.home,{alive})});
    if(roots.some(root=>path.dirname(file).startsWith(root+path.sep)))throw Error('Recovery journals must be outside the data snapshots.');
    const recovery=job.recovery||path.join(job.recoveryRoot,job.id);fs.mkdirSync(recovery,{recursive:true,mode:0o700});
    const crossVolume=fs.statSync(path.dirname(job.installation)).dev!==fs.statSync(recovery).dev;
    const volumes=spaceBudget([{directory:recovery,bytes:sizes.reduce((sum,row)=>sum+row.bytes,0)+(crossVolume||job.platform==='win32'?current.bytes:0)},{directory:path.dirname(job.installation),bytes:candidate.bytes+(crossVolume||job.platform==='win32'?current.bytes:0)}]);
    job=writeJob(file,{phase:'backing-up',recovery,freeSpaceBefore:job.freeSpaceBefore??before,volumeBudgets:volumes,recoveryData:roots.map((root,index)=>({root,...sizes[index],recoveryCachePolicy:copyOptions[index].recoveryCaches?1:0,cachePrefix:copyOptions[index].cachePrefix,runtimePrefix:copyOptions[index].runtimePrefix}))});
-   for(const [index,root]of roots.entries())copyRecovery(root,path.join(recovery,'data-'+index),{manifestFile:path.join(recovery,'copy-'+index+'.json'),expectedHash:sizes[index].hash,...copyOptions[index]});
+   for(const [index,root]of roots.entries()){
+    if(dataOwner(job.home,{alive}))throw Error('A live owner reclaimed its data home before recovery copying.');
+    copyRecovery(root,path.join(recovery,'data-'+index),{manifestFile:path.join(recovery,'copy-'+index+'.json'),expectedHash:sizes[index].hash,...copyOptions[index]});
+   }
+   if(dataOwner(job.home,{alive}))throw Error('A live owner reclaimed its data home during recovery copying.');
    const next=job.platform==='win32'?candidate.bundle:job.installation+'.next-'+job.id;if(!fs.existsSync(next))copyTree(candidate.bundle,next);if(inspect(next).hash!==candidate.hash)throw Error('Staged replacement differs from accepted bytes.');
    job=writeJob(file,{phase:'installing',replacement:next});
   }
@@ -196,7 +201,7 @@ async function supervise(file,{inspect=inspectPackage,request=ownerRequest,launc
   // closed app, and never restore data or replay an uncertain provider delivery.
   if(['stopping','backing-up'].includes(failed.phase)){
    try{
-    if(alive(failed.ownerPid)||fs.existsSync(path.join(failed.home,'runner.lock')))throw Error('The previous owner has not released its data home.');
+    if(alive(failed.ownerPid)||dataOwner(failed.home,{alive}))throw Error('The previous owner has not released its data home.');
     if(inspect(failed.installation).hash!==failed.previous.hash)throw Error('The baseline changed before failed-preflight recovery.');
     const checkpoint=failed.checkpoint+'\n\nUpdate failed before application replacement: '+error.message+' The previous application is unchanged. Report this failure and inspect the preserved journal before any new installation attempt.';
     job=writeJob(file,{phase:'verifying',outcome:'rollback',failedBeforeReplacement:true,preInstallFailure:{phase:failed.phase,error:error.message,at:new Date().toISOString()},incompleteRecovery:failed.recovery||null,recovery:null,checkpoint,blocker:null});

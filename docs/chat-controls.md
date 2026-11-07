@@ -298,3 +298,15 @@ Mobile reading now prepares twenty-four older meaningful rows / 96 KiB per later
 ### Internet Search dialog fill correction — October 13
 
 The desktop search input removes the regular composer’s 140px maximum height and fills the available dialog body. The workspace selector, provider buttons and Cancel retain their existing styling and remain outside the scrolling text. Empty status text reserves no space. Disposable Electron UI checks pass at 1440×960, 850×650 and 1100×520, including long-text scrolling, visible actions, no horizontal overflow and Cancel. Signed build `68095bceb17e` passes the same checks and is installed on the primary computer. HC transfer is pending destination acceptance; installation is tracked in the unified release ledger.
+
+## Nov 5 message display and refresh recovery
+
+Accepted composer sends update the chat from the owner receipt before refreshing the overview.
+An overview failure reports that the message was accepted, retaining visible history. Concurrent
+send clicks coalesce; an uncertain response retains the same message ID/payload for retry within
+the current renderer session. A proven pre-delivery rejection releases that attempt for editing;
+a recorded uncertain delivery does not. Reload recovery still uses the owner's durable receipt.
+Same-view state projections wait for the in-flight generation before capturing a newer one;
+renderer refresh callers share one request. Content-free error codes and active queue counts are
+exposed in performance diagnostics, distinguishing cache pressure, churn, worker timeout/exit and
+assembly failure. The historical live cause remains unproven until installed diagnostics observe it.

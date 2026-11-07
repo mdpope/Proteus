@@ -1,3 +1,87 @@
+## Nov 6 — recovery capture owns the data-home transition
+
+A process exit alone is not a stable-filesystem witness. Wait for bounded quiet hashes and check
+the live owner lock before capture and before replacement; never weaken the final hash gate.
+A reopened app must yield before initializing data while its supervisor owns capture/replacement.
+Preserve terminal failed-job evidence rather than retargeting it; retry through a new ordinary
+signed job, which existing owners support without raw store or journal modification.
+
+## Nov 6 — isolate embedded CDP client sessions
+
+Each embedded automation client uses a native CDP session, including its primary page attachment.
+The Electron root debugger is shared with passive certificate observers; reusing its enabled domains
+does not replay existing execution contexts for a reconnecting client. Secondary attachments must
+never reuse the primary session ID. Forward only events from sessions owned by this single-tab
+bridge, and retire those sessions on disconnect without changing unrelated debugger leases.
+
+## November 6 — shared Mnemosyne observer, desktop configuration
+
+One renderer and stylesheet implement the desktop/web operations design. Paired web clients get
+sanitized, bounded on-demand observations rather than private runtime settings or raw native logs.
+No native service lifecycle is transferred into Proteus. Existing native receipts supply distinct
+outcomes and opaque event/claim lineage; missing records cannot imply failure or successful filing.
+Core configuration remains on the owner desktop. Legacy IDs and stored settings are retained for
+compatibility. See [the implementation contract](mnemosyne-operations.md) for the independent native
+product work that is still required. The operator authorized source/build/test, not deployment.
+
+## Nov 5: workspace file browsing and viewer residency
+
+Extend document viewing for supported raster images rather than inventing a separate authorization
+model. File browsing has an explicit per-device, per-workspace owner grant independent of chat
+document access. Web file views persist only root/path metadata and re-read through that grant.
+Bounded directory traversal replaces background indexing; hidden previews release file bytes.
+See [the implementation and client limits](nov5-client-feature-acceptance.md).
+
+## Nov 5 — discover identity before pinning new Atlassian connections
+
+Keep enrollment outside the runnable registry. A local owner action starts PKCE/state-protected
+OAuth using the existing pinned authv2 route and host browser preference. Only account/resources
+are read before confirmation. The access token stays in owner memory; the refresh grant is saved
+to protected quarantine. The owner explicitly confirms the discovered account and selects one
+returned site and workspaces. The runtime then retains those exact pins and existing verification
+rules. Refresh does not discover/rebind another account. Cancel/expiry clears the memory token and
+never deletes or revokes prior credentials. Quarantined encrypted grants are not runtime-usable.
+
+## Nov 5 — managed MCP auth belongs to the connection owner
+
+Use explicit owner/workspace/revision bindings, opaque credential references and a host-managed
+transport shared by provider adapters. organization workflows retains portable capability requirements and business
+policy. The protected credential store never exposes tokens through model tools. Persist renewal
+uncertainty before contacting a rotating credential issuer, then save its replacement before
+releasing a short-lived token. A crash with uncertain rotation requires reconciliation rather than
+blindly replaying the prior refresh grant. Per-owner grants avoid uncoordinated cross-machine
+rotation. Foundation code is not yet runtime-connected; see managed-mcp-connections.md for
+remaining adapter, UI and installed acceptance.
+
+## November 5 — source reconciliation and native scoped autonomy
+
+A workflow owns foreign manifest validation. Proteus validates its exported schedule and exact
+manifest/export identities, previews the change, and requires the current revision plus unchanged
+plan digest before saving; enabled state is retained. It runs no exporter.
+
+Scoped command autonomy uses native filesystem enforcement and on-request boundary approval,
+not executable-name rules. Deny ambient root/temp access and command network access; retain
+explicit folder grants and required public runtime reads. Connector startup is a prerequisite
+for named tool grants or an explicit read-only tool policy. Native calls use actual connected
+thread-scoped catalog annotations; missing, ambiguous or destructive annotations fail closed.
+Actual calls remain independently authorized. Capability/runtime
+verification must fail closed. See https://learn.chatgpt.com/docs/permissions and
+https://learn.chatgpt.com/docs/sandboxing (official OpenAI documentation, reviewed November 5).
+
+A source-rejected create may recapture only when the destination journal proves that exact
+ordinary create failed during source capture. Preserve that receipt and bind all recapture
+attempts to a second durable logical-create claim; pending outcomes cannot replay. Existing
+successful or unknown delivery outcomes do not qualify.
+
+## November 5 — schedule inspection remains an owner-scoped read
+
+Expose saved settings separately from current resolved policy; a read must not save, enable or
+execute a schedule. Source discovery is limited to its base and already referenced workspace
+catalogs and returns metadata only. Proposed changes share update validation and permission
+guards but can preview source-managed schedules without writing them. Record test-start preflight
+configuration as evidence, without treating it as a frozen runtime approval grant or proof of
+external workflow success. Existing test receipts without this evidence remain explicitly unknown.
+
 ## Nov 2 R37 — one idle inventory for guard and diagnostics
 
 Derive live updater waiting details from the same execution inventory used at each idle barrier. Background executions are keyed by lane, so resolve their chat IDs from slot values. Include orphan execution ownership conservatively rather than trusting a terminal chat status. Diagnostics are read-only; a tool approval remains an operator decision and no cancellation is added. A new-input checkpoint reset is distinct from active work and is cleared only by a revision-checked handoff.
@@ -3232,3 +3316,53 @@ A client's page can redirect for reasons private to that device: cookies, user a
 ## 2026-11-03 — state crosses the wire as patches, not snapshots
 
 Owner state is replaceable and about 1.4 MB, so resending it per change was the largest source of traffic. Clients opt in through `sync` and keep their own baseline; a gap resynchronizes, and older clients keep whole snapshots at a batched cadence. State stays out of the replay journal, which exists for events a reconnect must not miss.
+
+
+## Nov 5 — native managed MCP bridge and publisher authority
+
+Use one owner transport with per-turn MCP stdio bridges for Codex/Copilot. Each call receives the
+actual catalog's annotations and current run permission; native approval forwarding never grants
+upstream authority. Capture account/configuration revisions in permission identity and preserve
+prior turn pins. Do not give the HTTP SDK an OAuth provider that can replay a mutation or widen
+consent on its own. Safe retries belong to the owner and require explicit idempotent read metadata.
+
+The operator chose publisher key rotation on Build Mac and reaffirmed its sole source/signing
+authority for all platforms. Native builders must return unsigned tested payloads; key custody,
+trust transition and signing/publication belong to Build Mac.
+
+## Nov 5: host-managed Atlassian identity and explicit workspace binding
+
+Use the separately discovered authv2 resource/issuer with owner-driven public-client PKCE consent;
+never reinterpret the legacy organization workflows credential as equivalent. Persist each rotated grant in protected
+quarantine before remote identity verification, then commit ready state before releasing its token.
+The owner loopback broker serves both native providers, but every run retains its own tool rules.
+Health probes are explicit minimal owner reads and do not manufacture server read-only annotations.
+Standalone schedule folders cannot select an account: the manifest names a captured source workspace.
+This source decision does not establish authenticated organization workflows or installed acceptance.
+
+## Nov 5 — ADO authentication ownership
+
+Use a separately approved Entra public client and MSAL's supported cache/network interfaces with
+platform-encrypted persistence. Do not adopt an unverified CLI token cache, use the SDK's production-
+inappropriate development client, or accept the ADO server's azcli fallback chain. The pinned server
+uses supported envvar bearer injection only inside its dedicated owner child. Native providers use
+the same per-run managed broker as Atlassian. Initial corporate application approval remains an
+explicit local setup prerequisite. Source tests do not establish corporate authorization or access.
+
+## Nov 5: managed connections lead the account page
+
+Use shared renderer cards and local service logos for managed MCP connections. Keep independent
+credential/authentication/transport/resource evidence visible and move source inventory and
+less-frequent actions into expandable sections. Load the source inventory only when opened.
+This changes presentation, not owner setup or per-run authority. Design references and tests
+are in [connection-page-design.md](connection-page-design.md).
+
+
+## 2026-11-06 — Fixed field diagnostics instead of general evaluation grants
+
+Diagnose application-controlled editor input with an optional bounded observation around one
+normal authorized browser fill. The owner supplies fixed code and returns metadata, not caller
+JavaScript, DOM content or keys. Keep ordinary tab/run permissions, remove listeners on exit,
+and report replacement/reset/cancellation without retrying. This avoids requiring a scheduled
+workflow to receive arbitrary Playwright server execution merely to explain failed input.
+Synthetic acceptance does not establish the actual Slack cause or authorize submission.

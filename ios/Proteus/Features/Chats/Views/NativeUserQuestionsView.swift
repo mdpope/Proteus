@@ -10,6 +10,8 @@ struct NativeUserQuestionCard: View {
     let question: NativeUserQuestion
     var showHeading = true
     var chatID: String
+    var focusRequest: UUID? = nil
+    @FocusState private var answerFocused: Bool
     let submit: (String, String, [String: JSON]) async throws -> Void
     @State private var answer = ""
     @State private var busy = false
@@ -35,6 +37,7 @@ struct NativeUserQuestionCard: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Your answer").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                     TextField("", text: $answer, axis: .vertical).textFieldStyle(.plain).lineLimit(2...6)
+                        .focused($answerFocused)
                         .modifier(ChatReturnKey(text: $answer, submit: { send(answer) })).disabled(busy)
                         .padding(10).frame(maxWidth: .infinity, minHeight: 68, alignment: .topLeading)
                         .background(NativeTheme.background, in: RoundedRectangle(cornerRadius: 8))
@@ -75,6 +78,10 @@ struct NativeUserQuestionCard: View {
                 if shared.draftAttachments[key] == nil { shared.draftAttachments[key] = shared.draftAttachments[oldScope] }
                 if store.draft(key + "-attachments") == .null { store.setDraft(key + "-attachments", store.draft("question-attachments:" + chatID + ":" + question.id)) }
             }
+        }
+        .task(id: focusRequest) {
+            guard focusRequest != nil, question.status == "pending" else { return }
+            await Task.yield(); if !Task.isCancelled { answerFocused = true }
         }
         .onChange(of: answer) { _, value in var saved = store.draft(key).object; saved["answer"] = .string(value); store.setDraft(key, .object(saved)) }
         .fileImporter(isPresented: $picking, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
