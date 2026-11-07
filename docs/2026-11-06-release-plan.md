@@ -111,3 +111,71 @@ Keep machine/chat identifiers and the original screenshot in private release evi
 Nov 5 outstanding rollout/acceptance remains in its existing records; this plan does not close it
 or silently move its unfinished work. Add further Nov 6 items explicitly as requested. Reserve the
 successor version once, after Nov 5 closeout, using docs/release-process.md.
+
+## Operator closeout boundary — after Nov 5 acceptance
+
+The operator explicitly moves non-digest features/fixes, including Proxmox, into this successor
+plan rather than another Nov 5 build. Finish existing updates and Work Mac digest acceptance first.
+Do not reserve a new version or start this release until the current release is closed. Tested
+preparatory ADO/network source changes are preserved as a checksum-verified private patch and
+original files, outside the active Nov 5 checkout; they are not shipped or silently discarded.
+
+### N6-03 — Proxmox and website network access
+
+Native CDP session isolation and same-profile secure WebSocket certificate reuse shipped in
+Nov 5. Live Proxmox remains open: the host resolves and accepts TCP, while the embedded browser
+reports address-unreachable for both hostname and IP; public browsing works and the operator
+confirms macOS Local Network is enabled. That does not establish a certificate or URL cause.
+The current Electron website permission handler also silently denies its new local-network,
+legacy local-network-access and loopback-network types. A prepared correction surfaces exact
+origin/type/profile Allow/Block requests with local-only persistence, retaining OS permissions,
+certificate decisions and agent-sharing boundaries. Focused source tests pass; installed native
+permission delivery, Proxmox page load, actual noVNC connection and DevTools responsiveness must
+be verified before claiming resolution. No VM input or session/certificate changes were performed.
+
+### N6-04 — Guided full-family Azure DevOps and agent pools
+
+Prepared source removes manual GUID entry from new PAT setup, discovers the actual identity,
+organization and bounded paginated project list, and requires account/workspace/family review.
+The official pinned MCP supports core, work, work-items, search, test-plans, repositories, wiki,
+pipelines and advanced-security. Existing connections retain their four-family defaults; explicit
+changes can preserve the existing PAT through a verified protected reference while keeping rollback
+credentials. The issuer-managed profile does not invent granted scopes. Actual PAT rights and run
+permissions remain independent limits, and unsupported service operations must be named honestly.
+
+The official catalog has no agent-pool tools. Prepared owner-managed read/write pool operations
+use fixed documented endpoints, share the same credential/organization binding, withhold registration
+secrets and agent environment/capability dictionaries, and never replay an uncertain mutation.
+Source/disposable UI acceptance passes, including real vendor catalog exposure and protected mutation
+annotations. The full prepared source suite passed 1,711 tests with four skips; two native connection
+UI suites and static checks pass. No new package, HC migration, authenticated full-family read,
+agent-pool mutation or write acceptance is claimed. No new PAT, app registration or scopes were created.
+
+Finish qualified full-account CLI/optional PAT-lifecycle design without unsafe cache adoption,
+client-ID substitution or automatic fallback. Existing working PATs must not need recreation to
+select tool families. Publish final schema/migration/rollback guidance, test both native providers,
+and use explicitly authorized disposable resources for live mutation checks.
+
+### N6-05 — Independent Mnemosyne follow-up
+
+The shared Proteus desktop/web operations interface is implemented and shipped in Nov 5. The
+separate native core/library extraction, bounded native event journaling and guarded service
+controls, additional sources/watchers and neutral iOS library synchronization remain future product
+work. Load that product's source and ownership instructions before implementation; preserve current
+native service ownership, working claims, publication boundaries and data. Do not label the shipped
+Proteus observer as completion of the independent product redesign.
+
+### N6-06 — Remaining parity and production acceptance
+
+Track physical mobile question gestures/reconnect/APNs, native workspace-file/image navigation,
+signed-in production web interaction and representative network/performance measurements. Preserve
+existing simulator/source/disposable acceptance; it is not physical or production proof. These are
+follow-up scope and limitations, not failed organization workflows historical content coverage.
+
+### N6-07 — Updater diagnostics and recovery exceptions
+
+Prepared-job/helper readiness failures need bounded, sanitized, pollable owner diagnostics rather
+than an attention-only reconciliation endpoint. Investigate readiness verification latency against
+legacy deadlines without weakening integrity, idle or preservation gates. Keep original failed and
+uncertain receipts. Recovery exceptions need supported owner reconciliation and precise retention
+conditions; do not raw-edit journals or delete unresolved copies to make maintenance green.

@@ -1,3 +1,35 @@
+## Current installed acceptance and closeout boundary
+
+Build Mac runs signed build `7180447eb2b2+src.18dd918fd000`, with verified update health and
+zero navigation differences across eight workspaces, 19 projects, 58 scopes, 247 tabs and three
+windows. Read-only desktop discovery, permissions and real observation pass. Two verified recovery
+generations survive; unresolved legacy attention/unregistered recoveries remain preserved and prevent
+clean maintenance. Full history, source selections, individual reading anchors, pairings and migration
+details are not independently established by the navigation receipt.
+
+Work Mac runs `7932e29cfa88+src.344f85175946`, with verified health and zero navigation differences
+across three workspaces, 13 projects, 78 scopes, 290 tabs and four windows. Native inbox, digest and
+planning acceptance completed without new prompts. Actual managed Jira/ADO reads and bounded Slack
+exact-query/thread propagation pass. A separate native replay kept all 52 watched files byte-identical,
+with stable counts/cursors and successful same-tab unload/automatic reload. Planning checks pass.
+All 111 organization workflows tests and four source manifests validate. Existing schedule revisions, enabled state,
+models, permissions, notifications and working authentication remain unchanged. Historical content
+coverage remains partial; its retained backlog/quality errors are not product regressions. Three
+background snapshots completed in 3.910, 0.044 and 3.501 seconds without timeout; this is bounded
+responsiveness evidence, not a claim that future hangs are impossible.
+
+Main Windows and Linux installations have verified health/navigation receipts; Ian's Windows
+laptop still has the original prepared helper-readiness failure and is being diagnosed in its
+existing coordinator. Physical iPhone/iPad installation and protected-file checks passed; physical
+push, gestures and reconnect remain separate limitations. Web deployment and isolated authenticated
+acceptance are recorded below; production signed-in interaction remains a follow-up.
+
+The operator defers non-digest additions/fixes, explicitly Proxmox, to the Nov 6 plan. New guided
+ADO/agent-pool and Local Network source preparation is checksum-preserved outside this checkout,
+not shipped. No new feature artifact or successor version is opened. Finish current update outcomes,
+source integration and verified retention before marking Nov 5 closed. Earlier checkpoints below
+are historical and do not supersede this state.
+
 ## Nov 6 updater repair — signed and published
 
 Source `7180447eb2b2e6c999c9d7234d1f198831f1917c` produced signed Mac arm64 build
