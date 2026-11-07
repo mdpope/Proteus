@@ -1,3 +1,4 @@
+const {diagnosticFill}=require('./field-fill-diagnostics.cjs');
 const {agentViewport,ensureAgentViewport,releaseAgentViewport}=require('./agent-viewport.cjs');
 const {BrowserStateBatch}=require('./browser-state-batch.cjs');
 const {browserErrorDocument,errorColors}=require('./browser-error.cjs');
@@ -834,6 +835,7 @@ class BrowserTabs {
     void task.finally(()=>{if(this.agentQueues.get(key)===task)this.agentQueues.delete(key);}).catch(()=>{});return task;
   }
   async performAgent(value, runId) {
+    if(value.diagnostics!==undefined&&(typeof value.diagnostics!=='boolean'||value.action!=='fill'))throw Error('Field diagnostics are supported only for fill.');
     const allowed = tab => this.tabs.get(tab.id)===tab&&this.profileAvailable(tab)&&!this.agentStatus(tab).agentPaused;
     if (value.action === 'list') return this.list().filter(info => this.ownsWindow(this.get(info.id))&&this.profileAvailable(this.get(info.id))).map(({history,...info})=>info);
     if(value.action==='destinations')return {...(this.options.agentDestinations?.(runId)||{destinations:[{type:'chat',id:runId}]}),defaultProfileId:'default',profiles:(this.options.profiles?.list().items||[{id:'default',name:'Default'}]).map(({id,name})=>({id,name,available:this.profileAvailable({profileId:id})}))};
@@ -916,11 +918,11 @@ class BrowserTabs {
     let fillResult;
     if(value.action==='fill'&&typeof value.value!=='string')throw new Error('Fill requires an explicit string value. text is a locator, not field content. No input was performed.');
     if (value.action === 'click') await locator.click();
-    else if (value.action === 'fill') { await locator.scrollIntoViewIfNeeded();const box=await locator.boundingBox();if(box){clearTimeout(tab.pointerTimer);tab.pointerTimer=null;tab.agentPointer={...box,kind:'field'};tab.view.webContents.send('proteus:agent-pointer',tab.agentPointer);}await locator.fill(value.value);
+    else if (value.action === 'fill') { await locator.scrollIntoViewIfNeeded();const box=await locator.boundingBox();if(box){clearTimeout(tab.pointerTimer);tab.pointerTimer=null;tab.agentPointer={...box,kind:'field'};tab.view.webContents.send('proteus:agent-pointer',tab.agentPointer);}if(value.diagnostics===true){fillResult=await diagnosticFill(locator,value.value);}else{await locator.fill(value.value);
       // ARIA snapshots may omit contenteditable text. Read the exact target back;
       // this is DOM retention evidence, not a claim of application submission.
       await new Promise(resolve=>setTimeout(resolve,150));
-      fillResult=await locator.evaluate((element,expected)=>{const editable=element.isContentEditable,observed=['INPUT','TEXTAREA'].includes(element.tagName)?element.value:editable?element.innerText:null;return {tag:element.tagName.toLowerCase(),role:element.getAttribute('role'),contentEditable:editable,retained:element.isConnected&&observed===expected,verification:'DOM value after fill; not application submission'};},value.value);
+      fillResult=await locator.evaluate((element,expected)=>{const editable=element.isContentEditable,observed=['INPUT','TEXTAREA'].includes(element.tagName)?element.value:editable?element.innerText:null;return {tag:element.tagName.toLowerCase(),role:element.getAttribute('role'),contentEditable:editable,retained:element.isConnected&&observed===expected,verification:'DOM value after fill; not application submission'};},value.value);}
     }
     else if (value.action === 'select') await locator.selectOption(String(value.value));
     else if (value.action === 'press') { if (locator) await locator.press(value.key); else await page.keyboard.press(value.key); }

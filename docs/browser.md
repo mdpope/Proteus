@@ -1714,3 +1714,21 @@ ARIA snapshots can omit editor content. A false retained value is not success: s
 never submit or automatically repeat. A true value establishes only observed DOM retention,
 not application acceptance or a guarantee against later rerender. No field content is echoed in
 this acknowledgment.
+
+
+### Bounded field diagnostics
+
+`proteus_browser` supports `fill` with `diagnostics:true` and the normal fresh
+locator plus explicit `value`. This executes exactly one ordinarily authorized fill, not an
+evaluation API. Fixed host code observes only that field: focus, document visibility, connected
+state, text length (suppressed for password/OTP inputs), original-versus-current target identity,
+and exact retention before input, immediately afterward, and after 150/500 ms waits. At most 32
+input/keyboard/composition event metadata entries include type, trusted/cancelled state and
+allowlisted input type; never key, data, entered text, HTML or arbitrary code. Listeners are
+removed in finally, with a 15-second expiry if the renderer outlives a failed caller. The normal
+snapshot response remains ordinary authorized page evidence; only the diagnostics projection is
+text-free. No Enter, focus of the native window, retry or automatic fallback is performed.
+
+The existing fill permission and tab sharing/profile/run boundaries remain mandatory. This
+option does not authorize Playwright server evaluation or grant access to an unrelated tab.
+It is diagnostic support, not a proven fix for Slack input loss or whole-page stalls.

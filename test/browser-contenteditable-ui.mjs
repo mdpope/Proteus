@@ -24,12 +24,25 @@ try{
  await assert.rejects(act({action:'fill',tabId:tab.id,role:'textbox',name:'Query',text:'Wrong content argument'}),/explicit string value/);
  assert.equal((await act({action:'fill',tabId:tab.id,role:'textbox',name:'Query',value:'Synthetic bounded query'})).fillResult.retained,true);await act({action:'press',tabId:tab.id,role:'textbox',name:'Query',key:'Enter'});
  assert.match(JSON.stringify(await act({action:'snapshot',tabId:tab.id})),/Synthetic bounded query/);
+ const diagnosed=await act({action:'fill',tabId:tab.id,role:'textbox',name:'Query',value:'Private synthetic query',diagnostics:true});
+ assert.equal(diagnosed.fillResult.retained,true);
+ assert.deepEqual(diagnosed.fillResult.diagnostics.samples.map(x=>x.phase),['before','immediate','150ms','500ms']);
+ assert.ok(diagnosed.fillResult.diagnostics.events.some(x=>x.type==='input'));
+ assert.ok(!JSON.stringify(diagnosed.fillResult).includes('Private synthetic query'));
+ // Cancellation is observed, never converted to a successful fill or replayed.
+ await native((main,id)=>main.getBrowser().get(id).view.webContents.executeJavaScript("document.querySelector('[contenteditable]').addEventListener('beforeinput',e=>e.preventDefault(),{once:true})"),tab.id);
+ const cancelled=await act({action:'fill',tabId:tab.id,role:'textbox',name:'Query',value:'Cancelled query',diagnostics:true});
+ assert.equal(cancelled.fillResult.retained,false);
+ assert.ok(cancelled.fillResult.diagnostics.events.some(x=>x.type==='beforeinput'&&x.defaultPrevented));
  // A collapsed layout after first use must not strand a retained background page.
  await native((main,id)=>main.getBrowser().get(id).view.setBounds({x:0,y:0,width:0,height:0}),tab.id);
  await act({action:'snapshot',tabId:tab.id});const retained=await act({action:'fill',tabId:tab.id,role:'textbox',name:'Query',value:'Recovered viewport'});
  assert.equal(retained.fillResult.retained,true);assert.equal(retained.fillResult.contentEditable,true);
  await native((main,id)=>main.getBrowser().get(id).view.webContents.executeJavaScript("document.querySelector('[contenteditable]').addEventListener('input',e=>setTimeout(()=>{e.target.textContent=''},20),{once:true})"),tab.id);
- assert.equal((await act({action:'fill',tabId:tab.id,role:'textbox',name:'Query',value:'Rejected by editor'})).fillResult.retained,false);
+ const reset=await act({action:'fill',tabId:tab.id,role:'textbox',name:'Query',value:'Rejected by editor',diagnostics:true});assert.equal(reset.fillResult.retained,false);assert.equal(reset.fillResult.diagnostics.samples.at(-1).original.length,0);
+ // Replacing the original target is reported explicitly, without following it with new input.
+ await native((main,id)=>main.getBrowser().get(id).view.webContents.executeJavaScript("document.querySelector('[contenteditable]').addEventListener('input',e=>{const next=e.target.cloneNode(false);e.target.replaceWith(next)},{once:true})"),tab.id);
+ const replaced=await act({action:'fill',tabId:tab.id,role:'textbox',name:'Query',value:'Replaced query',diagnostics:true});assert.equal(replaced.fillResult.retained,false);assert.equal(replaced.fillResult.diagnostics.samples.at(-1).current.sameTarget,false);assert.equal(replaced.fillResult.diagnostics.samples.at(-1).original.connected,false);
 
  const afterInput=await native(main=>[...main.getWindows().contexts.values()].map(ctx=>({id:ctx.id,active:ctx.session.get().active,focused:ctx.window.isFocused()})));assert.deepEqual(afterInput,before);
  let capture=await act({action:'screenshot',tabId:tab.id}),captureMeta=JSON.parse(capture.content.find(item=>item.type==='text').text);

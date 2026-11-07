@@ -1,3 +1,18 @@
+## Bounded field diagnostics — source work
+
+Work Mac's corrected explicit-value fill still reports retained:false on the actual Slack
+contenteditable div/combobox. Missing-value rejection and own-tab cleanup work. Generic and
+Quill editor fills succeed locally; neither reproduces Slack. General Playwright evaluation
+is not granted by the schedule policy. Added optional fixed target-only `fill diagnostics:true`
+without caller code or text export, automatic retry, Enter or broader authority. Native tests
+exercise retained input, cancellation, editor reset and target replacement. Full suite: 1,688 passed,
+four skipped, zero failures; static checks and the native diagnostic fixture pass. Live diagnosis and
+Slack acceptance remain open; no new artifact or installed diagnostic is claimed.
+
+Track whole-page Slack hangs separately: responsiveness, renderer stalls, background lifecycle
+and verified recovery after refresh/reload. Successful load or a generic input fixture is not
+proof of restored interaction. No root cause for the whole-page hangs is established.
+
 ## Nov 6 request — remote Allow and remember reliability
 
 N6-02 in [the Nov 6 plan](2026-11-06-release-plan.md#n6-02--reliable-remote-allow-and-remember)

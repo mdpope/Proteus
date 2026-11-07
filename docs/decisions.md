@@ -3340,3 +3340,13 @@ credential/authentication/transport/resource evidence visible and move source in
 less-frequent actions into expandable sections. Load the source inventory only when opened.
 This changes presentation, not owner setup or per-run authority. Design references and tests
 are in [connection-page-design.md](connection-page-design.md).
+
+
+## 2026-11-06 — Fixed field diagnostics instead of general evaluation grants
+
+Diagnose application-controlled editor input with an optional bounded observation around one
+normal authorized browser fill. The owner supplies fixed code and returns metadata, not caller
+JavaScript, DOM content or keys. Keep ordinary tab/run permissions, remove listeners on exit,
+and report replacement/reset/cancellation without retrying. This avoids requiring a scheduled
+workflow to receive arbitrary Playwright server execution merely to explain failed input.
+Synthetic acceptance does not establish the actual Slack cause or authorize submission.
