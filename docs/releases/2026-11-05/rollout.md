@@ -1,3 +1,21 @@
+## Narrow field diagnostic — published Mac artifact
+
+Source `28263bf06d4c500526cab38b462caa2f45205866` produced signed build
+`28263bf06d4c+src.9dda742481d5`, fingerprint
+`9dda742481d544360a9a7258b62d3ac73d4272863d1fa7a9068424fedafc0e02`.
+Published release `0.2.43-darwin-arm64-10c3dd5179f2f55170f39beb`, manifest digest
+`6de8acc83af5bb56be8541bf535dc1367145c598945131aadd8fbc37923eae1b`.
+Source tests: 1,688 pass/four skip; static checks pass. Signed and officially extracted
+package startup/restart/terminal and hidden editor cancellation/reset/replacement checks pass.
+HTTPS hashes and the receiving owner's signed catalog agree. The accepted source companion
+matches every recorded runtime/build input. Windows/Linux bytes were retained unchanged.
+
+One owner update coordinator was dispatched after confirming the prior job was complete.
+Installation and preservation acceptance remain pending. `fill diagnostics:true` uses the
+ordinary exact `proteus_browser`/`fill` permission; it grants no general evaluation authority
+and is not itself a fix for Slack typing failure or whole-page hangs. Workflow acceptance
+requires the bounded real-target trace after healthy installation.
+
 ## Nov 6 — fill acknowledgment and protected journal correction
 
 Source `6f6243dee279191257c53d58fd6f66e0a0d4589f`, build
