@@ -1,3 +1,11 @@
+## Nov 6 — recovery capture owns the data-home transition
+
+A process exit alone is not a stable-filesystem witness. Wait for bounded quiet hashes and check
+the live owner lock before capture and before replacement; never weaken the final hash gate.
+A reopened app must yield before initializing data while its supervisor owns capture/replacement.
+Preserve terminal failed-job evidence rather than retargeting it; retry through a new ordinary
+signed job, which existing owners support without raw store or journal modification.
+
 ## Nov 6 — isolate embedded CDP client sessions
 
 Each embedded automation client uses a native CDP session, including its primary page attachment.

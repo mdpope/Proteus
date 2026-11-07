@@ -38,16 +38,28 @@ else {
   app.on('open-url',(event,url)=>{event.preventDefault();receiveURL(url);});
   if(process.platform!=='darwin')process.argv.filter(raw=>webURL(raw)||protocolURL([raw])).forEach(receiveURL);
   app.on('activate', showWindow);
-  app.whenReady().then(async () => {
-    const updateBridge={handle:(value,runId)=>service.updates?.handle(value,runId)||Promise.reject(Error('Supervised updates are not ready.'))};
-    const appIcon = nativeImage.createFromPath(path.join(__dirname, 'icon.png'));
-    app.dock?.setIcon(appIcon);
-    const { startServer } = await import('../src/server.js');
+  void (async () => {
     const { isWithin,defaultHome } = await import('../src/shared/files.js');
     const {Updates,pendingUpdate}=await import('../src/services/updates/updates.js');
     const freshHome=!require('node:fs').existsSync(defaultHome());
     const installation=app.isPackaged?(process.platform==='darwin'?path.resolve(app.getAppPath(),'../../..'):path.resolve(app.getAppPath(),'../..')):null;
-    const pendingRecovery=installation&&!desktopPreview?pendingUpdate(defaultHome(),installation):null;if(pendingRecovery)process.env.PROTEUS_UPDATE_JOB=pendingRecovery;
+    const pendingRecovery=installation&&!desktopPreview?pendingUpdate(defaultHome(),installation):null;
+    if(pendingRecovery){
+      const {readJob}=require('./updates/update-package.cjs'),{supervisorOwnsCapture}=require('./updates/pre-owner-gate.cjs');
+      const alive=pid=>{try{process.kill(pid,0);return true;}catch(error){if(error.code==='ESRCH')return false;throw error;}};
+      if(supervisorOwnsCapture(readJob(pendingRecovery),{home:require('node:fs').realpathSync(defaultHome()),installation:require('node:fs').realpathSync(installation),alive})){
+        // A modal would hold the single-instance lock and block the helper's
+        // replacement launch. Yield immediately without initializing data.
+        console.warn('Proteus update is in progress. This launch yielded to the supervisor; Proteus will reopen automatically.');
+        app.quit();return;
+      }
+      process.env.PROTEUS_UPDATE_JOB=pendingRecovery;
+    }
+    await app.whenReady();
+    const updateBridge={handle:(value,runId)=>service.updates?.handle(value,runId)||Promise.reject(Error('Supervised updates are not ready.'))};
+    const appIcon = nativeImage.createFromPath(path.join(__dirname, 'icon.png'));
+    app.dock?.setIcon(appIcon);
+    const { startServer } = await import('../src/server.js');
     const { CredentialBroker } = await import('../src/services/integrations/credentials.js');
     const { TerminalStore } = await import('../src/services/tools/terminals.js');
     if(desktopPreview){
@@ -434,7 +446,7 @@ else {
     await firstWindow.loadURL(service.url).catch(()=>windows.contexts.get(firstRecord.id).recovery.failed('initial-load-failed'));if(firstRecord.maximized)firstWindow.maximize();
     for(const record of records.slice(1))await createAppWindow(record);
     externalLinksStarted=true;void externalURLs.drain();
-  }).catch(error => { console.error(error.message); app.quit(); });
+  })().catch(error => { console.error(error.message); app.quit(); });
   app.on('window-all-closed', () => {});
   app.on('before-quit', event => {
     keepAwake.dispose();linkRouter?.close();

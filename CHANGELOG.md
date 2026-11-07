@@ -1,3 +1,10 @@
+## Nov 6 updater repair
+
+Bounded quiescent recovery capture, live-owner exclusion, final source/destination verification
+diagnostics, stale-lock baseline recovery and a pre-owner startup gate are implemented in source.
+Use a fresh ordinary supervised attempt after a terminal pre-install attention failure, retaining
+its original job/copy. Source and native tests precede packaging; installed acceptance is separate.
+
 ## Nov 5 corrective source — Nov 6 browser inspection
 
 - Use independent native CDP sessions so DevTools inspection does not strand callbacks or lose console/network events after switching backends.

@@ -1,3 +1,22 @@
+## Nov 6 — pre-install recovery failure correction
+
+Recovery capture now waits for a bounded quiet interval after graceful owner shutdown,
+checks that no live owner has reclaimed the data home, and retains strict source/destination
+hash checks. A final verification failure writes the final file count and independent source
+versus destination results before stopping; a progress checkpoint is not a missing-file count.
+Baseline recovery distinguishes a stale runner lock from a live owner without deleting the lock.
+Normal owner startup remains responsible for stale-lock reclamation.
+
+A manually reopened installed app detects an active supervisor before owner-data initialization and logs the update-in-progress state and yields immediately. Verification launches remain allowed.
+The signed candidate's helper performs these checks, allowing an older owner to use them through
+the ordinary signed stage/prepare/handoff process. The existing owner already treats attention
+as terminal: a fresh supervised attempt preserves the old failed job and snapshot unchanged.
+No raw journal edits, success overrides, cancellation or new data restoration are required.
+
+The observed failed copy matched its original snapshot hash; the live source had changed.
+The original writer/timing remains unproven. The failed snapshot is retained pending a new
+verified recovery and explicit retention reconciliation. Installed acceptance remains open.
+
 ## Publisher custody — Nov 5
 
 Build Mac owns source/release authority and signs every platform's accepted manifest. Builders

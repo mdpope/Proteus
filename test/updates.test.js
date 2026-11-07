@@ -223,7 +223,7 @@ test('snapshot failure restarts the unchanged baseline and reports failure throu
  const f=fixture(t);await handoff(f,await prepare(f));await f.controller.advance();const job=writeJob(f.controller.file,{ownerPid:99999999});
  const server=net.createServer();await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(path.join(f.home,'unknown.sock'),resolve);});t.after(()=>new Promise(resolve=>server.close(resolve)));
  let launches=0,verified=0,resumes=0;
- await supervise(job.file,{inspect:f.inspect,launchApp:()=>{launches++;assert.equal(fs.readFileSync(path.join(f.installation,'identity'),'utf8'),'old');return {};},verify:async(j,identity)=>{verified++;assert.equal(identity.hash,job.previous.hash);assert.equal(j.failedBeforeReplacement,true);return {at:new Date().toISOString()};},resumeChat:async(j,outcome)=>{
+ await supervise(job.file,{inspect:bundle=>{if(bundle===f.installation)fs.writeFileSync(path.join(f.home,'runner.lock'),'99999999');return f.inspect(bundle);},launchApp:()=>{launches++;assert.equal(fs.readFileSync(path.join(f.installation,'identity'),'utf8'),'old');return {};},verify:async(j,identity)=>{verified++;assert.equal(identity.hash,job.previous.hash);assert.equal(j.failedBeforeReplacement,true);return {at:new Date().toISOString()};},resumeChat:async(j,outcome)=>{
   resumes++;assert.equal(outcome,'rollback');assert.match(j.checkpoint,/failed before application replacement.*unknown.sock/);
   const args={action:'resume',id:j.id,secret:j.secret,outcome};await f.controller.recovery(args);await f.controller.recovery(args);
   return writeJob(j.file,{phase:'complete',outcome});
@@ -308,4 +308,9 @@ test('maintenance operation receipts coalesce retries and expose busy state with
  complete({planDigest:'synthetic-plan',canApply:false});await f.controller.maintenanceTask;
  const done=await f.controller.handle({action:'maintenance-status',id});assert.equal(done.state,'complete');assert.equal(done.result.planDigest,'synthetic-plan');
  assert.equal(f.controller.status().operation.busy,false);assert.equal((await f.controller.handle({action:'maintenance',operationId:id})).state,'complete');assert.equal(calls,1);
+});
+
+test('a terminal pre-install attention failure permits a fresh supervised candidate without editing its evidence',async t=>{
+ const f=fixture(t),first=await prepare(f);const failed=writeJob(f.controller.file,{phase:'attention',error:'Recovery verification failed; source and partial snapshot were preserved.',recovery:path.join(f.controller.root,'recoveries',first.id),helperPid:null});fs.mkdirSync(failed.recovery,{recursive:true});fs.writeFileSync(path.join(failed.recovery,'copy-0.json'),'preserved failure metadata');const original=fs.readFileSync(failed.file);
+ const next=await prepare(f);assert.notEqual(next.id,failed.id);assert.equal(next.phase,'prepared');assert.deepEqual(fs.readFileSync(failed.file),original);assert.equal(fs.readFileSync(path.join(failed.recovery,'copy-0.json'),'utf8'),'preserved failure metadata');assert.equal(fs.readFileSync(path.join(f.installation,'identity'),'utf8'),'old');
 });

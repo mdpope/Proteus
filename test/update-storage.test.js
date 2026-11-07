@@ -102,3 +102,9 @@ test('package copy executes off the caller thread and rejects unknown worker ope
  assert.ok(turns>0,'the caller event loop remains responsive during copying');assert.equal(tree(source).hash,tree(destination).hash);
  await assert.rejects(packageOperation('removeArbitraryData',root),/Unsupported/);
 });
+
+test('a source-change failure records the complete verified copy and both hashes',t=>{
+ const root=fixture(t),source=path.join(root,'source'),destination=path.join(root,'snapshot'),manifestFile=path.join(root,'progress.json');put(source,'a','before');const expected=tree(source,{exclude:excluded});
+ assert.throws(()=>copyRecovery(source,destination,{manifestFile,afterFile:()=>put(source,'a','late write')}),/source changed/);
+ const receipt=JSON.parse(fs.readFileSync(manifestFile));assert.equal(receipt.verified,1);assert.equal(receipt.complete,false);assert.equal(receipt.verification.destinationMatches,true);assert.equal(receipt.verification.sourceUnchanged,false);assert.equal(tree(destination,{exclude:excluded}).hash,expected.hash);assert.equal(fs.readFileSync(path.join(source,'a'),'utf8'),'late write');
+});
