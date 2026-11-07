@@ -1,3 +1,22 @@
+## Nov 6 browser correction — signed and published
+
+Mac arm64 build `7932e29cfa88+src.344f85175946`, source
+`7932e29cfa88deb409efc0ede86d3f76ae333728`, is signed and publicly verified. Release
+`0.2.43-darwin-arm64-cfe74682286d696116fc6fff`, manifest digest
+`baff2f31a8bbd37e8d3eb39541c512437c1bef47c6d7d83cfc76f9eb6e617e66`.
+All 29 public paths verify; hosting configuration and unrelated content are preserved,
+with no new error/warning log categories in the bounded publication window. Windows/Linux
+bytes are unchanged. Full suite: 1,689 pass, four skip, zero fail; static checks pass.
+Native source/signed/extracted DevTools inspection, cross-origin iframe, console/network
+evidence and backend handoff pass; signed synthetic HTTPS/WSS and packaged terminal/restart pass.
+
+Work Mac's previous diagnostic build is healthy with zero navigation differences and two
+verified recoveries; its new purpose:update coordinator owns this correction, installation pending.
+Build Mac remains on 0.2.42 with its earlier 88367d6 update waiting for idle. The existing
+coordinator resumes that job; this correction is a follow-on only after its health/preservation
+acceptance. No duplicate local job, cancellation or idle bypass. Live Proxmox VNC, Slack typing
+and whole-page hang acceptance remain open.
+
 ## Narrow field diagnostic — published Mac artifact
 
 Source `28263bf06d4c500526cab38b462caa2f45205866` produced signed build
