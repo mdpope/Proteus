@@ -1,3 +1,9 @@
+## Closed 2026-11-06
+
+The operator explicitly deferred the blocked additional Windows consumer update to Nov 6 and
+requested closure. See [final closeout](closeout.md) for accepted outcomes and retained limits.
+No other source changes or rollout retries are authorized merely by historical checkpoints below.
+
 ## Current installed acceptance and closeout boundary
 
 Build Mac runs signed build `7180447eb2b2+src.18dd918fd000`, with verified update health and
@@ -18,16 +24,16 @@ coverage remains partial; its retained backlog/quality errors are not product re
 background snapshots completed in 3.910, 0.044 and 3.501 seconds without timeout; this is bounded
 responsiveness evidence, not a claim that future hangs are impossible.
 
-Main Windows and Linux installations have verified health/navigation receipts; Ian's Windows
-laptop still has the original prepared helper-readiness failure and is being diagnosed in its
-existing coordinator. Physical iPhone/iPad installation and protected-file checks passed; physical
+Main Windows and Linux installations have verified health/navigation receipts; The additional Windows
+consumer laptop is explicitly deferred by the operator to Nov 6, retaining its original prepared
+helper-readiness failure and previous installation. Physical iPhone/iPad installation and protected-file checks passed; physical
 push, gestures and reconnect remain separate limitations. Web deployment and isolated authenticated
 acceptance are recorded below; production signed-in interaction remains a follow-up.
 
 The operator defers non-digest additions/fixes, explicitly Proxmox, to the Nov 6 plan. New guided
 ADO/agent-pool and Local Network source preparation is checksum-preserved outside this checkout,
-not shipped. No new feature artifact or successor version is opened. Finish current update outcomes,
-source integration and verified retention before marking Nov 5 closed. Earlier checkpoints below
+not shipped. No new feature artifact or successor version is opened. Nov 5 is closed with the explicit Windows-consumer deferral, accepted organization workflows evidence,
+merged source and verified artifact retention. Earlier checkpoints below
 are historical and do not supersede this state.
 
 ## Nov 6 updater repair — signed and published

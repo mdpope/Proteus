@@ -1,8 +1,8 @@
 # Nov 5 / 0.2.43 closeout
 
-Status: final acceptance recorded; existing Windows laptop update still pending diagnosis.
-Do not mark the release closed or treat the successor as open until the remaining rollout outcome
-is settled or the operator explicitly defers that device.
+Status: **closed 2026-11-06**. The operator explicitly deferred the blocked additional Windows
+consumer update to Nov 6. The release is complete with that recorded rollout deferral and the
+verification limits below. No successor release has been opened.
 
 ## Accepted product and deployment
 
@@ -30,7 +30,7 @@ The accepted runtime source pins differ by platform and corrective delivery:
 | Work Mac | 7932e29 browser correction installed, healthy; zero navigation differences; bounded actual organization workflows acceptance passes |
 | Main Windows | Accepted windows.30f8b6596e38 installed; verified health/navigation/desktop; detailed rendering/history limits retained |
 | Linux | Accepted 88367d6 source package installed; verified health/navigation; GUI/history and legacy maintenance limits retained |
-| Ian Windows laptop | Original prepared job remains; helper-readiness failure under read-only diagnosis, no duplicate update |
+| Additional Windows consumer | Operator-deferred to Nov 6; prior installation and original prepared helper-readiness failure preserved; no successful update claimed |
 | iPhone / iPad | 0.2.43 build 2611.5.1 installed in place; protected-file/destination and launch checks pass; physical interaction/push limits retained |
 | Web | 20261106T080204Z deployed; endpoint and isolated authenticated acceptance pass; production signed-in check remains unverified |
 
@@ -64,4 +64,7 @@ Mac artifacts were independently reverified. Twenty-two obsolete bundle/archive/
 items were retired while preserving corresponding source companions and metadata; 17,850,437,632
 bytes of free space were observed recovered. Current Windows/Linux/iOS artifacts, all live data
 and device recovery roots were untouched. One source worktree remains; no obsolete source
-worktree was found. Final source merge/push/ref verification and closed-state receipt remain pending.
+worktree was found. PR #31 is merged into main at `0dbc4437e9bcdfb39cc2cd9be59b5baa92c593be`. Final closed-state
+metadata is committed on main, with remote synchronization and merged-branch retirement verified
+in the private closeout receipt. The accepted application bytes are unchanged by documentation
+closeout. No new build, installation or workflow run was required.

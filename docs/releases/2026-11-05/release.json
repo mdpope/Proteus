@@ -3,11 +3,20 @@
   "id": "2026-11-05",
   "name": "Nov 5",
   "version": "0.2.43",
-  "status": "open",
+  "status": "closed",
   "openedOn": "2026-11-05",
   "plan": "docs/2026-11-05-release-plan.md",
   "implementation": "docs/releases/2026-11-05/implementation.md",
   "rollout": "docs/releases/2026-11-05/rollout.md",
   "closeout": "docs/releases/2026-11-05/closeout.md",
-  "sourceCommit": null
+  "sourceCommit": "0dbc4437e9bcdfb39cc2cd9be59b5baa92c593be",
+  "closedOn": "2026-11-06",
+  "deferredTargets": [
+    {
+      "platform": "win32",
+      "target": "additional consumer laptop",
+      "status": "deferred",
+      "reason": "Operator explicitly defers blocked helper-readiness update to Nov 6; previous installed build and prepared evidence preserved."
+    }
+  ]
 }

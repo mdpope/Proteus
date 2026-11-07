@@ -1,7 +1,7 @@
 # Nov 6 update plan
 
-Status: planned successor to the open Nov 5 / 0.2.43 release. Requested November 6, 2026.
-Version: not reserved. Close and reconcile Nov 5 before opening this release with the release tool;
+Status: planned successor to Nov 5 / 0.2.43, closed 2026-11-06. Requested November 6, 2026.
+Version: not reserved. Nov 5 closeout is recorded; open this release only on the operator’s next instruction;
 leave current.json, package versions, accepted artifacts and in-flight update jobs unchanged.
 This request creates the plan; it does not claim implementation, build or deployment.
 
@@ -179,3 +179,13 @@ than an attention-only reconciliation endpoint. Investigate readiness verificati
 legacy deadlines without weakening integrity, idle or preservation gates. Keep original failed and
 uncertain receipts. Recovery exceptions need supported owner reconciliation and precise retention
 conditions; do not raw-edit journals or delete unresolved copies to make maintenance green.
+
+
+## Explicitly deferred Windows rollout
+
+The operator explicitly carries the additional Windows consumer's blocked update into Nov 6.
+Its old runtime remains installed and its original prepared job/package/failure evidence stays
+intact. Read-only package verification did not return a complete result, so no integrity success
+or safe handoff was established. Diagnose through supported owner operations; do not retry blindly,
+raw-edit the journal or duplicate the coordinator. Private routing/revision receipts remain in
+the release ledger. This deferral permits Nov 5 closure and does not itself authorize a new run.

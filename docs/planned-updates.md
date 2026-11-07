@@ -1,3 +1,10 @@
+## Nov 5 closed 2026-11-06
+
+Release 0.2.43 is closed. Work Mac native inbox/digest/planning, actual managed tracker/Slack reads,
+separate unchanged-evidence replay and bounded recovery acceptance pass. The operator explicitly
+defers one Windows consumer update and non-digest follow-ups to the [Nov 6 plan](2026-11-06-release-plan.md).
+No successor version is reserved. See [closeout](releases/2026-11-05/closeout.md).
+
 ## Nov 6 updater repair
 
 Bounded quiescent recovery capture, live-owner exclusion, final source/destination verification

@@ -1,3 +1,10 @@
+## Closed 2026-11-06
+
+Nov 5 / 0.2.43 is closed following verified current updates, bounded Work Mac native workflow
+acceptance and main integration. The operator explicitly deferred one blocked Windows consumer
+update and non-digest follow-ups to Nov 6. Historical open/hold checkpoints below are retained
+as evidence. See [closeout](releases/2026-11-05/closeout.md); do not restart this release.
+
 ## Nov 6 updater repair
 
 Bounded quiescent recovery capture, live-owner exclusion, final source/destination verification
