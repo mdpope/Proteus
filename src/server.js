@@ -1,3 +1,7 @@
+import {ownerSelectionUpdate,clearOwnerSelection} from './services/scheduling/source-selection-overrides.js';
+import {qualifyScopedCommandRuntime} from './services/scheduling/host-scoped-executor.js';
+import {resolveExecutionCapabilities} from './services/scheduling/execution-capabilities.js';
+import {effectiveScheduleAccess,revokeScheduleAccess} from './services/scheduling/access-overlay.js';
 import {validateManagedRequirements,managedWorkspace} from './services/integrations/managed-requirements.js';
 import {ScheduleControl} from './services/scheduling/schedule-control.js';
 import {clearQuestionFromQueue} from './services/chats/user-questions.js';
@@ -193,7 +197,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   };
   engine.executionLane = schedule => schedule.provider === 'local-process' && ['audio', 'library', 'semantic'].includes(schedule.integration?.job) ? `omi:${schedule.integration.job}` : null;
   engine.prepareSchedule = (schedule,trigger='scheduled') => {
-    if(trigger!=='chat')schedule={...schedule,permissionScope:{kind:'schedule',id:schedule.id}};
+    if(trigger!=='chat')schedule={...schedule,scheduleAccessBasePermissions:structuredClone(schedule.executionPermissions||null),executionPermissions:effectiveScheduleAccess(schedule),permissionScope:{kind:'schedule',id:schedule.id}};
     omi.assertEnabled(schedule);
     if (schedule.provider === 'local-process') return schedule;
     if (schedule.context && !schedule.contextSelection && !schedule.workspaceSources) return schedule;
@@ -349,7 +353,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         if (value.action === 'revoke') return json(200, remote.revoke(value.id));
         if (value.action === 'resource-access') return json(200, remote.setResourceAccess(value.id, value.enabled));
         if (value.action === 'browser-access') return json(200, remote.setBrowserAccess(value.id, value.enabled));
-        if (value.action === 'workspace-file-access') return json(200, remote.setWorkspaceFileAccess(value.id,value.workspaceIds));
+        if (value.action === 'workspace-file-access') return json(200, remote.setWorkspaceFileAccess(value.id,value.workspaceIds,value.writeWorkspaceIds));
         if (value.action === 'document-access') return json(200, remote.setDocumentAccess(value.id, value.enabled));
         if (value.action === 'document-review') return json(200, remote.reviewDocument(value.requestId,value.approved));
         throw new Error('Unknown remote action.');
@@ -424,7 +428,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       if (url.pathname === '/api/chats/index' && req.method === 'GET') {
         const info=remote.info(),lastSyncAt=new Date().toISOString();
         const includeArchived=url.searchParams.get('includeArchived')==='1',projectCatalog=preview?.read();
-        const local=engine.visibleRuns(includeArchived).slice(0,1000).map(r=>({id:r.id,chatId:r.id,hostId:info.hostId,local:true,title:r.title,titleRevision:r.titleRevision,trigger:r.trigger,chatType:r.chatType,provider:r.schedule.provider,status:r.status,createdAt:r.createdAt,updatedAt:r.updatedAt,lastActivityAt:chatActivityAt(r),archivedAt:r.archivedAt||null,archived:!!r.archivedAt,unansweredQuestionCount:(r.userQuestions||[]).filter(q=>q.status==='pending').length,attentionRequired:needsAttention(r),failureEventAt:['failed','interrupted'].includes(r.status)?r.failureEventAt||r.updatedAt:null,failureReviewedAt:r.failureReviewedAt||null,...chatMembership(r),...(preview?preview.membership(r,projectCatalog):{}),scheduleName:r.trigger==='chat'?'':r.schedule.name,destinationName:info.label}));
+        const local=engine.visibleRuns(includeArchived).slice(0,1000).map(r=>({id:r.id,chatId:r.id,hostId:info.hostId,local:true,title:r.title,titleRevision:r.titleRevision,trigger:r.trigger,chatType:r.chatType,provider:r.schedule.provider,model:r.schedule.model,reasoningEffort:r.schedule.reasoningEffort,serviceTier:r.schedule.serviceTier,status:r.status,createdAt:r.createdAt,updatedAt:r.updatedAt,lastActivityAt:chatActivityAt(r),archivedAt:r.archivedAt||null,archived:!!r.archivedAt,unansweredQuestionCount:(r.userQuestions||[]).filter(q=>q.status==='pending').length,attentionRequired:needsAttention(r),failureEventAt:['failed','interrupted'].includes(r.status)?r.failureEventAt||r.updatedAt:null,failureReviewedAt:r.failureReviewedAt||null,...chatMembership(r),...(preview?preview.membership(r,projectCatalog):{}),scheduleName:r.trigger==='chat'?'':r.schedule.name,destinationName:info.label}));
         const peer=service.peers?await service.peers.index():{items:[],hosts:[],partial:false};
         const items=[...local,...peer.items.filter(item=>includeArchived||!item.archivedAt)].sort((a,b)=>String(b.updatedAt).localeCompare(String(a.updatedAt))||a.hostId.localeCompare(b.hostId)||a.chatId.localeCompare(b.chatId));
         return json(200,{items,hosts:[{id:info.hostId,name:info.label,online:true,lastSyncAt},...peer.hosts],partial:peer.partial});
@@ -475,6 +479,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         res.writeHead(200,{'Content-Type':'application/json'});res.end(body);return;
       }
       if (url.pathname === '/api/mnemosyne' && req.method === 'GET') return json(200, await service.mnemosyne.snapshot());
+      if (url.pathname === '/api/mnemosyne/control' && req.method === 'POST') return json(200, await service.mnemosyne.control(await body(req)));
       if (url.pathname === '/api/mnemosyne/logs' && req.method === 'GET') return json(200, service.mnemosyne.logs(url.searchParams.get('job'),url.searchParams.get('stream')||'out'));
       if (['/api/omi','/api/transcription'].includes(url.pathname) && req.method === 'GET') return json(200, { ...await omi.status(), schedules: engine.schedules.list().filter(isOmiSchedule) });
       if (['/api/omi/settings','/api/transcription/settings'].includes(url.pathname) && req.method === 'POST') {
@@ -491,11 +496,14 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       if (url.pathname === '/api/life/data' && req.method === 'POST') { const value = await body(req); return json(200, await life.data(value.section, value.query || {})); }
       if (url.pathname === '/api/life/action' && req.method === 'POST') { const value = await body(req, 30 * 1024 * 1024); const result = await life.action(value.action, value.input || {}, value.idempotencyKey, value.identity); notify(); return json(200, result); }
       if (url.pathname === '/api/life/evidence' && req.method === 'POST') { const value=await body(req); return json(200, await life.evidence(value.attachmentId, value.identity)); }
+      if(url.pathname==='/api/workspace-explorer/pdf'&&req.method==='GET'){
+        const bytes=workspaceExplorer.pdf(Object.fromEntries(url.searchParams));res.setHeader('Content-Security-Policy',"default-src 'none'; frame-ancestors 'self'; object-src 'self'");res.writeHead(200,{'Content-Type':'application/pdf','Content-Length':bytes.length,'Cache-Control':'no-store'});return res.end(bytes);
+      }
       if (url.pathname.startsWith('/api/workspace-explorer/') && req.method === 'POST') {
         const value=await body(req),action=url.pathname.split('/').at(-1);
-        if(!['roots','browse','preview'].includes(action))throw Error('Unknown file browser action.');
+        if(!['roots','browse','preview','mutate','resolve-link'].includes(action))throw Error('Unknown file browser action.');
         const controller=new AbortController();res.once('close',()=>controller.abort());
-        return json(200,await workspaceExplorer[action](value,{signal:controller.signal}));
+        return json(200,await workspaceExplorer[action==='resolve-link'?'resolveLink':action](value,{signal:controller.signal}));
       }
       if (url.pathname === '/api/workspace-files/roots' && req.method === 'GET') return json(200, workspaceFiles.roots());
       if (url.pathname === '/api/workspace-files/list' && req.method === 'POST') return json(200, workspaceFiles.list(await body(req)));
@@ -641,12 +649,24 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         engine.recheckPermissions(); return json(200, engine.permissions.get());
       }
       if (url.pathname === '/api/preview' && req.method === 'POST') { const value = await body(req); return json(200, { nextRuns: nextRuns(value.cron, value.timezone) }); }
+      if(url.pathname==='/api/schedule-selection'&&req.method==='POST'){const value=await body(req);try{const current=engine.schedules.get(value.scheduleId);if(value.action!=='clear-owner-override')throw Error('Choose a provider override action.');const next=clearOwnerSelection(current);await service.scheduleControl.preflight(next);const saved=engine.schedules.save(next,value.expectedRevision);engine.emit('change');return json(200,{...saved,revision:revision(saved)});}catch(error){activity.scheduleError({scheduleId:value.scheduleId,action:'clear-provider-override',code:error.code});throw error;}}
+      if(url.pathname==='/api/schedule-capabilities'&&req.method==='POST'){const schedule=await body(req),result=resolveExecutionCapabilities(schedule);if(result.supported&&schedule.executionPermissions?.sandboxedCommands)result.runtime=await qualifyScopedCommandRuntime();return json(200,result);}
+      if(url.pathname==='/api/schedule-access/revoke'&&req.method==='POST'){const value=await body(req);try{const current=engine.schedules.get(value.scheduleId);const saved=engine.schedules.save(revokeScheduleAccess(current,value.grantId),value.expectedRevision);engine.recheckPermissions();engine.emit('change');return json(200,{...saved,revision:revision(saved)});}catch(error){activity.scheduleError({scheduleId:value.scheduleId,action:'revoke-access',code:error.code});throw error;}}
       if (url.pathname === '/api/schedules' && req.method === 'POST') {
-        const { schedule, expectedRevision } = await body(req);
+        const { schedule:requested, expectedRevision } = await body(req);
+        let schedule=requested;
+        try {
+        try{const current=engine.schedules.get(schedule?.id);schedule=ownerSelectionUpdate(current,schedule);}catch(error){if(error.code!=='ENOENT')throw error;}
         validateSchedule(schedule);
         if(schedule.contextSelection||schedule.workspaceSources||schedule.executionPermissions)resolveScheduleContext(schedule,context,engine.permissions);
+        if(schedule.ownerSelectionOverride){const metadata=await catalogs[schedule.provider]?.get(true),model=metadata?.models?.find(row=>row.id===schedule.model);if(!metadata?.available||metadata.stale||!model)throw Error('Refresh the destination provider catalog and choose its model before saving.');validateModelOptions(schedule,model);}
+        if(schedule.executionPermissions?.sandboxedCommands&&schedule.provider!=='codex')await qualifyScopedCommandRuntime();
         const saved=engine.schedules.save(schedule, expectedRevision);
         return json(200, {...saved,revision:revision(saved)});
+        } catch(error) {
+          if(/^[a-z0-9][a-z0-9-]{0,79}$/.test(schedule?.id||''))activity.scheduleError({scheduleId:schedule.id,action:'save',code:error.code});
+          throw error;
+        }
       }
       if (url.pathname === '/api/import' && req.method === 'POST') {
         const { schedules } = await body(req); if (!Array.isArray(schedules)) throw new Error('Expected an array of schedules.');
@@ -808,7 +828,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       if (url.pathname === '/api/markdown' && req.method === 'POST') {
         const { file, image } = await body(req);
         const roots = [...context.roots(), ...context.config().documents.map(doc => path.dirname(doc.path)), settings.get().workspace.cwd, ...settings.get().workspace.additionalDirectories, ...engine.schedules.list().filter(s => !s.error).flatMap(s => [s.workspace.cwd, ...s.workspace.additionalDirectories])];
-        if (typeof file !== 'string' || !/\.(md|png|jpe?g|gif|webp)$/i.test(file) || !isWithin(file, roots)) throw new Error('Choose a Markdown file inside a configured workspace.');
+        if (typeof file !== 'string' || !/\.(md|pdf|txt|json|js|ts|py|swift|css|html|sh|c|cpp|rs|go|png|jpe?g|gif|webp)$/i.test(file) || !isWithin(file, roots)) throw new Error('Choose a Markdown file inside a configured workspace.');
         const document=readFilePreview(file,roots);
         return json(200, image ? readImage({ source: image, texts: [document.content], cwd: path.dirname(file), roots }) : document);
       }

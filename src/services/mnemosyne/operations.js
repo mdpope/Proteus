@@ -1,3 +1,4 @@
+import {storageUsage} from './storage.js';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
@@ -75,17 +76,21 @@ export class MnemosyneOperations {
   }
   async collect() {
     const raw=await this.omi.status(),observedAt=this.clock().toISOString();
-    const native=await this.nativeActivity(raw.settings.pipelineRoot);
+    const [native,storage,serviceControl]=await Promise.all([this.nativeActivity(raw.settings.pipelineRoot),storageUsage(raw.settings),this.omi.serviceControl?this.omi.serviceControl().catch(()=>({available:false,state:'unknown'})):Promise.resolve({available:false,state:'unavailable'})]);
     const schedules=this.engine.schedules.list().filter(isOmiSchedule).map(item=>({id:item.id,name:[...OMI_JOBS,...TRANSCRIPT_AUTOMATIONS].find(job=>job.scheduleId===item.id)?.name.replace(/^Omi · /,'')||'Transcript workflow',enabled:item.enabled===true,cron:item.cron,revision:item.revision,owner:item.provider==='local-process'?'Prepared alternative':'Proteus',job:item.integration?.job}));
     const runs=this.engine.listRuns().filter(run=>isOmiSchedule(run.schedule)).slice(0,100).map(run=>({id:'proteus:'+run.id,runId:run.id,origin:'proteus',owner:'Proteus',purpose:TRANSCRIPT_AUTOMATIONS.find(job=>job.scheduleId===run.schedule.id)?.name||'Transcript processing',status:status(run.status),observedAt:timestamp(run.updatedAt||run.createdAt),startedAt:timestamp(run.startedAt),finishedAt:timestamp(run.finishedAt),model:model(run.schedule.model),effort:['low','medium','high','xhigh','max','ultra'].includes(run.schedule.reasoningEffort)?run.schedule.reasoningEffort:null,sourceRevision:digest(run.schedule.integration?.sourceRevision),usage:{},effects:[],filing:'unverified',stages:[{stage:'Request',state:'Proteus run recorded'},{stage:'Model outcome',state:status(run.status)},{stage:'Deterministic validation',state:'Inspect workflow receipts'},{stage:'Guarded effects',state:'Not inferred from model status'},{stage:'Final receipt',state:'Inspect workflow receipts'}]}));
     return {schemaVersion:1,observedAt,runtimeAvailable:raw.status.runtimeAvailable,
       services:raw.status.nativeServices.map(item=>({id:item.id,name:OMI_JOBS.find(job=>job.id===item.id)?.name.replace(/^Omi · /,''),owner:'Native service',state:item.state,observedAt:raw.status.checkedAt,heartbeat:'unknown',control:'owner-only'})),
-      metadata:raw.status.metadata,schedules,activity:[...native.rows,...runs].sort((a,b)=>(b.observedAt||'').localeCompare(a.observedAt||'')),
+      serviceControl,storage,metadata:raw.status.metadata,schedules,activity:[...native.rows,...runs].sort((a,b)=>(b.observedAt||'').localeCompare(a.observedAt||'')),
       nativeHistory:{available:native.available,examined:native.examined,truncated:native.truncated,limit:200},
       sources:[{id:'omi',name:'Omi',state:raw.status.runtimeAvailable?'configured':'unconfigured'},{id:'stardate',name:'Stardate',state:'not_connected'},{id:'exports',name:'Audio / text exports',state:raw.automations.some(item=>item.canonicalVerified)?'filing_configured':'unconfigured'}],
       adapters:raw.automations.map(item=>({id:item.id,name:item.name,configured:item.canonicalVerified===true,owner:'Proteus workflow',independent:false})),
       configuration:{desktopOnly:true,nativeReplacementEnabled:raw.status.enabled,intakeEnabled:raw.status.intakeEnabled},
       limitations:['Loaded service is ownership evidence, not continuous health.','Native receipts retain their original outcomes; destination files are not revalidated here.','Stardate watcher migration and neutral library publication require separate native-owner acceptance.']};
+  }
+  control(args) {
+    if(!args||Object.keys(args).some(key=>!['action','expectedRevision','expectedSettingsRevision'].includes(key))||!['pause','resume','restart'].includes(args.action))throw Error('Choose a supported native service action.');
+    return this.omi.serviceControl(args.action,args.expectedRevision,args.expectedSettingsRevision);
   }
   logs(job,stream='out') {
     const {localPath,...safe}=this.omi.logs(job,stream,100);

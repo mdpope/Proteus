@@ -7,7 +7,7 @@ test('scoped execution pins explicit roots, denies ambient paths, preserves appr
  const schedule={provider:'codex',workspace:{cwd:root,additionalDirectories:[]},executionPermissions:{mode:'custom',sandboxedCommands:true,folders:[{path:root,access:'read-write'}]}};
  const policy=scopedExecutionSandbox(schedule),profile=policy.config.permissions[policy.managedProfile];assert.equal(profile.filesystem[':root'],'deny');assert.equal(profile.filesystem[':slash_tmp'],'deny');assert.equal(profile.network.enabled,false);assert.equal(policy.approvalPolicy,'on-request');assert.equal(profile.filesystem[root],'write');
  assert.throws(()=>codexSandbox(schedule,{mode:'ask'},{permissionControls:true}),/changed/);
- assert.throws(()=>validateScopedExecution({...schedule,provider:'copilot'}),/Codex/);
+ assert.throws(()=>validateScopedExecution({...schedule,provider:'mtplx'}),/cannot enforce/);
  assert.throws(()=>validateScopedExecution({...schedule,executionPermissions:{...schedule.executionPermissions,folders:[{path:'/',access:'read-write'}]}}),/narrow/);
  const receipt={cwd:root,approvalPolicy:'on-request',approvalsReviewer:'user',activePermissionProfile:{id:policy.managedProfile,extends:null},runtimeWorkspaceRoots:policy.runtimeWorkspaceRoots,sandbox:{networkAccess:false}};
  verifyCodexSandbox(receipt,policy,root);assert.throws(()=>verifyCodexSandbox({...receipt,approvalPolicy:'never'},policy,root),/confirm/);assert.throws(()=>verifyCodexSandbox({...receipt,sandbox:{networkAccess:true}},policy,root),/confirm/);

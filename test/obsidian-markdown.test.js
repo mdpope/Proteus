@@ -15,3 +15,10 @@ test('wiki links participate in the shared reference parser and skip code/extern
  assert.match(render('[[Note]]'),/data-link="Note.md"/);
  assert.match(render('```\n[[Code]]\n```'),/\[\[Code\]\]/);
 });
+
+test('Obsidian raster embeds join shared image parsing without scripts or document transclusion',()=>{
+ const tokens=parser().parse('![[Images/photo.png|Photo]] ![[javascript:evil.png]] ![[note.md]]',{});
+ const images=tokens.flatMap(t=>t.children||[]).filter(t=>t.type==='image');
+ assert.equal(images.length,1);assert.equal(images[0].attrGet('src'),'Images/photo.png');
+ assert.match(render('![[Images/photo.png]]'),/data-image="Images\/photo.png"/);
+});

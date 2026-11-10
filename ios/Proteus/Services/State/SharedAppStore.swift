@@ -15,11 +15,20 @@ let nativeFixtureRelayOrigin = ""
 #endif
 /// Account-scoped app data uses its own explicit OAuth consent, never a host's credentials.
 @MainActor final class SharedAppStore: ObservableObject {
+    @Published var scheduleRunsRequest: JSON = .null
     // App-session presentation survives drawer/view recreation; never sync it to an owner.
     @Published var sidebarWorkspaces = Set<String>()
     @Published var sidebarProjects = Set<String>()
     @Published var sidebarOtherComputers = false
     @Published var expandedQuestionQueues = Set<String>()
+    struct ChatInputRequest: Equatable {
+        let token = UUID()
+        let hostID: String
+        let chatID: String
+        var questionID = ""
+    }
+    @Published var chatInputRequest: ChatInputRequest?
+
     @Published var snapshot: JSON = .null
     @Published var error: String?
     @Published var busy = false
@@ -152,12 +161,13 @@ let nativeFixtureRelayOrigin = ""
         blockVideoAutoplay = value; UserDefaults.standard.set(value, forKey: "proteus.block-video-autoplay")
         for view in browserViews.values { let controller = view.configuration.userContentController; let scripts = controller.userScripts.filter { !$0.source.contains("Symbol.for('proteus.video-autoplay')") }; controller.removeAllUserScripts(); for script in scripts { controller.addUserScript(script) }; installVideoPolicy(view); if let native = view as? NativeLinkWebView { native.updateVideoPolicy(videoScript()) } else { view.evaluateJavaScript(videoScript(), completionHandler: nil) } }
     }
+    @Published var downloadNotice: String?
     @Published var downloadError: String?
     @Published var downloads: [UUID: NativeLinkDownload] = [:]
     @Published var downloadHistory: [NativeDownloadRecord] = []
     @Published var downloadFolderName: String = UserDefaults.standard.string(forKey: "proteus.download-folder-name") ?? "Downloads in Proteus"
 
-    func downloadChanged(_ row: NativeDownloadRecord) { if let index = downloadHistory.firstIndex(where: { $0.id == row.id }) { downloadHistory[index] = row } else { downloadHistory.insert(row, at: 0) } }
+    func downloadChanged(_ row: NativeDownloadRecord) { if let index = downloadHistory.firstIndex(where: { $0.id == row.id }) { downloadHistory[index] = row } else { downloadHistory.insert(row, at: 0); downloadNotice = "Download started" } }
     func downloadDirectory() throws -> URL {
         if let bookmark = UserDefaults.standard.data(forKey: "proteus.download-folder") { var stale = false; let url = try URL(resolvingBookmarkData: bookmark, options: [], bookmarkDataIsStale: &stale); if stale { throw NSError(domain: "Proteus", code: 1, userInfo: [NSLocalizedDescriptionKey: "Choose the download folder again in Browser settings."]) }; return url }
         return FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("Downloads", isDirectory: true)
@@ -192,7 +202,7 @@ let nativeFixtureRelayOrigin = ""
         let failure = (error as? RemoteError).map { $0.message == "Command expired. Refresh before trying again." ? "expired" : $0.code == "JOURNAL_BUSY" ? "journal-busy" : "owner-error" } ?? (error == nil ? "" : "transport-error")
         let previous = contentReadAttempts[scope], now = Date().timeIntervalSince1970
         if previous?["phase"].string == phase, previous?["failure"].string == failure, now - Double(previous?["at"].int ?? 0) < 5 { return }
-        contentReadAttempts[scope] = .object(["phase": .string(phase), "failure": .string(failure), "at": .number(now), "pendingCount": .number(Double(contentPending[scope]?.count ?? 0)), "hasReceipt": .bool(contentRequests[scope] != nil), "cachedRevision": contentSnapshots[scope]?["revision"] ?? .null])
+        contentReadAttempts[scope] = .object(["phase": .string(phase), "failure": .string(failure), "at": .number(now), "pendingCount": .number(Double(contentPending[scope]?.count ?? 0)), "hasReceipt": .bool(contentRequests[scope] != nil), "cachedRevision": contentSnapshots[scope]?["revision"] ?? .null, "operationKinds": .array(Array(Set((contentPending[scope] ?? []).map { $0["action"].string })).sorted().prefix(12).map(JSON.string))])
         contentReadAttempts = Dictionary(uniqueKeysWithValues: contentReadAttempts.sorted { $0.value["at"].int > $1.value["at"].int }.prefix(64).map { ($0.key, $0.value) })
         writeContentEvidence()
     }
@@ -209,10 +219,104 @@ let nativeFixtureRelayOrigin = ""
     private var contentBackoff: [String: (until: Date, attempts: Int, notified: Date)] = [:]
     @Published private(set) var browserConflicts: [NativeBrowserNavigationConflict] = []
     private var contentBusy = Set<String>()
+    private var ownerProjectResets: [String: String] = [:]
     private var applyingContent = false
     private var account = ""
     private var restoring = false
     private var browserViews: [String: WKWebView] = [:]
+    @Published private(set) var browserSavedPages: [String: Date] = [:]
+    private var browserArchiveTasks: [String: Task<Void, Never>] = [:]
+    private var browserArchiveRules: [String: WKContentRuleList] = [:]
+    private var archiveCaptureTimes: [String: Date] = [:]
+    private lazy var pageCache = NativeBrowserPageCache(root: sharedCacheRoot.appendingPathComponent("page-cache", isDirectory: true))
+    private func pageCacheIdentity(_ tab: BrowserDescriptor) -> String {
+        String(decoding: try! JSONEncoder().encode([account, tab.ownerHostId ?? "", tab.profileId, tab.contentTabId ?? tab.id, tab.url ?? ""]), as: UTF8.self)
+    }
+    func beginLiveBrowserLoad(_ id: String) {
+        browserArchiveTasks.removeValue(forKey: id)?.cancel()
+        browserSavedPages[id] = nil
+        if let rule = browserArchiveRules.removeValue(forKey: id) { browserViews[id]?.configuration.userContentController.remove(rule) }
+        browserViews[id]?.configuration.defaultWebpagePreferences.allowsContentJavaScript = true
+    }
+    func captureBrowserPage(_ id: String) {
+        guard browserSavedPages[id] == nil, Date().timeIntervalSince(archiveCaptureTimes[id] ?? .distantPast) > 30,
+              UIApplication.shared.applicationState == .active, let tab = browserTabs.first(where: { $0.id == id }),
+              let view = browserViews[id], !view.isLoading, view.window != nil, view.url?.absoluteString == tab.url,
+              let text = tab.url, let url = URL(string: text), ["https", "http"].contains(url.scheme), url.user == nil, url.password == nil,
+              !url.path.lowercased().contains("login"), !url.path.lowercased().contains("oauth"), !url.path.lowercased().contains("checkout"), let key = sharedCacheKey() else { return }
+        let identity = pageCacheIdentity(tab), cache = pageCache, owner = account
+        archiveCaptureTimes[id] = Date()
+        browserArchiveTasks[id]?.cancel()
+        browserArchiveTasks[id] = Task { @MainActor [weak self, weak view] in
+            do {
+                try await Task.sleep(for: .milliseconds(900))
+                guard let self, let view, !Task.isCancelled, self.account == owner, self.browserViews[id] === view, view.url == url,
+                      !view.scrollView.isDragging, !view.scrollView.isDecelerating, !view.isLoading else { return }
+                let sensitive = try await view.evaluateJavaScript("!!document.querySelector('input[type=password],input[autocomplete*=cc-],input[autocomplete*=password]')") as? Bool
+                guard sensitive == false else { return }
+                let data = try await view.nativeArchiveData()
+                guard !Task.isCancelled, self.account == owner, view.url == url else { return }
+                try await cache.save(data, identity: identity, key: key)
+            } catch { /* Disposable cache failures never interrupt browsing. */ }
+        }
+    }
+    private func restoreBrowserPage(_ tab: BrowserDescriptor, view: WKWebView, url: URL) {
+        let identity = pageCacheIdentity(tab), owner = account, key = sharedCacheKey(), cache = pageCache
+        browserArchiveTasks[tab.id] = Task { @MainActor [weak self, weak view] in
+            let saved = if let key { await cache.read(identity: identity, key: key) } else { nil as NativeBrowserPageSnapshot? }
+            guard !Task.isCancelled, let self, let view, self.account == owner, self.browserViews[tab.id] === view, self.browserTabs.first(where: { $0.id == tab.id })?.url == url.absoluteString else { return }
+            if let saved {
+                do {
+                    let rule = try await WKContentRuleListStore.default().compileContentRuleList(forIdentifier: "proteus-saved-page-offline-v1", encodedContentRuleList: "[{\"trigger\":{\"url-filter\":\"^https?://\"},\"action\":{\"type\":\"block\"}}]")!
+                    guard !Task.isCancelled, self.browserViews[tab.id] === view else { return }
+                    view.configuration.userContentController.add(rule); self.browserArchiveRules[tab.id] = rule
+                    self.browserSavedPages[tab.id] = saved.savedAt
+                    view.configuration.defaultWebpagePreferences.allowsContentJavaScript = false
+                    view.load(saved.data, mimeType: "application/x-webarchive", characterEncodingName: "UTF-8", baseURL: url)
+                    return
+                } catch { /* A live load is the fallback when a saved page cannot be isolated. */ }
+            }
+            view.load(URLRequest(url: url))
+        }
+    }
+    private var browserPositionTasks: [String: Task<Void, Never>] = [:]
+    private var pendingBrowserPositions: [String: Date] = [:]
+    func captureBrowserReadingPosition(_ id: String) {
+        guard pendingBrowserPositions[id] == nil,
+              let view = browserViews[id], let url = view.url?.absoluteString,
+              let index = browserTabs.firstIndex(where: { $0.id == id }), browserTabs[index].url == url else { return }
+        let offset = view.scrollView.contentOffset
+        guard offset.x.isFinite, offset.y.isFinite else { return }
+        let position = BrowserReadingPosition(url: url, x: Double(max(0, offset.x)), y: Double(max(0, offset.y)))
+        if browserTabs[index].readingPosition != position { browserTabs[index].readingPosition = position }
+    }
+    func restoreBrowserReadingPosition(_ id: String) {
+        guard let deadline = pendingBrowserPositions[id] else { return }
+        guard deadline > Date(), let view = browserViews[id],
+              let tab = browserTabs.first(where: { $0.id == id }), let position = tab.readingPosition,
+              tab.url == position.url, position.x.isFinite, position.y.isFinite, position.x >= 0, position.y >= 0 else { pendingBrowserPositions[id] = nil; return }
+        // Initial WebKit layout can precede its URL/content. Keep the bookmark
+        // until this document is large enough, or a physical gesture takes over.
+        guard view.url?.absoluteString == position.url, view.scrollView.contentSize.height > 0 else { return }
+        let scroll = view.scrollView, maximumY = max(0, scroll.contentSize.height - scroll.bounds.height)
+        let target = CGPoint(x: position.x, y: min(position.y, maximumY))
+        scroll.setContentOffset(target, animated: false)
+        if !view.isLoading, maximumY >= position.y, abs(scroll.contentOffset.y - position.y) < 2 && abs(scroll.contentOffset.x - position.x) < 2 { pendingBrowserPositions[id] = nil }
+    }
+    private func observeBrowserPosition(_ view: WKWebView, id: String) -> NSKeyValueObservation {
+        view.scrollView.observe(\.contentOffset, options: [.new]) { [weak self, weak view] _, _ in
+            Task { @MainActor [weak self, weak view] in
+                guard let self, let view, self.browserViews[id] === view else { return }
+                self.browserPositionTasks[id]?.cancel()
+                self.browserPositionTasks[id] = Task { @MainActor [weak self] in
+                    do { try await Task.sleep(for: .milliseconds(300)) } catch { return }
+                    self?.captureBrowserReadingPosition(id)
+                    self?.browserPositionTasks[id] = nil
+                }
+            }
+        }
+    }
+
     private var profileStores: [String: WKWebsiteDataStore] = [:]
     private var browserObservations: [String: [NSKeyValueObservation]] = [:]
     private var browserTouched: [String: Date] = [:]
@@ -238,18 +342,76 @@ let nativeFixtureRelayOrigin = ""
     private let cacheWriter: NativeSharedCacheWriter
     private let sharedCacheRoot: URL
     private let sharedCacheKey: () -> String?
-    init(cacheWriter: NativeSharedCacheWriter = .shared, cacheRoot: URL? = nil, cacheKey: @escaping () -> String? = BrowserCacheKeychain.key) {
+    init(cacheWriter: NativeSharedCacheWriter = .shared, cacheRoot: URL? = nil, cacheKey: @escaping () -> String? = BrowserCacheKeychain.key, maintenanceArguments: [String] = ProcessInfo.processInfo.arguments) {
         self.cacheWriter = cacheWriter
         if let cacheRoot { contentEvidenceURL = cacheRoot.appendingPathComponent("proteus-tab-sync-evidence.json") }
         chatPositionNamespace = cacheRoot?.path ?? ""
         sharedCacheRoot = cacheRoot ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Proteus")
         sharedCacheKey = cacheKey
         UserDefaults.standard.removeObject(forKey: "proteus.download-history"); loadDocumentTabs(); loadHistoryCache()
+        for (key, value) in legacyContentReview where key.hasPrefix("owner-reset:") && value["phase"].string == "awaiting-owner" { ownerProjectResets[value["scope"].string] = value["operationId"].string }
+        if let index = maintenanceArguments.firstIndex(of: "--restore-project-tabs-from-owner"), maintenanceArguments.count > index + 3 { try? requestOwnerProjectTabReset(hostID: maintenanceArguments[index + 1], projectID: maintenanceArguments[index + 2], operationID: maintenanceArguments[index + 3]) }
+
+    }
+    /// Operator-only OS launch maintenance. Web links cannot trigger this reset.
+    /// Only the named local project cache/outbox is retired; owner tabs are read.
+    func requestOwnerProjectTabReset(hostID: String, projectID: String, operationID: String) throws {
+        guard let host = UUID(uuidString: hostID)?.uuidString.lowercased(), let project = UUID(uuidString: projectID)?.uuidString.lowercased(), let operation = UUID(uuidString: operationID)?.uuidString.lowercased() else { throw RemoteError(message: "Choose exact owner, project and operation UUIDs.") }
+        let scope = "project:" + host + ":" + project, key = "owner-reset:" + operation
+        if let old = legacyContentReview[key], old["scope"].string != scope { throw RemoteError(message: "This maintenance operation belongs to another project.") }
+        if legacyContentReview[key]?["phase"].string == "completed" { return }
+        ownerProjectResets[scope] = operation
+        legacyContentReview[key] = .object(["scope": .string(scope), "operationId": .string(operation), "phase": .string("awaiting-owner"), "requestedAt": .string(ISO8601DateFormatter().string(from: Date()))])
+        saveDocumentTabs()
+    }
+    func performPendingOwnerProjectResets(using destinations: DestinationStore) async {
+        guard !ownerProjectResets.isEmpty else { return }
+        for _ in 0..<120 {
+            if Task.isCancelled || ownerProjectResets.isEmpty { return }
+            for scope in Array(ownerProjectResets.keys) {
+                let parts = scope.split(separator: ":", maxSplits: 2).map(String.init)
+                guard parts.count == 3, let remote = destinations.remote(for: parts[1]), remote.connected else { continue }
+                await remote.refreshProjects()
+                await resetProjectCacheFromOwner(scope: scope, remote: remote, id: parts[2])
+            }
+            if ownerProjectResets.isEmpty { return }
+            do { try await Task.sleep(for: .milliseconds(500)) } catch { return }
+        }
+    }
+    private func resetProjectCacheFromOwner(scope: String, remote: RemoteStore, id: String) async {
+        guard let operation = ownerProjectResets[scope], !contentBusy.contains(scope), remote.connected, let host = remote.connection?.hostId,
+              scope == "project:" + host + ":" + id, remote.supportsProjects, remote.projectCatalog.project(id: id)?["id"].string == id else { return }
+        contentBusy.insert(scope); defer { contentBusy.remove(scope) }
+        let identity = account, key = "owner-reset:" + operation
+        do {
+            try await saveDocumentTabs().value()
+            let fresh = try await remote.request("tabs.get", ["scope": .string("project"), "id": .string(id)])
+            guard case .array = fresh["tabs"], fresh["revision"] != .null, !Task.isCancelled,
+                  account == identity, remote.connected, remote.connection?.hostId == host, ownerProjectResets[scope] == operation else { return }
+            let ids = fresh["tabs"].array.map { $0["id"].string }
+            guard ids.allSatisfy({ !$0.isEmpty }), Set(ids).count == ids.count else { throw RemoteError(message: "Owner returned an invalid tab inventory.") }
+            legacyContentReview[key] = .object(["scope": .string(scope), "operationId": .string(operation), "phase": .string("completed"), "completedAt": .string(ISO8601DateFormatter().string(from: Date())), "ownerRevision": fresh["revision"], "retiredPending": .array(contentPending[scope] ?? []), "retiredRequest": contentRequests[scope] ?? .null])
+            contentPending[scope] = nil; contentRequests[scope] = nil; contentSnapshots[scope] = nil
+            contentHosts[scope] = host; contentSync[scope] = (remote, "project", id, host)
+            let wasApplying = applyingContent; applyingContent = true
+            let stale = tabs(in: scope).filter { !ids.contains($0.contentTabId ?? $0.id) }
+            for tab in stale { unload(tab.id, force: true) }
+            browserTabs.removeAll { tab in stale.contains { $0.id == tab.id } }
+            applyingContent = wasApplying
+            applyContentTabs(fresh, scope: scope)
+            try await saveDocumentTabs().value()
+            ownerProjectResets[scope] = nil
+            recordContentRead(fresh, scope: scope)
+            contentReadAt[scope] = Date()
+            recordContentAttempt(scope, phase: "owner-reset-completed")
+            Task { await self.refreshContentTabs(scope: scope, remote: remote, kind: "project", id: id) }
+        } catch { recordContentAttempt(scope, phase: "owner-reset-waiting", error: error) }
     }
     static func isOrganizationalScope(_ scope: String) -> Bool { scope.hasPrefix("workspace:") || scope.hasPrefix("project:") }
     /// Explicit user intent joins the same encrypted durable outbox as browser
     /// navigation. Cache persistence precedes effects, including after reconnect.
     func queueContentOperations(_ operations: [JSON], scope: String, remote: RemoteStore, kind: String, id: String) {
+        guard ownerProjectResets[scope] == nil else { error = "Restoring this project from its computer; wait for the owner inventory."; return }
         guard let host = remote.connection?.hostId, contentHosts[scope] == nil || contentHosts[scope] == host else { error = "This tab belongs to another computer."; return }
         guard (contentPending[scope]?.count ?? 0) + operations.count <= 4096 else { error = "Reconnect to finish pending tab changes before adding more."; return }
         contentHosts[scope] = host; contentSync[scope] = (remote, kind, id, host)
@@ -391,6 +553,10 @@ let nativeFixtureRelayOrigin = ""
             // Retain that live view exactly once rather than appending a restored copy on refresh.
             if let existing, (privateLocal.contains(existing) || explicitBrowserNavigations.contains(existing.id)), existing.profileId == (tab["profileId"].string.isEmpty ? "default" : tab["profileId"].string) { nextBrowsers.append(existing); continue }
             let localID = existing?.id ?? ("sync:" + SHA256.hash(data: Data((scope + "\0" + tab["id"].string).utf8)).map { String(format: "%02x", $0) }.joined())
+            let favicon = tab["favicon"].string
+            if favicon.hasPrefix("data:image/png;base64,"), favicon.utf8.count <= 98304,
+               let data = Data(base64Encoded: String(favicon.dropFirst(22))), let image = UIImage(data: data) { browserFavicons[localID] = image }
+
             // A shared descriptor can come from an unloaded desktop tab. Its automatic
             // title must not replace the title of the page already displayed here.
             // Explicit names still win; a changed URL follows the remote navigation.
@@ -583,6 +749,7 @@ let nativeFixtureRelayOrigin = ""
         saveDocumentTabs(); saveBrowsers()
     }
     func refreshContentTabs(scope: String, remote: RemoteStore, kind: String, id: String) async {
+        if ownerProjectResets[scope] != nil { await resetProjectCacheFromOwner(scope: scope, remote: remote, id: id); return }
         if remote.status.lowercased().contains("revoked"), let host = remote.connection?.hostId { revokeContentHost(host); return }
         guard kind != "main", remote.connected, remote.state["capabilities"].array.contains(.string("content-tabs.v1")), let host = remote.connection?.hostId else { recordContentAttempt(scope, phase: "offline"); return }
         if kind == "project" {
@@ -607,7 +774,27 @@ let nativeFixtureRelayOrigin = ""
             guard remote.connected, remote.connection?.hostId == host, contentHosts[scope] == host else { return }
         }
         if contentPending[scope]?.isEmpty == true && contentRequests[scope] == nil { contentPending[scope] = nil }
-        if contentPending[scope] != nil { recordContentAttempt(scope, phase: "pending-retry"); await flushContentTabs(scope); return }
+        if contentPending[scope] != nil {
+            recordContentAttempt(scope, phase: "pending-retry")
+            await flushContentTabs(scope)
+            // An outbox failure cannot freeze the owner's membership indefinitely.
+            // Read after the exact retry, retain its envelope, and project only still-valid intent.
+            if contentPending[scope] != nil, !contentBusy.contains(scope), remote.connected {
+                do {
+                    let fresh = try await remote.request("tabs.get", ["scope": .string(kind), "id": .string(id)])
+                    guard contentHosts[scope] == host, contentSync[scope]?.remote === remote,
+                          fresh["revision"].int >= (contentSnapshots[scope]?["revision"].int ?? -1) else { return }
+                    let pending = contentPending[scope] ?? []
+                    var displayed = fresh.object
+                    displayed["tabs"] = .array(Self.projectContentOperations(Self.rebaseContentOperations(pending, snapshot: fresh), onto: fresh["tabs"].array))
+                    applyContentTabs(.object(displayed), scope: scope)
+                    contentSnapshots[scope] = fresh
+                    contentReadAt[scope] = Date(); recordContentRead(fresh, scope: scope)
+                    saveDocumentTabs()
+                } catch { recordContentAttempt(scope, phase: "failed", error: error) }
+            }
+            return
+        }
         guard !contentBusy.contains(scope) else { return }; contentBusy.insert(scope); defer { contentBusy.remove(scope) }
         do {
             let readRevision = contentSnapshots[scope]?["revision"].int ?? -1
@@ -774,6 +961,7 @@ let nativeFixtureRelayOrigin = ""
         return true
     }
     private func flushContentTabs(_ scope: String) async {
+        guard ownerProjectResets[scope] == nil else { return }
         guard !scope.hasPrefix("main:"), !contentBusy.contains(scope), let config = contentSync[scope], config.remote.connected,
               let pending = contentPending[scope], !pending.isEmpty else { return }
         guard (contentBackoff[config.host]?.until ?? .distantPast) <= Date() else { return }
@@ -873,6 +1061,7 @@ let nativeFixtureRelayOrigin = ""
                 Task { await self.flushContentTabs(scope) }
             }
         } catch {
+            recordContentAttempt(scope, phase: "failed", error: error)
             guard account == requestAccount, contentHosts[scope] == config.host, contentSync[scope]?.remote === config.remote else { return }
             if retainExpiredContentRequest(scope, error: error) {
                 let readRevision = contentSnapshots[scope]?["revision"].int ?? -1
@@ -920,7 +1109,11 @@ let nativeFixtureRelayOrigin = ""
             for tab in browserTabs where tab.scope != "team" && tab.scope != "main" { if scopedSelection[tab.scope] == nil { let saved = savedSelections[tab.scope]?.string ?? ""; scopedSelection[tab.scope] = saved.isEmpty ? tab.id : saved } }
             unloadedBrowsers = Set(browserTabs.filter { $0.url != nil }.map(\.id))
         }
-        historyNavigation = [:]; pendingBrowserLoads = [:]; nativeHistoryPosition = [:]; insertionOrigins = [:]; profilesEnabled = UserDefaults.standard.bool(forKey: profilePreferenceKey)
+        historyNavigation = [:]; pendingBrowserLoads = [:]; nativeHistoryPosition = [:]; insertionOrigins = [:]; if !UserDefaults.standard.bool(forKey: profilePreferenceKey + ".desktop-parity-v1") {
+            profilesEnabled = true
+            UserDefaults.standard.set(true, forKey: profilePreferenceKey)
+            UserDefaults.standard.set(true, forKey: profilePreferenceKey + ".desktop-parity-v1")
+        } else { profilesEnabled = UserDefaults.standard.bool(forKey: profilePreferenceKey) }
         restoring = false
         for tab in browserTabs where tab.persist && profileAvailable(tab.profileId) { reload(tab.id); _ = webView(tab) }
     }
@@ -1003,6 +1196,7 @@ let nativeFixtureRelayOrigin = ""
         })
     }
     @discardableResult func flushCachedState() -> String? {
+        for id in browserViews.keys { captureBrowserReadingPosition(id) }
         flushDocumentScrollPositions()
         NativeDescriptorCacheWriter.shared.flush()
         do { try cacheWriter.flush(); return nil } catch { let message = "Local tab/history changes could not be saved: " + error.localizedDescription; self.error = message; return message }
@@ -1393,9 +1587,22 @@ let nativeFixtureRelayOrigin = ""
         let recent = Set(browserTouched.filter { item in browserTabs.first(where: { $0.id == item.key })?.persist != true }.sorted { $0.value > $1.value }.prefix(max(1, min(256, loadedTabLimit))).map(\.key))
         for id in Array(browserViews.keys) where browserTabs.first(where: { $0.id == id })?.persist != true && !recent.contains(id) && now.timeIntervalSince(browserTouched[id] ?? .distantPast) >= 3600 { unload(id) }
     }
+    func relieveBrowserMemoryPressure() {
+        // Preserve active/media/Persist pages; dormant ordinary pages keep their
+        // descriptors, navigation and reading position for the next selection.
+        for id in Array(browserViews.keys) {
+            guard let tab = browserTabs.first(where: { $0.id == id }), !tab.persist,
+                  let view = browserViews[id], view.window == nil else { continue }
+            unload(id)
+        }
+        browserPreviews = [:]
+        flushCachedState()
+    }
     func takeBrowserInsertionOrigin(_ id: String) -> String? { insertionOrigins.removeValue(forKey: id) }
-    @discardableResult func open(_ url: URL?, title: String = "New tab", scope: String = "team", profileId: String = "default", afterSourceID: String? = nil) -> String? {
+    @discardableResult func open(_ url: URL?, title: String = "New tab", scope: String = "team", profileId: String = "default", afterSourceID: String? = nil, background: Bool = false) -> String? {
+        guard ownerProjectResets[scope] == nil else { error = "Wait for this project to restore from its computer before opening a new tab."; return nil }
         guard profileAvailable(profileId) else { error = "Sign in and refresh browser profiles before opening this profile."; return nil }
+        let previousSelection = selected(in: scope)
         var tab = BrowserDescriptor(id: UUID().uuidString, title: title, url: nil, scope: scope, profileId: profileId)
         let scopeParts = scope.split(separator: ":", maxSplits: 2).map(String.init)
         if scopeParts.count == 3, UUID(uuidString: scopeParts[1]) != nil { tab.ownerHostId = scopeParts[1] }
@@ -1413,7 +1620,8 @@ let nativeFixtureRelayOrigin = ""
         } else { browserTabs.append(tab); order.append(tab.id) }
         if scope != "team" { chatChildOrder[scope] = order }
         if Self.isOrganizationalScope(scope) { workspaceContentDescriptors[scope] = localContentTabs(scope) }
-        select(tab.id, in: scope); if scope != "main" && scope != "team" { selectChatChild(tab.id, for: scope) }
+        if !background { select(tab.id, in: scope); if scope != "main" && scope != "team" { selectChatChild(tab.id, for: scope) } }
+        else if let previousSelection { select(previousSelection, in: scope, activateMainBrowser: false) }
         saveDocumentTabs(); applyingContent = priorApplying; if !priorApplying { recordContentOpen(tab); contentTabsChanged() }
         if let url { _ = navigate(url, in: tab.id); if title != "New tab", let index = browserTabs.firstIndex(where: { $0.id == tab.id }) { browserTabs[index].title = title } }
         return tab.id
@@ -1429,6 +1637,7 @@ let nativeFixtureRelayOrigin = ""
         guard ["http", "https"].contains(url.scheme), url.host != nil, url.user == nil, url.password == nil,
               let index = browserTabs.firstIndex(where: { $0.id == id }) else { return false }
         if browserTabs[index].url == url.absoluteString, browserTabs[index].history != nil { refreshBrowser(id); return true }
+        beginLiveBrowserLoad(id)
         serverRedirectedBrowsers.remove(id); originalBrowserLoads[id] = url.absoluteString
         mirroredBrowserLoads.remove(id)
         explicitBrowserNavigations.insert(id)
@@ -1527,7 +1736,11 @@ let nativeFixtureRelayOrigin = ""
             return response
         } catch { historyStatus[host] = "Cached history · " + error.localizedDescription; return .null }
     }
-    func browserFavicon(_ id: String) -> UIImage? { browserFavicons[id] }
+    func browserFavicon(_ id: String) -> UIImage? {
+        if let icon = browserFavicons[id] { return icon }
+        guard let tab = browserTabs.first(where: { $0.contentTabId == id }) else { return nil }
+        return browserFavicons[tab.id]
+    }
     func captureBrowserFavicon(_ id: String) async {
         guard let view = browserViews[id], !view.isLoading, let page = view.url, Self.safeURL(page.absoluteString) != nil, Date().timeIntervalSince(faviconAttempts[id] ?? .distantPast) > 300 else { return }
         faviconAttempts[id] = Date()
@@ -1590,6 +1803,7 @@ let nativeFixtureRelayOrigin = ""
         return indices.map { BrowserHistoryItem(index: $0, url: URL(string: history.entries[$0].url)!, title: history.entries[$0].title, entryId: history.entries[$0].id) }
     }
     func goBrowserHistory(_ item: BrowserHistoryItem, in id: String) {
+        beginLiveBrowserLoad(id)
         guard let index = browserTabs.firstIndex(where: { $0.id == id }), let history = browserTabs[index].history else { return }
         let target = item.entryId.flatMap { selected in history.entries.firstIndex { $0.id == selected } } ?? (item.entryId == nil ? item.index : -1)
         guard history.entries.indices.contains(target), target != history.index, history.entries[target].url == item.url.absoluteString else { return }
@@ -1598,6 +1812,7 @@ let nativeFixtureRelayOrigin = ""
         queueBrowserOperation(browserTabs[index], action: "browser-traverse", entry: history.entries[item.index])
         browserTabs[index].history?.currentEntryId = history.entries[item.index].id
         browserTabs[index].history?.index = item.index
+        beginLiveBrowserLoad(id)
         serverRedirectedBrowsers.remove(id); originalBrowserLoads[id] = item.url.absoluteString
         historyNavigation[id] = item.index
         browserTabs[index].url = item.url.absoluteString
@@ -1680,6 +1895,7 @@ let nativeFixtureRelayOrigin = ""
         return queued
     }
     func failBrowserNavigation(_ id: String, currentURL: URL?) {
+        beginLiveBrowserLoad(id)
         serverRedirectedBrowsers.remove(id); originalBrowserLoads.removeValue(forKey: id)
         pendingBrowserLoads.removeValue(forKey: id); historyNavigation.removeValue(forKey: id)
         // Engine failures and authentication overlays are local lifecycle states.
@@ -1689,7 +1905,10 @@ let nativeFixtureRelayOrigin = ""
     }
     /// Trusted interaction releases ownership of the mirrored page immediately,
     /// including an SPA route change long after the tap. Passive redirects never do.
-    func browserDidReceiveTrustedInteraction(_ id: String) { mirroredBrowserLoads.remove(id) }
+    func browserDidReceiveTrustedInteraction(_ id: String) {
+        pendingBrowserPositions[id] = nil
+        mirroredBrowserLoads.remove(id)
+    }
     func completeBrowserNavigation(_ url: URL, title: String, in id: String, nativePosition: Int? = nil, sameDocumentObservation: Bool = false) {
         if applyingContent {
             // WebKit KVO can fire synchronously during an owner-driven load.
@@ -1762,11 +1981,18 @@ let nativeFixtureRelayOrigin = ""
         let result = BrowserTabHistory(entries: entries, index: selected, currentEntryId: entries[selected].id, revision: value.revision)
         return result
     }
-    func refreshBrowser(_ id: String) { if let view = browserViews[id] { view.reload() } else { reload(id) } }
+    func refreshBrowser(_ id: String) {
+        let saved = browserSavedPages[id] != nil; beginLiveBrowserLoad(id)
+        if let view = browserViews[id] { if saved, let address = browserTabs.first(where: { $0.id == id })?.url, let url = URL(string: address) { view.load(URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData)) } else { view.reload() } } else { reload(id) }
+    }
     func stopBrowser(_ id: String) { if let view = browserViews[id] { failBrowserNavigation(id, currentURL: view.url); view.stopLoading() } }
     func renameBrowser(_ id: String, title: String) { guard let index = browserTabs.firstIndex(where: { $0.id == id }) else { return }; var tab = browserTabs[index]; tab.title = String(title.prefix(200)); tab.customTitle = tab.title; browserTabs[index] = tab }
     func close(_ id: String) { if let tab = browserTabs.first(where: { $0.id == id }) { let scope = tab.scope == "team" ? "team:" + (tab.ownerHostId ?? currentTeamOwner ?? "") : tab.scope == "main" ? "main:" + (tab.ownerHostId ?? "") : tab.scope; recordContentClose(tab.contentTabId ?? tab.id, scope: scope); NativeThumbnailCache.remove(thumbnailKey(tab)) }; let scope = browserTabs.first(where: { $0.id == id })?.scope ?? "team"; unload(id, force: true); unloadedBrowsers.remove(id); browserTouched.removeValue(forKey: id); browserTabs.removeAll { $0.id == id }; browserPreviews[id] = nil; browserFavicons[id] = nil; faviconAttempts[id] = nil; if selected(in: scope) == id { if scope == "main" { selectedMainBrowser = tabs(in: scope).last?.id } else if scope == "team" { selectedBrowser = tabs(in: scope).last?.id } else { scopedSelection[scope] = tabs(in: scope).last?.id } } }
     func unload(_ id: String, force: Bool = false) {
+        captureBrowserReadingPosition(id)
+        beginLiveBrowserLoad(id)
+        browserPositionTasks.removeValue(forKey: id)?.cancel()
+        pendingBrowserPositions[id] = nil
         guard force || browserTabs.first(where: { $0.id == id })?.persist != true else { error = "Turn off Persist before unloading this tab."; return }
         historyNavigation.removeValue(forKey: id)
         mirroredBrowserLoads.remove(id)
@@ -1819,8 +2045,9 @@ let nativeFixtureRelayOrigin = ""
         // goBrowserHistory still reuses matching native page instances via go(to:).
         view.allowsBackForwardNavigationGestures = false; view.isFindInteractionEnabled = true
         browserViews[tab.id] = view
-        browserObservations[tab.id] = [observeBrowser(view, id: tab.id, keyPath: \.canGoBack), observeBrowser(view, id: tab.id, keyPath: \.canGoForward), observeBrowser(view, id: tab.id, keyPath: \.isLoading), observeBrowser(view, id: tab.id, keyPath: \.url), observeBrowser(view, id: tab.id, keyPath: \.title)]
-        if let text = tab.url, let url = URL(string: text) { mirroredBrowserLoads.insert(tab.id); pendingBrowserLoads[tab.id] = url.absoluteString; applyPageScale(tab.id, url: url); view.load(URLRequest(url: url)) }
+        browserObservations[tab.id] = [observeBrowser(view, id: tab.id, keyPath: \.canGoBack), observeBrowser(view, id: tab.id, keyPath: \.canGoForward), observeBrowser(view, id: tab.id, keyPath: \.isLoading), observeBrowser(view, id: tab.id, keyPath: \.url), observeBrowser(view, id: tab.id, keyPath: \.title), observeBrowserPosition(view, id: tab.id), view.scrollView.observe(\.contentSize, options: [.new]) { [weak self] _, _ in Task { @MainActor in self?.restoreBrowserReadingPosition(tab.id) } }]
+        if tab.readingPosition?.url == tab.url { pendingBrowserPositions[tab.id] = Date().addingTimeInterval(8) }
+        if let text = tab.url, let url = URL(string: text) { mirroredBrowserLoads.insert(tab.id); pendingBrowserLoads[tab.id] = url.absoluteString; applyPageScale(tab.id, url: url); restoreBrowserPage(tab, view: view, url: url) }
         return view
     }
     private func observeBrowser<Value>(_ view: WKWebView, id: String, keyPath: KeyPath<WKWebView, Value>) -> NSKeyValueObservation {

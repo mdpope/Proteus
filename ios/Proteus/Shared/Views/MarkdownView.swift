@@ -61,6 +61,7 @@ struct MarkdownView: UIViewRepresentable {
     @Binding var height: CGFloat
     var onDocumentLink: ((String) -> Void)? = nil
     var documentAssetURLs: [String: String]? = nil
+    var allFileLinks = false
     var onResize: () -> Void = {}
     var search: NativePageSearch? = nil
     var searchKey = 0
@@ -190,6 +191,7 @@ struct MarkdownView: UIViewRepresentable {
                         parent.shared.open(url, title: url.host ?? "Link", scope: scope)
                         Task { await parent.shared.record(url, title: url.host ?? "Link", life: parent.life) }
                     } else if url.scheme?.lowercased() == "mailto" { UIApplication.shared.open(url) }
+                    else if parent.allFileLinks, let open = parent.onDocumentLink { open(value) }
                     else if ["md", "html", "htm"].contains(url.pathExtension.lowercased()) || ["md", "html", "htm"].contains((value as NSString).pathExtension.lowercased()) { if let onDocumentLink = parent.onDocumentLink { onDocumentLink(value) } else { UIPasteboard.general.string = value; parent.store.error = "This file path was copied. Open it on \(parent.store.displayName)." } }
                     else { UIPasteboard.general.string = value.removingPercentEncoding ?? value; parent.store.error = "File path copied. Open it on \(parent.store.displayName): \(value.removingPercentEncoding ?? value)" }
                 }

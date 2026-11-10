@@ -60,3 +60,8 @@ test('PAT read/write is explicit and preserves existing read-only profiles',()=>
  const write=structuredClone(read);write.expected.scopes=[...adoWriteScopes];assert.doesNotThrow(()=>qualifyAdoAuthentication(write));assert.deepEqual(read.expected.scopes,adoReadScopes);
  for(const scope of ['vso.code_write','vso.build_execute','app_token']){const bad=structuredClone(write);bad.expected.scopes.push(scope);assert.throws(()=>qualifyAdoAuthentication(bad));}
 });
+
+test('explicit configuration edits preserve PAT through a new protected reference and keep rollback credential intact',async t=>{
+ const f=patFixture(t);await f.adapter.store(f.d,{pat:'x'.repeat(52),email:'owner@example.test'});const old=f.rows.get('ref'),next=structuredClone(f.d);next.transport={...next.transport,domains:['core','pipelines','repositories']};const changed=await f.adapter.reconfigure(f.d,next);assert.notEqual(changed.authentication.credentialRef,'ref');assert.equal(f.rows.get('ref'),old);await f.adapter.use(changed,token=>assert.equal(Buffer.from(token,'base64').toString(),'owner@example.test:'+('x'.repeat(52))));assert.equal(next.authentication.credentialRef,'ref');
+ const noChange=await f.adapter.reconfigure(f.d,f.d);assert.equal(noChange,f.d);const foreign=structuredClone(next);foreign.expected.principal=adoUserId;const count=f.rows.size;assert.equal((await f.adapter.reconfigure(f.d,foreign)).authentication.credentialRef,'ref');assert.equal(f.rows.size,count);
+});

@@ -545,13 +545,22 @@ enum NativeWorkspaceNavigation {
     /// and host-owned terminals/documents, following the owner's saved order.
     @MainActor static func children(scope: String, navigationKey: String, remote: RemoteStore, shared: SharedAppStore) -> [JSON] {
         let descriptors = shared.workspaceContentDescriptors[scope] ?? []
-        let chatIDs = deduplicated(remote.draft(navigationKey)["chats"].array.map(\.string))
-        let chats: [JSON] = chatIDs.map { .object(["id": .string("chat:" + $0), "sortId": .string("chat:" + $0), "type": .string("chat"), "chatId": .string($0), "title": run($0, remote: remote)["title"]]) }
-        let browsers: [JSON] = shared.tabs(in: scope).map { .object(["id": .string($0.id), "sortId": .string($0.contentTabId ?? $0.id), "type": .string("browser"), "title": .string($0.title)]) }
+        let chatIDs = deduplicated(shared.workspaceContentDescriptors[scope] == nil
+            ? remote.draft(navigationKey)["chats"].array.map(\.string)
+            : descriptors.filter { $0["type"].string == "chat" }.map { $0["chatId"].string })
+        let chats: [JSON] = chatIDs.map { id in
+            let tab = descriptors.first { $0["type"].string == "chat" && $0["chatId"].string == id } ?? .null
+            let metadata = run(id, remote: remote)
+            let title = metadata["title"].string == "Chat" && !tab["title"].string.isEmpty ? tab["title"] : metadata["title"]
+            return .object(["id": .string("chat:" + id), "sortId": tab["id"].string.isEmpty ? .string("chat:" + id) : tab["id"], "type": .string("chat"), "chatId": .string(id), "title": title])
+        }
+        let browsers: [JSON] = shared.tabs(in: scope).filter { browser in
+            shared.workspaceContentDescriptors[scope] == nil || descriptors.contains { $0["id"].string == (browser.contentTabId ?? browser.id) }
+        }.map { .object(["id": .string($0.id), "sortId": .string($0.contentTabId ?? $0.id), "type": .string("browser"), "title": .string($0.title)]) }
         let other: [JSON] = descriptors.filter { ["terminal", "document"].contains($0["type"].string) }.map { tab in var fields = tab.object; fields["sortId"] = tab["id"]; fields["id"] = .string(tab["type"].string == "document" && !tab["chatId"].string.isEmpty ? tab["id"].string : "remote:" + tab["id"].string); return .object(fields) }
         let setups: [JSON] = descriptors.filter { $0["setup"] != .null }.map { .object(["id": .string("draft:" + $0["id"].string), "sortId": $0["id"], "title": $0["title"], "type": .string("chat-setup")]) }
         let order = descriptors.map { $0["id"].string }
-        let hidden = Set(descriptors.filter { $0["hidden"].bool }.map { $0["id"].string })
+        let hidden = Set(descriptors.filter { $0["hidden"].bool || $0["navigationClosed"].bool || $0["connectionPaused"].bool }.map { $0["id"].string })
         let hiddenBrowsers = Set(shared.tabs(in: scope).filter(\.hidden).map(\.id))
         return (chats + browsers + other + setups).enumerated().sorted { a, b in
             let x = order.firstIndex(of: a.element["sortId"].string) ?? order.count + a.offset
@@ -694,9 +703,11 @@ struct NativeWorkspaceContentView: View {
     var body: some View {
         VStack(spacing: 0) {
             if !NativePhonePreview.enabled || !phoneChrome.controlsHidden { workspaceTabStrip; Divider() }
+            if selected == "workspace" { Button("Files", systemImage: "folder") { page = "Files" }.accessibilityIdentifier("workspace-files") }
             if selected == "workspace" {
                 if projectID != nil { Picker("Project page", selection: $page) { Text("Chats").tag("Chats"); Text("Tabs").tag("Tabs") }.pickerStyle(.segmented).padding(12) }
-                if page == "Projects" && projectID == nil && store.supportsProjects { NativeProjectsView(workspaceID: workspaceID, onOpen: onOpenProject) }
+                if page == "Files" { NativeFileBrowser(workspaceID: workspaceID).environment(store) }
+                else if page == "Projects" && projectID == nil && store.supportsProjects { NativeProjectsView(workspaceID: workspaceID, onOpen: onOpenProject) }
                 else if page == "Tabs" { NativeWorkspaceTabsView(workspaceID: workspaceID, projectID: projectID, onOpen: openManagedTab).environment(store) }
                 else if page == "Configuration" { ContextView(workspaceID: workspaceID).environment(store) }
                 else { AggregateChatsView(onSelect: { openChat($0.run["id"].string) }, lockedWorkspaceID: workspaceID, lockedHostID: hostID, lockedProjectID: projectID, initialChatType: "all") }
@@ -775,7 +786,7 @@ struct NativeWorkspaceContentView: View {
     }
     private func workspaceChild(_ child: JSON) -> some View {
         HStack {
-            Button { selected = child["id"].string; if child["type"].string == "browser" { shared.select(selected, in: scope) } } label: { NativeContentTabLabel(title: child["title"].string, symbol: NativeTabSymbol.name(kind: child["type"].string, chatType: child["type"].string == "chat" ? run(child["chatId"].string)["chatType"].string : "", mediaType: child["mediaType"].string)) }.lineLimit(1).frame(maxWidth: 220).accessibilityIdentifier("workspace-child-tab-" + child["id"].string).accessibilityLabel(child["title"].string).accessibilityValue(selected == child["id"].string ? "Selected" : "")
+            Button { selected = child["id"].string; if child["type"].string == "browser" { shared.select(selected, in: scope) } } label: { NativeContentTabLabel(title: child["title"].string, symbol: NativeTabSymbol.name(kind: child["type"].string, chatType: child["type"].string == "chat" ? run(child["chatId"].string)["chatType"].string : "", mediaType: child["mediaType"].string), icon: child["type"].string == "browser" ? shared.browserFavicon(child["id"].string) : nil) }.lineLimit(1).frame(maxWidth: 220).accessibilityIdentifier("workspace-child-tab-" + child["id"].string).accessibilityLabel(child["title"].string).accessibilityValue(selected == child["id"].string ? "Selected" : "")
             Button {
                 if child["type"].string == "chat-setup" { closeSetup(String(child["id"].string.dropFirst(6))) }
                 else if child["type"].string == "chat" { closeChat(child["chatId"].string) }

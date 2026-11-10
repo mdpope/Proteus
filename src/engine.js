@@ -1,3 +1,6 @@
+import {isOwnerScopedCommandRequest} from './services/scheduling/scoped-command-request.js';
+import {scopedCommandTools} from './services/scheduling/scoped-command-tools.js';
+import {addScheduleAccess,scheduleAccessBinding,effectiveScheduleAccess,assertScheduleManagedAccess} from './services/scheduling/access-overlay.js';
 import {attachmentPrompt,providerPrompt} from './services/chats/attachment-prompt.js';
 import { isActiveExecutionLimit } from './providers/execution-policy.js';
 import {taskFeedbackDelivery} from './services/chats/task-feedback-kind.js';
@@ -110,7 +113,18 @@ export class Engine extends EventEmitter {
   visibleRuns(includeArchived = false) { return this.listRuns().filter(run => !run.delegation && (includeArchived || !run.archivedAt)); }
   getRun(id) { const run = this.runs.get(id); if (!run) throw new Error('Run not found.'); return run; }
   describePermissions(run) {
-    if(!run.delegation)return this.permissions.describeRun(run);
+    if(!run.delegation){
+      if(run.schedule.permissionScope?.kind==='schedule'&&run.schedule.scheduleAccessBasePermissions!==undefined){
+        let current;try{current=this.schedules.get(run.schedule.permissionScope.id);}catch(error){if(error.code!=='ENOENT')throw error;return this.permissions.describeRun(run.schedule.accessOverlay?{...run,schedule:{...run.schedule,executionPermissions:run.schedule.scheduleAccessBasePermissions||undefined,accessOverlay:undefined}}:run);}
+        if(!current.accessOverlay&&!run.schedule.accessOverlay)return this.permissions.describeRun(run);
+        const prepared=this.prepareSchedule?this.prepareSchedule(current):current;
+        if(scheduleAccessBinding(prepared)!==scheduleAccessBinding(run.schedule))throw Error('Schedule resources changed; review and start a new run.');
+        if(run.schedule.managedConnectionBindings)assertScheduleManagedAccess(current,run.schedule.managedConnectionBindings);
+        const executionPermissions=effectiveScheduleAccess({...current,executionPermissions:run.schedule.scheduleAccessBasePermissions||undefined});
+        return this.permissions.describeRun({...run,schedule:{...run.schedule,executionPermissions,accessOverlay:current.accessOverlay}});
+      }
+      return this.permissions.describeRun(run);
+    }
     const parent=this.getRun(run.delegation.parentRunId),captured=run.delegation.permissionProfile;
     if(!this.delegation.current(parent)||parent.turns?.at(-1)?.id!==run.delegation.parentTurnId)throw Error('Delegated parent turn ended or was revoked.');
     const current=this.describePermissions(parent);
@@ -168,7 +182,7 @@ export class Engine extends EventEmitter {
     run.chatPermission = {...previous, rules:previous.rules.filter(rule=>permissionRuleId(rule)!==ruleId)};
     run.chatPermissionRevision = randomUUID(); this.persist(run); this.recheckPermissions(); return this.describePermissions(run);
   }
-  setChatFolder(id, folder, access, revoke, expectedContextId, expectedChatRevision, recheck = true) {
+  setChatFolder(id, folder, access, revoke, expectedContextId, expectedChatRevision, recheck = true, beforePersist = null) {
     const run = this.getRun(id), context = this.permissions.describe(run.schedule);
     if (run.trigger !== 'chat' && !revoke) {
       const offer = run.status === 'awaiting_input' && run.pending?.type === 'permission' ? this.permissions.folderOffer(run.schedule, run.pending.details || {}) : null;
@@ -182,7 +196,7 @@ export class Engine extends EventEmitter {
     const folders = (previous.folders || []).filter(item => item.path !== canonical);
     if (!revoke) folders.push({ path: canonical, access });
     run.chatPermission = { ...previous, folders }; run.chatPermissionRevision = randomUUID();
-    this.persist(run); if (recheck) this.recheckPermissions(); return this.describePermissions(run);
+    beforePersist?.(); this.persist(run); if (recheck) this.recheckPermissions(); return this.describePermissions(run);
   }
   decidePermission(run, request) {
     const profile = this.describePermissions(run);
@@ -389,7 +403,7 @@ export class Engine extends EventEmitter {
     const run = this.getRun(id); const pending = this.pending.get(id);
     if (!pending || run.pending?.id !== requestId) throw new Error('This request is no longer waiting for an answer.');
     if (typeof answer !== 'string' || !answer.trim()) throw new Error('A reply is required.');
-    const isPermission = run.pending.type === 'permission';
+    const isPermission = run.pending.type === 'permission',isScopedCommand=run.pending.details?.kind==='scoped-command'&&isOwnerScopedCommandRequest(run.pending.details);
     let questionFiles=[];
     if(attachmentDispatch){
       if(isPermission)throw Error('Tool approvals cannot contain attachments.');
@@ -404,7 +418,13 @@ export class Engine extends EventEmitter {
         const offered = run.pending.permissionChoices?.find(choice => choice.value === answer);
         const current = this.permissions.choices(run.schedule, run.pending.details || {}).find(choice => choice.value === answer);
         if (!offered || offered.label !== current?.label) throw new Error('Permission scope changed. Review the workspace permissions before continuing.');
-        if (answer === 'trust-folder-chat') { const folder = this.permissions.folderOffer(run.schedule, run.pending.details); this.setChatFolder(run.id, folder.path, folder.access, false, this.permissions.describe(run.schedule).id, run.chatPermissionRevision || null, false); }
+        if(['allow-schedule','allow-schedule-scoped'].includes(answer)){
+          const current=this.schedules.get(run.schedule.permissionScope.id),prepared=this.prepareSchedule?this.prepareSchedule(current):current;
+          if(scheduleAccessBinding(prepared)!==scheduleAccessBinding(run.schedule))throw Error('Schedule resources changed. Reload and review access before saving consent.');
+          const folder=this.permissions.folderOffer(run.schedule,run.pending.details),rule=operationRule(run.pending.details),command=run.pending.details?.kind==='scoped-command'&&isOwnerScopedCommandRequest(run.pending.details)?run.pending.details.commandIdentity:null;
+          if(!folder&&!rule&&!command)throw Error('This operation cannot be saved as schedule access.');
+          this.schedules.save(addScheduleAccess(current,answer==='allow-schedule-scoped'?{commandScope:{scopeHash:command.scopeHash,sourceHash:command.sourceHash}}:command?{command}:folder?{folder}:{rule},{managedBindings:run.schedule.managedConnectionBindings}),revision(current));
+        } else if (answer === 'trust-folder-chat') { const folder = this.permissions.folderOffer(run.schedule, run.pending.details); this.setChatFolder(run.id, folder.path, folder.access, false, this.permissions.describe(run.schedule).id, run.chatPermissionRevision || null, false); }
         else if (answer === 'always-tool-chat') {
           const context = this.permissions.describe(run.schedule), rule = operationRule(run.pending.details);
           const previous = run.chatPermission?.contextId === context.id ? run.chatPermission : {mode:'inherit',contextId:context.id};
@@ -418,7 +438,7 @@ export class Engine extends EventEmitter {
     if(inputOrigin)run.turnOrigin=inputOrigin;this.pending.delete(id); run.pending = null; run.status = 'running';resumeTurn(run,this.now());providerProgress(run,this.now(),{observable:true});
     if (!isPermission) this.event(run, 'user', answer, {questionReply:{requestId},...(attachmentDispatch?{attachments:questionFiles,delivery:{id:attachmentDispatch.messageId,questionReplyDigest:attachmentDispatch.signature}}:{})}); else this.persist(run);
     const providerAnswer=attachmentDispatch?answer+`\nThe user attached ${questionFiles.length} file(s). Call proteus_question_attachments with requestId ${requestId} to view the images/text before continuing.`:answer;
-    pending.resolve(isPermission && !['approve','deny'].includes(answer) ? 'approve' : providerAnswer);
+    pending.resolve(isPermission&&['allow-schedule','allow-schedule-scoped'].includes(answer)&&isScopedCommand?'approve-schedule':isPermission && !['approve','deny'].includes(answer) ? 'approve' : providerAnswer);
     if (isPermission) this.recheckPermissions();
     return run;
   }
@@ -476,6 +496,7 @@ export class Engine extends EventEmitter {
     this.event(run, 'system', `Auto-approved ${request?.kind || 'tool'}: ${decision.reason}.`, { permission: { kind: request?.kind, request:displayText(request||{},12000), intention:displayText(request?.intention||request?.toolName||request?.fullCommandText||request?.fileName||request?.kind||'Tool request',240), automatic: true, reason: decision.reason, mode: decision.mode, source: decision.source || 'workspace',...(typeof request?.toolCallId==='string'?{toolCallId:request.toolCallId.slice(0,128)}:{}),...(decision.resolvedTarget?{resolvedTarget:decision.resolvedTarget.slice(0,1024)}:{}),...(decision.matchedRoot?{matchedRoot:decision.matchedRoot.slice(0,1024)}:{}) } });
   }
   recheckPermissions() {
+    for(const check of this.scopedCommandChecks||[])check();
     for(const run of this.runs.values())if(run.delegation&&active.has(run.status)){
       try{this.describePermissions(run);}catch{this.delegation.stopChildren(run.id);this.cancel(run.id);}
     }
@@ -522,6 +543,7 @@ export class Engine extends EventEmitter {
       this.turnAttachments.set(run.id,attachments);
       await provider.run({
         run, prompt:providerPrompt(prompt,attachments), attachments:providerAttachmentInputs(attachments,provider.acceptedMediaTypes), signal: controller.signal,
+        scopedTools:scopedCommandTools(this,run,controller.signal),
         permissionProfile: () => this.describePermissions(run),
         emit: (role, text, data) => this.event(run, role, text, data),
         stream: (id, text) => this.stream(run, id, text),

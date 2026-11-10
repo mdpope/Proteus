@@ -35,6 +35,7 @@ contextBridge.exposeInMainWorld('desktop', {
   onRemote: handler => { const listener = () => handler(); ipcRenderer.on('proteus:remote', listener); return () => ipcRenderer.removeListener('proteus:remote', listener); },
   standupPopout: width => ipcRenderer.invoke('proteus:standup-popout', width),
   credentials: value => ipcRenderer.invoke('proteus:credentials', value),
+  findDocument: value=>ipcRenderer.invoke('proteus:document-find',value),
   copyText: text => ipcRenderer.invoke('proteus:copy-text', text),
   choosePaths: options => ipcRenderer.invoke('proteus:choose-paths', options),
   openPath: file => ipcRenderer.invoke('proteus:open-path', file),

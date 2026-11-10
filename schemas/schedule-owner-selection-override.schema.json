@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "schedule-owner-selection-override.schema.json",
+  "title": "Proteus schedule owner provider selection override v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "source", "selection", "baseSelection"],
+  "properties": {
+    "version": {"const": 1},
+    "source": {"type":"object","additionalProperties":false,"required":["system","manifest"],"properties":{"system":{"type":"string","minLength":1,"maxLength":4096},"manifest":{"type":"string","minLength":1,"maxLength":4096}}},
+    "selection": {"$ref":"#/$defs/selection"},
+    "baseSelection": {"$ref":"#/$defs/selection"}
+  },
+  "$defs": {"selection":{"type":"object","additionalProperties":false,"required":["provider","model"],"properties":{"provider":{"type":"string","minLength":1,"maxLength":4096},"model":{"type":"string","maxLength":4096},"reasoningMode":{"type":"string","maxLength":4096},"reasoningEffort":{"type":"string","maxLength":4096},"contextTier":{"type":"string","maxLength":4096},"serviceTier":{"type":"string","maxLength":4096}}}}
+}

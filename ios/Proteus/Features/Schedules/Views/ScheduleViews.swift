@@ -33,6 +33,8 @@ struct SchedulesView: View {
 }
 struct ScheduleView: View {
     @Environment(RemoteStore.self) var store
+    @EnvironmentObject var shared: SharedAppStore
+    @EnvironmentObject var phoneChrome: NativePhoneChrome
     let id: String
     var openRun: (String) -> Void
     @State private var name = ""
@@ -51,6 +53,7 @@ struct ScheduleView: View {
     @State private var includeDefaults = true
     @State private var expectedRevision = ""
     @State private var next: [JSON] = []
+    @State private var capabilityMessage = ""
     @State private var busy = false
     @State private var loadedForm: [String] = []
     private var formValues: [String] { [name, cron, timezone, prompt, provider, model, effort, contextTier, serviceTier, String(enabled), String(notifyCompletion), selected.sorted().joined(separator: ","), agent, String(includeDefaults)] }
@@ -61,17 +64,31 @@ struct ScheduleView: View {
         NativeForm {
             if !expectedRevision.isEmpty && expectedRevision != schedule["revision"].string { Section { Text("The file changed outside Proteus. Your edits are preserved. Reload the latest version before saving.").foregroundStyle(.orange) } }
             if managed { Section("Omi processing") { Text("Manage processing paths, execution and cutover in the Omi section on \(store.displayName). Capture and the recording library remain in the separate Omi iCloud app.") } }
-            if owned && !managed { Section("Repository-owned schedule") { Text("Update the source manifest and reconcile it on \(store.displayName). You can start a chat to make that change with your repository instructions."); Text(schedule["source"]["manifest"].string).font(.caption.monospaced()).textSelection(.enabled) } }
+            if owned && !managed { Section("Repository-owned schedule") { Text("The workflow is source-owned. Provider/model selection is saved as an owner override and survives source reconciliation; other workflow changes use the manifest on \(store.displayName)."); Text(schedule["source"]["manifest"].string).font(.caption.monospaced()).textSelection(.enabled) } }
+            Section {
+                HStack {
+                    Text(enabled ? "Enabled" : "Paused").font(.caption).foregroundStyle(enabled ? .green : .secondary)
+                    Spacer()
+                    Button("Recent schedule runs", systemImage: "clock.arrow.circlepath") { shared.scheduleRunsRequest = .object(["hostID": .string(store.connection?.hostId ?? ""), "name": schedule["name"]]); phoneChrome.activateArea?("Chats") }.accessibilityIdentifier("schedule-recent-runs")
+                    Button("Run now", systemImage: "play.fill") { run() }.disabled(busy || !store.connected)
+                }.buttonStyle(.borderless)
+            }
             Section("Schedule") { TextField("Name", text: $name); TextField("Cron", text: $cron).autocorrectionDisabled().textInputAutocapitalization(.never).accessibilityIdentifier("schedule-cron"); TextField("Time zone", text: $timezone).autocorrectionDisabled().textInputAutocapitalization(.never); Toggle("Enabled", isOn: $enabled); Toggle("Notify on completion", isOn: $notifyCompletion); TextField("Instructions", text: $prompt, axis: .vertical).lineLimit(4...12) }.disabled(owned || busy || !store.connected)
             Section("Provider & model") {
-                Picker("Provider", selection: $provider) { ForEach(nativeProviderIDs(store.providerStatuses, selected: provider), id: \.self) { id in Text(nativeProviderName(id)).tag(id) } }
-                if !["rehearsal", "local-process"].contains(provider) { ProviderModelPicker(model: $model, effort: $effort, contextTier: $contextTier, serviceTier: $serviceTier, provider: provider, disabled: owned || busy) }
-            }.disabled(owned || busy || !store.connected)
+                Picker("Provider", selection: Binding(get: { provider }, set: { value in guard provider != value else { return }; provider = value; model = ""; effort = ""; serviceTier = ""; contextTier = "default" })) { ForEach(nativeProviderIDs(store.providerStatuses, selected: provider), id: \.self) { id in Text(nativeProviderName(id)).tag(id) } }
+                if !["rehearsal", "local-process"].contains(provider) { ProviderModelPicker(model: $model, effort: $effort, contextTier: $contextTier, serviceTier: $serviceTier, provider: provider, disabled: busy) }
+                if !capabilityMessage.isEmpty { Text(capabilityMessage).font(.caption).foregroundStyle(.secondary) }
+            }.disabled(busy || !store.connected || owned && !store.state["capabilities"].array.contains(.string("schedule.access-profile.v1")))
             ContextSelection(selected: $selected, agent: $agent, includeDefaults: $includeDefaults, workspace: schedule["workspace"]).disabled(owned || busy)
             Section("Next runs") { ForEach(next, id: \.self) { Text($0.string).font(.caption.monospaced()) }; Button("Preview cron") { preview() }.disabled(busy || !store.connected) }
-            Section { Button("Save schedule") { save() }.disabled(owned || busy || !store.connected); Button("Reload latest version") { Task { await store.refresh(); load() } }; Button("Run now") { run() }.disabled(busy || !store.connected) }
+            Section { Button("Save schedule") { save() }.disabled(busy || !store.connected); Button("Reload latest version") { Task { await store.refresh(); load() } } }
             if !schedule["error"].string.isEmpty { Section { Text(schedule["error"].string).foregroundStyle(.orange) } }
-        }.background(NativeTheme.background).navigationTitle(schedule["name"].string).navigationBarTitleDisplayMode(.inline).task { await store.refresh(); load(); if let saved = store.drafts["schedule:" + id] { restoreDraft(saved) }; if !["rehearsal", "local-process"].contains(provider) { await store.loadModels(provider: provider) } }.onChange(of: formValues) { _, _ in store.setDraft("schedule:" + id, loadedForm.isEmpty || loadedForm == formValues ? .null : scheduleDraft) }.onChange(of: schedule["revision"].string) { _, _ in if loadedForm == formValues { load() } }.onChange(of: provider) { _, value in if !["rehearsal", "local-process"].contains(value) { Task { await store.loadModels(provider: provider) } } }
+        }.background(NativeTheme.background).navigationTitle(schedule["name"].string).navigationBarTitleDisplayMode(.inline).task { await store.refresh(); load(); if let saved = store.drafts["schedule:" + id] { restoreDraft(saved) }; if !["rehearsal", "local-process"].contains(provider) { await store.loadModels(provider: provider) } }.onChange(of: formValues) { _, _ in store.setDraft("schedule:" + id, loadedForm.isEmpty || loadedForm == formValues ? .null : scheduleDraft) }.onChange(of: schedule["revision"].string) { _, _ in if loadedForm == formValues { load() } }.onChange(of: provider) { _, value in if !["rehearsal", "local-process"].contains(value) { Task { await store.loadModels(provider: provider); await previewCapabilities() } } }
+    }
+    private func previewCapabilities() async {
+        guard store.state["capabilities"].array.contains(.string("schedule.access-profile.v1")) else { capabilityMessage = "Update the computer to use portable schedule access profiles."; return }
+        let selected = provider
+        do { let value = try await store.request("schedule.capabilities", ["id": .string(id), "provider": .string(selected)]); guard provider == selected else { return }; capabilityMessage = value["supported"].bool ? (value["required"]["scopedFilesystem"].bool ? "Verified host sandbox: fixed folder scope, denied network and credential services. Saved grants carry across providers; new access requires explicit consent." : "Saved workflow access carries across providers. New access requires explicit consent.") : "This provider cannot enforce the required restrictions. The previous valid configuration is retained on failed save." } catch { capabilityMessage = error.localizedDescription }
     }
     private func load() { provider = schedule["provider"].string; model = schedule["model"].string; effort = schedule["reasoningEffort"].string; serviceTier = schedule["serviceTier"].string; contextTier = schedule["contextTier"].string.isEmpty ? "default" : schedule["contextTier"].string; name = schedule["name"].string; cron = schedule["cron"].string; timezone = schedule["timezone"].string; prompt = schedule["prompt"].string; enabled = schedule["enabled"].bool; notifyCompletion = schedule["notifications"]["onCompletion"].bool; expectedRevision = schedule["revision"].string; next = schedule["nextRuns"].array; selected = Set(schedule["contextSelection"]["selectedIds"].array.map(\.string)); agent = schedule["contextSelection"]["agentId"].string; includeDefaults = schedule["contextSelection"]["includeDefaults"] != .bool(false); loadedForm = formValues }
     private var scheduleDraft: JSON { .object(["name": .string(name), "cron": .string(cron), "timezone": .string(timezone), "prompt": .string(prompt), "provider": .string(provider), "model": .string(model), "effort": .string(effort), "contextTier": .string(contextTier), "serviceTier": .string(serviceTier), "enabled": .bool(enabled), "notifyCompletion": .bool(notifyCompletion), "selected": .array(selected.sorted().map(JSON.string)), "agent": .string(agent), "includeDefaults": .bool(includeDefaults), "revision": .string(expectedRevision)]) }
@@ -82,6 +99,6 @@ struct ScheduleView: View {
         value["selectedIds"] = .array(ids.sorted().map(JSON.string)); value["agentId"] = .string(agent); value["includeDefaults"] = .bool(includeDefaults); return .object(value)
     }
     private var notificationSettings: JSON { var value = schedule["notifications"].object; value["onCompletion"] = .bool(notifyCompletion); return .object(value) }
-    private func save() { busy = true; Task { defer { busy = false }; do { _ = try await store.request("schedule.save", ["id": .string(id), "expectedRevision": .string(expectedRevision), "changes": .object(["name": .string(name), "provider": .string(provider), "model": .string(!["rehearsal", "local-process"].contains(provider) ? model : ""), "reasoningEffort": .string(effort), "contextTier": .string(contextTier), "serviceTier": .string(serviceTier), "cron": .string(cron), "timezone": .string(timezone), "prompt": .string(prompt), "enabled": .bool(enabled), "notifications": notificationSettings, "contextSelection": contextSelection])]); await store.refresh(); load() } catch { store.error = error.localizedDescription } } }
+    private func save() { busy = true; Task { defer { busy = false }; do { _ = try await store.request("schedule.save", ["id": .string(id), "expectedRevision": .string(expectedRevision), "changes": .object(owned ? ["provider": .string(provider), "model": .string(model), "reasoningEffort": .string(effort), "contextTier": .string(contextTier), "serviceTier": .string(serviceTier)] : ["name": .string(name), "provider": .string(provider), "model": .string(!["rehearsal", "local-process"].contains(provider) ? model : ""), "reasoningEffort": .string(effort), "contextTier": .string(contextTier), "serviceTier": .string(serviceTier), "cron": .string(cron), "timezone": .string(timezone), "prompt": .string(prompt), "enabled": .bool(enabled), "notifications": notificationSettings, "contextSelection": contextSelection])]); await store.refresh(); load() } catch { store.error = error.localizedDescription } } }
     private func run() { busy = true; Task { defer { busy = false }; do { let result = try await store.request("schedule.run", ["id": .string(id)]); openRun(result["runId"].string) } catch { store.error = error.localizedDescription } } }
 }

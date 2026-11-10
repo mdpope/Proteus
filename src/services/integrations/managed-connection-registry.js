@@ -27,10 +27,12 @@ export function validateManagedConnection(value){
  if(transport?.type==='http'){
   fields(transport,['type','endpoint']);https(transport.endpoint);
  }else if(transport?.type==='stdio'){
-  fields(transport,['type','package','version','integrity']);
+  fields(transport,['type','package','version','integrity','domains']);
+  if(transport.domains!==undefined){const domains=strings(transport.domains,{max:9});if(!domains.length||domains.some(d=>!['core','work','work-items','search','test-plans','repositories','wiki','pipelines','advanced-security'].includes(d)))throw Error('Choose supported explicit ADO tool families.');}
   if(!/^(@[a-z0-9-]+\/)?[a-z0-9-]+$/.test(transport.package||'')||!/^\d+\.\d+\.\d+(-[a-zA-Z0-9.-]+)?$/.test(transport.version||'')||!/^sha512-[a-zA-Z0-9+/]{86}==$/.test(transport.integrity||''))throw Error('Pin the connector package, exact version and SHA-512 integrity.');
  }else throw Error('Unsupported managed transport.');
- fields(value.authentication,['adapter','credentialRef','credentialOwnerId','clientId','cli','expiresAt','reminderDays']);
+ fields(value.authentication,['adapter','credentialRef','credentialOwnerId','clientId','cli','expiresAt','reminderDays','permissionProfile']);
+ if(value.authentication.permissionProfile!==undefined&&(value.authentication.adapter!=='ado-pat'||value.authentication.permissionProfile!=='issuer-granted'))throw Error('Choose a supported credential permission profile.');
  if(value.authentication.cli!==undefined){fields(value.authentication.cli,['executable','profileDirectory','sha256','version']);for(const key of ['executable','profileDirectory','sha256','version'])if(typeof value.authentication.cli[key]!=='string'||value.authentication.cli[key].length>4096||/[\x00-\x1f\x7f]/.test(value.authentication.cli[key]))throw Error('Choose explicit nonsecret CLI paths and version pins.');}
  if(value.authentication.clientId!==undefined&&!/^[a-f0-9-]{36}$/i.test(value.authentication.clientId))throw Error('Choose an explicit public application client ID.');
  if(!id(value.authentication.adapter)||!id(value.authentication.credentialRef)||value.authentication.credentialOwnerId!==value.ownerId)throw Error('Use an opaque credential reference owned by this connection host.');

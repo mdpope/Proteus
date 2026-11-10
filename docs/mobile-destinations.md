@@ -1,3 +1,15 @@
+## Nov 8 — pending-input routes and reading stability
+
+Notification, notification-history and Needs attention actions use the exact paired owner and
+question identity. Routing waits for that owner's authentication, then opens the chat's conversation
+and pending answer/approval controls. Another connected computer cannot satisfy that route. Cached
+chat/schedule reading remains available offline; schedule detail can be closed on standard iPhone.
+
+Native chat gestures cancel saved-position commands through deceleration. Cancelled/completed
+commands cannot replay from delayed view updates, and late history responses fill cache without
+moving a newer reading position. Source/simulator evidence and deployment limits are recorded in
+the [Nov 8 implementation](releases/2026-11-08/implementation.md).
+
 ## Nov 2 — New chat tabs
 
 New chat opens a device-local main or workspace/project tab before creating a conversation.

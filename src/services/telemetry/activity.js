@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { atomicJSON, readJSON } from '../../shared/files.js';
 import { RemoteCommandJournal } from '../remote/remote-command-journal.js';
 
-const types = new Set(['chat.completed', 'review.required', 'schedule.completed', 'device.added', 'device.reconnected', 'browser.issue','website.notification']);
+const types = new Set(['chat.completed', 'review.required', 'schedule.completed', 'device.added', 'device.reconnected', 'browser.issue','website.notification','schedule.error']);
 const sharedLogTypes=new Set(['chat.queued','chat.running','chat.awaiting_input','chat.completed','chat.failed','chat.cancelled','chat.interrupted','chat.deleted','transport.online','transport.offline','transport.device_added','browser.open','browser.unload','app.started','app.stopping','api.failed']);
 const limits = { notifications: 1000, outbox: 500 };
 export function safeLog(value, limit = 1000) {
@@ -69,6 +69,15 @@ export class ActivityStore extends EventEmitter {
   read(id) {
     const item = this.data.notifications.find(item => item.id === id); if (!item) throw new Error('Notification not found.');
     item.readAt ||= this.clock().toISOString(); this.save(); return { ok: true };
+  }
+  scheduleError({scheduleId,action='save',code='SCHEDULE_CONFIGURATION_FAILED',correlationId}={}) {
+    const reasons={SCHEDULE_EXECUTION_UNSUPPORTED:'The selected provider cannot enforce the required filesystem, network and child-process restrictions. Keep the current provider or choose a verified execution adapter.',SCHEDULE_EXECUTOR_UNAVAILABLE:'The host command sandbox could not be verified on this computer. Refresh or repair its native runtime and retry with the same access policy.',SCHEDULE_CONFIGURATION_FAILED:'Schedule configuration was rejected. Review the error in the schedule editor and retry; the previous saved configuration is retained.'};
+    if(!/^[a-z0-9][a-z0-9-]{0,79}$/.test(scheduleId||'')||!['save','preview','preflight','reconcile','revoke-access','clear-provider-override'].includes(action))throw Error('Choose a schedule and configuration action.');
+    if(!Object.hasOwn(reasons,code))code='SCHEDULE_CONFIGURATION_FAILED';
+    const previous=this.data.notifications.find(item=>item.type==='schedule.error'&&item.scheduleId===scheduleId&&item.action===action&&item.code===code&&!item.readAt);
+    if(previous)return previous;
+    const item={id:randomUUID(),type:'schedule.error',level:'error',...(this.hostId?.()?{hostId:this.hostId()}:{}),title:'Schedule '+action+' failed',body:reasons[code],scheduleId,action,code,correlationId:/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(correlationId||'')?correlationId:randomUUID(),createdAt:this.clock().toISOString(),silent:true};
+    this.data.notifications.push(item);this.data.notifications=this.data.notifications.slice(-limits.notifications);this.save();this.emit('notification',item);this.queue('notifications',item);return item;
   }
   browserIssue(detail = {}) {
     const {kind,windowId}=detail;
@@ -140,6 +149,7 @@ export class ActivityStore extends EventEmitter {
     this.data.outbox=this.data.outbox.slice(-limits.outbox);this.save();void this.flush();
   }
   attach(engine, hostId, hostName = () => '') {
+    this.hostId=hostId;
     const describe = run => ({ hostId: hostId(), hostName: hostName(), chatId: run.id, chatTitle: run.title || run.schedule?.name || '' });
     const snapshot = run => ({ status: run.status, pending:reviewRequests({...run,userQuestions:[]})[0]?.id, questions:(run.userQuestions||[]).filter(question=>question.status==='pending').map(question=>question.id) });
     const reconcile=run=>{
@@ -183,7 +193,7 @@ export class ActivityStore extends EventEmitter {
           // Older servers do not accept website events yet. Keep those bounded
           // retry receipts until the coordinated web rollout, while allowing
           // ordinary notifications behind them to continue.
-          if(row.item.type==='website.notification'&&[400,422].includes(error.status)){this.data.outbox.push(this.data.outbox.shift());deferred.add(row);this.save();continue;}
+          if(['website.notification','schedule.error'].includes(row.item.type)&&[400,422].includes(error.status)){this.data.outbox.push(this.data.outbox.shift());deferred.add(row);this.save();continue;}
           // Permanently invalid events must not starve unrelated delivery. Authentication,
           // throttling and server outages remain retryable until their owner resolves them.
           if([400,413,422].includes(error.status)){this.data.outbox.shift();this.save();continue;}

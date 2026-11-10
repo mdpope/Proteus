@@ -1,3 +1,4 @@
+import {isOwnerScopedCommandRequest} from '../scheduling/scoped-command-request.js';
 import {scheduleAccessScope,scheduleAccessRule,matchesScheduleAccess} from './schedule-access-rule.js';
 import fs from 'node:fs';
 import {chatAccessScope,matchesChatAccess} from './chat-access-rule.js';
@@ -111,6 +112,8 @@ export class PermissionProjection {
     const own=this.describeContext(context,current);
     const inherited=schedule.permissionScope?.kind==='schedule'&&!current.profiles.has(context.id)?this.describeContext(snapshot?projectionContext({...schedule,permissionScope:undefined},snapshot):permissionContext({...schedule,permissionScope:undefined}),current):own;
     const profile={...inherited,...context,workingFolders:this.chatWorkingFolders(schedule,context,inherited,snapshot)},explicit=schedule.executionPermissions;
+    const grants=(schedule.accessOverlay?.grants||[]).filter(grant=>!grant.revokedAt);
+    if(grants.some(grant=>grant.rule||grant.folder)){profile.scheduleRules=grants.flatMap(grant=>grant.rule?[grant.rule]:[]);profile.scheduleFolders=grants.flatMap(grant=>grant.folder?[grant.folder]:[]);}
     if(!explicit)return profile;
     const folders=(explicit.folders||[]).map(folder=>({...folder,path:projectionPath(folder.path,context.cwd,snapshot)}));
     if(folders.some(folder=>!folder.path))throw Error('A schedule folder is unavailable. Review schedule access.');
@@ -269,6 +272,8 @@ export class PermissionStore extends PermissionProjection {
     if(request.kind==='schedule-access')return operationRule(request)?[...(this.preserveInheritedDefaults?[{value:'always-tool-chat',label:'Remember this exact schedule scope for this chat'}]:[]),{value:'always-tool',label:'Remember this exact schedule scope for this workspace or schedule'}]:[];
     if(request.kind==='chat-access')return operationRule(request)?[...(this.preserveInheritedDefaults?[{value:'always-tool-chat',label:'Remember this conversation access scope for this chat'}]:[]),{value:'always-tool',label:'Remember this conversation access scope for this workspace or schedule'}]:[];
     const choices = [];
+    if(schedule.permissionScope?.kind==='schedule'&&request.kind==='scoped-command'&&isOwnerScopedCommandRequest(request)&&request.commandIdentity?.digest)choices.push({value:'allow-schedule',label:'Allow this exact scoped command for this schedule (saved automatically)'},{value:'allow-schedule-scoped',label:'Allow command variations inside these exact sandbox folders for this schedule (saved automatically)'});
+    if(schedule.permissionScope?.kind==='schedule'&&!protectedRequest(request)&&request.kind!=='shell'&&(this.folderOffer(schedule,request)||operationRule(request)&&!['chat-access','schedule-access'].includes(request.kind)))choices.push({value:'allow-schedule',label:`Allow ${this.folderOffer(schedule,request)?this.folderOffer(schedule,request).path:ruleLabel(operationRule(request))} for this schedule (saved automatically)`});
     const folder = this.folderOffer(schedule, request);
     if (folder) choices.push({ value: 'trust-folder-chat', label: `Allow ${folder.access === 'read' ? 'reads' : 'reads and writes'} in ${folder.path} for this chat` });
     if (folder) choices.push({ value: 'trust-folder', label: `Always allow ${folder.access === 'read' ? 'reads' : 'reads and writes'} in ${folder.path}${schedule.permissionScope?.kind==='schedule'?' for this schedule':''}` });
@@ -294,11 +299,11 @@ export class PermissionStore extends PermissionProjection {
     });
   }
   decide(schedule, request, profile = this.describe(schedule)) {
-    if (protectedRequest(request)) return { allowed: false, reason: 'Enterprise policy or sandbox escape requires a direct response.' };
+    if (protectedRequest(request)) return { allowed: false, reason: request.kind==='folder-access'?'Adding folder access requires your approval.':'Enterprise policy or sandbox escape requires a direct response.' };
     // Connecting the selected server is a prerequisite for a specifically granted
     // tool, not permission to invoke its other tools. Each invocation still gates.
     if(request.kind==='mcp-connect'){
-      const allowed=profile.mode!=='ask'&&(profile.mode==='autopilot'||profile.readOnlyTools===true||profile.rules.some(rule=>rule.kind==='mcp'&&rule.server===request.serverName&&rule.tool&&rule.tool!=='*'));
+      const allowed=(profile.scheduleRules||[]).some(rule=>rule.kind==='mcp'&&rule.server===request.serverName)||profile.mode!=='ask'&&(profile.mode==='autopilot'||profile.readOnlyTools===true||profile.rules.some(rule=>rule.kind==='mcp'&&rule.server===request.serverName&&rule.tool&&rule.tool!=='*'));
       return {allowed,reason:allowed?'Connect server for explicitly granted tools':'Server connection requires approval',mode:profile.mode};
     }
     // The owner creates this request for an exact durable chat scope. A generic
@@ -319,6 +324,9 @@ export class PermissionStore extends PermissionProjection {
       const matched=folders[0];
       if(matched)return {allowed:request.kind==='read'||matched.access==='read-write',reason:matched.access==='read'?'Read-only working folder':'Workspace folder access',mode:profile.mode,resolvedTarget:target,matchedRoot:matched.path,source:'workspace'};
     }
+    const scheduledRule=operationRule(request);
+    if(scheduledRule&&(profile.scheduleRules||[]).some(rule=>hash(rule)===hash(scheduledRule)))return {allowed:true,reason:'Explicit saved schedule operation',mode:profile.mode,source:'schedule'};
+    if(['read','write'].includes(request.kind)){const target=requestedPath(request,profile),folder=(profile.scheduleFolders||[]).find(folder=>canonicalPath(folder.path,profile.cwd)===folder.path&&target&&within(target,folder.path)&&(request.kind==='read'||folder.access==='read-write'));if(folder)return {allowed:true,reason:'Explicit saved schedule folder',mode:profile.mode,source:'schedule'};}
     if (profile.mode === 'ask') return { allowed: false, reason: 'Ask for approval' };
     if (['read','write'].includes(request.kind)) {
       const target = requestedPath(request, profile);

@@ -1,3 +1,15 @@
+## Nov 8 — targeted iPhone scrolling candidate
+
+The operator requested an immediate iPhone-only build for real-chat scrolling evaluation. Signed
+0.2.44 / 2611.8.1 installed in place with the existing explicit push profile and unchanged identity.
+Focused scrolling/project-navigation simulator checks pass. A device unlock pause required an
+incremental refresh of changed recovery files, reusing verified unchanged files. The operator then
+opened the installed app during final readback. Initial per-file hashes passed, but the final
+stability guard failed; the receipt explicitly qualifies historical readback and makes no current
+profile-equality claim. Running candidate and saved destinations are verified; physical scrolling
+acceptance remains with the operator. Exactly two verified full recovery generations remain.
+Other device, web and desktop deployment holds are unchanged.
+
 ## Nov 2 — targeted update authorization and acceptance
 
 The latest operator instruction authorizes this local Mac and physical iPhone/iPad after R23 scheduler fixes. It supersedes the historical simulator-only hold for these targets. Wider distribution and broad Mnemosyne implementation remain held. Native source acceptance and the unresolved simulator rotation check are recorded in the [release implementation](releases/2026-11-02/implementation.md); signed artifact and device preservation receipts remain distinct from UI tests.

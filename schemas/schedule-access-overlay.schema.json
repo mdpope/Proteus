@@ -1,0 +1,321 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Proteus schedule access overlay v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "binding",
+    "grants"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "binding": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "grants": {
+      "type": "array",
+      "maxItems": 256,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "approvedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "approvedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "revokedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "folder": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "path",
+              "access"
+            ],
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "access": {
+                "enum": [
+                  "read",
+                  "read-write"
+                ]
+              }
+            }
+          },
+          "rule": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "enum": [
+                  "url",
+                  "mcp",
+                  "custom-tool"
+                ]
+              },
+              "server": {
+                "type": "string",
+                "maxLength": 512
+              },
+              "tool": {
+                "type": "string",
+                "maxLength": 512
+              },
+              "action": {
+                "type": "string",
+                "maxLength": 512
+              },
+              "origin": {
+                "type": "string",
+                "maxLength": 512
+              }
+            }
+          },
+          "command": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "version",
+              "cwd",
+              "commandHash",
+              "scopeHash",
+              "sourceHash",
+              "executable",
+              "executableSha256",
+              "inputs",
+              "digest"
+            ],
+            "properties": {
+              "version": {
+                "const": 1
+              },
+              "cwd": {
+                "type": "string"
+              },
+              "executable": {
+                "type": "string"
+              },
+              "commandHash": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "scopeHash": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "sourceHash": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "executableSha256": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "digest": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "inputs": {
+                "type": "array",
+                "maxItems": 10000,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "path",
+                    "sha256"
+                  ],
+                  "properties": {
+                    "path": {
+                      "type": "string"
+                    },
+                    "sha256": {
+                      "type": "string",
+                      "pattern": "^[a-f0-9]{64}$"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "commandScope": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "scopeHash",
+              "sourceHash"
+            ],
+            "properties": {
+              "scopeHash": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "sourceHash": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              }
+            }
+          }
+        },
+        "oneOf": [
+          {
+            "required": [
+              "folder"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "rule"
+                  ]
+                },
+                {
+                  "required": [
+                    "command"
+                  ]
+                },
+                {
+                  "required": [
+                    "commandScope"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "required": [
+              "rule"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "folder"
+                  ]
+                },
+                {
+                  "required": [
+                    "command"
+                  ]
+                },
+                {
+                  "required": [
+                    "commandScope"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "required": [
+              "command"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "folder"
+                  ]
+                },
+                {
+                  "required": [
+                    "rule"
+                  ]
+                },
+                {
+                  "required": [
+                    "commandScope"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "required": [
+              "commandScope"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "folder"
+                  ]
+                },
+                {
+                  "required": [
+                    "rule"
+                  ]
+                },
+                {
+                  "required": [
+                    "command"
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "managedBindings": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "connectionId",
+          "name",
+          "ownerId",
+          "workspaceId",
+          "configurationRevision"
+        ],
+        "properties": {
+          "connectionId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "ownerId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "workspaceId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "configurationRevision": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        }
+      }
+    }
+  }
+}

@@ -181,12 +181,14 @@ export class CopilotProvider {
     if (!session) throw new Error('Copilot is still starting. Queue this message or try steering again.');
     await session.send({ prompt, mode: 'immediate',attachments:copilotMessageAttachments(attachments,this.acceptedMediaTypes) });
   }
-  async run({ run, prompt, attachments=[], emit, ask, update, signal, stream, permissionProfile, managedMcp={} }) {
+  async run({ run, prompt, attachments=[], emit, ask, update, signal, stream, permissionProfile, scopedTools=[], managedMcp={} }) {
     const nativeAttachments=copilotMessageAttachments(attachments,this.acceptedMediaTypes);
     let turn;
     const askUser = async request => { turn?.pause(); try { return await ask(request); } finally { turn?.resume(); } };
     const decisions = new Map();
     const permission = request => {
+      if(scopedTools.length&&request.kind==='custom-tool'&&request.toolName==='proteus_exec')return Promise.resolve({kind:'approve-once'});
+      if(scopedTools.length&&(request.kind==='shell'||request.kind==='custom-tool'&&['bash','powershell','task','sql'].includes(request.toolName)))return Promise.resolve({kind:'reject',feedback:'Use proteus_exec for this scoped schedule; native shell execution is disabled.'});
       // The actual call must traverse our run-scoped owner bridge, which obtains
       // permission from the connected catalog. This avoids two prompts per write.
       if(request.kind==='mcp'&&Object.hasOwn(managedMcp,request.serverName))return Promise.resolve({kind:'approve-once'});
@@ -218,7 +220,7 @@ export class CopilotProvider {
     validateModelOptions(run.schedule, model);
     run.modelCapabilities = { capturedAt: new Date().toISOString(), id: model.id, controls: model.controls };
     const includeLegacy = snapshot?.includeDefaults !== false;
-    const appTools=[...questionAttachmentTools(this,run.id),...browserTools(this.browser,run.id),...integrationTools(this.integrations,run.id),...chatControlTools(this.chatControl,run.id)];captureAppCapabilities(run,appTools,update,managed?[...selectedAgentToolScope(managed),...appTools.map(tool=>tool.name)]:null);
+    const appTools=[...scopedTools,...questionAttachmentTools(this,run.id),...browserTools(this.browser,run.id),...integrationTools(this.integrations,run.id),...chatControlTools(this.chatControl,run.id)];captureAppCapabilities(run,appTools,update,managed?[...selectedAgentToolScope(managed),...appTools.map(tool=>tool.name)]:null);
     // Fusion selects the provider's virtual Auto model with an advertised Fusion tier;
     // the tier, not a reasoning effort, controls orchestration depth.
     const fusionOptions = fusionSessionOptions(run.schedule, model);
@@ -231,8 +233,9 @@ export class CopilotProvider {
       skillDirectories: includeLegacy ? run.schedule.skillDirectories || [] : [],
       mcpServers: mergeManagedServers(managed ? { ...Object.fromEntries(Object.entries(includeLegacy ? run.schedule.mcpServers || {} : {}).filter(([name]) => !managed.disabledLegacyMcp.includes(name))), ...managed.mcpServers } : run.schedule.mcpServers || {},managedMcp),
       ...(managed ? { skipCustomInstructions: true, enableConfigDiscovery: false, enableOnDemandInstructionDiscovery: false, enableSkills: includeLegacy && !!run.schedule.skillDirectories?.length, disabledSkills: managed.disabledSkills, enableFileHooks: false, customAgents: managed.customAgents.map(agent=>({...agent,...(agent.tools==null?{}:{tools:[...new Set([...agent.tools,...appTools.map(tool=>tool.name)])]})})), agent: managed.agent, availableTools: [...new Set([...selectedAgentToolScope(managed),...appTools.map(tool=>tool.name)])] } : {}),
+      ...(scopedTools.length?{availableTools:['view','grep','glob','edit','create','apply_patch','ask_user','mcp:*',...appTools.map(tool=>tool.name)]}:{}),
       tools: appTools,
-      systemMessage: { mode: 'append', content: `${appInstructions}\nProteus workspace roots (${managed ? 'use the explicitly selected context below; do not automatically load other instruction/skill/agent files' : 'read relevant AGENTS.md and .github/copilot-instructions.md before work'}):\n${[run.schedule.workspace.cwd, ...additionalDirectories].join('\n')}\n${this.browser ? 'Embedded browser access is available through proteus_browser. Use it for visible authenticated website reads. The user can interact with those same tabs; ask for sign-in if needed.' : 'Embedded browser access is unavailable in this server-only session.'}\nEditor context supplied by the user: ${JSON.stringify(run.schedule.editorContext || null)}\n${managed?.instructionText || ''}` },
+      systemMessage: { mode: 'append', content: `${appInstructions}\n${scopedTools.length?'Scoped schedule: use proteus_exec for all commands. The host enforces scope, captures durable command consent and denies native shells. Preserve stable invocation operation IDs.':''}\nProteus workspace roots (${managed ? 'use the explicitly selected context below; do not automatically load other instruction/skill/agent files' : 'read relevant AGENTS.md and .github/copilot-instructions.md before work'}):\n${[run.schedule.workspace.cwd, ...additionalDirectories].join('\n')}\n${this.browser ? 'Embedded browser access is available through proteus_browser. Use it for visible authenticated website reads. The user can interact with those same tabs; ask for sign-in if needed.' : 'Embedded browser access is unavailable in this server-only session.'}\nEditor context supplied by the user: ${JSON.stringify(run.schedule.editorContext || null)}\n${managed?.instructionText || ''}` },
       onPermissionRequest: permission,
       onUserInputRequest: async request => ({ answer: await askUser({ type: 'question', question: request.question, choices: request.choices }), wasFreeform: true })
     };

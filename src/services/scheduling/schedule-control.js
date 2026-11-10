@@ -1,3 +1,5 @@
+import {ownerSelectionUpdate} from './source-selection-overrides.js';
+import {qualifyScopedCommandRuntime} from './host-scoped-executor.js';
 import {managedWorkspace} from '../integrations/managed-requirements.js';
 import {reconciliationPlan} from './source-reconciliation.js';
 import {inspectSchedule,scheduleSources,refreshScheduleCatalog} from './schedule-inspection.js';
@@ -33,7 +35,7 @@ export class ScheduleControl {
   this.service.chatControl.assertCaller();const grant={id:randomUUID(),actor,contextId,scope,createdAt:new Date().toISOString()};this.access.grants.push(grant);atomicJSON(this.accessFile,this.access);return {granted:true,grant};
  }
  current(args){const schedule=this.service.engine.schedules.get(args.scheduleId);if(!args.expectedRevision||revision(schedule)!==args.expectedRevision)throw Error('Schedule changed. Read the current revision before proceeding.');return schedule;}
- view(schedule){return {executionPermissions:schedule.executionPermissions||null,...pick(schedule,['id','name','enabled','cron','timezone','provider','model','reasoningMode','reasoningEffort','contextTier','serviceTier','prompt','misfire','contextSelection','workspace','workspaceSources','executionPermissions','managedConnections','managedConnectionWorkspaceId','notifications','source','error']),prompt:String(schedule.prompt||'').slice(0,24000),promptTruncated:String(schedule.prompt||'').length>24000,revision:schedule.revision||revision(schedule),mcpServerNames:Object.keys(schedule.mcpServers||{}),capturedSources:(schedule.context?.entries||[]).map(entry=>pick(entry,['id','name','kind','hash'])),availableMcpServerNames:[...new Set([...Object.keys(this.service.settings.get().mcpServers||{}),...Object.keys(schedule.mcpServers||{})])]};}
+ view(schedule){return {executionPermissions:schedule.executionPermissions||null,...pick(schedule,['id','name','enabled','cron','timezone','provider','model','reasoningMode','reasoningEffort','contextTier','serviceTier','prompt','misfire','contextSelection','workspace','workspaceSources','executionPermissions','managedConnections','managedConnectionWorkspaceId','notifications','source','accessOverlay','ownerSelectionOverride','error']),prompt:String(schedule.prompt||'').slice(0,24000),promptTruncated:String(schedule.prompt||'').length>24000,revision:schedule.revision||revision(schedule),mcpServerNames:Object.keys(schedule.mcpServers||{}),capturedSources:(schedule.context?.entries||[]).map(entry=>pick(entry,['id','name','kind','hash'])),availableMcpServerNames:[...new Set([...Object.keys(this.service.settings.get().mcpServers||{}),...Object.keys(schedule.mcpServers||{})])]};}
  validateChanges(actor,args){
      if(!args.changes||typeof args.changes!=='object'||Array.isArray(args.changes)||Object.keys(args.changes).some(key=>![...editable,'mcpServerNames'].includes(key)))throw Error('Choose supported schedule settings.');
      if(args.changes.executionPermissions!==undefined||args.changes.workspaceSources?.some(ref=>ref.categories?.includes('permissions')))this.check(actor,args,'schedule-configure-permissions');
@@ -51,6 +53,7 @@ export class ScheduleControl {
   for(const folder of [prepared.workspace.cwd,...prepared.workspace.additionalDirectories])if(!fs.statSync(folder).isDirectory())throw Error('A configured working directory is unavailable.');
   const selection=schedule.contextSelection?.selectedIds||[];
   for(const id of selection)if(!prepared.context?.entries?.some(entry=>entry.id===id))throw Error('A selected source is unavailable. Refresh sources before testing.');
+  if(prepared.executionPermissions?.sandboxedCommands&&prepared.provider!=='codex')await qualifyScopedCommandRuntime();
   if(prepared.context?.warnings?.some(warning=>/missing|unavailable|failed|not found/i.test(warning.message||'')))throw Error('Selected sources have loading errors. Review and refresh before testing.');
   if(prepared.provider!=='rehearsal'){
    const catalog=await this.service.catalogs[prepared.provider]?.get(true),model=catalog?.models?.find(item=>item.id===prepared.model);
@@ -97,6 +100,14 @@ export class ScheduleControl {
   this.inflight.set(key,{signature,promise});try{return await promise;}finally{this.inflight.delete(key);}
  }
  async handle(args={},actor='operator'){
+  try{return await this.handleOperation(args,actor);}catch(error){
+   if(['update','preview','preflight','reconcile','preview-reconcile'].includes(args.action)){
+    try{this.host(args);if(this.permitted(actor,args.hostId,'schedule-read',args.scheduleId))this.service.activity.scheduleError({scheduleId:args.scheduleId,action:args.action==='update'?'save':args.action==='preview-reconcile'?'preview':args.action,code:error.code,correlationId:args.operationId});}catch{}
+   }
+   throw error;
+  }
+ }
+ async handleOperation(args={},actor='operator'){
   const control=this.service.chatControl,turn=actor==='operator'?null:this.service.engine.running.get(actor);
   return control.callers.run({actor,turn},async()=>{
    control.assertCaller();if(this.closed)throw Error('Schedule controls are closing.');
@@ -159,11 +170,13 @@ export class ScheduleControl {
    if(args.action==='preflight'){const result=await this.preflight(schedule);this.check(actor,args,permission);this.current(args);return result.summary;}
    if(['enable','disable','update','preview'].includes(args.action)){
     if(args.settingsScope!=='future-runs')throw Error('Schedule changes require explicit future-runs scope. Captured runs remain unchanged.');
-    if(schedule.source?.manifest&&!['disable','preview'].includes(args.action))throw Error('Repository-owned schedules must be updated through their source workflow.');
+    if(schedule.source?.manifest&&!['disable','preview'].includes(args.action)&&!(args.action==='update'&&Object.keys(args.changes||{}).every(key=>['provider','model','reasoningMode','reasoningEffort','contextTier','serviceTier'].includes(key))))throw Error('Repository-owned schedules must be updated through their source workflow.');
     let next={...schedule};
     if(['update','preview'].includes(args.action)){
      this.validateChanges(actor,args);
      next={...next,...pick(args.changes,editable)};
+     if(args.changes.provider&&args.changes.provider!==schedule.provider){if(!args.changes.model)throw Error('Choose a model from the destination provider catalog.');for(const key of ['reasoningMode','reasoningEffort','contextTier','serviceTier'])if(args.changes[key]===undefined)delete next[key];}
+     next=ownerSelectionUpdate(schedule,next);
      if(args.changes.mcpServerNames!==undefined){const available={...this.service.settings.get().mcpServers,...schedule.mcpServers},names=args.changes.mcpServerNames;if(!Array.isArray(names)||names.length>100||names.some(name=>typeof name!=='string'||!Object.hasOwn(available,name)))throw Error('Select existing owner MCP server names.');next.mcpServers=Object.fromEntries(names.map(name=>[name,available[name]]));}
     }else next.enabled=args.action==='enable';
     if(next.provider==='local-process')throw Error('Native replacement schedule settings keep their existing owner controls.');

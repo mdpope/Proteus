@@ -101,7 +101,11 @@ struct EngineRoomView: View {
     private func historyRows(_ items: [JSON], sharedHistory: Bool) -> some View {
         ForEach(items, id: \.self) { item in
             VStack(alignment: .leading, spacing: 4) {
-                Text(NativeNotifications.notificationBody(item))
+                if !item["chatId"].string.isEmpty || !item["scheduleId"].string.isEmpty {
+                    Button {
+                        notifications.receivedTap(["hostId": sharedHistory ? item["hostId"].string : destinations.selectedID ?? "", "chatId": item["chatId"].string, "scheduleId": item["scheduleId"].string, "type": item["type"].string, "notificationId": sharedHistory ? item["eventId"].string : item["id"].string, "questionId": item["questionId"].string, "requestId": item["requestId"].string])
+                    } label: { Text(NativeNotifications.notificationBody(item)).frame(maxWidth: .infinity, minHeight: 44, alignment: .leading).contentShape(Rectangle()) }.buttonStyle(.plain).accessibilityHint("Open the source chat or schedule")
+                } else { Text(NativeNotifications.notificationBody(item)) }
                 if item["type"].string == "website.notification", !item["origin"].string.isEmpty { Text(item["origin"].string).font(.caption).foregroundStyle(.secondary) }
                 if let date = ProviderAllowance.date(item["createdAt"].string) { Text(nativeTimestamp(date, timezone: shared.snapshot["preferences"]["timezone"].string)).font(.caption).foregroundStyle(.secondary) }
                 if item["type"].string == "website.notification" {

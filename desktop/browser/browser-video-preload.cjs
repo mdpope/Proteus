@@ -13,13 +13,25 @@ function apply(blocked){contextBridge.executeInMainWorld({func:enabled=>{
   if(intent.source===current)return true;
   if(performance.now()-intent.at<1500){intent.source=current;return true;}return false;
  };
+ // Modern players keep media and controls in separate shadow roots. Search
+ // only the nearest player/container, with a fixed bound, to retain player-scoped consent.
+ const playerVideos=root=>{
+  const found=[],pending=[root];let visited=0;
+  while(pending.length&&visited++<256){
+   const node=pending.shift();
+   if(node instanceof HTMLVideoElement&&[...node.getClientRects()].some(rect=>rect.width>0&&rect.height>0)){found.push(node);if(found.length>1)return found;}
+   if(node.shadowRoot)pending.push(node.shadowRoot);
+   if(node.children)pending.push(...node.children);
+  }
+  return found;
+ };
  const gesture=event=>{
   if(!event.isTrusted)return;const target=event.composedPath().find(node=>node instanceof Element);if(!target)return;
   if(event.type==='keydown'&&![' ','k','K','Enter','MediaPlayPause'].includes(event.key))return;
   let videos=target instanceof HTMLVideoElement?[target]:[];
   const control=target.closest('button,[role="button"]');
-  if(!videos.length&&control&&/\b(play|resume)\b/i.test([control.getAttribute('aria-label'),control.title,control.textContent].join(' '))){
-   for(let node=control.parentElement,depth=0;node&&depth<6;node=node.parentElement,depth++){const found=node.querySelectorAll('video');if(found.length===1){videos=[found[0]];break;}if(found.length>1)break;}
+  if(!videos.length&&control&&/\b(play(?:back)?|resume)\b/i.test([control.getAttribute('aria-label'),control.title,control.textContent].join(' '))){
+   for(let node=control.parentElement||control.getRootNode()?.host,depth=0;node&&depth<8;node=node.parentElement||node.getRootNode()?.host,depth++){const found=playerVideos(node);if(found.length===1){videos=[found[0]];break;}if(found.length>1)break;}
   }
   if(!videos.length&&event.type==='keydown'&&[' ','k','K','MediaPlayPause'].includes(event.key)&&!target.closest('input,textarea,select,[contenteditable="true"]')){const found=document.querySelectorAll('video');if(found.length===1)videos=[found[0]];}
   for(const video of videos)intents.set(video,{source:source(video),at:performance.now()});

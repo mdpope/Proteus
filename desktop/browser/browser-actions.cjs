@@ -1,5 +1,6 @@
 const { app, Menu, shell, clipboard, dialog, nativeImage, WebContentsView } = require('electron');
 const path = require('node:path');
+const {editContextItems}=require('../services/edit-context-menu.cjs');
 const { safeHistoryURL } = require('./browser-history.cjs');
 const {BrowserDownloads}=require('./browser-downloads.cjs');
 const {pageWebPreferences}=require('./browser-page-preferences.cjs');
@@ -44,7 +45,7 @@ class BrowserActions {
     const run = action => () => { if (this.browser.shuttingDown || !this.browser.tabs.has(tab.id)) return; Promise.resolve().then(()=>this.browser.withTabWindow?this.browser.withTabWindow(tab,action):action()).catch(error => this.send({type:'error',id:tab.id,message:error.message})); };
     const items=[];
     if(params.isEditable){
-      items.push({role:'undo'},{role:'redo'},{type:'separator'},{role:'cut'},{role:'copy'},{role:'paste'},{role:'selectAll'});
+      items.push(...editContextItems(tab.view.webContents,params));
     } else if(params.selectionText){
       items.push({label:'Copy Selection',role:'copy'},{role:'selectAll'});
     }
@@ -67,8 +68,9 @@ class BrowserActions {
     return Menu.buildFromTemplate([
       // One entry per configured profile, Default first; the former generic
       // "New Tab" duplicated whichever profile the source tab used.
-      ...this.profileItems().map(profile=>({label:`Open Link in New ${String(profile.name||'Default').replace(/[\r\n]/g,' ').replace(/&/g,'&&')} Browser Tab`,...this.icon('NSAddTemplate'),click:run(async()=>{const info=await this.browser.create(url,null,null,{...source,profileId:profile.id});this.send({type:'select-tab',info,afterId:tab.id});})})),
+      ...this.profileItems().slice(0,1).map(profile=>({label:`Open Link in New ${String(profile.name||'Default').replace(/[\r\n]/g,' ').replace(/&/g,'&&')} Browser Tab`,...this.icon('NSAddTemplate'),click:run(async()=>{const info=await this.browser.create(url,null,null,{...source,profileId:profile.id});this.send({type:'select-tab',info,afterId:tab.id});})})),
       {label:'Open Link in Background Tab',...this.icon('NSAddTemplate'),click:run(async()=>{const info=await this.browser.create(url,null,null,{...source,hidden:false,unloaded:false,background:true});this.send({type:'background-tab',info,afterId:tab.id});})},
+      ...this.profileItems().slice(1).map(profile=>({label:`Open Link in New ${String(profile.name||'Default').replace(/[\r\n]/g,' ').replace(/&/g,'&&')} Browser Tab`,...this.icon('NSAddTemplate'),click:run(async()=>{const info=await this.browser.create(url,null,null,{...source,profileId:profile.id});this.send({type:'select-tab',info,afterId:tab.id});})})),
       {label:'Open Link in Unloaded Tab',...this.icon('NSAddTemplate'),click:run(async()=>{const info=await this.browser.create(url,null,null,{...source,hidden:true,unloaded:true,title:String(params.linkText||'').trim().slice(0,200)});this.send({type:'unloaded-tab',info,afterId:tab.id});})},
       {label:`Open Link in ${browserName.replace(/[\r\n]/g,' ').replace(/&/g,'&&')}`, ...this.icon('NSFollowLinkFreestandingTemplate'), click:run(() => shell.openExternal(url))},
       {type:'separator'},

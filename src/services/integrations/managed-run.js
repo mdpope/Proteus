@@ -1,3 +1,4 @@
+import {assertScheduleManagedAccess} from '../scheduling/access-overlay.js';
 import {managedMcpBridge} from './managed-mcp-bridge.js';
 
 import {validateManagedRequirements,managedWorkspace} from './managed-requirements.js';
@@ -27,6 +28,7 @@ export async function prepareManagedRun(manager,args){
    emit('system',`Optional managed connection ${requirement.name} has no matching workspace binding. Continue independent work and retain the missing evidence scope.`);
   }
  }
+ assertScheduleManagedAccess(run.schedule,bindings);
  // Non-secret pins participate in the permission identity. Preserve the preceding
  // turn's pins as history when explicitly starting another turn after a change.
  const prior=run.schedule.managedConnectionBindings;

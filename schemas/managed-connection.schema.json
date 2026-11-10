@@ -70,6 +70,25 @@
             "integrity": {
               "type": "string",
               "pattern": "^sha512-[a-zA-Z0-9+/]{86}==$"
+            },
+            "domains": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "core",
+                  "work",
+                  "work-items",
+                  "search",
+                  "test-plans",
+                  "repositories",
+                  "wiki",
+                  "pipelines",
+                  "advanced-security"
+                ]
+              },
+              "minItems": 1,
+              "maxItems": 9,
+              "uniqueItems": true
             }
           },
           "required": [
@@ -141,6 +160,11 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 30
+        },
+        "permissionProfile": {
+          "enum": [
+            "issuer-granted"
+          ]
         }
       },
       "required": [

@@ -5,6 +5,16 @@ separate unchanged-evidence replay and bounded recovery acceptance pass. The ope
 defers one Windows consumer update and non-digest follow-ups to the [Nov 6 plan](2026-11-06-release-plan.md).
 No successor version is reserved. See [closeout](releases/2026-11-05/closeout.md).
 
+
+## Nov 6 request — remote Windows question answers
+
+[N6-08](2026-11-06-release-plan.md#n6-08--answer-questions-in-remote-windows-chats) tracks
+Build Mac answers to ordinary questions in Windows-owned chats failing with the reported
+"unsuported desktop peer command" error. Verify supported peer dispatch, exact question resolution,
+acknowledgment and UI refresh, preserving drafts and uncertain-delivery identities. Requested only;
+separate from remembered tool approvals. Nov 5 remains closed; no successor release is started.
+
+
 ## Nov 6 updater repair
 
 Bounded quiescent recovery capture, live-owner exclusion, final source/destination verification
@@ -12402,3 +12412,50 @@ diagnostic request; no expression ran and no state was changed. Keep its prepare
 original recovery data. Do not force quit, edit the store, suppress flush failures or claim
 a new binary alone resolves the bootstrap. A supported live diagnosis and preserving recovery
 path remain release blockers; signed corrective delivery follows that qualification.
+
+## Nov 8 / 0.2.44 — active successor
+
+The Nov 6 plan moves to docs/2026-11-08-release-plan.md with stable N6 identifiers. N8-09 adds
+Mnemosyne audit/storage/readable logs and qualified controls; N8-10 adds desktop/web Chats layout,
+collapsible compact filters, progressive rows and captured run metadata. See the implementation
+checkpoint for implemented versus open work. Web/device deployment is held; local update follows
+completed work. Native service controls, Atlassian acceptance and updater recovery remain open.
+
+Nov 8 checkpoint: pollable updater helper-readiness phases/timings implemented with opt-in IPC; existing deadline and verification gates preserved. Recovery-exception acceptance remains open.
+
+Nov 8 additions N8-11/N8-12: human-approved agent chat-folder requests on all client approval surfaces; owner-aware mobile notification/history/attention routing and exact answer focus. Native drain-first control source is implemented. See the plan for acceptance and deployment limits.
+
+
+Nov 8 addition N8-13: iPhone chat scroll stability, including cancelled restoration replay,
+native pan/deceleration ownership and late history loading. Source implementation and simulator
+acceptance are tracked in the [Nov 8 plan](2026-11-08-release-plan.md#n8-13--predictable-iphone-chat-scrolling).
+
+
+Nov 8 N8-15 clarification: native project overview and navigation use the same visible owner list.
+Hidden tabs belong only on the project Tabs management page. Shared iPhone/iPad simulator membership
+and management-page checks pass; the correction is source-only after installed 2611.8.1.
+
+Nov 8 N8-18: iOS new-chat attachment discovery and universal system spelling/edit menus, plus categorized secret-free updater recovery-request diagnostics. Build Mac retry is authorized; installed acceptance remains separate.
+
+## Nov 9 provider-neutral schedule access follow-up
+
+Explicit owner schedule grants, source reconciliation preservation, capability resolution and durable error history are implemented in uninstalled Nov 8 source. Command identity, equivalent Copilot/Claude execution adapters, live revocation propagation and destination acceptance remain open. See [contract](schedule-access-overlay.md).
+
+### Nov 8 continuation acceptance
+
+Portable schedule access, owner provider overrides, durable configuration errors and the schedule
+configuration Recent schedule runs button are implemented; see docs/schedule-access-overlay.md for
+schema and qualified native evidence. Physical/HC destination acceptance remains separately open.
+Encrypted iOS saved-page restoration and exact owner-project cache repair are source-implemented;
+physical tab reconciliation and current iPhone/Mac deployment remain pending. Native Mnemosyne
+controls are installed and pause/resume verified; end-to-end output/phone consumption is not inferred.
+
+## Nov 8 follow-up — file browser expansion
+
+Operator requested desktop and iPhone/iPad file management, previews and lazy remote browsing.
+Implementation and permission boundaries are recorded in [file browser](file-browser.md).
+Desktop interactions and source boundaries are tested; native streaming/permissions and physical
+acceptance remain individually tracked. Existing read sharing does not grant file edits. View-local
+native document tabs are not yet shared owner-navigation tabs; do not claim that parity from compile.
+
+Nov 8 completion pass: large-folder move destination paging and native file request identity/disposal guards are implemented. Electron and iPhone actual move fixtures pass; new packages and iPad acceptance remain separate.

@@ -45,7 +45,7 @@ owner transport. This does not add an agent tool or grant agent access to files.
 - `mnemosyne.logs({job, stream})`: job is `audio`, `library` or `semantic`; stream is `out` or `err`.
   Returns sanitized records, withheld-line count, availability, modification/observation time.
 - Local protected GET `/api/mnemosyne` and `/api/mnemosyne/logs` use the same owner service.
-  Existing local configuration routes remain unchanged. No remote Mnemosyne mutation exists.
+  Existing local configuration routes remain unchanged. Newer owners also advertise `mnemosyne.control.v1` for human operations controls; older owners remain read-only.
 
 Activity contains opaque SHA-256 native claim/event references, enumerated purposes/states,
 optional source digests, source-map observation/digest, stages, effects and numeric usage.
@@ -96,3 +96,35 @@ unchanged. No live store, schedule, deployment or service migration was performe
 
 These are source and disposable-runtime results. Packaged release, installed native-owner evidence
 and production website acceptance are not claimed. Deployment remains held.
+
+## Nov 8 source additions
+
+Audio shows configured pipeline, incoming-source and library storage in decimal GB, with logical
+file size and allocated disk bytes by file type. The asynchronous metadata-only scan is bounded
+by 500,000 entries / ten seconds, deduplicates hard links/overlapping roots and skips symlinks.
+It excludes dependency trees, shared ASR models and app binaries. Partial coverage is a lower
+bound, never presented as a complete inventory. It does not read recording contents or remove files.
+Library describes native packaging/review observations; neither its counts nor its modification
+time prove iPhone download. Logs use expandable sanitized records, labeled fields and local dates.
+Native pause/drain/restart support remains required before controls can safely interrupt services.
+
+The November 8 audit found recent native audio/library snapshots and enabled/firing Proteus
+intake/follow-up schedules. Their latest reports still have incomplete reconciliation and technical
+holds. Successful model turns and wake requests do not establish end-to-end success.
+
+## Native controls — Nov 8 source
+
+The native worker owns a shared admission gate independent of Proteus. Pause prevents new work
+and lets admitted jobs finish with their existing claims and locks. Resume enables future native
+wakes; drain/restart waits for admitted work, then the next native wake resumes admission. No
+process is killed or launchd owner replaced. Pause persists across restarts; phone capture is
+independent. Corrupt/linked state fails closed. Configuration/control revisions protect actions.
+
+Desktop and web share the Services controls. The owner executes only the fixed native CLI verbs
+`status`, `pause`, `resume`, `restart` using its verified configured runtime. UI controls appear only
+when that runtime supports the new native module. `mnemosyne.control` is a journaled paired-human
+mutation and rejects agentControl. It is not an agent tool. Failed/uncertain responses require
+status refresh before another action. Opening the view never mutates native processing.
+
+Native source and 61 disposable tests pass; the installed runtime is unchanged. Native deployment
+and live drain acceptance remain required before these controls are described as operational.

@@ -264,6 +264,33 @@ as soon as the new generation has verified; it is not a second retained release 
 Older clients without `chat.update-release.v1` require the documented bootstrap rather than a
 silent fallback. Do not cancel unrelated work or replace an existing prepared job to test this flow.
 
+## Recovery monitoring and idle decisions
+
+Use the [Nov 8 release review](releases/2026-11-08/review.md) for the current lessons and outstanding
+acceptance matrix. For subsequent update attempts:
+
+- Record the candidate fingerprint, installed baseline and durable job/task IDs once. After a
+  failure, read the actual category, startup stage timing and preservation outcome before retry.
+  Repeated identical verification failures require diagnosis and a concrete correction or an
+  explicit reviewed retry decision. Preserve each original failure receipt.
+- Keep recovery request deadlines within the remaining overall verification budget. Validate
+  healthy slow responses and reject late success. Exercise representative restored windows and
+  preservation work in disposable helper/restart/rollback acceptance.
+- After handoff, the parent and coordinator release their desktop control and end their turns.
+  The owner/helper supplies progress through restart. Agent turns should resume for a concrete
+  decision, failure or post-restart verification. Refresh phase/revision after real user input
+  and review the checkpoint if the owner has returned the job to prepared.
+- Present exact idle blockers and what the operator can decide. Future schedule permission edits
+  do not answer captured approvals. Stopping named work requires explicit authorization for that
+  work. Record inability to expose a direct decision action as an interface gap.
+- Reconcile planned recovery survivors and retirement with the actual owner retention capability
+  before shutdown. A prose checkpoint does not create a retention hold. Any exception must have
+  supported enforcement, a space budget and a defined release condition.
+- Update one current rollout/acceptance matrix after restart. Distinguish installed identity,
+  health and navigation receipts from independently exercised histories, drafts, sources,
+  pairings, model options and real workflow outcomes. Carry old qualifications forward until
+  later evidence resolves them.
+
 ## Retention limits
 
 | Location | Steady-state limit |

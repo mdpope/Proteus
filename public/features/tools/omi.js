@@ -9,7 +9,7 @@ const act = callback => async () => { try { await callback(); } catch (error) { 
 export function renderOmi() {
  if(document.querySelector('#mnemosyne-page')||document.querySelector('#omi-page'))return;
  document.querySelector('#main').innerHTML='<div id="mnemosyne-page"></div>';
- mountMnemosyne(document.querySelector('#mnemosyne-page'),{readSnapshot:()=>ui.api('/api/mnemosyne'),readLogs:(job,stream)=>ui.api(`/api/mnemosyne/logs?job=${encodeURIComponent(job)}&stream=${encodeURIComponent(stream)}`),openSchedule:ui.openSchedule,openRun:ui.openRun,onError:error=>ui.toast(error.message),configure:()=>{document.querySelector('#main').innerHTML='';renderOwnerConfiguration();}});
+ mountMnemosyne(document.querySelector('#mnemosyne-page'),{readSnapshot:()=>ui.api('/api/mnemosyne'),controlServices:args=>ui.api('/api/mnemosyne/control',args),readLogs:(job,stream)=>ui.api(`/api/mnemosyne/logs?job=${encodeURIComponent(job)}&stream=${encodeURIComponent(stream)}`),openSchedule:ui.openSchedule,openRun:ui.openRun,onError:error=>ui.toast(error.message),configure:()=>{document.querySelector('#main').innerHTML='';renderOwnerConfiguration();}});
 }
 function renderOwnerConfiguration() {
   if (!$('#omi-page')) {

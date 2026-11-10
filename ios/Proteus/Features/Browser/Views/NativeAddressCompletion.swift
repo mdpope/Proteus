@@ -104,3 +104,62 @@ struct NativeHistorySiteIcon: View {
             }
     }
 }
+
+/// Wraps URL display by character while Return submits and pasted line breaks
+/// are removed. UIKit keeps native selection, marked text and caret behavior.
+struct NativeWrappingAddressEditor: UIViewRepresentable {
+    @Binding var text: String
+    var focused: Binding<Bool>
+    var sites: [JSON]
+    var submit: () -> Void
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+    func makeUIView(context: Context) -> UITextView {
+        let view = UITextView(); view.delegate = context.coordinator
+        view.font = .systemFont(ofSize: 14); view.textColor = .label; view.backgroundColor = .clear
+        view.spellCheckingType = .no; view.smartQuotesType = .no; view.smartDashesType = .no; view.smartInsertDeleteType = .no
+        view.keyboardType = .URL; view.returnKeyType = .go; view.autocapitalizationType = .none; view.autocorrectionType = .no
+        view.textContainerInset = .zero; view.textContainer.lineFragmentPadding = 0
+        view.textContainer.lineBreakMode = .byCharWrapping; view.isScrollEnabled = false
+        view.accessibilityIdentifier = "browser-address-editor"
+        let twice = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.selectAll(_:))); twice.numberOfTapsRequired = 2; twice.cancelsTouchesInView = false; view.addGestureRecognizer(twice)
+        return view
+    }
+    func updateUIView(_ view: UITextView, context: Context) {
+        context.coordinator.parent = self
+        if view.text != text, view.markedTextRange == nil { view.text = text }
+        if focused.wrappedValue, !view.isFirstResponder { DispatchQueue.main.async { [weak view, weak coordinator = context.coordinator] in if coordinator?.parent.focused.wrappedValue == true, view?.window != nil { view?.becomeFirstResponder() } } }
+        if !focused.wrappedValue, view.isFirstResponder { DispatchQueue.main.async { [weak view, weak coordinator = context.coordinator] in if coordinator?.parent.focused.wrappedValue == false { view?.resignFirstResponder() } } }
+    }
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: UITextView, context: Context) -> CGSize? {
+        guard let width = proposal.width, width > 0 else { return nil }
+        let size = uiView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
+        uiView.isScrollEnabled = size.height > 240
+        return CGSize(width: width, height: min(240, max(22, size.height)))
+    }
+    final class Coordinator: NSObject, UITextViewDelegate {
+        var parent: NativeWrappingAddressEditor
+        init(_ parent: NativeWrappingAddressEditor) { self.parent = parent }
+        @objc func selectAll(_ recognizer: UITapGestureRecognizer) {
+            guard let view = recognizer.view as? UITextView else { return }
+            parent.focused.wrappedValue = true; view.becomeFirstResponder(); view.selectAll(nil)
+            DispatchQueue.main.async { [weak view] in if view?.isFirstResponder == true { view?.selectAll(nil) } }
+        }
+        func textViewDidBeginEditing(_ view: UITextView) { parent.focused.wrappedValue = true }
+        func textViewDidEndEditing(_ view: UITextView) { parent.focused.wrappedValue = false }
+        func textViewDidChange(_ view: UITextView) { parent.text = view.text }
+        func textView(_ view: UITextView, shouldChangeTextIn range: NSRange, replacementText value: String) -> Bool {
+            if value == "\n" || value == "\r" {
+                guard view.markedTextRange == nil else { return false }
+                if view.selectedRange.length == 0, view.selectedRange.location == view.text.utf16.count, let completion = NativeAddressCompletion.match(view.text, sites: parent.sites) { parent.text = completion.url }
+                parent.submit(); return false
+            }
+            if value.rangeOfCharacter(from: .newlines) != nil {
+                let cleaned = value.components(separatedBy: .newlines).joined()
+                view.text = (view.text as NSString).replacingCharacters(in: range, with: cleaned)
+                view.selectedRange = NSRange(location: range.location + cleaned.utf16.count, length: 0)
+                parent.text = view.text; return false
+            }
+            return true
+        }
+    }
+}

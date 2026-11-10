@@ -1,3 +1,4 @@
+import {folderAccessTools} from './folder-access.js';
 import {managedRequirementsSchema} from '../integrations/managed-requirements.js';
 import {scheduleControlTools} from '../scheduling/schedule-control-tools.js';
 import {delegationTools} from './delegation.js';
@@ -28,5 +29,5 @@ export function chatControlTools(control, runId) {
       scope:{type:'object',properties:{hostId:{type:'string'},chatIds:{type:'array',items:{type:'string'}},projectId:{type:'string'},actions:{type:'array',items:{type:'string',enum:['read','dispatch','answer','cancel']}}},required:['hostId','actions'],additionalProperties:false}
     },required:['action'],additionalProperties:false},
     handler:async args=>{if(runId&&control.service&&(control.service.engine.running.get(runId)!==turn||!turn||turn.controller.signal.aborted))throw Error('This chat tool no longer belongs to an active turn.');return JSON.stringify(await control.handle(args, runId || 'operator'));}
-  },...scheduleControlTools(control.service?.scheduleControl,runId),...delegationTools(control,runId)];
+  },...folderAccessTools(control.service?.engine,runId),...scheduleControlTools(control.service?.scheduleControl,runId),...delegationTools(control,runId)];
 }

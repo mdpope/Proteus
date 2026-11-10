@@ -11,6 +11,7 @@ struct NativeUserQuestionCard: View {
     var showHeading = true
     var chatID: String
     var focusRequest: UUID? = nil
+    var focusChanged: (Bool) -> Void = { _ in }
     @FocusState private var answerFocused: Bool
     let submit: (String, String, [String: JSON]) async throws -> Void
     @State private var answer = ""
@@ -83,7 +84,24 @@ struct NativeUserQuestionCard: View {
             guard focusRequest != nil, question.status == "pending" else { return }
             await Task.yield(); if !Task.isCancelled { answerFocused = true }
         }
-        .onChange(of: answer) { _, value in var saved = store.draft(key).object; saved["answer"] = .string(value); store.setDraft(key, .object(saved)) }
+        .onChange(of: answerFocused) { _, focused in focusChanged(focused) }
+        .onDisappear { if answerFocused { focusChanged(false) } }
+        .onChange(of: answer) { _, value in
+            var saved = store.draft(key).object; saved["answer"] = .string(value); store.setDraft(key, .object(saved))
+            #if DEBUG
+            // Deliver a layout-changing owner update during each fixture edit,
+            // rather than before XCTest has finished waiting for initial idle.
+            if !value.isEmpty, ProcessInfo.processInfo.arguments.contains("--synthetic-question-typing-refresh"), var fields = store.chats[chatID]?.object {
+                var events = fields["events"]!.array
+                let prefixIndex = max(0, events.count - 2)
+                var prefix = events[prefixIndex].object
+                prefix["text"] = .string("Incoming context. " + String(repeating: "Updated earlier context. ", count: 12 + value.utf8.count % 6))
+                events[prefixIndex] = .object(prefix); fields["events"] = .array(events)
+                fields["updatedAt"] = .string("typing-update-" + String(value.utf8.count))
+                store.chats[chatID] = .object(fields)
+            }
+            #endif
+        }
         .fileImporter(isPresented: $picking, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
             do { for url in try result.get() { try importFile(url) } } catch { self.error = error.localizedDescription }
         }
@@ -96,7 +114,7 @@ struct NativeUserQuestionCard: View {
     @ViewBuilder private var attachmentMenu: some View {
         if !types.isEmpty {
             Menu {
-                Button("Choose files", systemImage: "folder") { picking = true }
+                Button("Choose files", systemImage: "folder") { picking = false; Task { @MainActor in try? await Task.sleep(for: .milliseconds(250)); picking = true } }
                 Button("Choose photos", systemImage: "photo") { photos = true }
                 Button("Paste image or file", systemImage: "doc.on.clipboard") { paste() }
             } label: { Image(systemName: "plus").frame(width: 44, height: 44) }

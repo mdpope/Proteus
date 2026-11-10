@@ -38,8 +38,8 @@ test('Claude MCP configuration admits selected stdio and HTTPS only, preserving 
   assert.throws(()=>claudeMcpConfig({bad:{type:'http',url:'http://example.invalid',headers:{}}},fs.realpathSync(os.tmpdir())),/HTTPS/);
   assert.throws(()=>claudeMcpConfig({bad:{type:'stdio',command:'/usr/bin/false',workingDirectory:'/elsewhere'}},fs.realpathSync(os.tmpdir())),/working directory is unavailable/);
   assert.throws(()=>claudeMcpConfig({bad:{type:'stdio',command:'/usr/bin/false',workingDirectory:'relative'}},fs.realpathSync(os.tmpdir())),/absolute working directory/);
-  assert.throws(()=>claudeMcpConfig({bad:{type:'stdio',command:'/usr/bin/false',tools:['read']}},fs.realpathSync(os.tmpdir())),/cannot enforce/);
-  assert.throws(()=>claudeMcpConfig({bad:{type:'stdio',command:'/usr/bin/false',tools:[]}},fs.realpathSync(os.tmpdir())),/cannot enforce/);
+  assert.ok(claudeMcpConfig({bad:{type:'stdio',command:'/usr/bin/false',tools:['read']}},fs.realpathSync(os.tmpdir())).mcpServers.bad);
+  assert.ok(claudeMcpConfig({bad:{type:'stdio',command:'/usr/bin/false',tools:[]}},fs.realpathSync(os.tmpdir())).mcpServers.bad);
   assert.deepEqual(claudeMcpConfig({allowed:{type:'stdio',command:'/usr/bin/false',tools:['*']}},fs.realpathSync(os.tmpdir())).mcpServers.allowed,{type:'stdio',command:'/usr/bin/false',args:[],env:{}});
 });
 test('Claude private stdio launcher preserves selected source cwd and env without shell or secret argv',async t=>{

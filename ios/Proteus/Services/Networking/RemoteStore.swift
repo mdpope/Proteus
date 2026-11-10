@@ -272,6 +272,18 @@ struct RemoteHostInfo: Equatable {
         connection?.relay = relay; error = nil
         activity(reconnect)
     }
+    /// Await this owner's existing connection without restarting a healthy socket.
+    /// Notification taps can arrive before foreground authentication has finished.
+    func waitUntilConnected(timeout: TimeInterval = 6) async throws {
+        if connected { return }
+        activity(true)
+        let deadline = ContinuousClock.now.advanced(by: .milliseconds(Int(timeout * 1000)))
+        while !connected {
+            try Task.checkCancellation()
+            guard ContinuousClock.now < deadline else { throw RemoteError(message: "\(displayName) has not finished connecting. Try opening the notification again.") }
+            try await Task.sleep(for: .milliseconds(100))
+        }
+    }
     func connect() {
         guard active, socket == nil, connection != nil || invite != nil else { return }
         let relay = connection?.relay ?? invite?["relay"].string ?? ""

@@ -1,3 +1,4 @@
+import {randomUUID} from 'node:crypto';
 import {revision} from '../scheduling/schedules.js';
 import {qualifyAdoAuthentication,safeAdoFailure,adoFailure as fail} from './managed-ado-alternative-profile.js';
 import {verifyAdoResource} from './managed-ado-resource-identity.js';
@@ -14,6 +15,18 @@ export class ManagedAdoPat {
   await verifyAdoResource(d,'Basic '+authorization,{fetchFn:this.fetchFn,signal:AbortSignal.timeout(d.policy.requestTimeoutMs)});
   await this.vault.write(d.authentication.credentialRef,{schemaVersion:1,binding,pat,email});this.checked.delete(binding);
   return {state:'authenticated',nextAction:'Verify the selected capabilities. PAT expiry is owner supplied; issuer revocation can occur sooner.'};
+ }
+ // An explicit owner configuration change can retain the same PAT without
+ // changing issuer grants. Keep the old protected reference intact for rollback;
+ // publish the new reference only through the registry's guarded atomic save.
+ async reconfigure(prior,next){
+  const oldBinding=this.binding(prior);if(oldBinding===this.binding(next))return next;
+  if(prior.authentication.credentialRef!==next.authentication.credentialRef)return next;
+  if(['principal','tenant','resource','audience','organizationId'].some(k=>prior.expected[k]!==next.expected[k]))return next;
+  const record=await this.vault.read(prior.authentication.credentialRef);if(!record||record.binding!==oldBinding)return next;
+  const updated=structuredClone(next);updated.authentication.credentialRef=randomUUID();
+  await verifyAdoResource(updated,'Basic '+Buffer.from(record.email+':'+record.pat).toString('base64'),{fetchFn:this.fetchFn,signal:AbortSignal.timeout(updated.policy.requestTimeoutMs)});
+  await this.vault.write(updated.authentication.credentialRef,{...record,binding:this.binding(updated)});return updated;
  }
  async use(d,consume){try{return await this.useProtected(d,consume);}catch(error){throw safeAdoFailure(error);}}
  async useProtected(d,consume){

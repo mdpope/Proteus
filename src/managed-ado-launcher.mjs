@@ -2,6 +2,7 @@ import {createRequire} from 'node:module';
 import fs from 'node:fs';
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
+import {selectedAdoDomains} from './services/integrations/managed-ado-alternative-profile.js';
 import {installAdoNetworkGuard} from './services/integrations/managed-ado-network-guard.js';
 const require=createRequire(import.meta.url),organization=process.env.PROTEUS_ADO_ORGANIZATION,tenant=process.env.PROTEUS_ADO_TENANT;
 const mode=process.env.PROTEUS_ADO_AUTH_MODE||'envvar';
@@ -11,6 +12,7 @@ const manifest=require.resolve('@azure-devops/mcp/package.json'),pkg=JSON.parse(
 if(pkg.version!=='2.11.0')throw Error('Managed ADO server package does not match the qualified version.');
 installAdoNetworkGuard(organization,params=>process.stdout.write(JSON.stringify({jsonrpc:'2.0',method:'notifications/proteus/ado-health',params})+'\n'));
 const entry=path.join(path.dirname(manifest),'dist/index.js');
-process.argv=[process.execPath,entry,organization,'--authentication',mode,'--tenant',tenant,'--domains','core','work','work-items','search'];
+const domains=selectedAdoDomains({transport:{domains:process.env.PROTEUS_ADO_DOMAINS?JSON.parse(process.env.PROTEUS_ADO_DOMAINS):undefined}});
+process.argv=[process.execPath,entry,organization,'--authentication',mode,'--tenant',tenant,'--domains',...domains];
 process.env.LOG_LEVEL='error';delete process.env.AZURE_LOG_LEVEL;
 await import(pathToFileURL(entry).href);

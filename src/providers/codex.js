@@ -67,7 +67,23 @@ export function codexSandbox(schedule, profile, { desktopPreview = false, permis
 // Permission transition check. The already-started native sandbox stays fixed;
 // only a proven addition may wait until the next turn. Unknown or reduced bounds stop.
 export function codexSandboxPreservesAccess(original, current) {
- if(original?.managedProfile||current?.managedProfile)return original?.managedProfile===current?.managedProfile&&JSON.stringify(original)===JSON.stringify(current);
+ if(original?.managedProfile||current?.managedProfile){
+  if(JSON.stringify(original)===JSON.stringify(current))return true;
+  if(original?.managedProfile!=='proteus-workspace'||current?.managedProfile!==original.managedProfile)return false;
+  try{
+   const name=original.managedProfile,before=original.config.permissions[name].filesystem,after=current.config.permissions[name].filesystem;
+   const envelope=value=>{const copy=structuredClone(value);delete copy.runtimeWorkspaceRoots;delete copy.config.permissions[name].filesystem;return JSON.stringify(copy);};
+   if(envelope(original)!==envelope(current)||!original.runtimeWorkspaceRoots.every(root=>current.runtimeWorkspaceRoots.includes(root)))return false;
+   if(!Object.entries(before).every(([key,value])=>JSON.stringify(value)===JSON.stringify(after[key])))return false;
+   const rank={read:1,write:2},within=(target,root)=>{const relative=path.relative(root,target);return relative===''||relative!=='..'&&!relative.startsWith('..'+path.sep)&&!path.isAbsolute(relative);};
+   for(const [key,value]of Object.entries(after))if(!Object.hasOwn(before,key)){
+    if(!path.isAbsolute(key)||path.normalize(key)!==key||!Object.hasOwn(rank,value))return false;
+    const parent=Object.keys(before).filter(root=>path.isAbsolute(root)&&within(key,root)).sort((a,b)=>b.length-a.length)[0];
+    if(rank[value]<(rank[before[parent]]||1))return false;
+   }
+   return true;
+  }catch{return false;}
+ }
  const contains=(root,target)=>{const relative=path.relative(root,target);return relative===''||(!relative.startsWith('..'+path.sep)&&relative!=='..'&&!path.isAbsolute(relative));};
  const normalized=value=>{
   if(!value||!['read-only','workspace-write'].includes(value.sandbox)||typeof value.cwd!=='string'||!path.isAbsolute(value.cwd)||!Array.isArray(value.runtimeWorkspaceRoots)||value.policy?.networkAccess!==false)return null;
@@ -148,7 +164,7 @@ export class CodexProvider {
   // ambiguous acknowledgements. A request response alone need not consume bytes.
   await a.client.request('turn/steer',{threadId:run.providerSessionId,expectedTurnId:a.turnId,input});
  }
- async run({run,prompt,attachments=[],emit,ask,update,signal,stream,permissionProfile,managedMcp={}}){
+ async run({run,prompt,attachments=[],emit,ask,update,signal,stream,permissionProfile,scopedTools=[],managedMcp={}}){
   for(const item of attachments)if(!this.acceptedMediaTypes.includes(item.mediaType)||!Buffer.isBuffer(item.bytes))throw new Error('Codex can receive images and plain text here. PDF and other files are not supported.');
   let imageDir=null,appBridge=null;
   const client=await this.connect();const model=(await this.models(client)).find(m=>m.id===run.schedule.model);if(!model)throw new Error('Choose an available Codex model from the provider catalog.');validateModelOptions(run.schedule,model);
@@ -171,10 +187,11 @@ export class CodexProvider {
     else mcp[name]={enabled:true,command:def.command,args:def.args||[],env:def.env||{},cwd:def.workingDirectory||def.cwd||run.schedule.workspace.cwd};
     if(def.tools?.length&&!def.tools.includes('*'))mcp[name].enabled_tools=def.tools;
   }
-  const roots=[run.schedule.workspace.cwd,...run.schedule.workspace.additionalDirectories];
+  const folderProfile=permissionProfile?.();
+  const roots=[...new Set([run.schedule.workspace.cwd,...run.schedule.workspace.additionalDirectories,...(folderProfile?.mode!=='ask'?folderProfile?.chatFolders||[]:[]).filter(folder=>(folderProfile?.folders||[]).some(active=>active.path===folder.path)).map(folder=>folder.path)])];
   const sandbox=codexSandbox(run.schedule,permissionProfile?.(),{permissionControls:(this.options.permissionControls===true||this.options.desktopPreview===true)});
   if(sandbox.scopedCommands&&(native.config?.permissions?.[sandbox.managedProfile]||(native.layers||[]).some(layer=>layer.config?.permissions?.[sandbox.managedProfile])))throw Error('A native configuration layer already defines this scoped profile. Review it before running.');
-  const currentBrowserTools=browserTools(this.browser,run.id),currentIntegrationTools=[...integrationTools(this.integrations,run.id),...chatControlTools(this.chatControl,run.id)];const browser=[...questionAttachmentTools(this,run.id),...currentBrowserTools,...currentIntegrationTools];const items=new Map();const calls=new Map();
+  const currentBrowserTools=browserTools(this.browser,run.id),currentIntegrationTools=[...integrationTools(this.integrations,run.id),...chatControlTools(this.chatControl,run.id)];const browser=[...scopedTools,...questionAttachmentTools(this,run.id),...currentBrowserTools,...currentIntegrationTools];const items=new Map();const calls=new Map();
   const approvedBridgeCalls=new Map();
   captureAppCapabilities(run,browser,update);
   let resolveTurn,rejectTurn,settled=false,abortTimer;const completed=new Promise((resolve,reject)=>{resolveTurn=resolve;rejectTurn=reject;});completed.catch(()=>{});
@@ -190,8 +207,9 @@ export class CodexProvider {
   const assertAppToolActive=()=>{if(this.active!==active||settled||signal.aborted)throw new Error('This Proteus tool request no longer belongs to an active turn.');};
   const invokeAppTool=async(tool,args,callId)=>{
    assertAppToolActive();
+   if(tool.name==='proteus_exec')return tool.handler(args);
    if(active.recheckPermissions())throw new Error('Workspace permissions changed; this tool request was cancelled.');
-   if(['proteus_chats','proteus_agents'].includes(tool.name))return tool.handler(args); // The host service owns scoped approval and rechecks.
+   if(['proteus_chats','proteus_agents','proteus_folder_access','proteus_exec'].includes(tool.name))return tool.handler(args); // The host service owns scoped approval and rechecks.
    const key=JSON.stringify([tool.name,args]),approved=approvedBridgeCalls.get(key);approvedBridgeCalls.delete(key);
    const answer=approved&&approved.expires>Date.now()?'approve':await ask({type:'permission',question:'Allow Proteus app action?',details:{kind:'custom-tool',toolCallId:callId,toolName:tool.name,args,intention:tool.name==='proteus_open_document'?`Open Markdown tab: ${args?.path||''}`:`Browser ${args?.action||'action'}`}});
    assertPendingApprovalCurrent();assertAppToolActive();
@@ -251,7 +269,7 @@ export class CodexProvider {
    }else if(msg.method==='mcpServer/elicitation/request'){
      const meta=p._meta,name=p.message?.match(/tool "([^"\n]+)"\?$/)?.[1],tool=browser.find(tool=>tool.name===name);
      if(p.serverName==='proteus_app'&&p.mode==='form'&&meta?.codex_approval_kind==='mcp_tool_call'&&tool&&meta.tool_params&&typeof meta.tool_params==='object'&&!Array.isArray(meta.tool_params)&&Object.keys(p.requestedSchema?.properties||{}).length===0){
-       const args=meta.tool_params,answer=await scopeAsk({type:'permission',question:'Allow Proteus app action?',details:{kind:'custom-tool',toolCallId:p.turnId,toolName:name,args,intention:`Proteus ${name} ${args.action||''}`}});
+       const args=meta.tool_params,answer=name==='proteus_folder_access'?'approve':await scopeAsk({type:'permission',question:'Allow Proteus app action?',details:{kind:'custom-tool',toolCallId:p.turnId,toolName:name,args,intention:`Proteus ${name} ${args.action||''}`}});
        assertPendingApprovalCurrent();assertAppToolActive();const allowed=['approve','approve-auto'].includes(answer);
        if(allowed){if(approvedBridgeCalls.size>=16)approvedBridgeCalls.clear();approvedBridgeCalls.set(JSON.stringify([name,args]),{expires:Date.now()+15000});}
        client.respond(msg.id,{action:allowed?'accept':'decline',content:allowed?{}:null});
@@ -300,11 +318,11 @@ export class CodexProvider {
       assertPendingApprovalCurrent();
       if(!['approve','approve-auto'].includes(answer))throw new Error('Document opening was declined.');
       return this.browser.openDocument(args,id);
-    }},run.id,[...currentIntegrationTools,...resumedBrowserTools]);
+    }},run.id,[...scopedTools.map(tool=>({...tool,handler:args=>invokeAppTool(tool,args)})),...currentIntegrationTools,...resumedBrowserTools]);
     mcp.proteus_app={enabled:true,...appBridge.config};
    }
    const instructions=`${appInstructions}${resumedBrowserTools.length?'\nUse the fresh tools published by the proteus_app MCP server. Native desktop control uses its proteus_desktop tool so screenshots arrive as images. For browser and tab operations in resumed chats, also prefer that fresh catalog: older unprefixed dynamic schemas may be stale. The fresh catalog supports hidden/unloaded lifecycle actions and every available profile; normal workflow approvals still apply.':''}\nYou are working inside Proteus. Use only the selected sources below. Workspace folders:\n${roots.join('\n')}\n${managed?.instructionText||''}\n${(managed?.customAgents||[]).map(a=>`Agent: ${a.displayName}${a.name===managed.agent?' (main identity)':''}\n${a.prompt}`).join('\n\n')}\nEditor context: ${JSON.stringify(run.schedule.editorContext||null)}`;
-   const config={...sandbox.config,project_doc_max_bytes:0,developer_instructions:instructions,mcp_servers:mcp,features:{skip_host_skill_discovery:true,skill_mcp_dependency_install:false,enable_mcp_apps:false,multi_agent:true},plugins:Object.fromEntries(Object.keys(plugins).map(name=>[name,{enabled:false}])),apps:{_default:{enabled:false}},web_search:'disabled'};
+   const config={...sandbox.config,project_doc_max_bytes:0,developer_instructions:instructions,mcp_servers:mcp,features:{skip_host_skill_discovery:true,skill_mcp_dependency_install:false,enable_mcp_apps:false,multi_agent:!scopedTools.length,...(scopedTools.length?{shell_tool:false,unified_exec:false}:{})},plugins:Object.fromEntries(Object.keys(plugins).map(name=>[name,{enabled:false}])),apps:{_default:{enabled:false}},web_search:'disabled'};
    const params={model:run.schedule.model,cwd:sandbox.cwd,runtimeWorkspaceRoots:sandbox.runtimeWorkspaceRoots,approvalPolicy:sandbox.approvalPolicy||'untrusted',approvalsReviewer:'user',...(sandbox.managedProfile?{}:{sandbox:sandbox.sandbox}),developerInstructions:instructions,config};
    const thread=run.providerSessionId?await client.request('thread/resume',{...params,threadId:run.providerSessionId}):await client.request('thread/start',{...params,dynamicTools:browser.filter(t=>!['proteus_open_document','proteus_desktop'].includes(t.name)).map(t=>({type:'function',name:t.name,description:t.description,inputSchema:t.parameters}))});
    verifyCodexSandbox(thread,sandbox,sandbox.cwd);
