@@ -1,3 +1,6 @@
+## Nov 10 — source branch only, not built or deployed
+- Restore human draft read/save commands in the paired desktop transport so remote desktop composers use the same owner draft revisions as mobile/web. Preserve conflict copies, pairing/pause/revocation and agent denial. Installed acceptance remains pending; Nov 8 packages are unchanged.
+
 ## Nov 8 / 0.2.44 — source in progress
 - Match Claude owner-bridge approvals to captured unprefixed tool/action rules; route Codex scoped-command transport directly to the host identity gate without a redundant outer approval. Preserve command consent, owner checks and containment.
 - Use the loaded iOS page address on browser reselection; honor owner tab closure for private login pages, retire duplicate cached identities and prevent metadata updates from reopening stale tabs.

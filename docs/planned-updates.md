@@ -1,8 +1,10 @@
 ## Nov 10 — queued interface follow-up
 
 The [Nov 10 plan](2026-11-10-release-plan.md) records clickable links to chats, schedules and
-file-browser resources, a Chats list design investigation, and denser headers across features.
-These are queued requests; Nov 8 release closeout continues independently.
+file-browser resources, a Chats list design investigation, denser headers across features, and
+N10-04 desktop peer draft synchronization. The draft correction is isolated on its own source
+branch; the operator explicitly defers another Nov 8 build/deployment for it. Nov 8 closeout
+continues independently; no new package or installed acceptance is implied.
 
 ## Nov 8 — complete request audit before further deployment
 

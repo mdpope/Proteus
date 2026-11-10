@@ -1,3 +1,13 @@
+## Nov 10 branch — desktop draft transport correction
+
+Human desktop peer composers use `draft.text.get` and `draft.text.save` through the authenticated
+desktop connection, matching the existing mobile/web owner draft service. Draft text remains
+separate from chat/tab inventories. Saves require the current revision and stable operation ID;
+conflicting edits retain both versions. Pairing, pause, revocation and the human-composer guard
+still apply. This branch restores the missing desktop transport allowlist entries; it grants
+agents no draft access. Source regression passes; actual composer and installed acceptance remain
+pending. The operator deferred builds/deployment to Nov 10.
+
 Current cross-platform acceptance is recorded in [PR #20](https://github.com/mdpope/Proteus/pull/20).
 The dated/source-specific checkpoints below retain their original verification scope; later
 workflow results supersede their pending/failure status without changing the recorded artifacts.
