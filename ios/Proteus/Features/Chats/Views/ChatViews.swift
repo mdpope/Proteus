@@ -711,6 +711,13 @@ struct ChatView: View {
                             scrollCommand = NativeScrollCommand(id: token, y: 1500, minimumContentHeight: 2800)
                         }.accessibilityIdentifier("read-long-message-fixture")
                         Button("Prepend fixture") { prependFixtureHistory() }.accessibilityIdentifier("prepend-chat-fixture")
+                        Button("History top") {
+                            followLatest = false; userReadingGesture = false; conversationReady = true
+                            cancelReadingRestore(); restoringConversation = false; historyGestureAvailable = false
+                            let token = UUID(); fixtureScrollID = token
+                            scrollCommand = NativeScrollCommand(id: token, y: 0)
+                        }.accessibilityIdentifier("history-top-fixture")
+                        Button("Earlier page") { loadEarlier() }.accessibilityIdentifier("history-page-fixture")
                         NativeChatScrollDiagnostics(measurements: scrollMeasurements).frame(height: 24)
                         Text(scrollTrace.joined(separator: " | ")).font(.system(size: 5)).lineLimit(2).accessibilityIdentifier("chat-scroll-trace")
                     }.font(.caption).padding(6)
@@ -1097,7 +1104,7 @@ struct ChatView: View {
                 // after the native pan and its deceleration have ended.
                 if !followLatest && !restoringConversation && abs(previousHeight - snapshot.contentHeight) < 1,
                    snapshot.offset < previousOffset - 1,
-                   userReadingGesture || Date().timeIntervalSince1970 - lastReaderInteractionAt < 2 {
+                   userReadingGesture {
                     historyGestureAvailable = true
                 }
                 if conversationReady && !followLatest && snapshot.offset < snapshot.viewportHeight * 6 { prefetchEarlier() }
@@ -1107,21 +1114,26 @@ struct ChatView: View {
                 userReadingGesture = reading
                 lastReaderInteractionAt = Date().timeIntervalSince1970
                 if reading {
+                    scrollMeasurements.preservedHistoryAnchor = nil
                     questionRevealTask?.cancel(); questionRevealID = nil; questionFocus = nil
                     composerHasFocus = false; composerExpanded = false
-                    followLatest = false; historyGestureAvailable = true; conversationReady = true
+                    followLatest = false; historyGestureAvailable = false; conversationReady = true
                     cancelReadingRestore()
                     restoreID = nil; pendingAnchorRestore = nil; pendingInitialRestore = nil
                     scrollCommand = nil; restoringConversation = false
                     pendingHistoryRestore = nil; historyWindowChanged = false
-                    if !earlierError && hasEarlierMessages && conversationOffset < max(480, composerAvailableHeight * 2.5) { loadEarlier() }
                 } else {
-                    if scrollMeasurements.latest?.atEnd == true {
+                    if !earlierError && hasEarlierMessages && historyGestureAvailable,
+                       conversationOffset < max(480, composerAvailableHeight * 2.5) {
+                        // A short iPad page is both top and bottom. A real pull
+                        // toward older messages wins over resuming bottom follow.
+                        followLatest = false
+                        loadEarlier()
+                    } else if scrollMeasurements.latest?.atEnd == true {
                         followLatest = true
                         shared.clearChatScrollLocation(for: chatBrowserScope)
                     } else {
                         shared.persistChatScrollLocation(for: chatBrowserScope)
-                        if !earlierError && hasEarlierMessages && conversationOffset < max(480, composerAvailableHeight * 2.5) && (scrollMeasurements.historyRevealPending || historyGestureAvailable) { loadEarlier() }
                     }
                     scrollMeasurements.historyRevealPending = false
                 }
@@ -1163,9 +1175,10 @@ struct ChatView: View {
                     pendingInitialRestore = location
                 }
             }
-            .onDisappear { saveReadingPosition(); cancelReadingRestore(); questionRevealTask?.cancel(); questionRevealTask = nil }
+            .onDisappear { saveReadingPosition(); scrollMeasurements.preservedHistoryAnchor = nil; cancelReadingRestore(); questionRevealTask?.cancel(); questionRevealTask = nil }
             .onChange(of: editingAnswer) { _, editing in
                 if editing {
+                    scrollMeasurements.preservedHistoryAnchor = nil
                     cancelReadingRestore(); restoreID = nil; scrollCommand = nil
                     pendingAnchorRestore = nil; pendingInitialRestore = nil; pendingHistoryRestore = nil
                     restoringConversation = false
@@ -1205,8 +1218,10 @@ struct ChatView: View {
     private func rememberReadingAnchor(_ snapshot: NativeScrollSnapshot) {
         guard !followLatest, conversationReady, !restoringConversation else { return }
         let top = snapshot.offset + snapshot.topInset
-        guard let entry = eventFrames.filter({ $0.value.start == renderedEventStart && $0.value.contentTop <= top && $0.value.frame.maxY > top }).min(by: { $0.key < $1.key }) else { return }
-        let location = NativeChatScrollLocation(anchor: entry.key, inset: top - entry.value.contentTop,
+        let pinned = scrollMeasurements.preservedHistoryAnchor
+        let pinnedEntry = pinned?.anchor.flatMap { key in eventFrames[key].flatMap { $0.start == renderedEventStart ? (key: key, value: $0) : nil } }
+        guard let entry = pinnedEntry ?? NativeChatEventFrame.readingEntry(in: eventFrames, start: renderedEventStart, top: top) else { return }
+        let location = NativeChatScrollLocation(anchor: entry.key, inset: pinnedEntry.flatMap { _ in pinned?.inset } ?? (top - entry.value.contentTop),
             offset: max(0, snapshot.offset), eventStart: run["eventStart"].int, presentationStart: renderedEventStart,
             contentHeight: snapshot.contentHeight, anchorHeight: entry.value.frame.height,
             viewportWidth: snapshot.viewportWidth, eventRevision: run["updatedAt"].string)
@@ -1588,6 +1603,7 @@ struct ChatView: View {
     }
     private func revealQuestion(_ question: NativeUserQuestion, request: UUID, with proxy: ScrollViewProxy) async {
         defer { if questionRevealID == request { questionRevealTask = nil } }
+        scrollMeasurements.preservedHistoryAnchor = nil
         cancelReadingRestore(); restoreID = nil; scrollCommand = nil; questionFocus = nil
         followLatest = false; pendingHistoryRestore = nil; pendingInitialRestore = nil; pendingAnchorRestore = nil; restoringConversation = false
         do {
@@ -1662,8 +1678,12 @@ struct ChatView: View {
         loadingEarlier = true; earlierError = false
         let keepBottom = followLatest
         let offset = run["eventCount"].int - oldFirst
-        let reading = shared.chatScrollLocations[chatBrowserScope] ?? NativeChatScrollLocation(anchor: oldFirst, inset: 0, offset: conversationOffset)
-        if !keepBottom { shared.chatScrollLocations[chatBrowserScope] = reading; pendingHistoryRestore = reading; historyWindowChanged = true }
+        // Freeze the current geometry before inserting anything. Otherwise a new
+        // top snapshot can overwrite the bookmark before onChange starts restore.
+        if let snapshot = scrollMeasurements.viewport.snapshot { rememberReadingAnchor(snapshot) }
+        var reading = shared.chatScrollLocations[chatBrowserScope] ?? NativeChatScrollLocation(anchor: oldFirst, inset: 0, offset: conversationOffset)
+        if reading.anchor == nil { reading.anchor = oldFirst }
+        if !keepBottom { scrollMeasurements.preservedHistoryAnchor = reading; shared.chatScrollLocations[chatBrowserScope] = reading; pendingHistoryRestore = reading; historyWindowChanged = true; restoringConversation = true }
         if oldFirst > loadedFirst {
             oldestVisibleEvent = loadedFirst + NativeHistoryWindow.start(events: run["events"].array, before: oldFirst - loadedFirst, preparingOlder: true)
             loadingEarlier = false
@@ -1675,14 +1695,14 @@ struct ChatView: View {
                 if editingAnswer || userReadingGesture || lastReaderInteractionAt != interactionAtRequest {
                     // A response may finish after another pan. Cache it without
                     // moving the new viewport back to the request's old bookmark.
-                    pendingHistoryRestore = nil; historyWindowChanged = false
+                    scrollMeasurements.preservedHistoryAnchor = nil; pendingHistoryRestore = nil; historyWindowChanged = false; restoringConversation = false
                     scrollMeasurements.historyRevealPending = true
                     store.mergeChat(value)
                 } else {
                     oldestVisibleEvent = value["eventStart"].int + NativeHistoryWindow.start(events: value["events"].array, preparingOlder: true)
                     store.mergeChat(value)
                 } }
-            catch { earlierError = true; store.error = error.localizedDescription }
+            catch { scrollMeasurements.preservedHistoryAnchor = nil; pendingHistoryRestore = nil; historyWindowChanged = false; restoringConversation = false; earlierError = true; store.error = error.localizedDescription }
         }
     }
     private func openDocument(_ source: String) {

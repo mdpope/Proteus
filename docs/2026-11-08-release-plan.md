@@ -423,3 +423,21 @@ notifications and keep uncertain deliveries from automatic replay. Resolution mu
 account store. Missing/upload-failed attachments need a brief visible notice with obvious Remove
 and applicable Retry actions, including the collapsed composer and keyboard-visible layout.
 Preserve typed text and never automatically replay uncertain messages.
+
+## N8-23 — Physical history prepend and idle iPad cascade
+
+Loading older messages must preserve the current message and screen offset, including a viewport
+in the history header or between rows. Prepending must not jump to the newly loaded top or rearm
+another reveal through programmatic layout corrections. A short iPad viewport waits for an actual
+pull toward older messages. Keep the original anchor through late Markdown sizing until a new
+user gesture, editing, explicit navigation or view exit. Verify both device layouts, repeated
+gesture paging, momentum, reopen and the idle no-cascade case, then redeploy both iOS devices.
+
+## N8-24 — iPad page/address mismatch and resurrected tabs
+
+Use desktop owner membership as the authority, including closure of locally private login pages.
+Collapse duplicate cached aliases without creating owner tabs; incidental metadata must never
+reopen a stale cached identity. Explicit new-tab creation and offline replay retain their own
+intent. On reselecting a loaded browser, show its actual page address without publishing private
+redirect URLs to the owner. Preserve visible unloaded tabs and exclude hidden tabs from navigation.
+Verify same-document navigation, reselection and owner reconciliation, then redeploy iOS.

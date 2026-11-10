@@ -1,5 +1,9 @@
 ## Nov 8 — complete request audit before further deployment
 
+Physical follow-up adds N8-23 history-anchor/idle-cascade and N8-24 iPad address/tab-reconciliation
+corrections. Corrective iOS source is under validation. If a mobile device locks, continue the
+remaining authorized device rollout and return to it later; never bypass the device lock.
+
 The operator requires checking all new features and full file-browser parity on desktop, web,
 iPhone and iPad before another deployment. The [request audit](releases/2026-11-08/request-audit.md)
 retains every requested interaction, evidence and remaining gap. Native columns/modifier selection,

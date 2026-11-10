@@ -1,3 +1,23 @@
+# Nov 8 follow-up — header gaps and automatic history cascades
+
+Physical feedback found that older history moved the reader to the new top, and an idle iPad
+could reveal page after page. A short viewport no longer permits revealing history: only a new
+reader gesture arms it. Programmatic corrections cannot rearm it through a recent-gesture timeout.
+Bounded cache prefetch remains separate from presentation.
+
+Before changing the rendered window, capture the current message geometry and freeze its bookmark.
+A viewport in the header or between rows anchors the next visible message with a signed inset.
+Retain that original anchor through the prepend and late Markdown layout until the next pan,
+editing action, explicit question navigation or view exit. Selecting a newly inserted preceding
+row during acknowledgement lost the original point and caused a reproducible 19-point shift.
+
+The strict phone regression passes the actual history-window prepend, screen-position and idle
+no-cascade checks; header-gap and window-policy unit tests pass. Tablet prepend/idle and repeated
+gesture paging checks pass, as do isolated phone paging and phone momentum/reopen. An initial
+phone paging run inherited an unrelated synthetic bookmark; its failure remains recorded and the
+isolated rerun resets only that fixture bookmark. These are source/simulator results, not physical deployment.
+Earlier records below retain their original qualifications.
+
 # R32 — preserve the reading anchor after late prefix layout
 
 The iPad prepend/reopen rehearsal exposed 64 pixels of drift inside the same message, exceeding

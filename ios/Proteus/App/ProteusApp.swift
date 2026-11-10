@@ -166,6 +166,9 @@ struct ProteusRoot: View {
                         }
                         // Workloads have distinct durable bookmark/draft scopes.
                         let fixtureID = heavy ? "history-workload-1000" : "history-workload-100"
+                        if Bundle.main.bundleIdentifier == "org.proteusapp.proteus.mobile-tests", ProcessInfo.processInfo.arguments.contains("--synthetic-reset-history-position") {
+                            shared.clearChatScrollLocation(for: "chat:10000000-0000-4000-8000-000000000001:" + fixtureID)
+                        }
                         let run: JSON = .object(["id": .string(fixtureID), "title": .string(heavy ? "Heavy fixture" : "Many fixture"),
                             "status": .string("completed"), "eventStart": .number(0), "events": .array(events),
                             "usage": .object(["observed": .bool(true), "inputTokens": .number(123456), "outputTokens": .number(6789)]),

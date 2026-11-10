@@ -29,8 +29,8 @@ enum NativeHistoryWindow {
         return max(loadedStart, min(requestedStart, loadedStart + events.count))
     }
     static func shouldPrefetch(offset: CGFloat, viewport: CGFloat, content: CGFloat, reading: Bool, ready: Bool) -> Bool {
-        guard ready, viewport > 0, content > 0 else { return false }
-        // Fill short screens automatically, but never drain history from an initial top snapshot.
-        return content < viewport + 80 || reading && offset < max(480, viewport * 2.5)
+        guard ready, reading, viewport > 0, content > 0 else { return false }
+        // A short restored viewport is not a request to reveal another page.
+        return offset < max(480, viewport * 2.5)
     }
 }

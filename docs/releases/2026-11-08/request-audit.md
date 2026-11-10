@@ -3,7 +3,8 @@
 The operator requires a complete scope check before any further deployment. This gate supersedes
 earlier instructions to install immediately. The last web activation completed before the gate;
 newer candidates are held until this audit passes. The operator subsequently authorized Personal
-Mac, web, iPhone and iPad when ready. Other desktops and Work Mac remain outside this rollout.
+Mac, web, iPhone and iPad when ready, then Work Mac after Build Mac validation and Linux/Windows
+after the preceding work. Physical feedback adds N8-23/24; their corrective iOS build is not yet deployed.
 An implemented feature, a fixture pass and installed acceptance are separate states.
 
 ## File browser: every requested interaction
@@ -67,10 +68,9 @@ connection grants are separate and checked again by the desktop for every operat
 
 ## Gate status
 
-**Source scope audited; final package gate pending.** Phone and iPad batch drag now pass after
-separating the drag handle from the context-menu gesture. Notification resolution/uncertain-send,
-visible attachment recovery, shared owner file tabs, source-origin grants and Markdown resources
-pass. Final phone and tablet reader/layout/attachment regressions pass. Signed exact-
-package checks must finish before replacing held candidates. Physical acceptance follows installation.
-The web activation is historical, not approval to bypass this gate. Maintain one final candidate
-per target after the remaining changes settle.
+**Source scope and signed package gates passed.** Final phone/tablet interaction, shared owner
+file tabs, resources, notification and attachment regressions pass. Build Mac, web and iPad
+have later installation receipts; see the current rollout ledger for exact outcomes and limits.
+Native hardware modifiers, edge autoscroll and real physical workflows retain separate acceptance.
+The operator now includes Work Mac after Build Mac validation, then Linux/Windows after the
+preceding work. No deployment result is inferred from model completion.

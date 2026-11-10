@@ -743,6 +743,13 @@ final class RemoteUITests: XCTestCase {
         }
     }
     @MainActor private func openDefaultTeamBrowser(_ app: XCUIApplication) {
+        let options = app.buttons["Team Tools options"]
+        if options.waitForExistence(timeout: 2) {
+            options.tap()
+            let profile = app.buttons["Browser · Default"].firstMatch
+            XCTAssertTrue(profile.waitForExistence(timeout: 8)); profile.tap()
+            XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "browser-address").firstMatch.waitForExistence(timeout: 10)); return
+        }
         let menu = app.buttons["team-new-browser-tab"]
         XCTAssertTrue(menu.waitForExistence(timeout: 10)); menu.tap()
         let choices = app.buttons.matching(NSPredicate(format: "label == %@", "Browser - Default"))
@@ -1409,7 +1416,7 @@ final class RemoteUITests: XCTestCase {
     }
     @MainActor func testVariableHeightHistoryCanPageRepeatedlyAndReturnToBottom() {
         let app = nativeFixtureApplication()
-        app.launchArguments = ["--reset-pairing", "--synthetic-destinations", "--synthetic-heavy-chat", "--synthetic-varied-chat", "--history-diagnostics"]
+        app.launchArguments = ["--reset-pairing", "--synthetic-clean-navigation", "--synthetic-reset-history-position", "--synthetic-destinations", "--synthetic-heavy-chat", "--synthetic-varied-chat", "--history-diagnostics"]
         app.launch(); showChats(app)
         let row = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Heavy fixture")).firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 12)); row.tap()
@@ -1431,6 +1438,32 @@ final class RemoteUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Input tokens"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["123,456"].exists); XCTAssertTrue(app.staticTexts["6,789"].exists)
         let usageShot = XCTAttachment(screenshot: app.screenshot()); usageShot.name = "Stacked dark runtime and token values"; usageShot.lifetime = .keepAlways; add(usageShot)
+    }
+    @MainActor func testHistoryPrependKeepsHeaderGapAnchorAndDoesNotCascade() async throws {
+        let app = nativeFixtureApplication()
+        app.launchArguments = ["--reset-pairing", "--synthetic-clean-navigation", "--synthetic-destinations", "--synthetic-heavy-chat", "--synthetic-varied-chat", "--history-diagnostics", "--show-scroll-fixture-controls"]
+        app.launch(); showChats(app)
+        let row = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Heavy fixture")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 12)); row.tap()
+        let window = app.staticTexts["history-window"]
+        XCTAssertTrue(window.waitForExistence(timeout: 20))
+        app.buttons["history-top-fixture"].tap()
+        try await Task.sleep(for: .seconds(1))
+        let first = try XCTUnwrap(Int(window.label.split(separator: ":").first ?? ""))
+        try await Task.sleep(for: .seconds(2))
+        XCTAssertEqual(Int(window.label.split(separator: ":").first ?? ""), first, "An idle top viewport must not reveal history on its own")
+        let anchor = app.descendants(matching: .any)["chat-event-\(first)"].firstMatch
+        XCTAssertTrue(anchor.exists); let y = anchor.frame.minY
+        app.buttons["history-page-fixture"].tap()
+        try await Task.sleep(for: .seconds(3))
+        let tree = XCTAttachment(string: app.debugDescription); tree.name = "History prepend position"; tree.lifetime = .keepAlways; add(tree)
+        XCTAssertLessThan(Int(window.label.split(separator: ":").first ?? "") ?? first, first)
+        XCTAssertTrue(anchor.exists)
+        XCTAssertEqual(anchor.frame.minY, y, accuracy: 12, "Prepending must keep the same message at the same screen offset")
+        let after = window.label
+        try await Task.sleep(for: .seconds(2))
+        XCTAssertEqual(window.label, after, "A restored top viewport must not cascade into another page")
+        XCTAssertEqual(anchor.frame.minY, y, accuracy: 12)
     }
     @MainActor func testCompactOptionsHaveSingleGreenExpander() {
         let app = nativeFixtureApplication(); app.launchArguments = ["--reset-pairing", "--synthetic-destinations", "--synthetic-heavy-chat"]; app.launch(); showChats(app)
@@ -1892,14 +1925,21 @@ final class RemoteUITests: XCTestCase {
         XCTAssertTrue(app.webViews.staticTexts["Third browser page"].waitForExistence(timeout: 10))
     }
     @MainActor func testBrowserSameDocumentPushStateAndHashHistory() {
-        let app = nativeFixtureApplication(); app.launchArguments = ["--reset-pairing", "--synthetic-destinations", "--synthetic-browser-workspace"]; app.launch()
+        let app = nativeFixtureApplication(); app.launchArguments = ["--reset-pairing", "--synthetic-destinations", "--synthetic-browser-workspace", "--synthetic-clean-navigation"]; app.launch()
         let ready = app.buttons["sidebar-Team"].exists ? app.buttons["sidebar-Team"] : app.buttons["destination-picker"]
-        XCTAssertTrue(ready.waitForExistence(timeout: 20)); app.buttons["Team"].firstMatch.tap()
+        XCTAssertTrue(ready.waitForExistence(timeout: 20)); showTeam(app)
         openDefaultTeamBrowser(app)
-        let address = app.textFields["browser-address"]; XCTAssertTrue(address.waitForExistence(timeout: 10)); address.tap(); address.typeText("\(nativeFixtureHTTPOrigin)/browser/spa"); app.buttons["browser-go"].tap()
+        let address = app.descendants(matching: .any).matching(identifier: "browser-address").firstMatch
+        XCTAssertTrue(address.waitForExistence(timeout: 10)); address.tap()
+        let editor = UIDevice.current.userInterfaceIdiom == .phone ? app.textViews["browser-address-editor"] : app.textFields["browser-address"]
+        XCTAssertTrue(editor.waitForExistence(timeout: 5)); editor.typeText("\(nativeFixtureHTTPOrigin)/browser/spa"); app.buttons["browser-go"].tap()
         XCTAssertTrue(app.webViews.staticTexts["SPA step 1"].waitForExistence(timeout: 15))
         app.webViews.buttons["SPA Next"].tap(); XCTAssertTrue(app.webViews.staticTexts["SPA step 2"].waitForExistence(timeout: 8))
         app.webViews.buttons["SPA Next"].tap(); XCTAssertTrue(app.webViews.staticTexts["SPA step 3"].waitForExistence(timeout: 8))
+        XCTAssertTrue((address.value as? String ?? "").contains("step=3"))
+        showChats(app); showTeam(app)
+        XCTAssertTrue(app.webViews.staticTexts["SPA step 3"].waitForExistence(timeout: 8))
+        XCTAssertTrue((address.value as? String ?? "").contains("step=3"), "Reselecting the browser must keep its address consistent with the rendered page")
         app.webViews.buttons["SPA Replace"].tap()
         app.buttons["browser-back"].tap(); XCTAssertTrue(app.webViews.staticTexts["SPA step 3"].waitForExistence(timeout: 8))
         XCTAssertTrue(app.buttons["browser-back"].isEnabled); app.buttons["browser-back"].tap(); XCTAssertTrue(app.webViews.staticTexts["SPA step 2"].waitForExistence(timeout: 8))
@@ -2111,6 +2151,20 @@ final class RemoteUITests: XCTestCase {
         expectation(for: NSPredicate(format: "label == %@", "Oct 5, 3:00 AM GMT+9"), evaluatedWith: timestamp)
         waitForExpectations(timeout: 10)
     }
+    @MainActor private func showTeam(_ app: XCUIApplication) {
+        if let navigation = app.buttons.matching(identifier: "phone-app-navigation").allElementsBoundByIndex.first(where: { $0.isHittable }) {
+            navigation.tap()
+            let team = app.buttons["phone-nav-Team"]
+            XCTAssertTrue(team.waitForExistence(timeout: 8)); team.tap(); return
+        }
+        if app.tabBars.buttons["Team"].exists { app.tabBars.buttons["Team"].tap(); return }
+        if app.buttons["Team"].firstMatch.exists { app.buttons["Team"].firstMatch.tap(); return }
+        if !app.buttons.matching(identifier: "sidebar-Team").allElementsBoundByIndex.contains(where: { $0.isHittable }), app.buttons["Toggle sidebar"].exists { app.buttons["Toggle sidebar"].tap() }
+        let team = app.buttons.matching(identifier: "sidebar-Team").firstMatch
+        XCTAssertTrue(team.waitForExistence(timeout: 10))
+        let visible = app.buttons.matching(identifier: "sidebar-Team").allElementsBoundByIndex.first(where: { $0.isHittable })
+        XCTAssertNotNil(visible); visible?.tap()
+    }
     @MainActor private func showChats(_ app: XCUIApplication) {
         if app.buttons.matching(identifier: "phone-app-navigation").firstMatch.waitForExistence(timeout: 3),
            let navigation = app.buttons.matching(identifier: "phone-app-navigation").allElementsBoundByIndex.first(where: { $0.isHittable }) {
@@ -2119,6 +2173,7 @@ final class RemoteUITests: XCTestCase {
             XCTAssertTrue(chats.waitForExistence(timeout: 8)); chats.tap(); return
         }
         if app.tabBars.buttons["Chats"].exists { app.tabBars.buttons["Chats"].tap(); return }
+        if app.buttons["Chats"].firstMatch.exists { app.buttons["Chats"].firstMatch.tap(); return }
         if !app.buttons.matching(identifier: "sidebar-Chats").allElementsBoundByIndex.contains(where: { $0.isHittable }), app.buttons["Toggle sidebar"].exists { app.buttons["Toggle sidebar"].tap() }
         let chats = app.buttons.matching(identifier: "sidebar-Chats").firstMatch
         XCTAssertTrue(chats.waitForExistence(timeout: 10))
