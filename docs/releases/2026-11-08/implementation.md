@@ -2,6 +2,13 @@
 
 Version: 0.2.44. Integrated into main. Release remains open.
 
+Final Windows recovery correction `c235d2aaf6ce2f1b3c6ba8e80108103ca849df7d` is under
+native package validation. A large cold baseline can exceed the old one-minute budget before
+any comparison. Settlement now starts after baseline discovery, allows measured comparison
+cost and records attempt/timing evidence. The three added regressions pass, along with 1,758
+local source tests/four skipped, 1,750 native Windows tests/12 skipped and static checks on both
+hosts. The accepted packages on other platforms retain their previously recorded identities.
+
 Current gate: the [complete request audit](request-audit.md) separates source, simulator and
 installed evidence. Build Mac, web, iPhone and iPad are authorized when ready; final native
 interaction and signed-package checks precede deployment. New source adds native toolbar,

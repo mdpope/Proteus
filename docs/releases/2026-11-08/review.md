@@ -38,9 +38,9 @@ work, beyond the existing smaller source regressions.
 | Area | Latest evidence | Remaining work |
 | --- | --- | --- |
 | Mac recovery/preservation | Final installed fingerprint, health and 8 workspaces/19 projects/64 scopes/241 tabs/3 windows verify. | Independently exercise Back/Forward, reading, sources/models, pairings and real Keychain continuity. Desktop peer draft read/save methods were missing from the transport allowlist; mobile/web use a different path. The operator defers the correction to a separate Nov 10 branch and forbids another Nov 8 build/deployment for it. Preserve both drafts; installed synchronization has not passed. Fresh Cua verification was blocked by another chat's desktop lease; installed tools alone are not permission/observation evidence. Resolve legacy attention/unregistered recoveries through supported maintenance. |
-| iOS new-chat attachments | Simulator Files/Photos dismissal, native Paste consent, image review/upload and chat creation pass. | Physical new-chat import/review and retry acceptance remain pending; build 2611.9.3 is installed; simulator acceptance is distinct from physical import/retry testing. |
+| iOS new-chat attachments | Simulator Files/Photos dismissal, native Paste consent, image review/upload and chat creation pass. Both devices have corrective build 2611.10.3 installed. | Physical new-chat import/review and retry acceptance remain pending. |
 | Spelling | Desktop native edit routing and replacement callbacks pass their checks. Mac package contains the change. Web assets build. | Actual OS dictionary suggestions/replacement were unavailable in the automated Mac fixture. Verify real desktop/browser correction. Deploy the later web editable-menu guard and validate native iOS spell checking after simulator acceptance. |
-| Physical mobile behavior | iPhone 2611.9.3 preserved 339 files and four destinations before launch. Simulator routing, grouped tabs and typing/history cases pass. | Real-chat scrolling/typing, notification-repeat cessation, tap-to-answer and cold/background reconnect acceptance. A recorded phone General-project cache revision matched all 17 desktop tab IDs, including five hidden; new phone-tab propagation still needs verification. iPad is authorized when ready; other desktop rollout holds remain. |
+| Physical mobile behavior | Both devices have corrective 2611.10.3 installed and launched. The rollout ledger records the specific phone lock-file exception and tablet final source-stability qualification. Simulator routing, grouped tabs and typing/history cases pass. | Real-chat scrolling/typing, notification-repeat cessation, tap-to-answer and cold/background reconnect remain qualified. A recorded phone cache revision matched the desktop tab IDs, while new phone-tab propagation still needs physical verification. |
 | Folder access | Owner grant, stable retry and permission transition regressions pass. | Installed desktop/web/iPhone/iPad request/approve/deny and next-turn sandbox activation acceptance. |
 | Schedule provider portability | HC native first ingestion totals 10; unchanged-evidence replay passes on Codex, Copilot and Claude with no new prompt. Exact saved grant, artifacts/mtimes, two-entry ledger, paused state and source/owner selection remain intact. | Once/deny/revocation and actual Notification Center severity/correlation/dedup/restart remain unverified. Synthetic replay does not establish all professional workflows or first ingestion on every provider. Live schedules remain unchanged. |
 | Remote questions/remembered approvals | Ordinary question transport and acknowledgment-driven dialog correction are implemented. | Actual Mac-to-Windows text/choice questions and stale/reconnect/double-click cases. Full cross-owner remembered-approval fault matrix. |
@@ -48,6 +48,19 @@ work, beyond the existing smaller source regressions.
 | Atlassian/ADO | Reconsented managed Jira exposes 18 tools. Issue/JQL/comment reads and nine canonical team queries pass. Live queue comparison matches 16 open items in order and 33 resolved items in membership. The disposable fixture accepted a comment and Resolve transition, each independently read back, and is completed. Guided ADO source/catalog/UI tests pass. | Jira multi-page results and create/edit/link/worklog runtime acceptance remain open. Workflow validation required resolution notes/customer fields omitted from required-field metadata and ADF formatting. Account-scoped ADO family reads/pool writes and PAT lifecycle/CLI design remain separate. |
 | Proxmox/local networking | Native permission correction and browser/CDP source tests pass. | Installed local-network permission delivery, live page/noVNC connection and DevTools responsiveness. |
 | Release completion | Mac, web and iPhone accepted identities are recorded separately. | Current publication/source-companion reconciliation, release integration/closeout and eligible artifact/recovery cleanup. Nov 8 has no completed closeout. |
+
+Final recovery follow-up reproduced the Windows first-scan deadline defect in the unchanged
+accepted source. The correction is undergoing Windows package acceptance and normal signed
+rollout, with scan counts/timings retained for any later failure. The original installation
+receipt cannot establish which failure path occurred.
+
+Web recovery closeout independently reverified the existing isolated restoration against all
+18 captured protected tables, schema, native ledger and nutrition. Current live snapshots were
+stable and differ in app records from the earlier capture. The original failed rehearsal remains
+retained with its unrecorded cause. The reviewed retention plan verified current code, previous
+recovery code, one server recovery and both local recovery generations before retiring eligible
+duplicates. Measured server free space increased by 655,704,064 bytes. All 14 endpoints passed
+the subsequent audit.
 
 ## Carried acceptance from earlier closed releases
 
