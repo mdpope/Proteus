@@ -14,7 +14,8 @@ planning document. The release remains open; the following is the November 10 cu
 | iPad | Corrective 2611.10.3 installed and launched | Four destinations retained. Initial per-file readback matched 262 protected files, but the final stopped/source-stability guard failed; the candidate was later observed running. A separate historical readback qualification records before-launch verification as false and does not establish current whole-profile equality. Controlled launch and the authorized one-shot project cache repair were recorded; physical reconciliation remains unverified. |
 | Work Mac | Updated; native provider portability and replay pass | Build `281a24894d9e+src.41d00617717d`; health verified. Navigation 3 workspaces, 13 projects, 84 scopes, 299 tabs, 4 windows, zero differences. Human-approved first native command processed two records totaling 10. Codex, Copilot and Claude each replayed unchanged evidence with exit 0, skipped 2, total 10 and no new prompts. Four artifact hashes and nanosecond mtimes, two-record ledger, exact saved grant, narrow folders, paused state and source/owner selection survive provider switches and reconciliation. Once/deny/revocation, Notification Center error severity/correlation/dedup/restart, Jira and broader preservation remain unverified. Live schedules are unchanged; this synthetic fixture does not qualify full professional workloads or first ingestion on every provider. |
 | Linux | Final package updated and health verified | Build `2d659fe3f06b+src.e6ba2990cf5e`; owner job complete/updated. Automatic navigation reports zero differences across 2 workspaces, 2 projects, 10 scopes, 18 tabs and 1 window. Native builder acceptance passed 1,749 tests with 10 skipped, extraction/UI/terminal/restart and disposable update/rollback/failure rehearsals. Cua is installed/catalog available, but verification sees no desktop windows; graphical-session observation remains unverified. Real installed keyring, full histories/drafts, sources/models, pairings, notifications and workflows remain separately qualified. |
-| Windows | Accepted bytes signed and published; installation blocked | Build `windows.9f6e1047d807`, pinned runtime source. Native suite 1,747 passed/12 skipped, packaged synthetic acceptance and Mac independent byte/source verification passed. The designated destination rejects its stale/malformed installer registration; no candidate or active operation remains. Another consumer rejects the new publisher key; an existing-trust transition envelope is signed but not installed. No registration/trust bypass or live Windows installation is claimed. |
+| Windows consumer | Updated and health verified | Build `windows.9f6e1047d807`, source fingerprint `9f6e1047d8077de08db87cb33b4e8f8c78aa44c241dd0b0191c60f46df6eef96`. Owner reports complete/updated with verified health. Navigation 1 workspace, 1 project, 5 scopes, 7 tabs and 1 window reports zero differences. Cua discovery, permissions, windows and real UIAutomation observation passed. Input and broader preserved-state checks remain open. The transition envelope used an existing trusted publisher key. |
+| Windows designated builder | Update stopped before replacement | Accepted `windows.9f6e1047d807` bytes passed staging. A qualified two-value transactional registration repair committed and verified, preserving all baseline package bytes and additional operator files. The update then failed during stopping because recovery data did not become quiescent. The healthy `windows.30f8b6596e38` baseline relaunched. Granted read access now permits failure-receipt inspection, but the receipt and empty helper log contain no scan duration/count or changed-path evidence. Cause and remedy remain unresolved. |
 
 The public Mac archive passes the official updater extractor and actual HTTPS hashes. The first
 unpublished archive had the wrong top-level layout; it was rejected before distribution, corrected
@@ -39,14 +40,25 @@ count as HC installed command or grant-lifecycle acceptance. Subsequent native e
 qualifies command portability, the explicit saved grant, unchanged-evidence replay and source
 reconciliation for the bounded fixture as described above; once/deny/revocation remain unverified.
 
-Windows follow-up: comparison with the original signed 0.2.43 archive found every baseline
-file unchanged. Three additional JSON files explain the installed package hash difference;
-they and four empty tool directories remain untouched. A native transactional registration
-repair is being qualified on disposable keys; earlier helpers failed receipt-validation tests
-and must not be used live. The second consumer's superseded prepared 0.2.43 job was cancelled
-through its original owning chat; the new coordinator is receiving the accepted 0.2.44 bytes
-with an envelope signed by its existing trusted publisher key. Neither Windows installation
-is yet verified updated. No app rebuild or trust-policy change is part of this recovery.
+Windows follow-up comparison with the original signed 0.2.43 archive found every baseline
+file unchanged. Three additional JSON files explain the installed package hash difference.
+Verified private copies preserve those additions through recovery. The final reviewed repair
+passed native transactional and wrapper fixtures and its single live invocation verified both
+registration values and unchanged package/addition hashes. Earlier rejected helpers remain
+retained as failure evidence. The consumer update completed after its superseded prepared job
+was cancelled through its owning chat. The designated builder's later pre-replacement failure
+remains unresolved. The synchronous scan can exceed its fixed budget on a first inspection,
+but retained evidence does not establish that this happened in the failed attempt.
+
+HC managed Jira acceptance now includes live issue/JQL/comment reads, all nine existing team
+queue queries and an independent live queue comparison. All 16 open items matched in order and
+all 33 recently resolved items matched membership. Each query fit one terminal page, so
+multi-page continuation remains untested. A disposable ticket accepted a validation comment,
+verified through a separate read, and a Resolve transition verified as Resolved with Done status
+category and Done resolution. Workflow validation required additional resolution notes/customer
+fields and ADF formatting. Two explicit rejections were reconciled before correction. The
+test ticket is completed with its authorized comment retained. Additional create/edit/link/worklog
+operations remain catalog evidence. Cross-window Playwright attachment is queued for Nov 10.
 
 The final Mac, Linux and Windows public packages have verified signatures, seven complete immutable HTTPS
 hashes and 22 catalog/page hashes. Hosting and unrelated public files were preserved. Three
