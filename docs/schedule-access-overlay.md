@@ -1,6 +1,18 @@
 # Durable workflow access and provider portability — v1
 
 Nov 8 source implementation; installed acceptance is tracked separately in the release record.
+HC installed 0.2.44 acceptance confirms provider selection/reconciliation and managed readiness,
+but has not executed the command fixture: Copilot is waiting at explicit command identity consent.
+The installed Codex MCP transport adds a redundant outer approval, and Claude's prefixed owner
+tool name misses the unprefixed exact action rule. These are adapter defects corrected in later
+source, not reasons to add broad trust or approve another run. Claude normalization is limited
+to captured tools on this run's owner bridge. Codex transport acceptance executes nothing: each
+invocation still reaches host identity consent, revocation, owner and sandbox checks.
+The agent schema now describes all three adapters and their verified destination requirement.
+Desktop runtime packages intentionally omit `docs/`; the versioned schemas ship in the package,
+and this contract is available in the corresponding source companion. Its absence from the app
+bundle does not establish a schema or runtime failure.
+
 The installed Work Mac 0.2.43 adapters have **no qualified equivalent workaround** for a scoped
 Codex schedule. Removing `sandboxedCommands` is not a supported migration: exact command
 approval and a working directory do not enforce filesystem, network or child-process boundaries.

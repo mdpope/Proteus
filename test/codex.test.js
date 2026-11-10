@@ -252,3 +252,18 @@ test('Codex attaches only the owner bridge and leaves actual managed tool author
  const conflict=fixture();conflict.run.schedule.mcpServers={example:{command:'competing'}};
  await assert.rejects(conflict.provider.run({...conflict.args,managedMcp:{example:server}}),/competing/);await conflict.provider.close();
 });
+
+test('Codex scoped MCP transport defers all execution consent to the captured host handler',async()=>{
+ const f=fixture();const args={operationId:'synthetic-operation',argv:['synthetic-not-executed']};let calls=0;
+ f.args.scopedTools=[{name:'proteus_exec',description:'synthetic consent owner',parameters:{type:'object'},handler:async()=>{calls++;return {identityConsentRequired:true};}}];
+ const approvals=[];f.args.ask=async request=>{approvals.push(request);return 'decline';};
+ try{
+  const task=f.provider.run(f.args);await until(()=>f.rpc.turn===1);const env=f.rpc.calls.find(row=>row.method==='thread/start').params.config.mcp_servers.proteus_app.env;
+  const elicitation=(id,serverName='proteus_app',name='proteus_exec')=>({id,method:'mcpServer/elicitation/request',params:{threadId:'thread',turnId:'turn-1',serverName,mode:'form',message:`Allow the ${serverName} MCP server to run tool "${name}"?`,_meta:{codex_approval_kind:'mcp_tool_call',tool_params:args},requestedSchema:{type:'object',properties:{}}}});
+  f.rpc.emit('request',elicitation(201));await until(()=>f.rpc.responses.some(row=>row.id===201));assert.equal(f.rpc.responses.find(row=>row.id===201).result.action,'accept');assert.equal(approvals.length,0);assert.equal(calls,0,'transport acceptance executes nothing');
+  for(let i=0;i<2;i++){const r=await fetch(env.PROTEUS_DOCUMENT_ENDPOINT,{method:'POST',headers:{authorization:env.PROTEUS_DOCUMENT_CAPABILITY},body:JSON.stringify({action:'call',name:'proteus_exec',arguments:args})});assert.deepEqual(await r.json(),{identityConsentRequired:true});}
+  assert.equal(calls,2,'every bridge invocation still reaches the host identity gate');assert.equal(approvals.length,0);
+  f.rpc.emit('request',elicitation(202,'unselected'));await until(()=>f.rpc.responses.some(row=>row.id===202));assert.equal(f.rpc.responses.find(row=>row.id===202).result.action,'decline');
+  f.rpc.notice('turn/completed',{turn:{status:'completed'}});await task;
+ }finally{await f.provider.close();}
+});

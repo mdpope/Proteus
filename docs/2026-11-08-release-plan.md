@@ -441,3 +441,12 @@ reopen a stale cached identity. Explicit new-tab creation and offline replay ret
 intent. On reselecting a loaded browser, show its actual page address without publishing private
 redirect URLs to the owner. Preserve visible unloaded tabs and exclude hidden tabs from navigation.
 Verify same-document navigation, reselection and owner reconciliation, then redeploy iOS.
+
+## N8-25 — Installed provider bridge acceptance
+
+Work Mac confirms source-owned Codex-to-Copilot selection/reconciliation, unchanged paused state,
+history and narrow policy, ready managed connections, Claude policy preview and invalid-model
+rollback. Execution totals/replay remain unverified pending human command consent. Correct the
+redundant Codex scoped-command MCP transport approval and Claude owner tool-name/action matching;
+retain host identity consent and all owner/sandbox/revocation checks. Correct stale agent schema
+descriptions. Source tests do not qualify an installed package or answer a pending approval.

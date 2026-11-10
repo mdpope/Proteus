@@ -269,7 +269,11 @@ export class CodexProvider {
    }else if(msg.method==='mcpServer/elicitation/request'){
      const meta=p._meta,name=p.message?.match(/tool "([^"\n]+)"\?$/)?.[1],tool=browser.find(tool=>tool.name===name);
      if(p.serverName==='proteus_app'&&p.mode==='form'&&meta?.codex_approval_kind==='mcp_tool_call'&&tool&&meta.tool_params&&typeof meta.tool_params==='object'&&!Array.isArray(meta.tool_params)&&Object.keys(p.requestedSchema?.properties||{}).length===0){
-       const args=meta.tool_params,answer=name==='proteus_folder_access'?'approve':await scopeAsk({type:'permission',question:'Allow Proteus app action?',details:{kind:'custom-tool',toolCallId:p.turnId,toolName:name,args,intention:`Proteus ${name} ${args.action||''}`}});
+       // A captured scoped tool owns command identity consent and sandbox checks.
+       // Accepting its transport envelope grants no command authority; the bridge
+       // still invokes the host handler, including on repeated calls.
+       const hostScoped=scopedTools.some(candidate=>candidate===tool&&candidate.name==='proteus_exec');
+       const args=meta.tool_params,answer=name==='proteus_folder_access'||hostScoped?'approve':await scopeAsk({type:'permission',question:'Allow Proteus app action?',details:{kind:'custom-tool',toolCallId:p.turnId,toolName:name,args,intention:`Proteus ${name} ${args.action||''}`}});
        assertPendingApprovalCurrent();assertAppToolActive();const allowed=['approve','approve-auto'].includes(answer);
        if(allowed){if(approvedBridgeCalls.size>=16)approvedBridgeCalls.clear();approvedBridgeCalls.set(JSON.stringify([name,args]),{expires:Date.now()+15000});}
        client.respond(msg.id,{action:allowed?'accept':'decline',content:allowed?{}:null});
@@ -310,7 +314,7 @@ export class CodexProvider {
    // The installed runtime accepts dynamic inputImage results but drops their
    // images before model delivery. Keep the fresh MCP path on new chats too.
    const resumedBrowserTools=currentBrowserTools.filter(tool=>tool.name!=='proteus_open_document'&&(run.providerSessionId||tool.name==='proteus_desktop')).map(tool=>({...tool,handler:args=>invokeAppTool(tool,args)}));
-   if(this.browser?.openDocument||this.integrations||this.chatControl||resumedBrowserTools.length){
+   if(scopedTools.length||this.browser?.openDocument||this.integrations||this.chatControl||resumedBrowserTools.length){
     if(selected.proteus_app)throw new Error('The MCP name proteus_app is reserved for Proteus app tools.');
     appBridge=await documentBridge({openDocument:async(args,id)=>{
       if(active.recheckPermissions())throw new Error('Workspace permissions changed.');
