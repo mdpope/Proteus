@@ -181,3 +181,19 @@ load the entire history without user scrolling. Restore position when returning 
 Verify mouse wheel, trackpad, touch and keyboard scrolling across desktop, web, iPhone and iPad,
 with short and long lists, narrow layouts, slow responses and failed page loads. This is queued
 for Nov 10; it does not authorize another Nov 8 build or deployment.
+
+## N10-10 — Name the service and connection in approval requests
+
+Operator approved a Jira connection request whose card displayed only “Allow app action?” and
+“Server connection requires approval”, without the Jira or configured connection name. Replace
+this ambiguous presentation with a brief description naming the service and exact configured
+connection, such as “Connect Jira · hc-atlassian for this turn?”. Do not require interpreting a
+generic app-action label or raw tool name to identify what is being approved.
+
+Carry the same identity through desktop, web and iOS approval cards and their notifications.
+Distinguish connecting the binding from permission to execute an individual tool, and explain
+the actual approval duration. Where names collide, expose enough owner/workspace or account
+context to distinguish them without displaying credentials, tokens or private issue content.
+Check managed and ordinary server connections, unavailable display metadata, duplicate names
+and narrow layouts; the named card and decision must remain bound to the same current request.
+This is deferred Nov 10 work, with no new Nov 8 build or deployment.
