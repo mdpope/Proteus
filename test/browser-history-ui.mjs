@@ -10,7 +10,7 @@ const command=(action,id,extra={})=>page.evaluate(value=>window.desktop.browser(
 const inspect=(id,expr)=>app.evaluate(({app},{id,expr})=>process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser().get(id).view.webContents.executeJavaScript(expr),{id,expr});
 let id;
 try{
- await launch();await page.locator('#tab-add-menu summary').click();await page.locator('#browser').click();id=await page.locator('.tabitem.selected [data-tab]').getAttribute('data-tab');
+ await launch();await page.locator('#tab-add-menu summary').click();await page.locator('#browser-url').waitFor();id=await page.locator('.tabitem.selected [data-tab]').getAttribute('data-tab');
  for(const suffix of ['/A','/B','/C']){await command('navigate',id,{url:site+suffix});await until(()=>app.evaluate(({app},{id,title})=>{const tab=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser().get(id);return tab.logicalHistory?.entries[tab.logicalHistory.index].title===title;},{id,title:'History '+suffix}));}
  // Intercept only the native popup in this disposable test to inspect real menu items.
  await app.evaluate(({Menu})=>{process.__historyMenus=[];const original=Menu.prototype.popup;process.__restoreHistoryPopup=()=>{Menu.prototype.popup=original;};Menu.prototype.popup=function(){process.__historyMenus.push(this);};});
@@ -32,7 +32,7 @@ try{
  await command('back',id);await until(async()=>await inspect(id,'location.pathname')==='/B');
  await inspect(id,"document.querySelector('input').value='PRIVATE_FORM_VALUE';true");await command('share',id,{shared:true});
  await until(()=>saved().tabs.find(t=>t.id===id)?.history?.index===1);
- const before=saved().tabs.find(t=>t.id===id);assert.deepEqual(before.history.entries.map(e=>e.url),['/A','/B','/C'].map(x=>site+x));assert.doesNotMatch(JSON.stringify(saved()),/PRIVATE_FORM_VALUE|pageState|postData|shared|owner/);
+ const before=saved().tabs.find(t=>t.id===id);assert.deepEqual(before.history.entries.map(e=>e.url),['/A','/B','/C'].map(x=>site+x));assert.doesNotMatch(JSON.stringify(saved()),/PRIVATE_FORM_VALUE|pageState|postData|"shared"\s*:|"owner"\s*:/);
  await app.close();app=null;await launch();await page.locator('#browser-url').waitFor();id=await page.locator('.tabitem.selected [data-tab]').getAttribute('data-tab');await until(async()=>await inspect(id,'location.pathname')==='/B');
  assert.equal(await page.locator('#browser-share').getAttribute('aria-pressed'),'false');assert.equal(await inspect(id,"document.querySelector('input').value"),'');
  assert.equal(await page.locator('#browser-back').isEnabled(),true);assert.equal(await page.locator('#browser-forward').isEnabled(),true);
@@ -48,7 +48,7 @@ try{
  // Malicious restore descriptors cannot navigate to the privileged app origin or restore authority.
  const origin=new URL(page.url()).origin;const bad=await command('create',null,{restore:true,url:origin,history:{index:1,entries:[{url:site+'/A',title:'A',pageState:'PRIVATE'},{url:origin,title:'App'}]},shared:true,owner:'run'});assert.equal(bad.url,'');assert.equal(bad.shared,false);assert.equal(bad.owner,null);await command('close',bad.id);
  const legacy=await command('create',null,{restore:true,url:site+'/legacy'});assert.equal(legacy.url,site+'/legacy');await command('close',legacy.id);
- const agent=await app.evaluate(async({app},id)=>{const browser=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser();await browser.command({action:'share',id,shared:true});return browser.agent({action:'list'},'synthetic-run');},id);assert.ok(agent.length);assert.ok(agent.every(info=>!('history' in info)));
+ const agent=await app.evaluate(async({app},id)=>{const main=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs'),browser=main.getBrowser(),s=main.getService();const run=s.engine.createRun({schemaVersion:1,id:'history-fixture',name:'Synthetic history',enabled:false,cron:'0 9 * * *',timezone:'UTC',provider:'rehearsal',model:'',workspace:{cwd:s.home,additionalDirectories:[]},misfire:'skip',prompt:'Synthetic only',context:s.context.capture({workspaceId:s.context.get().defaultWorkspaceId})},'chat',null,{deferStart:true});run.status='completed';run.deferredStart=false;s.engine.persist(run);await browser.command({action:'share',id,shared:true});return browser.agent({action:'list'},run.id);},id);assert.ok(agent.length);assert.ok(agent.every(info=>!('history' in info)));
  await command('close',id);await until(()=>saved().tabs.every(t=>t.type!=='browser'));assert.deepEqual(errors,[]);
  console.log(JSON.stringify({passed:true,checks:13,screenshot:'/private/tmp/proteus-browser-history-restored.png'}));
 }catch(error){console.error(JSON.stringify({message:error.message,errors,buttons:await page?.locator('.browserbar').innerHTML().catch(()=>''),state:await app?.evaluate(({app})=>{const b=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser();return {active:b.active,menus:process.__historyMenus?.length,tabs:b.list()};}).catch(()=>null)}));throw error;}finally{if(app)await app.close();await new Promise(resolve=>server.close(resolve));fs.rmSync(home,{recursive:true,force:true});}

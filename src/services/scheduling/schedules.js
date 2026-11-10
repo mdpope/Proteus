@@ -2,6 +2,8 @@ import {validateManagedRequirements} from '../integrations/managed-requirements.
 import {validateScheduleSources} from './schedule-context.js';
 import {canonicalPath} from '../settings/permissions.js';
 import { validateModelOptionShape } from '../../models/model-catalog.js';
+import {validateSelectionOverride} from './source-selection-overrides.js';
+import {validateAccessOverlay} from './access-overlay.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -15,6 +17,8 @@ export function nextRuns(cron, timezone, from = new Date(), count = 5) {
   return Array.from({ length: count }, () => parser.next().toISOString());
 }
 export function validateSchedule(value) {
+  if(value?.ownerSelectionOverride!==undefined)validateSelectionOverride(value.ownerSelectionOverride);
+  if(value?.accessOverlay!==undefined)validateAccessOverlay(value.accessOverlay);
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('A schedule must be a JSON object.');
   if (value.schemaVersion !== 1) throw new Error('schemaVersion must be 1.');
   if (!/^[a-z0-9][a-z0-9-]{0,79}$/.test(value.id || '')) throw new Error('id must be a lowercase filename-safe identifier.');

@@ -99,7 +99,7 @@ try {
     env.TEST_RUNNER_PROTEUS_TEST_HTTP_ORIGIN='http://127.0.0.1:'+httpPort;
     env.TEST_RUNNER_PROTEUS_TEST_RELAY_ORIGIN='ws://127.0.0.1:'+relayPort;
     child = spawn('xcrun', ['simctl', 'bootstatus', device.udid, '-b'], {cwd:root, env, stdio:'inherit'});
-    const bootCode = await new Promise((resolve, reject) => {child.once('error', reject); child.once('exit', resolve);});
+    const bootCode = await new Promise((resolve, reject) => {child.once('error', reject); child.once('close', resolve);});
     if (bootCode !== 0) throw new Error('Simulator did not finish booting. No fixture or test was started.');
     fixture = spawn(process.execPath, ['test/mobile-host.mjs'], {cwd:root, env:{...env, PROTEUS_TEST_CONTAINER:'0'}, stdio:['ignore','pipe','pipe']});
     const fixtureLog = fs.createWriteStream(path.join(output, 'fixture.log'));
@@ -117,11 +117,13 @@ try {
   const runBuild = async (arguments_, name) => {
     const log = fs.createWriteStream(path.join(output, name));
     child = spawn('xcodebuild', arguments_, {cwd:root, env, stdio:['ignore','pipe','pipe']});
+    let transcript='';child.stdout.on('data',data=>{transcript+=String(data);});child.stderr.on('data',data=>{transcript+=String(data);});
     child.stdout.pipe(log); child.stderr.pipe(log);
     child.stdout.on('data', data => {for (const line of String(data).split('\n')) if (/Test (Suite|Case)|Executed |\*\* (TEST|BUILD)|error:|warning:/.test(line)) console.log(line);});
     child.stderr.on('data', data => process.stderr.write(data));
-    const code = await new Promise((resolve, reject) => {child.once('error', reject); child.once('exit', resolve);});
+    const code = await new Promise((resolve, reject) => {child.once('error', reject); child.once('close', resolve);});
     if (code !== 0) throw new Error(`xcodebuild failed (${code}). Inspect ${path.join(output, name)}`);
+    return transcript;
   };
   await runBuild(buildArgs, 'xcodebuild.log');
   if (action === 'test') {
@@ -146,7 +148,11 @@ try {
     const testing=['test-without-building','-xctestrun',file,'-destination',`platform=iOS Simulator,id=${device.udid}`,'-parallel-testing-enabled','NO','-resultBundlePath',resultPath];
     for(const target of options['--only']||[])testing.push('-only-testing:'+target);
     if(process.env.PROTEUS_IOS_TEST_TIMEOUTS==='1')testing.push('-test-timeouts-enabled','YES','-default-test-execution-time-allowance','300','-maximum-test-execution-time-allowance','600');
-    await runBuild(testing,'test-without-building.log');
+    const transcript=await runBuild(testing,'test-without-building.log');
+    const started=[...transcript.matchAll(/Test Case '-\[([^ ]+) ([^\]]+)\]' started/g)].map(match=>({owner:match[1],method:match[2]}));
+    if(!started.length)throw Error('No native tests executed. A successful xcodebuild with zero tests is not acceptance.');
+    for(const target of options['--only']||[]){const [bundle,type,method]=target.split('/');if(!started.some(item=>item.owner.startsWith(bundle+'.')&&(!type||item.owner.endsWith('.'+type))&&(!method||item.method===method)))throw Error('Requested native test did not execute: '+target);}
+
   }
   console.log(`Verified ${action} on ${device.name}. Artifacts: ${output}`);
 } finally { await stop(fixture); }

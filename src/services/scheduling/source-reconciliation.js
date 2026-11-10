@@ -1,3 +1,4 @@
+import {reconcileOwnerSelection} from './source-selection-overrides.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
@@ -21,7 +22,8 @@ export function reconciliationPlan(current,evidence){
  if(matches.length!==1)throw Error('Export must contain exactly one matching schedule.');
  const exported=matches[0];validateSchedule(exported);
  if(exported.source?.system!==current.source.system||exported.source?.manifest!==current.source.manifest)throw Error('Source ownership mismatch.');
- const next={...current,...exported,source:{...current.source,...exported.source},enabled:current.enabled};
+ let next={...current,...exported,accessOverlay:current.accessOverlay,source:{...current.source,...exported.source},enabled:current.enabled};
+ next=reconcileOwnerSelection(current,exported,next);
  for(const key of ['file','revision','nextRuns','error'])delete next[key];
  if(next.executionPermissions?.folders)next.executionPermissions={...next.executionPermissions,folders:next.executionPermissions.folders.map(folder=>({...folder,path:canonicalPath(folder.path,next.workspace.cwd)}))};
  validateSchedule(next);

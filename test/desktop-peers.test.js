@@ -256,3 +256,12 @@ test('offline requests start recovery without replaying commands or defeating ba
   await peers.connect(record.hostId);peers.sessions.get(record.hostId).client.dispatchEvent(new CustomEvent('recovery-blocked'));peers.sessions.get(record.hostId).client.close();
   await assert.rejects(peers.request(record.hostId,'tabs.get'),/authentication/);assert.equal(clients,3);
 });
+
+test('ordinary question commands pass the desktop transport with exact question identity',async t=>{
+ const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-peer-question-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
+ const peers=new DesktopPeers(home,{safeStorage});peers.load();t.after(()=>peers.close());peers.records.set(record.hostId,{...record});
+ const sent=[];peers.sessions.set(record.hostId,{ready:true,client:{status:'online',request:async(method,args)=>{sent.push({method,args});return {runId:args.id};},close(){}}});
+ const args={id:'chat-fixture',questionId:'question-fixture',answers:{choice:'Yes'}};
+ await peers.request(record.hostId,'chat.answer-question',args);assert.deepEqual(sent,[{method:'chat.answer-question',args}]);
+ await peers.request(record.hostId,'chat.clear-question',{id:args.id,questionId:args.questionId});assert.equal(sent[1].method,'chat.clear-question');
+});

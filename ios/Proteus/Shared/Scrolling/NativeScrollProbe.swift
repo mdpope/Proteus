@@ -42,6 +42,7 @@ struct NativeScrollSnapshot {
 struct NativeScrollProbe: UIViewRepresentable {
     var command: NativeScrollCommand?
     var followBottom = false
+    var keepFocusedInputVisible = false
     var viewport: NativeScrollViewport? = nil
     var onSnapshot: (NativeScrollSnapshot) -> Void
     var onInteraction: (Bool) -> Void = { _ in }
@@ -53,6 +54,7 @@ struct NativeScrollProbe: UIViewRepresentable {
     func updateUIView(_ view: UIView, context: Context) {
         let coordinator = context.coordinator
         coordinator.followBottom = followBottom
+        coordinator.keepFocusedInputVisible = keepFocusedInputVisible
         coordinator.viewport = viewport
         viewport?.scrollView = coordinator.scrollView
         coordinator.onSnapshot = onSnapshot
@@ -76,6 +78,7 @@ struct NativeScrollProbe: UIViewRepresentable {
         weak var scrollView: UIScrollView?
         var viewport: NativeScrollViewport?
         var followBottom = false
+        var keepFocusedInputVisible = false
         var onSnapshot: (NativeScrollSnapshot) -> Void = { _ in }
         var onInteraction: (Bool) -> Void = { _ in }
         var onApplied: (UUID, NativeScrollSnapshot) -> Void = { _, _ in }
@@ -91,6 +94,25 @@ struct NativeScrollProbe: UIViewRepresentable {
         private var active = true
         private var updateScheduled = false
         private var settling: Task<Void, Never>?
+        private var interacting = false
+        private var retiredCommands: [UUID] = []
+
+        private func retire(_ id: UUID) {
+            guard !retiredCommands.contains(id) else { return }
+            retiredCommands.append(id)
+            if retiredCommands.count > 64 { retiredCommands.removeFirst() }
+        }
+
+        /// A native pan owns the viewport through deceleration. SwiftUI can
+        /// deliver an older command again before its cancellation state renders.
+        func beginInteraction() {
+            settling?.cancel(); settling = nil
+            interacting = true
+            followBottom = false
+            if let pendingCommand { retire(pendingCommand.id) }
+            pendingCommand = nil; resolvedTarget = nil
+            onInteraction(true)
+        }
 
         func invalidate() {
             active = false
@@ -155,26 +177,17 @@ struct NativeScrollProbe: UIViewRepresentable {
         @objc private func handlePan(_ recognizer: UIPanGestureRecognizer) {
             switch recognizer.state {
             case .began:
-                settling?.cancel(); settling = nil
-                // Stop pinning synchronously. SwiftUI gestures inside a WebKit
-                // message do not reliably see the containing scroll view's pan.
-                followBottom = false
-                pendingCommand = nil; resolvedTarget = nil
-                onInteraction(true)
+                beginInteraction()
             case .ended, .cancelled, .failed:
+                guard interacting else { return }
                 settling?.cancel()
                 let expected = generation
                 settling = Task { @MainActor [weak self] in
                     // UIKit starts deceleration after the recognizer's ended callback.
                     try? await Task.sleep(for: .milliseconds(32))
                     guard let self else { return }
-                    while !Task.isCancelled, let scroll = self.scrollView, self.active, self.generation == expected {
-                        if !scroll.isTracking && !scroll.isDragging && !scroll.isDecelerating {
-                            self.report(scroll)
-                            self.onInteraction(false)
-                            self.scheduleUpdate(scroll)
-                            break
-                        }
+                    while !Task.isCancelled, self.scrollView != nil, self.active, self.generation == expected {
+                        if self.finishInteractionIfSettled() { break }
                         try? await Task.sleep(for: .milliseconds(16))
                     }
                 }
@@ -182,8 +195,25 @@ struct NativeScrollProbe: UIViewRepresentable {
             }
         }
 
+        @discardableResult func finishInteractionIfSettled() -> Bool {
+            guard active, interacting, let scroll = scrollView,
+                  !scroll.isTracking, !scroll.isDragging, !scroll.isDecelerating else { return false }
+            // Drop stale follow props before handing control back. Only the
+            // settled parent can opt in again after reading the final viewport.
+            followBottom = false
+            interacting = false
+            report(scroll)
+            onInteraction(false)
+            scheduleUpdate(scroll)
+            return true
+        }
+
         func apply(_ command: NativeScrollCommand?) {
             guard active else { return }
+            if let command {
+                if interacting { retire(command.id); return }
+                guard !retiredCommands.contains(command.id) else { return }
+            }
             if pendingCommand?.id != command?.id {
                 resolvedTarget = nil
                 appliedCommand = nil
@@ -229,9 +259,38 @@ struct NativeScrollProbe: UIViewRepresentable {
             onSnapshot(current)
         }
 
+        private func keepEditorVisible(in scroll: UIScrollView) -> Bool {
+            guard keepFocusedInputVisible else { return false }
+            func focused(in view: UIView) -> UIView? {
+                if view.isFirstResponder { return view }
+                for child in view.subviews { if let value = focused(in: child) { return value } }
+                return nil
+            }
+            guard let editor = focused(in: scroll), let input = editor as? UITextInput,
+                  let selection = input.selectedTextRange else { return false }
+            let snapshot = snapshot(scroll)
+            let top = scroll.contentOffset.y + scroll.adjustedContentInset.top + 8
+            let bottom = scroll.contentOffset.y + scroll.bounds.height - scroll.adjustedContentInset.bottom - 8
+            guard bottom > top else { return true }
+            let whole = scroll.convert(editor.bounds, from: editor)
+            let caret = scroll.convert(input.caretRect(for: selection.end), from: editor)
+            let target = whole.height <= bottom - top ? whole : caret
+            var offset = scroll.contentOffset.y
+            if target.maxY > bottom { offset += target.maxY - bottom }
+            else if target.minY < top { offset -= top - target.minY }
+            offset = min(snapshot.maxOffset, max(-scroll.adjustedContentInset.top, offset))
+            if abs(offset - scroll.contentOffset.y) > 0.5 {
+                scroll.setContentOffset(CGPoint(x: scroll.contentOffset.x, y: offset), animated: false)
+            }
+            return true
+        }
+
         private func applyPending() {
-            guard active, let scroll = scrollView,
+            guard active, !interacting, let scroll = scrollView,
                   !scroll.isTracking, !scroll.isDragging, !scroll.isDecelerating else { return }
+            // Focus owns layout corrections while typing. Keep the actual editor
+            // visible instead of restoring an earlier message's bookmark.
+            if pendingCommand == nil, keepEditorVisible(in: scroll) { return }
             if followBottom && pendingCommand == nil && !scroll.isTracking && !scroll.isDragging && !scroll.isDecelerating {
                 let bottom = snapshot(scroll).maxOffset
                 if abs(scroll.contentOffset.y - bottom) > 0.5 { scroll.setContentOffset(CGPoint(x: scroll.contentOffset.x, y: bottom), animated: false) }
@@ -261,7 +320,8 @@ struct NativeScrollProbe: UIViewRepresentable {
         }
 
         private func verifyApplied(_ scroll: UIScrollView) {
-            guard active, scrollView === scroll,
+            guard active, !interacting, scrollView === scroll,
+                  !scroll.isTracking, !scroll.isDragging, !scroll.isDecelerating,
                   let command = pendingCommand, command.id != appliedCommand,
                   let target = resolvedTarget else { return }
             let state = snapshot(scroll)
@@ -270,6 +330,7 @@ struct NativeScrollProbe: UIViewRepresentable {
                   state.maxOffset >= target - 2,
                   abs(state.offset - max(0, target)) <= 2 else { return }
             appliedCommand = command.id
+            retire(command.id)
             onApplied(command.id, state)
         }
     }

@@ -89,8 +89,8 @@ export class Updates {
  }
  status(){
   let job,resolution;try{job=this.job();if(job?.phase==='attention')resolution=require('../../../desktop/updates/attention-reconciliation.cjs').readAttentionResolution(job);}catch(error){this.error=error.message;}
-  const idle=job?this.idleStatus(job):null;
-  return {identity:this.identity(),navigationVerification:this.navigationStatus(job),operation:{busy:!!(this.busy||this.downloading||this.packagePending),inspection:this.packageOperation||null,queuedInspections:Math.max(0,(this.packagePending||0)-(this.packageOperation?1:0)),maintenance:this.maintenanceOperation||null},browserActivity:this.service.browserUpdateActivity?.()||[],error:this.error||null,download:this.download||null,job:job?{id:job.id,revision:job.revision,phase:job.phase,runId:job.runId,version:job.candidate?.version,buildRevision:job.candidate?.buildRevision,outcome:job.outcome||null,error:job.error||job.preInstallFailure?.error||job.failureHistory?.at(-1)?.error||null,failureHistory:job.failureHistory||[],blocker:['complete','cancelled'].includes(job.phase)||resolution?null:job.phase==='waiting-for-idle'?(idle.blockers.map(updateBlockerText).join('; ')||'Waiting for the final idle check.'):job.blocker||null,idle,health:job.health?{verified:true,at:job.health.at}:null,ordinaryWorkResumedAt:job.ordinaryWorkResumedAt||null,attentionResolution:resolution?{at:resolution.at,receiptHash:resolution.receiptHash,originalError:resolution.originalError,continuationReplayed:false}:null,continuation:job.continuation||null,freeSpaceChange:job.freeSpaceAfter===undefined?null:job.freeSpaceAfter-job.freeSpaceBefore}:null};
+  const idle=job&&['prepared','waiting-for-idle'].includes(job.phase)?this.idleStatus(job):null;
+  return {identity:this.identity(),navigationVerification:this.navigationStatus(job),operation:{busy:!!(this.busy||this.downloading||this.packagePending),inspection:this.packageOperation||null,queuedInspections:Math.max(0,(this.packagePending||0)-(this.packageOperation?1:0)),maintenance:this.maintenanceOperation||null,helperReadiness:this.helperReadiness||null},browserActivity:this.service.browserUpdateActivity?.()||[],error:this.error||null,download:this.download||null,job:job?{id:job.id,revision:job.revision,phase:job.phase,verificationProgress:job.verificationProgress||null,runId:job.runId,version:job.candidate?.version,buildRevision:job.candidate?.buildRevision,outcome:job.outcome||null,error:job.error||job.preInstallFailure?.error||job.failureHistory?.at(-1)?.error||null,failureHistory:job.failureHistory||[],blocker:['complete','cancelled'].includes(job.phase)||resolution?null:job.phase==='waiting-for-idle'?(idle.blockers.map(updateBlockerText).join('; ')||'Waiting for the final idle check.'):job.blocker||null,idle,health:job.health?{verified:true,at:job.health.at}:null,ordinaryWorkResumedAt:job.ordinaryWorkResumedAt||null,attentionResolution:resolution?{at:resolution.at,receiptHash:resolution.receiptHash,originalError:resolution.originalError,continuationReplayed:false}:null,continuation:job.continuation||null,freeSpaceChange:job.freeSpaceAfter===undefined?null:job.freeSpaceAfter-job.freeSpaceBefore}:null};
  }
  readRecoveryPolicy(){try{return recoveryPolicy(this.policyFile,{home:this.ownerHome,installation:this.installation});}catch(error){if(error.code==='ENOENT')throw Error('The installer must inventory this installation’s existing recovery generations before supervised restart. See the Updates recovery setup instructions.');throw error;}}
  context(run){return digest(JSON.stringify({provider:run.schedule.provider,providerSessionId:run.providerSessionId,workspace:run.schedule.workspace,context:run.schedule.context,permissions:run.schedule.permissions,chatPermissionRevision:run.chatPermissionRevision,model:run.schedule.model,effort:run.schedule.reasoningEffort}));}
@@ -303,15 +303,33 @@ export class Updates {
  spawnHelper(job,arm=false){
   if(this.launchHelper)return this.launchHelper(job);
   const log=fs.openSync(path.join(path.dirname(job.file),'helper.log'),'a',0o600);
-  const child=spawn(job.candidate.executable,[path.join(job.candidate.bundle,this.platform==='darwin'?'Contents/Resources/app':'resources/app','desktop/updates/update-helper.cjs'),arm?'arm':'supervise',job.file],{detached:true,cwd:path.dirname(job.file),stdio:['ignore',log,log,'ipc'],env:helperEnvironment()});fs.closeSync(log);child.unref();child.channel?.unref();
+  const child=spawn(job.candidate.executable,[path.join(job.candidate.bundle,this.platform==='darwin'?'Contents/Resources/app':'resources/app','desktop/updates/update-helper.cjs'),arm?'arm':'supervise',job.file],{detached:true,cwd:path.dirname(job.file),stdio:['ignore',log,log,'ipc'],env:{...helperEnvironment(),...(arm?{PROTEUS_UPDATE_READINESS_PROGRESS:'1'}:{})}});fs.closeSync(log);child.unref();child.channel?.unref();
   if(!arm){child.on('error',error=>{this.error='The independent helper could not start: '+error.message;});return;}
-  return new Promise((resolve,reject)=>{const timer=setTimeout(()=>{child.kill();finish(Error('The independent helper did not acknowledge readiness. Proteus stayed open.'));},15000);const finish=(error)=>{clearTimeout(timer);child.removeListener('error',failed);child.removeListener('exit',exited);child.removeListener('message',ready);if(child.connected)child.disconnect();child.channel?.unref();error?reject(error):resolve();};const failed=error=>finish(error),exited=()=>finish(Error('The independent helper exited before handoff. Proteus stayed open.')),ready=message=>{if(message?.ready===job.id)finish();else finish(Error('The helper acknowledged another job.'));};child.once('error',failed);child.once('exit',exited);child.once('message',ready);});
+  const started=Date.now(),budgetMs=15000;
+  this.helperReadiness={jobId:job.id,state:'waiting',phase:'starting',startedAt:new Date(started).toISOString(),budgetMs,stages:[]};
+  const report=(phase,state='waiting')=>{this.helperReadiness={...this.helperReadiness,phase,state,elapsedMs:Date.now()-started,observedAt:new Date().toISOString(),stages:[...this.helperReadiness.stages,{phase,elapsedMs:Date.now()-started}].slice(-8)};this.service.notify?.();};
+  return new Promise((resolve,reject)=>{let settled=false;const timer=setTimeout(()=>{child.kill();finish(Error('The independent helper did not acknowledge readiness. Proteus stayed open.'),'timeout');},budgetMs);
+   const finish=(error,phase=error?'failed':'ready')=>{if(settled)return;settled=true;clearTimeout(timer);child.removeListener('error',failed);child.removeListener('exit',exited);child.removeListener('message',ready);if(child.connected)child.disconnect();child.channel?.unref();report(phase,error?'failed':'ready');error?reject(error):resolve();};
+   const failed=error=>finish(error),exited=()=>finish(Error('The independent helper exited before handoff. Proteus stayed open.'),'exited'),ready=message=>{
+    if(message?.readiness?.jobId===job.id&&['journal-read','candidate-verification','candidate-verified'].includes(message.readiness.phase)){report(message.readiness.phase);return;}
+    if(message?.ready===job.id)finish();else finish(Error('The helper acknowledged another job.'),'identity-mismatch');
+   };child.once('error',failed);child.once('exit',exited);child.on('message',ready);
+  });
  }
 
  async recovery(value){
   const job=this.job();if(!job||!this.owns(job.file)||job.id!==value.id||job.secret!==value.secret||job.home!==this.ownerHome||job.installation!==this.installation)throw Error('This recovery request does not match the bound installation.');
   if(!['verifying','awaiting-chat-resume'].includes(job.phase))throw Error('The update is not awaiting recovery verification.');
-  if(value.action==='verify'){await this.refreshIdentity();const identity=this.identity();if((this.service.windowCount?.()||0)<1||this.service.updateUIHealth&&!await this.service.updateUIHealth())throw Error('The restored app window is not ready.');if(!identity.barrier)throw Error('Recovery dispatch is not behind its idle barrier.');const preservation=this.verifyPreservation(job);return {identity,preservation,at:new Date().toISOString(),windows:this.service.windowCount?.()||0};}
+  if(value.action==='verify'){
+   // Static phase names and elapsed times are safe in the bound startup log;
+   // never log the recovery secret, owner response or preservation inventory.
+   const started=Date.now(),mark=phase=>console.info('Proteus update recovery '+phase+' '+(Date.now()-started)+'ms');
+   mark('identity-start');await this.refreshIdentity();const identity=this.identity();mark('identity-ready');
+   if((this.service.windowCount?.()||0)<1||this.service.updateUIHealth&&!await this.service.updateUIHealth())throw Error('The restored app window is not ready.');
+   mark('windows-ready');if(!identity.barrier)throw Error('Recovery dispatch is not behind its idle barrier.');
+   const preservation=this.verifyPreservation(job);mark('preservation-ready');
+   return {identity,preservation,at:new Date().toISOString(),windows:this.service.windowCount?.()||0};
+  }
   if(value.action==='quit'){this.quit();return {stopping:true};}
   if(value.action!=='resume')throw Error('Unknown update recovery action.');
   if(!job.runId){

@@ -256,3 +256,23 @@ body.sidebar-minimized:has(#sidebar:hover) #workspace,body.sidebar-minimized:has
 .fusion-attribution{margin:8px 0 2px;font-size:12px;color:var(--soft,#9aa79f)}.fusion-attribution>summary{cursor:pointer;list-style:none;overflow-wrap:anywhere}.fusion-attribution>summary::before{content:"\25C7  ";color:var(--accent,#c2e8a0)}.fusion-attribution[open]>summary{margin-bottom:6px}.fusion-attribution .fusion-phases{margin:4px 0 6px 18px;padding:0}.fusion-attribution li{margin:3px 0}.fusion-attribution li small{display:block;font-size:11px;opacity:.85}.fusion-attribution .note{margin:4px 0;font-size:11px}.fusion-models{width:100%;border-collapse:collapse;font-size:12px;margin:8px 0}.fusion-models th,.fusion-models td{text-align:left;padding:4px 6px;border-bottom:1px solid var(--line,#3d4b40)}
 
 @media(max-width:600px){.browser-overview{width:calc(100vw - 16px);height:calc(100dvh - 16px);max-height:calc(100dvh - 16px);padding:12px;border-radius:12px}.browser-overview-grid{gap:14px}}
+
+/* A single remaining-height scroller; filters stay outside the list. */
+.chat-index-page{display:flex;flex-direction:column;min-height:0;height:100%;box-sizing:border-box;overflow:hidden;margin:0}
+.chat-index-page>.heading,.chat-index-page>header,.chat-index-page>.chat-type-tabs,.chat-index-page>.banner{flex-shrink:0}
+.chat-index-page .chat-index-filter-panel{flex-shrink:0;margin:0 0 12px;max-height:45%;overflow:auto}
+.chat-index-filter-panel summary{cursor:pointer;font-size:13px;padding:8px 0}
+.chat-index-page .chat-index-filters{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px 12px;margin:4px 0 8px}
+.chat-index-filters label{min-width:0;margin:0;font-size:12px}.chat-index-filters input,.chat-index-filters select{width:100%;min-width:0;box-sizing:border-box;min-height:32px;padding:7px;font-size:12px}
+.chat-index-page .chat-index-rows{display:block;flex:1;min-height:0;max-height:none;overflow:auto;overscroll-behavior:contain;overflow-anchor:none}
+.chat-index-page .chat-index-row{display:grid;grid-template-columns:minmax(120px,1fr) minmax(150px,260px) minmax(100px,160px);gap:6px 16px;padding:12px;align-items:center}
+.chat-index-row .chat-run-options{grid-column:2;grid-row:1/3;display:grid;gap:5px;font-size:12px;overflow-wrap:anywhere}
+.chat-index-row .chat-computer{grid-column:3;grid-row:1/3;display:grid;gap:5px;font-size:12px}
+.chat-index-row .chat-run-options small,.chat-index-row .chat-computer small{grid-column:auto;font-size:11px;opacity:.7}
+.chat-index-row time,.chat-index-row .chat-index-project-label{grid-column:1;font-size:11px;opacity:.7}
+.chat-index-row strong{grid-column:1;min-width:0}
+@media(max-width:850px){.chat-index-page .chat-index-filters{grid-template-columns:repeat(2,minmax(0,1fr))}.chat-index-page .chat-index-row{grid-template-columns:minmax(0,1fr) minmax(90px,120px)}.chat-index-row .chat-run-options{grid-column:1;grid-row:auto}.chat-index-row .chat-computer{grid-column:2;grid-row:1/4}.chat-index-row strong{grid-column:1;white-space:normal}}
+
+#main:has(>.chat-index-page){overflow:hidden;min-height:0}
+
+.banner.error{color:#ffb3a4;background:#352420;border-color:#85483d}

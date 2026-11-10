@@ -9,7 +9,7 @@ export function updateObservation(service,run){
  const job=status.job?.runId===run.id?status.job:null;
  const identity=pick(status.identity,['platform','arch','packaged','buildRevision','sourceFingerprint']);
  return {available:true,identity,selection:run.schedule.updateSession?pick(run.schedule.updateSession,['releaseId','version','manifestDigest']):null,
-  job:job?{...pick(job,['id','revision','phase','version','buildRevision','outcome','error','blocker','health']),continuationDelivered:!!job.continuation}:null,
+  job:job?{...pick(job,['id','revision','phase','version','buildRevision','outcome','error','blocker','health','verificationProgress']),continuationDelivered:!!job.continuation}:null,
   packageVerified:!!(job?.phase==='complete'&&job.outcome==='updated'&&job.health?.verified&&identity.buildRevision===job.buildRevision)};
 }
 

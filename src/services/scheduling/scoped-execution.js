@@ -1,4 +1,5 @@
 import path from 'node:path';
+import {assertExecutionCapabilities} from './execution-capabilities.js';
 import {createHash} from 'node:crypto';
 import {canonicalPath} from '../settings/permissions.js';
 const within=(file,root)=>{const rel=path.relative(root,file);return rel===''||(!rel.startsWith('..'+path.sep)&&rel!=='..'&&!path.isAbsolute(rel));};
@@ -8,7 +9,8 @@ export function validateScopedExecution(schedule){
  if(p?.sandboxedCommands===undefined)return;
  if(typeof p.sandboxedCommands!=='boolean')throw Error('sandboxedCommands must be a boolean.');
  if(!p.sandboxedCommands)return;
- if(schedule.provider!=='codex'||p.mode!=='custom'||!p.folders?.length)throw Error('Scoped commands require Codex, custom mode and explicit folder grants.');
+ assertExecutionCapabilities(schedule);
+ if(p.mode!=='custom'||!p.folders?.length)throw Error('Scoped commands require custom mode and explicit folder grants.');
  for(const folder of p.folders)if(!path.isAbsolute(folder.path||'')||path.parse(folder.path).root===folder.path||!['read','read-write'].includes(folder.access))throw Error('Scoped commands require narrow absolute folder grants.');
  if(!p.folders.some(folder=>within(schedule.workspace.cwd,folder.path)))throw Error('Scoped command folders must include the working directory.');
 }

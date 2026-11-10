@@ -5,6 +5,6 @@
 // remain inside their page; Proteus-owned approval/file dialogs use a separate,
 // trusted host boundary.
 function pageWebPreferences(options = {}) {
-  return { ...options, nodeIntegration: false, contextIsolation: true, sandbox: true, disableDialogs: true };
+  return { ...options, nodeIntegration: false, contextIsolation: true, sandbox: true, disableDialogs: true, spellcheck: true };
 }
 module.exports = { pageWebPreferences };

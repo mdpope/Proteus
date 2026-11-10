@@ -3366,3 +3366,89 @@ JavaScript, DOM content or keys. Keep ordinary tab/run permissions, remove liste
 and report replacement/reset/cancellation without retrying. This avoids requiring a scheduled
 workflow to receive arbitrary Playwright server execution merely to explain failed input.
 Synthetic acceptance does not establish the actual Slack cause or authorize submission.
+
+## Nov 8 — observer measurements and approval acknowledgment
+
+Count only configured Mnemosyne roots using bounded asynchronous metadata reads; expose coverage
+and both logical/allocated bytes without contents or paths. Library observation is separate from
+phone-delivery evidence. Native ownership remains authoritative for pause/drain/restart; no forced
+kill or independent worker controls are introduced.
+
+Dismiss remembered-permission UI on exact owner reply acknowledgment. Subsequent view reload is
+independent, so its latency cannot leave an already-resolved approval dialog open. Existing stable
+mutation identities and owner permission matching remain unchanged.
+
+## Nov 8 — explicit chat-folder consent and native admission
+
+A request for a filesystem folder always receives direct human consent, even in Auto-approve
+mode. The owner captures the requesting turn, exact canonical directory/inode, access, reason,
+context revision and operation identity. The saved scope belongs only to that chat. It does not
+select instructions or alter workspace defaults. Existing provider sandboxes stay fixed; proven
+additions may wait for the next explicit turn, while reduced or unknown bounds still stop work.
+
+Native pause/restart uses an admission mutex and process-lifetime shared leases, separate from
+existing worker/publication locks. Pause blocks new admission and drains existing transactions;
+restart resumes through the next native wake. No forced signals, second runner or owner migration.
+
+
+## Nov 8 — native reading gestures own the chat viewport
+
+Retire a bounded set of cancelled and acknowledged native offset command identities. A delayed
+SwiftUI update carrying the same identity must not resurrect a completed/cancelled restoration.
+A native pan owns the viewport until tracking, dragging and deceleration finish. Follow-latest
+must be selected from the settled viewport, and a history response arriving after a newer gesture
+fills cache without revealing the earlier request's bookmark. Saved reading metadata remains local.
+
+
+## Nov 8 — mobile overview consumes the navigation projection
+
+Use the same active-scope visible children for the project strip and overview. The overview must
+not union browser cache aliases, sibling project inventories or history into that projection.
+Hidden tabs remain owner-managed on the project Tabs page. Overview refresh reads the active
+scope only, and active workspace/project selection takes priority over cached browser chrome.
+
+
+## Nov 8 — owner project order across grouped overviews
+
+Workspace resources precede project groups. The catalog array supplies project order to sidebars,
+Projects lists and overviews; neither current selection nor alphabetical sorting overrides it.
+Native drag/drop uses the existing revision-checked owner reorder command and does not create a
+second local order. Initial overview centering follows navigation selection and arriving inventories
+until a native user pan takes ownership. This supersedes the earlier active-project-only scope.
+
+
+## Nov 8 — one native background notification transport
+
+Normalize UUID-based notification receipt identities. A configured subscription for the current
+account owns background delivery; the live owner feed must not schedule a duplicate local alert.
+Retain the local fallback for accounts without configured push. Per-event deduplication does not
+collapse distinct permission requests or chats merely because their message text matches.
+
+## Nov 9: schedule access belongs to the workflow
+
+Persist explicit schedule consent separately from canonical source configuration, retaining owner grants during reconciliation. Bind authority to resources and named managed owner/workspace/connection identities, while provider/model choices resolve through qualified enforcement adapters. Preserve Codex sandbox enforcement and reject unqualified mappings. Never treat command approval as OS containment. Overlay v1 intentionally excludes shell capture pending command identity enforcement.
+
+## Nov 8 — owner workflow consent and portable execution
+
+Keep provider-neutral workflow authority on the schedule as an owner-owned revisioned overlay.
+Explicit schedule consent survives canonical reconciliation; once/deny never persist. Provider/model
+is an owner selection override with a current canonical fallback, separate from workflow ownership.
+Use a qualified host-owned command sandbox when native provider execution differs, preserving native
+Codex file restrictions. Never translate command approval into unrestricted execution. See
+[schema, migration and qualified limits](schedule-access-overlay.md).
+
+## Nov 8 — iOS saved page restoration
+
+Store bounded encrypted WebKit archives locally by account/owner/profile/tab/URL. A restored stale
+copy is labeled, blocks scripts/network, and requires explicit Refresh/live navigation. It never
+creates a second shared history entry. Memory-pressure unloading preserves tab descriptors and
+reading positions; iOS process residency is controlled by the operating system, not guaranteed.
+
+## On-demand workspace file views and device editing consent
+
+Use existing Markdown-it/Obsidian extensions and built-in Chromium/PDFKit viewers. Keep listings,
+preview bytes and image retrieval bounded and view-owned; do not replicate a desktop folder tree
+onto mobile. Paired-device file viewing remains per-workspace. File mutation requires a separate
+explicit per-device/workspace grant in Connections, preserving current read-only approvals.
+
+Nov 8 file-browser completion: folder and document results are view-generation and root bound; stale responses cannot change a newer selection. Move destinations use explicit bounded pages rather than downloading a tree. Native preview tabs remain view-local and explicitly closeable, with bytes released on exit.

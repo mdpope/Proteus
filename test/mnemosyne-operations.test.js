@@ -54,3 +54,32 @@ test('remote observer uses only sanitized read operations; no configuration/cont
  const value=await RemoteHost.prototype.execute.call(remote,{},'mnemosyne.snapshot',{});assert.equal(value.configuration.desktopOnly,true);assert.equal(value.settings,undefined);
  await assert.rejects(RemoteHost.prototype.execute.call(remote,{},'mnemosyne.settings',{enabled:true}),/Unknown|Unsupported/);
 });
+
+test('storage measures configured roots and extensions once, bounds scans and skips symlinks',async t=>{
+ const {storageUsage}=await import('../src/services/mnemosyne/storage.js');const f=fixture(t);
+ f.write('config.json',{});fs.writeFileSync(path.join(f.root,'recording.wav'),Buffer.alloc(4096));fs.linkSync(path.join(f.root,'recording.wav'),path.join(f.root,'duplicate.wav'));fs.symlinkSync('/etc',path.join(f.root,'outside'));
+ const value=await storageUsage({pipelineRoot:f.root,configPath:path.join(f.root,'config.json')});
+ assert.equal(value.byType.find(row=>row.type==='.wav').bytes,4096);assert.equal(value.byType.find(row=>row.type==='.wav').files,1);assert.equal(value.skippedLinks,1);assert.equal(value.complete,false);assert.doesNotMatch(JSON.stringify(value),/recording\.wav|duplicate\.wav|\/etc/);
+ const bounded=await storageUsage({pipelineRoot:f.root,configPath:path.join(f.root,'config.json')},{maxEntries:1});assert.equal(bounded.complete,false);
+});
+
+test('native controls validate revision and installed contract, bound arguments and sanitized results',async t=>{
+ const f=fixture(t);f.omi.verifyRuntime=()=>{};f.omi.getSettings=()=>({...f.omi.defaults,pipelineRoot:f.root,workerPath:path.join(f.root,'worker.py'),revision:'configuration-fixture'});fs.writeFileSync(path.join(f.root,'service_control.py'),'# installed contract fixture');
+ let called;f.omi.nativeControlExecute=async(command,args)=>{called={command,args};return {stdout:JSON.stringify({schemaVersion:1,state:'paused',desired:'paused',revision:'12345678-1234-1234-1234-123456789abc',active:false,privatePath:'PRIVATE'})};};
+ const status=await f.omi.serviceControl();assert.equal(status.available,true);assert.doesNotMatch(JSON.stringify(status),/PRIVATE/);
+ const result=await f.operations.control({action:'pause',expectedRevision:'initial',expectedSettingsRevision:'configuration-fixture'});assert.equal(result.state,'paused');assert.deepEqual(called.args.slice(-4),['--control-action','pause','--expected-revision','initial']);
+ await assert.rejects(f.omi.serviceControl('resume','initial','stale'),/configuration changed/);await assert.rejects(f.omi.serviceControl('kill'),/action/);
+ f.omi.nativeControlExecute=async()=>{throw Error('PRIVATE native traceback');};await assert.rejects(f.omi.serviceControl('restart','initial','configuration-fixture'),error=>/could not be confirmed/.test(error.message)&&!error.message.includes('PRIVATE'));
+ const remote={service:{mnemosyne:f.operations,engine:f.engine}};await assert.rejects(RemoteHost.prototype.execute.call(remote,{},'mnemosyne.control',{agentControl:true,action:'pause'}),/human operations/);
+});
+
+test('library observes published phone index counts separately from wake deltas without private records',async t=>{
+ const f=fixture(t);fs.mkdirSync(path.join(f.root,'cloud','Recordings'),{recursive:true});
+ f.omi.getSettings=()=>({...f.omi.defaults,pipelineRoot:f.root,configPath:path.join(f.root,'config.json')});
+ f.write('config.json',{source_dir:path.join(f.root,'cloud','Recordings')});
+ f.write('library/status.json',{packaged:0,checked_at:'2026-11-09T00:00:00Z'});
+ f.write('cloud/Control/Index/library.json',{items:[{kept:true,title:'PRIVATE',review_pending:true},{kept:false,audio_path:'PRIVATE'}]});
+ const value=(await f.omi.status()).status.metadata.library;
+ assert.deepEqual(value.inventory,{indexed:2,kept:1,review_pending:1});assert.equal(value.packaged,0);assert.doesNotMatch(JSON.stringify(value),/PRIVATE|audio_path|cloud|Recordings/);
+ fs.unlinkSync(path.join(f.root,'cloud/Control/Index/library.json'));assert.equal((await f.omi.status()).status.metadata.library.inventoryUnavailable,true);
+});

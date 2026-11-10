@@ -105,6 +105,7 @@ struct NativeGrowingReplyEditor: UIViewRepresentable {
         #endif
         let view = NativeReplyTextView()
         view.delegate = context.coordinator; view.backgroundColor = .clear
+        view.spellCheckingType = .yes; view.autocorrectionType = .default
         view.font = .preferredFont(forTextStyle: .body); view.adjustsFontForContentSizeCategory = true
         view.textColor = .label; view.tintColor = UIColor(NativeTheme.accent)
         view.textContainerInset = UIEdgeInsets(top: 8, left: 10, bottom: 8, right: 10)

@@ -64,7 +64,7 @@ class BrowserTabs {
     this.thumbnails=options.thumbnails||(options.home?new (require('../documents/thumbnail-cache.cjs').ThumbnailCache)(options.home):null);
     this.thumbnailTimer=setInterval(()=>{if(this.windowRegistry){for(const ctx of this.windowRegistry.contexts.values())this.windowRegistry.run(ctx.id,()=>{const tab=this.tabs.get(this.active);if(tab)this.scheduleThumbnail(tab);});}else{const tab=this.tabs.get(this.active);if(tab)this.scheduleThumbnail(tab);}},20000);this.thumbnailTimer.unref?.();
     this.retentionTimer = setInterval(() => { void this.sweepRetention(); }, 60_000);
-    this.retentionTimer.unref?.();this.profileTimer=setInterval(()=>{this.options.diagnostics?this.options.diagnostics.measureSync('browser.profiles.reconcile',()=>this.reconcileProfiles()):this.reconcileProfiles();this.refreshErrorThemes();},1000);this.profileTimer.unref?.();
+    this.retentionTimer.unref?.();this.profileTimer=setInterval(()=>{this.profileDisplay(()=>{this.options.diagnostics?this.options.diagnostics.measureSync('browser.profiles.reconcile',()=>this.reconcileProfiles()):this.reconcileProfiles();this.refreshErrorThemes();});},1000);this.profileTimer.unref?.();
     this.gestureHandler = (event, direction) => {
       const tab = [...this.tabs.values()].find(tab => tab.view?.webContents === event.sender);
       if(this.shuttingDown || !tab || tab.id !== this.active || event.senderFrame !== event.sender.mainFrame)return;
@@ -84,7 +84,7 @@ class BrowserTabs {
     ipcMain.on('proteus:browser-gesture',this.gestureHandler);
     this.navigationIntentHandler=event=>{const tab=[...this.tabs.values()].find(tab=>tab.view?.webContents===event.sender);if(tab&&event.senderFrame===event.sender.mainFrame){tab.mirror=null;tab.navigationIntentUntil=Date.now()+1200;this.touch(tab);this.activityChanged(tab);}};
     this.interactionHandler=event=>{const tab=[...this.tabs.values()].find(tab=>tab.view?.webContents===event.sender);if(tab&&event.senderFrame===event.sender.mainFrame){tab.mirror=null;this.touch(tab);this.activityChanged(tab);}};ipcMain.on('proteus:browser-interaction',this.interactionHandler);ipcMain.on('proteus:navigation-intent',this.navigationIntentHandler);
-    this.scrollHandler=(event,value)=>{const tab=[...this.tabs.values()].find(tab=>tab.view?.webContents===event.sender);if(!tab||event.senderFrame!==event.sender.mainFrame||JSON.stringify(value||{}).length>8192)return;const target=this.windowRegistry?.contexts.get(tab.windowId)?.window||this.window;if(!target.isDestroyed())target.webContents.send('proteus:browser-scroll',{id:tab.id,url:event.sender.getURL(),positions:value});};ipcMain.on('proteus:browser-scroll',this.scrollHandler);
+    this.scrollHandler=(event,value)=>{const tab=[...this.tabs.values()].find(tab=>tab.view?.webContents===event.sender);if(!tab||event.senderFrame!==event.sender.mainFrame||JSON.stringify(value||{}).length>8192)return;tab.lastScrollAt=Date.now();const target=this.windowRegistry?.contexts.get(tab.windowId)?.window||this.window;if(!target.isDestroyed())target.webContents.send('proteus:browser-scroll',{id:tab.id,url:event.sender.getURL(),positions:value});};ipcMain.on('proteus:browser-scroll',this.scrollHandler);
     this.partition = session.fromPartition('persist:proteus-browser');
     this.actions = new BrowserActions(this);this.permissions=new BrowserPermissions(this);this.externalProtocols=new ExternalProtocols(this,{home:this.options.home});this.siteNotificationHandler=(event,value)=>this.withSenderWindow(event,()=>this.permissions.receive(event,value));ipcMain.on('proteus:site-notification',this.siteNotificationHandler);
     this.configureSession(this.partition,'default');
@@ -155,7 +155,8 @@ class BrowserTabs {
   }
   agentIdentity(tab){return tab.thumbnailId||tab.id;}
   agentStatus(tab){return {agentPaused:this.agentAccess?this.agentAccess.paused(this.agentIdentity(tab)):tab.agentPaused!==false,agentAccessRevision:this.agentAccess?.revision||0};}
-  state(tab, includeHistory=false) {
+  state(tab, includeHistory=false) { return this.profileDisplay(()=>this.projectState(tab,includeHistory)); }
+  projectState(tab, includeHistory=false) {
     const audio={audioMuted:tab.audioMuted===true,audioPlaying:!!tab.view?.webContents&&!tab.view.webContents.isDestroyed()&&tab.view.webContents.isCurrentlyAudible()};
     if(!tab.view?.webContents||tab.view.webContents.isDestroyed())return {...tab.snapshot,...audio,navigationPending:tab.navigationPending===true,...this.previewState(tab),...this.agentStatus(tab),associationChatId:tab.associationChatId||null,persist:tab.persist===true,openedAt:tab.openedAt?new Date(tab.openedAt).toISOString():null,profileLocked:!this.profileAvailable(tab),siteMode:this.siteMode(tab),extensionsEnabled:this.extensions?.hasEnabled(tab.profileId)===true,profileName:this.options.profiles?.list().items.find(p=>p.id===tab.profileId)?.name||'Unavailable profile',profileId:tab.profileId||'default',id:tab.id,group:tab.group||'main',parentId:tab.parentId||null,loaded:false,loading:false,findRevision:tab.findRevision||0,shared:false,owner:null,resumeOwner:tab.resumeOwner||null,agentControlling:false,lastTouchedAt:tab.lastTouchedAt?new Date(tab.lastTouchedAt).toISOString():null};
     const wc = tab.view.webContents,liveURL=wc.getURL(),privateLocal=!tab.errorPage&&!!liveURL&&liveURL!=='about:blank'&&(!safeHistoryURL(liveURL,this.appOrigin)||isAuthenticationURL(liveURL));
@@ -225,7 +226,8 @@ class BrowserTabs {
   activityChanged(tab){if(tab)(this.activityTabs??=new Set()).add(tab.id);if(!this.activityTimer&&!this.shuttingDown)this.activityTimer=setTimeout(()=>this.flushActivity(),1000);}
   flushActivity(){clearTimeout(this.activityTimer);this.activityTimer=null;const ids=[...(this.activityTabs||[])];this.activityTabs?.clear();if(this.shuttingDown)return;const send=()=>{const rows=ids.flatMap(id=>{const tab=this.tabs.get(id);return tab?[{id:tab.id,windowId:tab.windowId||'main',lastTouchedAt:tab.lastTouchedAt?new Date(tab.lastTouchedAt).toISOString():null,lastActivityAt:tab.lastActivityAt?new Date(tab.lastActivityAt).toISOString():null}]:[];});if(this.windowRegistry){for(const ctx of this.windowRegistry.contexts.values())if(!ctx.window.isDestroyed()){const items=rows.filter(row=>row.windowId===ctx.id);if(items.length)ctx.window.webContents.send('proteus:browser-activity',items);}}else if(rows.length&&!this.window.isDestroyed())this.window.webContents.send('proteus:browser-activity',rows);};return this.options.diagnostics?this.options.diagnostics.measureSync('browser.activity.send',send):send();}
   changed(){if(this.shuttingDown)return;this.stateBatch??=new BrowserStateBatch(()=>this.flushChanged());this.stateBatch.request();}
-  flushChanged() { clearTimeout(this.activityTimer);this.activityTimer=null;this.activityTabs?.clear();this.updateThrottling();if(this.shuttingDown)return;const list=this.list(true),send=()=>{if(this.windowRegistry){for(const ctx of this.windowRegistry.contexts.values())if(!ctx.window.isDestroyed())ctx.window.webContents.send('proteus:browser-state',list.filter(tab=>this.tabs.get(tab.id)?.windowId===ctx.id));}else if(!this.window.isDestroyed())this.window.webContents.send('proteus:browser-state',list);};return this.options.diagnostics?this.options.diagnostics.measureSync('browser.state.send',send):send(); }
+  flushChanged() { return this.profileDisplay(()=>this.flushStateChanged()); }
+  flushStateChanged() { clearTimeout(this.activityTimer);this.activityTimer=null;this.activityTabs?.clear();this.updateThrottling();if(this.shuttingDown)return;const list=this.list(true),send=()=>{if(this.windowRegistry){for(const ctx of this.windowRegistry.contexts.values())if(!ctx.window.isDestroyed())ctx.window.webContents.send('proteus:browser-state',list.filter(tab=>this.tabs.get(tab.id)?.windowId===ctx.id));}else if(!this.window.isDestroyed())this.window.webContents.send('proteus:browser-state',list);};return this.options.diagnostics?this.options.diagnostics.measureSync('browser.state.send',send):send(); }
   get(id) { const tab = this.tabs.get(id); if (!tab) throw new Error('Browser tab is closed or unavailable.'); return tab; }
   previewState(tab) {
     return this.options.projects ? {hidden:tab.hidden===true,destination:tab.destination,lastActivityAt:tab.lastActivityAt?new Date(tab.lastActivityAt).toISOString():null} : {};
@@ -268,7 +270,7 @@ class BrowserTabs {
   }
   async captureThumbnail(tab){
     if(this.windowRegistry&&tab.windowId!==this.windowId())return this.windowRegistry.run(tab.windowId,()=>this.captureThumbnail(tab));
-    const wc=tab.view?.webContents;if(!this.thumbnails||this.active!==tab.id||this.overviewOpen||this.overlays?.size||this.shuttingDown||this.tabs.get(tab.id)!==tab||!wc||wc.isDestroyed()||wc.isLoading()||!this.profileAvailable(tab)||!safeHistoryURL(wc.getURL(),this.appOrigin)||isAuthenticationURL(wc.getURL()))return;
+    const wc=tab.view?.webContents;if(Date.now()-(tab.lastScrollAt||0)<1200)return;if(!this.thumbnails||this.active!==tab.id||this.overviewOpen||this.overlays?.size||this.shuttingDown||this.tabs.get(tab.id)!==tab||!wc||wc.isDestroyed()||wc.isLoading()||!this.profileAvailable(tab)||!safeHistoryURL(wc.getURL(),this.appOrigin)||isAuthenticationURL(wc.getURL()))return;
     const revision=tab.captureRevision||0,key=this.thumbnailKey(tab);tab.thumbnailAt=Date.now();
     try{const image=await wc.capturePage();if(image.isEmpty()||this.tabs.get(tab.id)!==tab||tab.view?.webContents!==wc||revision!==(tab.captureRevision||0)||this.overviewOpen||this.overlays.size)return;this.thumbnails.set(key,image.resize({width:360}).toJPEG(65));}catch{/* Keep the last good thumbnail. */}
   }
@@ -578,7 +580,7 @@ class BrowserTabs {
   historyMenu(tab, value) {
     if (!['back', 'forward'].includes(value.direction) || this.active !== tab.id) return;
     const wc = tab.view.webContents, history = wc.navigationHistory;
-    const logical=tab.logicalHistory,activeIndex=logical?.index??history.getActiveIndex(),entries=logical?.entries||history.getAllEntries();
+    const logical=tab.logicalHistory,activeIndex=logical?.index??history.getActiveIndex(),entries=logical?.entries||history.getAllEntries(),openedURL=entries[activeIndex]?.url;
     const indices = value.direction === 'back'
       ? Array.from({length: activeIndex}, (_, offset) => activeIndex - offset - 1)
       : Array.from({length: Math.max(0, entries.length - activeIndex - 1)}, (_, offset) => activeIndex + offset + 1);
@@ -587,15 +589,16 @@ class BrowserTabs {
       const title = (entry.title || entry.url).replace(/[\r\n\t]/g, ' ').slice(0, 140);
       return {label: title.replace(/&/g, '&&'), sublabel: entry.url.slice(0, 240).replace(/&/g, '&&'),
         accessibilityLabel: `${title} — ${entry.url}`, toolTip: entry.url,
-        click: () => {
+        click: () => this.withTabWindow(tab, () => {
           if (this.shuttingDown || wc.isDestroyed() || this.active !== tab.id || !this.selectionMatches(value,tab.id) || value.expectedGroup !== tab.group) return;
-          // A pending navigation can alter indices while the native menu is open.
-          if(logical){if(tab.logicalHistory!==logical||logical.index!==activeIndex)return;const entry=traverseNavigation(tab,index);if(entry){if(this.options.projects)this.touch(tab,true);tab.applyingShared=true;void this.navigate(tab.id,entry.url).finally(()=>{tab.applyingShared=false;this.changed();});}return;}
+          // Reject a changed navigation while accepting owner-assigned entry IDs
+          // arriving for the same history position after the popup opened.
+          if(logical){const current=tab.logicalHistory;if(!current||current.index!==activeIndex||current.entries[current.index]?.url!==openedURL)return;let target=current.entries.findIndex(item=>item.id===entry.id&&item.url===entry.url);if(target<0&&current.entries.length===entries.length&&current.entries.every((item,i)=>item.url===entries[i].url))target=index;if(target<0)return;const selected=traverseNavigation(tab,target);if(selected){if(this.options.projects)this.touch(tab,true);tab.applyingShared=true;void this.navigate(tab.id,selected.url).finally(()=>{tab.applyingShared=false;this.changed();});}return;}
           const current = history.getAllEntries();
           if (history.getActiveIndex() !== activeIndex || current.length !== entries.length || current.some((item, i) => item.url !== entries[i].url)) return;
           this.transition?.cancel(); cancelNavigation(wc, 'Navigation replaced by history selection.');
           try { tab.error = null;if(this.options.projects)this.touch(tab,true); history.goToIndex(index); this.changed(); } catch { /* Closed or replaced navigation. */ }
-        }};
+        })};
     });
     if (!template.length) return;
     const bounds = this.window.getContentBounds();

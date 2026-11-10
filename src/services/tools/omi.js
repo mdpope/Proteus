@@ -70,7 +70,7 @@ async function launchdProbe(label) {
 export function isOmiSchedule(schedule) { return schedule?.integration?.type === 'omi' || schedule?.provider === 'local-process' || [...OMI_JOBS, ...AUTOMATIONS].some(job => job.scheduleId === schedule?.id); }
 export class OmiIntegration {
   constructor(home, options = {}) {
-    this.home = home; this.file = path.join(home, 'omi.json'); this.launchdProbe = options.launchdProbe || launchdProbe; this.execute = options.execute || runLocalProcess;
+    this.home = home; this.file = path.join(home, 'omi.json'); this.launchdProbe = options.launchdProbe || launchdProbe; this.execute = options.execute || runLocalProcess; this.nativeControlExecute=options.nativeControlExecute||execFileAsync;
     const root = path.join(os.homedir(), 'Library', 'Application Support', 'OmiPipeline');
     this.defaults = { schemaVersion: 1, enabled: false, takeoverConfirmed: false, intakeEnabled: false, intakeTakeoverConfirmed: false, workflowRoot: '', pipelineRoot: root, pythonPath: path.join(root, 'worker', '.venv', 'bin', 'python'), workerPath: path.join(root, 'worker', 'omi_worker.py'), configPath: path.join(root, 'config.json'), automationRoot: path.join(os.homedir(), '.codex', 'automations'), timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, timeoutMinutes: 120 };
   }
@@ -155,8 +155,39 @@ export class OmiIntegration {
     for (const [key, file] of [['audio','status.json'], ['library','library/status.json'], ['queue','intake-state.json']]) {
       try { const target = insideFile(settings.pipelineRoot, file); const value = boundedJSON(target); metadata[key] = { available: true, modifiedAt: fs.statSync(target).mtime.toISOString(), ...safeOmiMetadata(value) }; } catch { metadata[key] = { available: false }; }
     }
+    // The status report contains changes from one wake, not the library inventory.
+    // Read only aggregate counts from the bounded index actually published to the phone.
+    try {
+      const config=boundedJSON(settings.configPath),source=fs.realpathSync(nativePath(config.source_dir));
+      const target=insideFile(path.dirname(source),'Control/Index/library.json'),index=boundedJSON(target,8*1024*1024);
+      if(!Array.isArray(index.items)||index.items.length>20000)throw Error('Library index exceeds observation bounds.');
+      metadata.library={...metadata.library,inventory:{indexed:index.items.length,kept:index.items.filter(item=>item.kept===true).length,review_pending:index.items.filter(item=>item.review_pending===true).length},inventoryObservedAt:fs.statSync(target).mtime.toISOString()};
+    } catch { metadata.library={...metadata.library,inventoryUnavailable:true}; }
     let runtimeAvailable = false; try { this.verifyRuntime(settings); runtimeAvailable = true; } catch { /* Read-only status can describe incomplete setup. */ }
     return { settings, areas: [{id:'omi',name:'Omi',enabled:settings.enabled,scope:'Pendant recording preparation, local ASR, library controls and guarded semantic publication.'},{id:'general',name:'private notes & MacWhisper',enabled:settings.intakeEnabled,scope:'Stable transcript exports, mixed review queues, People/project/household context effects and daily summary/follow-up audits.'}], status: { enabled: settings.enabled, intakeEnabled: settings.intakeEnabled, runtimeAvailable, nativeServices: await this.nativeServices(), metadata, checkedAt: new Date().toISOString() }, jobs: OMI_JOBS, automations: this.automationInventory() };
+  }
+  async serviceControl(action='status',expectedRevision,expectedSettingsRevision) {
+    if(!['status','pause','resume','restart'].includes(action))throw Error('Choose a native service control action.');
+    const settings=this.getSettings();
+    if(action!=='status'&&(settings.revision!==expectedSettingsRevision||settings.enabled))throw Error('Native ownership or configuration changed. Refresh before controlling services.');
+    try {
+      this.verifyRuntime(settings);
+      const relative=path.relative(settings.pipelineRoot,path.join(path.dirname(settings.workerPath),'service_control.py'));
+      if(!fs.statSync(insideFile(settings.pipelineRoot,relative)).isFile())throw Error();
+    } catch {
+      if(action!=='status')throw Error('Install the native service-control update on this owner before using controls.');
+      return {available:false,state:'unavailable'};
+    }
+    if(action!=='status'&&(typeof expectedRevision!=='string'||! /^(initial|[a-f0-9-]{36})$/.test(expectedRevision)))throw Error('Refresh native service control before applying.');
+    const args=[settings.workerPath,'--config',settings.configPath,'service-control','--control-action',action,...(action==='status'?[]:['--expected-revision',expectedRevision])];
+    try {
+      const result=await this.nativeControlExecute(settings.pythonPath,args,{timeout:5000,maxBuffer:16384});
+      const value=JSON.parse(result.stdout);
+      if(value.schemaVersion!==1||!['running','paused','draining','restart-pending'].includes(value.state)||!['running','paused','restart-pending'].includes(value.desired)||typeof value.revision!=='string'||! /^(initial|[a-f0-9-]{36})$/.test(value.revision)||typeof value.active!=='boolean')throw Error();
+      return {available:true,state:value.state,desired:value.desired,revision:value.revision,active:value.active,observedAt:new Date().toISOString(),configurationRevision:settings.revision};
+    } catch {
+      throw Error(action==='status'?'Native control status is unavailable. Refresh on the owner.':'Native control could not be confirmed. Refresh status before another action; current work was not forcibly stopped.');
+    }
   }
   logs(jobId, stream = 'out', limit = 50) {
     const job = OMI_JOBS.find(item => item.id === jobId);

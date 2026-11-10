@@ -25,7 +25,7 @@ struct ProteusRoot: View {
     @State private var area = "macs"
     @State private var incomingPairing = false
     @AppStorage("lifeEnabled") private var lifeEnabled = false
-    @AppStorage("proteus.keep-screen-awake") private var keepScreenAwake = false
+    @AppStorage("proteus.keep-screen-awake") private var keepScreenAwake = true
     private var showLife: Bool {
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--synthetic-life") { return true }
@@ -46,9 +46,13 @@ struct ProteusRoot: View {
     }
     var body: some View {
             applicationContent.tint(NativeTheme.accent).foregroundStyle(NativePalette.shared.color("text")).preferredColorScheme(.dark)
-                .onAppear { UIApplication.shared.isIdleTimerDisabled = keepScreenAwake && phase == .active }
+                .onAppear {
+                    if !UserDefaults.standard.bool(forKey: "proteus.foreground-reading-default-v1") { keepScreenAwake = true; UserDefaults.standard.set(true, forKey: "proteus.foreground-reading-default-v1") }
+                    UIApplication.shared.isIdleTimerDisabled = keepScreenAwake && phase == .active
+                }
                 .onChange(of: keepScreenAwake) { _, value in UIApplication.shared.isIdleTimerDisabled = value && phase == .active }
                 .onChange(of: phase) { _, next in UIApplication.shared.isIdleTimerDisabled = keepScreenAwake && next == .active; if next != .active { shared.flushCachedState() } }
+                .onReceive(NotificationCenter.default.publisher(for: UIApplication.didReceiveMemoryWarningNotification)) { _ in shared.relieveBrowserMemoryPressure() }
                 .onOpenURL { url in if url.scheme == "proteus" && url.host == "pair" { do { try destinations.add(url.absoluteString, label: "New computer"); incomingPairing = true } catch { destinations.error = error.localizedDescription } } }
                 .sheet(isPresented: $incomingPairing, onDismiss: { destinations.cancelPairing() }) { NavigationStack { PairView().toolbar { Button("Cancel") { incomingPairing = false } } } }
                 .onChange(of: destinations.pairingCompletion) { _, completion in if completion != nil { incomingPairing = false } }
@@ -83,9 +87,25 @@ struct ProteusRoot: View {
                     if ProcessInfo.processInfo.arguments.contains("--synthetic-notification-fixtures"),
                        let remote = destinations.remote(for: "10000000-0000-4000-8000-000000000001") {
                         let run: JSON = .object(["id": .string("notification-chat"), "title": .string("Notification fixture chat"), "status": .string("completed"), "events": .array([.object(["role": .string("assistant"), "text": .string("Notification destination loaded"), "at": .string("2026-10-05T00:00:00Z")])]), "eventStart": .number(0)])
-                        remote.state = .object(["runs": .array([run]), "schedules": .array([.object(["id": .string("notification-schedule"), "name": .string("Notification fixture schedule"), "cron": .string("0 9 * * *"), "timezone": .string("UTC")])])])
-                        remote.chats["notification-chat"] = run
+                        var fixtureRun = run
+                        if ProcessInfo.processInfo.arguments.contains("--synthetic-notification-question") {
+                            let question: JSON = .object(["id": .string("notification-question"), "text": .string("Which native folder is needed?"), "status": .string("pending"), "choices": .array([])])
+                            var fields = run.object
+                            fields["status"] = .string("awaiting_input")
+                            fields["pending"] = .object(["id": question["id"], "type": .string("question"), "question": question["text"]])
+                            fields["events"] = .array([.object(["role": .string("system"), "text": question["text"], "data": .object(["question": question])])])
+                            fixtureRun = .object(fields)
+                        }
+                        remote.state = .object(["runs": .array([fixtureRun]), "schedules": .array([.object(["id": .string("notification-schedule"), "name": .string("Notification fixture schedule"), "cron": .string("0 9 * * *"), "timezone": .string("UTC")])])])
+                        if ProcessInfo.processInfo.arguments.contains("--synthetic-question-typing-refresh") {
+                            var fields = fixtureRun.object
+                            let earlier: [JSON] = (0..<35).map { index in .object(["role": .string("assistant"), "text": .string("Earlier message \(index). " + String(repeating: "Recorded context. ", count: 12))]) }
+                            fields["events"] = .array(earlier + fields["events"]!.array)
+                            fixtureRun = .object(fields)
+                        }
+                        remote.chats["notification-chat"] = fixtureRun
                         remote.flushCache()
+
                     }
                     if ProcessInfo.processInfo.arguments.contains("--synthetic-chat-lifecycle-fixtures"),
                        let remote = destinations.remote(for: "10000000-0000-4000-8000-000000000001") {
@@ -414,5 +434,24 @@ private func nativeActivityFixtureEvents() -> [JSON] {
                                 }
                             } else { shared.open(nil, title: "Synthetic browser", scope: scope) }
                             shared.browserTabs.append(BrowserDescriptor(id: "fixture-local-recents", title: "Local recent across scopes", url: nil, scope: "fixture-history", history: BrowserTabHistory(entries: [BrowserHistoryEntry(url: "https://example.test/local", title: "Local recent across scopes")], index: 0)))
+                            if ProcessInfo.processInfo.arguments.contains("--synthetic-overview-membership") {
+                                var projects = remote.projectCatalog.raw.object
+                                projects["projects"] = .array((projects["projects"]?.array ?? []) + [.object(["id": .string("sibling-project"), "workspaceId": .string(workspaceID), "name": .string("Sibling project")])])
+                                var state = remote.state.object; state["workspaceProjects"] = .object(projects); remote.state = .object(state)
+                                let tabs: [JSON] = [
+                                    .object(["id": .string("chat:long-chat"), "type": .string("chat"), "chatId": .string("long-chat"), "title": .string("Long fixture")]),
+                                    .object(["id": .string("fixture-terminal"), "type": .string("terminal"), "title": .string("Synthetic terminal")]),
+                                    .object(["id": .string("document:fixture-document"), "type": .string("document"), "title": .string("Synthetic document")]),
+                                    .object(["id": .string("visible-browser"), "type": .string("browser"), "title": .string("Visible browser"), "url": .string(nativeFixtureHTTPOrigin + "/browser/one")]),
+                                    .object(["id": .string("hidden-browser"), "type": .string("browser"), "title": .string("Hidden fixture browser"), "url": .string(nativeFixtureHTTPOrigin + "/browser/three"), "hidden": .bool(true)]),
+                                    .object(["id": .string("chat:hidden-chat"), "type": .string("chat"), "chatId": .string("hidden-chat"), "title": .string("Hidden fixture chat"), "hidden": .bool(true)])]
+                                shared.applyContentTabs(.object(["revision": .number(2), "tabs": .array(tabs)]), scope: scope)
+                                shared.applyContentTabs(.object(["revision": .number(2), "tabs": .array([.object(["id": .string("sibling-browser"), "type": .string("browser"), "title": .string("Sibling-only browser"), "url": .string(nativeFixtureHTTPOrigin + "/browser/three")])])]), scope: "project:10000000-0000-4000-8000-000000000001:sibling-project")
+                                shared.applyContentTabs(.object(["revision": .number(2), "tabs": .array([.object(["id": .string("workspace-level-browser"), "type": .string("browser"), "title": .string("Workspace-level browser"), "url": .string(nativeFixtureHTTPOrigin + "/browser/three")])])]), scope: "workspace:10000000-0000-4000-8000-000000000001:" + workspaceID)
+                                shared.browserTabs.append(BrowserDescriptor(id: "orphan-cache", title: "Orphan cached browser", url: nil, scope: scope))
+                                let selected = shared.tabs(in: scope).first { $0.contentTabId == "visible-browser" }?.id ?? "workspace"
+                                remote.setDraft(navigationKey, .object(["selected": .string(selected)]))
+                            }
+
 }
 #endif

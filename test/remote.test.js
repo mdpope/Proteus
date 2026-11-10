@@ -403,6 +403,12 @@ test('workspace file browsing needs its own exact grant and rechecks revocation 
  assert.equal(result.content,'# Synthetic file');assert.equal(result.relativePath,'file-preview.md');
  await assert.rejects(client.request('files.preview',{workspaceId:'ungranted',rootId,file:'file-preview.md'}));
  await assert.rejects(client.request('files.preview',{workspaceId,rootId,file:'../file-preview.md'}));
+ await assert.rejects(client.request('files.mutate',{workspaceId,rootId,action:'create',name:'denied.txt'}),/editing/);
+ app.remote.setWorkspaceFileAccess(client.device.id,[workspaceId],[workspaceId]);
+ await client.request('files.mutate',{workspaceId,rootId,action:'create',name:'approved.txt'});
+ assert.equal(fs.existsSync(path.join(workspace,'approved.txt')),true);
+ app.remote.setWorkspaceFileAccess(client.device.id,[workspaceId],[]);
+ await assert.rejects(client.request('files.mutate',{workspaceId,rootId,action:'create',name:'revoked.txt'}),/editing/);
  const original=app.workspaceExplorer.preview.bind(app.workspaceExplorer);let release,started;
  const began=new Promise(resolve=>started=resolve);
  app.workspaceExplorer.preview=async args=>{started();await new Promise(resolve=>release=resolve);return original(args);};

@@ -17,7 +17,7 @@ struct NativePhotoSelection: UIViewControllerRepresentable {
         var configuration = PHPickerConfiguration()
         configuration.filter = .images; configuration.selectionLimit = max(1, limit)
         let picker = PHPickerViewController(configuration: configuration)
-        picker.delegate = context.coordinator
+        picker.view.accessibilityIdentifier = "native-photo-picker"; picker.delegate = context.coordinator
         return picker
     }
     func updateUIViewController(_ picker: PHPickerViewController, context: Context) { context.coordinator.finished = finished }
@@ -199,6 +199,32 @@ struct NewChatView: View {
                     if !internet { TextField("Chat name (optional)", text: $name).accessibilityIdentifier("new-chat-name") }
                     promptField
                 }
+                Section("Attachments") {
+                    HStack {
+                    Menu {
+                        Button("Choose files", systemImage: "folder") { filePicker = false; Task { @MainActor in try? await Task.sleep(for: .milliseconds(250)); filePicker = true } }
+                        Button("Choose photos", systemImage: "photo") { photoPicker = false; Task { @MainActor in try? await Task.sleep(for: .milliseconds(250)); photoPicker = true } }
+                    } label: { Label("Attach files or photos", systemImage: "paperclip").font(.subheadline) }
+                        .accessibilityIdentifier("new-chat-attach")
+                        .disabled(!attachmentsEnabled)
+                    Spacer()
+                    PasteButton(supportedContentTypes: [.image, .fileURL]) { providers in pasteAttachment(providers) }
+                        .accessibilityIdentifier("new-chat-paste").disabled(!attachmentsEnabled)
+                    }
+                    if !attachmentsEnabled {
+                        Text(supportedAttachmentTypes.isEmpty ? "Choose a provider that accepts attachments." : "Update the connected computer to attach files.").font(.caption).foregroundStyle(.secondary)
+                    }
+                    if !attachments.isEmpty {
+                        DisclosureGroup("Selected files") {
+                            ForEach(attachments) { item in HStack { Button { previewAttachment = item } label: { Label(item.name, systemImage: item.image == nil ? "doc" : "photo") }; Spacer(); Button("Remove", systemImage: "xmark.circle") { removeAttachment(item.id) }.labelStyle(.iconOnly) } }
+                        }
+                    }
+                    if !missingAttachments.isEmpty {
+                        Text("Reattach these files before sending: " + missingAttachments.map { $0["name"].string }.joined(separator: ", ") + ". Their bytes were discarded when Proteus closed.").font(.caption).foregroundStyle(.orange)
+                        Button("Remove missing files") { removeMissingAttachments() }
+                    }
+                    if hasUnsupportedAttachment { Text("Remove files this provider does not accept before starting.").font(.caption).foregroundStyle(.orange) }
+                }
                 Section("Run on " + store.displayName) {
                     Picker("Workspace", selection: $workspace) { ForEach(store.stateValue("context")["workspaces"].array, id: \.self) { Text($0["name"].string).tag($0["id"].string) } }.disabled(lockedWorkspaceID != nil)
                     if store.supportsProjects {
@@ -209,28 +235,6 @@ struct NewChatView: View {
                         ProviderModelPicker(model: $model, effort: $effort, contextTier: $contextTier, serviceTier: $serviceTier, provider: provider, catalogOverride: providerChoice?.catalog(store.providerStatuses[provider] ?? .null))
                     }
                 }
-                }
-                if attachmentsEnabled || !attachments.isEmpty || !missingAttachments.isEmpty {
-                    Section {
-                        if attachmentsEnabled {
-                            Menu {
-                                Button("Paste image or file", systemImage: "doc.on.clipboard") { pasteAttachment() }
-                                Button("Choose files", systemImage: "folder") { filePicker = true }
-                                Button("Choose photos", systemImage: "photo") { photoPicker = false; Task { @MainActor in try? await Task.sleep(for: .milliseconds(250)); photoPicker = true } }
-                            } label: { Label("Attach", systemImage: "plus").font(.subheadline) }
-                                .accessibilityIdentifier("new-chat-attach")
-                        }
-                        if !attachments.isEmpty {
-                            DisclosureGroup("Selected files") {
-                                ForEach(attachments) { item in HStack { Button { previewAttachment = item } label: { Label(item.name, systemImage: item.image == nil ? "doc" : "photo") }; Spacer(); Button("Remove", systemImage: "xmark.circle") { removeAttachment(item.id) }.labelStyle(.iconOnly) } }
-                            }
-                        }
-                        if !missingAttachments.isEmpty {
-                            Text("Reattach these files before sending: " + missingAttachments.map { $0["name"].string }.joined(separator: ", ") + ". Their bytes were discarded when Proteus closed.").font(.caption).foregroundStyle(.orange)
-                            Button("Remove missing files") { removeMissingAttachments() }
-                        }
-                        if hasUnsupportedAttachment { Text("Remove files this provider does not accept before starting.").font(.caption).foregroundStyle(.orange) }
-                    }
                 }
                 if !internet && lockedWorkspaceID == nil { ContextSelection(selected: $selected, agent: $agent, includeDefaults: $includeDefaults, workspaceID: workspace) }
                 if internet { Section { HStack { Spacer(); ForEach(store.stateValue("providerStatuses").object.keys.sorted().filter { !["local-process", "rehearsal"].contains($0) }, id: \.self) { id in Button("Search with " + id.capitalized) { provider = id; if store.stateValue("defaults")["internetSearches"][id]["model"].string.isEmpty { store.error = "Configure Internet Search defaults in Engine Room on \(store.displayName) first." } else if attachments.isEmpty { start() } else { confirmAttachmentStart = true } }.disabled((prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && attachments.isEmpty) || sending || !store.connected) } } } }
@@ -355,11 +359,14 @@ struct NewChatView: View {
         do { let values = try url.resourceValues(forKeys: [.fileSizeKey, .creationDateKey, .contentModificationDateKey]); let size = values.fileSize ?? 0; guard size > 0, size <= NativeAttachmentBudget.maxFileBytes else { throw RemoteError(message: "Choose a file between 1 byte and 8 MB.") }; return addAttachment(try Data(contentsOf: url), name: url.lastPathComponent, mediaType: mediaType, createdAt: values.creationDate.map { ISO8601DateFormatter().string(from: $0) }, modifiedAt: values.contentModificationDate.map { ISO8601DateFormatter().string(from: $0) }) }
         catch { store.error = error.localizedDescription; return false }
     }
-    private func pasteAttachment() {
-        let files = (UIPasteboard.general.urls ?? []).filter(\.isFileURL)
-        if !files.isEmpty { for url in files { if !importFile(url) { break } }; return }
-        if let image = UIPasteboard.general.image, let data = image.pngData() { addAttachment(data, name: "Pasted image.png", mediaType: "image/png"); return }
-        store.error = "Copy an image or a file supported by this provider, then paste it here."
+    private func pasteAttachment(_ providers: [NSItemProvider]) {
+        NativeAttachmentPaste.load(providers: providers) { result in
+            switch result {
+            case .success(.file(let url)): _ = importFile(url)
+            case .success(.image(let data)): _ = addAttachment(data, name: "Pasted image.png", mediaType: "image/png")
+            case .failure(let error): store.error = error.localizedDescription
+            }
+        }
     }
 }
 /// Press-and-hold actions for a chat's tab. Chats have no header bar, so link, rename,
@@ -591,6 +598,8 @@ struct ChatView: View {
     @State private var showRename = false
     @FocusState private var composerFocused: Bool
     @State private var nativeComposerFocused = false
+    @State private var focusedQuestionID: String?
+    private var editingAnswer: Bool { composerHasFocus || focusedQuestionID != nil }
     private var composerHasFocus: Bool {
         get { NativeDesignPreview.enabled ? nativeComposerFocused : composerFocused }
         nonmutating set {
@@ -746,7 +755,6 @@ struct ChatView: View {
     var body: some View {
         AnyView(chatLayout).environment(\.nativeBrowserContainer, workspaceBrowserScope ?? "main").onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in let available = max(160, height - 88); if abs(composerAvailableHeight - available) > 1 { composerAvailableHeight = available } }.background(NativeTheme.background).navigationBarBackButtonHidden(true).toolbar(.hidden, for: .navigationBar)
         .modifier(NativePhoneBackNavigation())
-        .simultaneousGesture(TapGesture(count: 2).onEnded { if NativePhonePreview.enabled && !composerHasFocus && !shared.tabs(in: chatBrowserScope).contains(where: { $0.id == selectedChild }) { phoneChrome.toggleControls() } })
         .background { if NativeDesignPreview.enabled && phoneAreaActive { NativePhoneSurface(chrome: phoneChrome, overviewEnabled: !shared.tabs(in: chatBrowserScope).contains(where: { $0.id == selectedChild })) } }
         .onChange(of: selectedChild) { _, _ in if NativeDesignPreview.enabled { registerPhoneTab() } }
         .onChange(of: phoneAreaActive) { _, active in if NativePhonePreview.enabled && active { phoneChrome.browserOwnsBack = false; registerPhoneTab() } }
@@ -866,7 +874,7 @@ struct ChatView: View {
             Text(run["title"].string.isEmpty ? "Conversation" : run["title"].string).font(.subheadline.weight(.medium)).lineLimit(1).truncationMode(.tail).frame(maxWidth: .infinity, alignment: .leading).accessibilityIdentifier("chat-header-title")
             chatActions
             if NativePhonePreview.enabled { NativeMainTabAdd() }
-        }.buttonStyle(.plain).padding(.horizontal, NativePhonePreview.enabled || !embedded ? 4 : 12).frame(height: 44).background(NativeTheme.surface)
+        }.nativeAdjacentTabSwipe().buttonStyle(.plain).padding(.horizontal, NativePhonePreview.enabled || !embedded ? 4 : 12).frame(height: 44).background(NativeTheme.surface)
     }
     private var chatActions: some View {
             Menu {
@@ -922,7 +930,10 @@ struct ChatView: View {
                             if !event["data"]["delivery"]["state"].string.isEmpty { Text(event["data"]["delivery"]["state"].string.capitalized).font(.caption2).foregroundStyle(.teal) }
                             MessageView(role: event["role"].string == "assistant" ? assistantName(event) : event["role"].string, text: NativeUserQuestion.presentationText(event["text"].string, questions: eventQuestions), runID: id, timestamp: event["timestamp"].string.isEmpty ? event["at"].string : event["timestamp"].string, turn: firstAssistant[event["data"]["turnId"].string] == index ? turns[event["data"]["turnId"].string] ?? .null : .null, actionID: MessageActions.eligible(event) ? "\(store.connection?.hostId ?? "local"):\(id):\(absoluteIndex):\(event["at"].string)" : nil, sentAttachments: event["data"]["attachments"].array, onDocumentLink: event["role"].string == "assistant" ? { source in openDocument(source) } : nil, search: pageSearch, searchKey: absoluteIndex, renderViewport: scrollMeasurements.renderViewport, questionContent: eventQuestions.isEmpty ? nil : AnyView(VStack(alignment: .leading, spacing: 0) {
                             ForEach(eventQuestions) { question in
-                                NativeUserQuestionCard(question: question, showHeading: !question.promptVisible(in: event["text"].string, among: eventQuestions.count), chatID: id, focusRequest: questionFocus?.id == question.id ? questionFocus?.request : nil) { value, messageID, delivery in
+                                NativeUserQuestionCard(question: question, showHeading: questionFocus?.id == question.id || !question.promptVisible(in: event["text"].string, among: eventQuestions.count), chatID: id, focusRequest: questionFocus?.id == question.id ? questionFocus?.request : nil, focusChanged: { focused in
+                                    if focused { focusedQuestionID = question.id }
+                                    else if focusedQuestionID == question.id { focusedQuestionID = nil }
+                                }) { value, messageID, delivery in
                                     var args = delivery; args["id"] = .string(id); args["answer"] = .string(value); args["messageId"] = .string(messageID); args[question.blocking ? "requestId" : "questionId"] = .string(question.id)
                                     _ = try await store.request(question.blocking ? "chat.reply" : "chat.answer-question", args)
                                     await store.openChat(id)
@@ -955,7 +966,7 @@ struct ChatView: View {
                                 scrollCommand = NativeScrollCommand(id: transaction, y: measured.contentTop + reading.inset - topInset)
                                 traceScroll("anchor \(absoluteIndex) contentY\(Int(frame.minY)) inset\(Int(reading.inset))")
                                 pendingAnchorRestore = nil
-                            } else if !followLatest, !userReadingGesture, !restoringConversation,
+                            } else if !editingAnswer, !followLatest, !userReadingGesture, !restoringConversation,
                                       let previous, previous.start == renderedEventStart,
                                       abs(previous.contentTop - measured.contentTop) > 0.5,
                                       let reading = shared.chatScrollLocations[chatBrowserScope], reading.anchor == absoluteIndex,
@@ -978,8 +989,8 @@ struct ChatView: View {
                         if pending["details"] != .null { PermissionRequestSummary(request: pending["details"]); DisclosureGroup("Request details") { Text(pending["details"].pretty).font(.caption.monospaced()).textSelection(.enabled) } }
                         if pending["type"].string == "permission" {
                             Text("Approve once applies only to this request on \(store.displayName). Saved workspace choices survive restart and affect matching chats and schedules until revoked.").font(.caption).foregroundStyle(.secondary)
-                            HStack { Button("Deny", role: .destructive) { answer("deny") }; Button("Approve once") { answer("approve") }.buttonStyle(.borderedProminent) }
-                            PendingChatApprovalView(run: run)
+                            HStack { Button("Deny", role: .destructive) { answer("deny") }; Button(pending["details"]["kind"].string == "folder-access" ? "Add folder to this chat" : "Approve once") { answer("approve") }.buttonStyle(.borderedProminent) }
+                            if pending["details"]["kind"].string != "folder-access" { PendingChatApprovalView(run: run) }
                             if !pending["permissionReason"].string.isEmpty { Text(pending["permissionReason"].string).font(.caption).foregroundStyle(.secondary) }
                             ForEach(pending["permissionChoices"].array, id: \.self) { choice in Button(choice["label"].string) { answer(choice["value"].string) } }
                         } else if pending["type"].string == "question" {
@@ -989,7 +1000,7 @@ struct ChatView: View {
                                 }.buttonStyle(.bordered)
                             }
                         }
-                    }.padding().background(Color.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: 16)).disabled(busy || !store.connected)
+                    }.padding().background(Color.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: 16)).disabled(busy || !store.connected).id("chat-pending-input")
                 }
                 if run["progress"]["stalled"].bool {
                     TimelineView(.periodic(from: .now, by: 1)) { timeline in
@@ -1032,7 +1043,7 @@ struct ChatView: View {
                     }.frame(maxWidth: .infinity, alignment: .leading)
                 }
                 Color.clear.frame(height: 1).id("chat-end")
-            }.padding().coordinateSpace(name: "conversation-content").background(NativeScrollProbe(command: scrollCommand, followBottom: followLatest && !userReadingGesture && !restoringConversation && pageSearch.query.isEmpty, viewport: scrollMeasurements.viewport, onSnapshot: { snapshot in
+            }.padding().coordinateSpace(name: "conversation-content").background(NativeScrollProbe(command: scrollCommand, followBottom: followLatest && focusedQuestionID == nil && !userReadingGesture && !restoringConversation && pageSearch.query.isEmpty, keepFocusedInputVisible: focusedQuestionID != nil, viewport: scrollMeasurements.viewport, onSnapshot: { snapshot in
                 guard snapshot.offset.isFinite else { return }
                 let previousOffset = conversationOffset
                 let previousHeight = conversationContentHeight
@@ -1041,7 +1052,7 @@ struct ChatView: View {
                 if abs(conversationOffset - snapshot.offset) > 0.5 { conversationOffset = max(0, snapshot.offset) }
                 if abs(conversationContentHeight - snapshot.contentHeight) > 0.5 { conversationContentHeight = snapshot.contentHeight }
                 if abs(conversationViewportWidth - snapshot.viewportWidth) > 0.5 { conversationViewportWidth = snapshot.viewportWidth }
-                if let initial = pendingInitialRestore, snapshot.viewportWidth > 0 {
+                if !editingAnswer, let initial = pendingInitialRestore, snapshot.viewportWidth > 0 {
                     pendingInitialRestore = nil
                     restoreConversation(initial)
                 }
@@ -1088,7 +1099,7 @@ struct ChatView: View {
                     cancelReadingRestore()
                     restoreID = nil; pendingAnchorRestore = nil; pendingInitialRestore = nil
                     scrollCommand = nil; restoringConversation = false
-                    if !loadingEarlier { pendingHistoryRestore = nil; historyWindowChanged = false }
+                    pendingHistoryRestore = nil; historyWindowChanged = false
                     if !earlierError && hasEarlierMessages && conversationOffset < max(480, composerAvailableHeight * 2.5) { loadEarlier() }
                 } else {
                     if scrollMeasurements.latest?.atEnd == true {
@@ -1120,6 +1131,7 @@ struct ChatView: View {
                 traceScroll("applied \(commandID.uuidString.prefix(4)) at\(Int(snapshot.offset))/\(Int(snapshot.maxOffset))")
                 conversationOffset = max(0, snapshot.offset)
                 restoreID = nil
+                if scrollCommand?.id == commandID { scrollCommand = nil }
                 historyWindowChanged = false
                 restoringConversation = false
                 // Restoring a bookmark is never consent to follow new output.
@@ -1138,13 +1150,34 @@ struct ChatView: View {
                 }
             }
             .onDisappear { saveReadingPosition(); cancelReadingRestore(); questionRevealTask?.cancel(); questionRevealTask = nil }
+            .onChange(of: editingAnswer) { _, editing in
+                if editing {
+                    cancelReadingRestore(); restoreID = nil; scrollCommand = nil
+                    pendingAnchorRestore = nil; pendingInitialRestore = nil; pendingHistoryRestore = nil
+                    restoringConversation = false
+                }
+            }
             .onChange(of: store.connected) { _, connected in
-                if connected && !followLatest && !userReadingGesture && questionRevealTask == nil, let location = shared.chatScrollLocations[chatBrowserScope] { restoreConversation(location) }
+                if connected && !editingAnswer && !followLatest && !userReadingGesture && questionRevealTask == nil && questionFocus == nil, let location = shared.chatScrollLocations[chatBrowserScope] { restoreConversation(location) }
             }
             .onChange(of: renderedEventStart) { _, _ in
-                guard readingRestoreTask == nil, questionRevealTask == nil else { return }
+                guard !editingAnswer, !userReadingGesture, readingRestoreTask == nil, questionRevealTask == nil else { return }
                 if let reading = pendingHistoryRestore { pendingHistoryRestore = nil; restoreConversation(reading) }
                 else if !followLatest, let reading = shared.chatScrollLocations[chatBrowserScope] { restoreConversation(reading) }
+            }
+            .task(id: shared.chatInputRequest?.token) {
+                guard let target = shared.chatInputRequest, target.hostID == store.connection?.hostId, target.chatID == id else { return }
+                let questions = NativeUserQuestion.read(run).filter { $0.status == "pending" }
+                let question = target.questionID.isEmpty ? questions.first(where: { $0.blocking }) ?? questions.first : questions.first(where: { $0.id == target.questionID })
+                if let question {
+                    questionRevealTask?.cancel(); let request = UUID(); questionRevealID = request
+                    questionRevealTask = Task { await revealQuestion(question, request: request, with: proxy) }
+                } else if pending != .null {
+                    cancelReadingRestore(); followLatest = false
+                    await Task.yield(); proxy.scrollTo("chat-pending-input", anchor: .top)
+                    if pending["type"].string == "question" { composerHasFocus = true }
+                }
+                if shared.chatInputRequest?.token == target.token { shared.chatInputRequest = nil }
             }
             .safeAreaInset(edge: .top) {
                 NativeUserQuestionQueue(questions: questions, chatKey: chatBrowserScope) { question in
@@ -1177,7 +1210,10 @@ struct ChatView: View {
         readingRestoreTask?.cancel(); readingRestoreTask = nil
     }
     private func restoreConversation(_ location: NativeChatScrollLocation, cacheReady: Bool = false) {
-        guard location.valid, readingRestoreTask == nil || cacheReady else { return }
+        guard location.valid, !editingAnswer, !userReadingGesture, readingRestoreTask == nil || cacheReady else { return }
+        // Leave an offline bookmark deferred rather than starting a restoration
+        // that has no loaded anchor and can never acknowledge its command.
+        if let anchor = location.anchor, anchor < run["eventStart"].int, !store.connected { return }
         let transaction = UUID()
         restoreID = transaction
         restoringConversation = true
@@ -1187,7 +1223,10 @@ struct ChatView: View {
             guard store.connected else { return } // Keep the bookmark for reconnect.
             readingRestoreToken = transaction
             readingRestoreTask = Task { @MainActor in
-                defer { if readingRestoreToken == transaction { readingRestoreTask = nil; readingRestoreToken = nil } }
+                defer { if readingRestoreToken == transaction {
+                    readingRestoreTask = nil; readingRestoreToken = nil
+                    if restoreID == transaction { restoreID = nil; restoringConversation = false }
+                } }
                 do {
                     while run["eventStart"].int > anchor {
                         try Task.checkCancellation()
@@ -1327,7 +1366,7 @@ struct ChatView: View {
                     Text("|").foregroundStyle(.secondary)
                     modeLink("Live browser", mode: "live", identifier: "chat-live-browser")
                 }
-            }.font(.caption).buttonStyle(.plain)
+            }.contentShape(Rectangle()).nativeAdjacentTabSwipe().font(.caption).buttonStyle(.plain)
     }
     private var composerContent: some View {
         VStack(spacing: 8) {
@@ -1341,7 +1380,7 @@ struct ChatView: View {
                     HStack(spacing: 0) {
                         Button { composerExpanded = true; composerHasFocus = true } label: {
                             Text(text.isEmpty ? replyPlaceholder : text.replacingOccurrences(of: "\n", with: " ")).lineLimit(1).truncationMode(.tail).font(.subheadline).foregroundStyle(text.isEmpty ? .secondary : .primary).frame(maxWidth: .infinity, minHeight: 44, alignment: .leading).padding(.horizontal, 10)
-                        }.buttonStyle(.plain).accessibilityLabel("Expand message composer").accessibilityValue(text).accessibilityHint(attachments.isEmpty && missingAttachments.isEmpty ? "" : "Includes attachments. Expand to review them.").accessibilityIdentifier("composer-preview")
+                        }.buttonStyle(.plain).accessibilityLabel("Expand message composer").accessibilityValue(text).accessibilityHint(attachments.isEmpty && missingAttachments.isEmpty ? "" : "Includes attachments. Expand to review them.").accessibilityIdentifier("composer-preview").nativeAdjacentTabSwipe()
                         if NativePhonePreview.enabled && ["running", "awaiting_input"].contains(run["status"].string) { stopButton }
                     }
                 }
@@ -1352,7 +1391,7 @@ struct ChatView: View {
                             if !attachmentsEnabled { Text(NativeDesignPreview.isolated ? "Attachments are unavailable in this rehearsal." : "Attachments are unavailable for this provider.") }
                             Group {
                             Button("Paste image or file", systemImage: "doc.on.clipboard") { pasteAttachment() }
-                            Button("Choose files", systemImage: "folder") { filePicker = true }
+                            Button("Choose files", systemImage: "folder") { filePicker = false; Task { @MainActor in try? await Task.sleep(for: .milliseconds(250)); filePicker = true } }
                             Button("Choose photos", systemImage: "photo") { photoPicker = false; Task { @MainActor in try? await Task.sleep(for: .milliseconds(250)); photoPicker = true } }
                             }.disabled(!attachmentsEnabled)
                         } label: { Image(systemName: "plus").frame(width: 44, height: 44) }
@@ -1383,7 +1422,7 @@ struct ChatView: View {
                 .onTapGesture { composerExpanded = true; composerHasFocus = true }
                 .accessibilityElement(children: .contain).accessibilityIdentifier("reply-composer-card")
 
-        }.padding(.horizontal).padding(.vertical, 8).background(NativePalette.shared.color("composer"))
+        }.padding(.horizontal).padding(.vertical, 4).padding(.bottom, NativePhonePreview.enabled && !composerHasFocus ? -10 : 0).background((NativePhonePreview.enabled ? NativeTheme.rail : NativePalette.shared.color("composer")).ignoresSafeArea(edges: .bottom))
     }
     private var stopButton: some View {
         Button(role: .destructive) { act("chat.cancel", [:]) } label: {
@@ -1521,10 +1560,13 @@ struct ChatView: View {
         } catch { store.error = error.localizedDescription; return false }
     }
     private func pasteAttachment() {
-        let files = (UIPasteboard.general.urls ?? []).filter(\.isFileURL)
-        if !files.isEmpty { for url in files { if !importFile(url) { break } }; return }
-        if let image = UIPasteboard.general.image, let data = image.pngData() { addAttachment(data, name: "Pasted image.png", mediaType: "image/png"); return }
-        store.error = "Copy an image or a file supported by this provider, then paste it here."
+        NativeAttachmentPaste.read { result in
+            switch result {
+            case .success(.file(let url)): _ = importFile(url)
+            case .success(.image(let data)): _ = addAttachment(data, name: "Pasted image.png", mediaType: "image/png")
+            case .failure(let error): store.error = error.localizedDescription
+            }
+        }
     }
     private func revealQuestion(_ question: NativeUserQuestion, request: UUID, with proxy: ScrollViewProxy) async {
         defer { if questionRevealID == request { questionRevealTask = nil } }
@@ -1545,15 +1587,23 @@ struct ChatView: View {
                 store.mergeChat(value)
                 target = NativeUserQuestion.read(run).first(where: { $0.id == question.id }) ?? target
             }
-            guard target.eventIndex >= 0 else { composerHasFocus = true; proxy.scrollTo("chat-end", anchor: .bottom); return }
+            guard target.eventIndex >= 0 else { proxy.scrollTo("chat-pending-input", anchor: .top); composerHasFocus = true; return }
             oldestVisibleEvent = max(run["eventStart"].int, target.eventIndex - 4)
             // Wait for the new history window and the collapsed queue inset to
             // lay out before asking SwiftUI to find the nested question anchor.
             try await Task.sleep(for: .milliseconds(100))
             try Task.checkCancellation()
             guard questionRevealID == request else { return }
+            proxy.scrollTo(target.eventIndex, anchor: .top)
+            await Task.yield()
             proxy.scrollTo("user-question-" + question.id, anchor: .top)
             questionFocus = (question.id, request)
+            // Keyboard and Markdown measurement can change the target geometry
+            // after the initial jump. Reapply once without restoring an old anchor.
+            try await Task.sleep(for: .milliseconds(180))
+            try Task.checkCancellation()
+            guard questionRevealID == request else { return }
+            proxy.scrollTo("user-question-" + question.id, anchor: .top)
         } catch is CancellationError { } catch { store.error = error.localizedDescription }
     }
     private func answer(_ value: String) { act("chat.reply", ["answer": .string(value), "requestId": pending["id"]]) }
@@ -1585,7 +1635,7 @@ struct ChatView: View {
     }
     private func loadEarlier() {
         if userReadingGesture { scrollMeasurements.historyRevealPending = true; return }
-        guard !loadingEarlier, pendingHistoryRestore == nil, !restoringConversation, hasEarlierMessages else { return }
+        guard !editingAnswer, !loadingEarlier, pendingHistoryRestore == nil, !restoringConversation, hasEarlierMessages else { return }
         if prefetchingEarlier && renderedEventStart == run["eventStart"].int { return }
         historyGestureAvailable = false
         let loadedFirst = run["eventStart"].int
@@ -1601,10 +1651,19 @@ struct ChatView: View {
             loadingEarlier = false
             return
         }
+        let interactionAtRequest = lastReaderInteractionAt
         Task { defer { loadingEarlier = false }
             do { let value = try await store.readChat(["id": .string(id), "offset": .number(Double(offset)), "beforeEvent": .number(Double(oldFirst))]);
-                oldestVisibleEvent = value["eventStart"].int + NativeHistoryWindow.start(events: value["events"].array, preparingOlder: true)
-                store.mergeChat(value) }
+                if editingAnswer || userReadingGesture || lastReaderInteractionAt != interactionAtRequest {
+                    // A response may finish after another pan. Cache it without
+                    // moving the new viewport back to the request's old bookmark.
+                    pendingHistoryRestore = nil; historyWindowChanged = false
+                    scrollMeasurements.historyRevealPending = true
+                    store.mergeChat(value)
+                } else {
+                    oldestVisibleEvent = value["eventStart"].int + NativeHistoryWindow.start(events: value["events"].array, preparingOlder: true)
+                    store.mergeChat(value)
+                } }
             catch { earlierError = true; store.error = error.localizedDescription }
         }
     }

@@ -10,7 +10,7 @@ export function documentAssociationMetadata(descriptor){
 }
 // Saved checkpoints retain origin after presentation moves to a project or Team.
 export function documentSessionMetadata(tab){
- return {file:tab.markdown?.file||tab.file,...(tab.associationChatId?{associationChatId:tab.associationChatId}:{})};
+ return {file:tab.markdown?.file||tab.file,...(tab.workspaceId?{workspaceId:tab.workspaceId}:{}),...(tab.associationChatId?{associationChatId:tab.associationChatId}:{})};
 }
 export function windowContentTabId(tab){
  if(['run','remote-run'].includes(tab.type))return 'chat:'+(tab.runId||tab.chatId||(tab.contentTabId?.startsWith('chat:')?tab.contentTabId.slice(5):tab.id.replace(/^chat:/,'')));

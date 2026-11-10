@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import WebKit
 import CryptoKit
 
 /// Reviewed navigation is shared with release builds. Synthetic service access
@@ -149,7 +150,6 @@ private struct NativeFeaturePage: ViewModifier {
                 .safeAreaInset(edge: .bottom, spacing: 0) {
                     if NativePhonePreview.enabled, let search { searchField(search).padding(.horizontal, 16).padding(.vertical, 8).background(NativeTheme.background) }
                 }
-                .simultaneousGesture(TapGesture(count: 2).onEnded { if NativePhonePreview.enabled { chrome.toggleControls() } })
         } else if let search { content.searchable(text: search) }
         else { content }
     }
@@ -312,10 +312,32 @@ struct NativePhoneSurface: UIViewRepresentable {
             let tap = UITapGestureRecognizer(target: self, action: #selector(interacted(_:)))
             let pan = UIPanGestureRecognizer(target: self, action: #selector(interacted(_:)))
             let pinch = UIPinchGestureRecognizer(target: self, action: #selector(pinched(_:)))
-            gestures = [tap, pan, pinch]
+            let doubleTap = UITapGestureRecognizer(target: self, action: #selector(toggleControls(_:)))
+            doubleTap.numberOfTapsRequired = 2
+            gestures = [tap, pan, pinch, doubleTap]
             for gesture in gestures { gesture.cancelsTouchesInView = false; gesture.delaysTouchesBegan = false; gesture.delaysTouchesEnded = false; gesture.delegate = self; window.addGestureRecognizer(gesture) }
         }
         func remove() { for gesture in gestures { host?.removeGestureRecognizer(gesture) }; gestures = []; host = nil }
+        @objc private func toggleControls(_ gesture: UITapGestureRecognizer) {
+            guard gesture.state == .ended, let chrome, chrome.browserSurfaceScope == nil, let window = host else { return }
+            let point = gesture.location(in: window)
+            let hit = window.hitTest(point, with: nil)
+            guard !NativeChromeHitTest.containsEditorOrControl(hit) else { return }
+            var current = hit
+            while let value = current {
+                if let webView = value as? WKWebView {
+                    let local = window.convert(point, to: webView)
+                    Task { @MainActor [weak chrome, weak webView] in
+                        guard let webView, await NativeChromeHitTest.isBackground(local, in: webView) else { return }
+                        chrome?.toggleControls()
+                    }
+                    return
+                }
+                if let label = value as? UILabel, label.text?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false { return }
+                current = value.superview
+            }
+            chrome.toggleControls()
+        }
         @objc private func pinched(_ gesture: UIPinchGestureRecognizer) {
             guard overviewEnabled, let chrome else { return }
             if gesture.state == .began || gesture.state == .changed { if gesture.scale < 0.98 { chrome.pinch(gesture.scale) } }
@@ -385,7 +407,7 @@ struct NativePhoneOverview: View {
     var title = "Tabs"
     var selectedID: String? = nil
     var accessibilityID = "phone-tab-overview"
-    @State private var positionedInitially = false
+    @State private var readerInteracted = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private var sections: [(id: String, title: String, items: [NativePhoneTab])] {
         var result: [(id: String, title: String, items: [NativePhoneTab])] = []
@@ -404,7 +426,11 @@ struct NativePhoneOverview: View {
             ZStack(alignment: .topLeading) {
                 VStack(spacing: 0) {
                     HStack {
-                        Text(title).font(.title2.bold()); Spacer()
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(title).font(.title2.bold())
+                            let count = items.filter { !$0.id.hasPrefix("project-home:") && !$0.id.hasPrefix("workspace-home:") }.count
+                            Text("\(count) " + (count == 1 ? "tab" : "tabs")).font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("overview-tab-count")
+                        }; Spacer()
                         Button("Done") { chrome.closeOverview() }.frame(minWidth: 44, minHeight: 44)
                     }.padding(.horizontal, 20)
                     ScrollViewReader { proxy in
@@ -429,14 +455,16 @@ struct NativePhoneOverview: View {
                             }
                         }.padding(18)
                         }
-                        }
+                        }.background(NativeScrollProbe(onSnapshot: { _ in }, onInteraction: { active in if active { readerInteracted = true } }).frame(width: 1, height: 1).opacity(0))
                     }
                     // Open on the current tab, centred (the last tab naturally rests at the bottom), as on desktop.
-                    .task {
-                        guard !positionedInitially, items.contains(where: { $0.id == activeID }) else { return }
-                        positionedInitially = true
+                    .task(id: items.map(\.id)) {
+                        guard !readerInteracted, items.contains(where: { $0.id == activeID }) else { return }
                         await Task.yield()
-                        guard !Task.isCancelled else { return }
+                        guard !Task.isCancelled, !readerInteracted else { return }
+                        proxy.scrollTo(activeID, anchor: .center)
+                        try? await Task.sleep(for: .milliseconds(120))
+                        guard !Task.isCancelled, !readerInteracted else { return }
                         proxy.scrollTo(activeID, anchor: .center)
                     }
                     }
@@ -524,4 +552,19 @@ enum NativeThumbnailCache {
         } catch { /* Keep the previous good preview and the icon fallback. */ }
     }
     static func remove(_ key: String) { images.removeObject(forKey: key as NSString); writer.async { try? FileManager.default.removeItem(at: file(key)); images.removeObject(forKey: key as NSString) } }
+}
+
+struct NativeAdjacentTabSwipe: ViewModifier {
+    @Environment(\.nativeTabStep) private var step
+    var enabled = true
+    var fallback: ((Int) -> Void)? = nil
+    func body(content: Content) -> some View {
+        content.simultaneousGesture(DragGesture(minimumDistance: 24).onEnded { value in
+            guard enabled, let direction = NativeAddressSwipe.direction(x: value.translation.width, y: value.translation.height) else { return }
+            (step ?? fallback)?(direction)
+        }, including: enabled && (step != nil || fallback != nil) ? .all : .none)
+    }
+}
+extension View {
+    func nativeAdjacentTabSwipe(enabled: Bool = true, fallback: ((Int) -> Void)? = nil) -> some View { modifier(NativeAdjacentTabSwipe(enabled: enabled, fallback: fallback)) }
 }

@@ -27,7 +27,7 @@ export function bindPermissionSidebar(root,{run,request,reply,reload,dialog,pick
  $('[data-preview-workspace-permissions]')?.addEventListener('click',()=>void openWorkspace?.());
  $('[data-preview-remember]')?.addEventListener('click',()=>{
   const pending=run.pending;if(pending?.type!=='permission')return;
-  dialog(previewRememberDialog(pending),async()=>{await reply(global('[data-preview-remember-choice][aria-pressed=true]').dataset.previewRememberChoice,pending.id);await reload();});
+  dialog(previewRememberDialog(pending),async()=>{await reply(global('[data-preview-remember-choice][aria-pressed=true]').dataset.previewRememberChoice,pending.id);void Promise.resolve(reload()).catch(error=>notify(error.message));});
   const explain=()=>{const answer=global('[data-preview-remember-choice][aria-pressed=true]').dataset.previewRememberChoice;global('[data-preview-remember-target]').textContent=previewPermissionChoiceLabel(pending.permissionChoices.find(choice=>choice.value===answer),pending);global('[data-preview-remember-effect]').textContent=previewRememberEffect(pending,answer);};
   document.querySelectorAll('[data-preview-remember-choice]').forEach(button=>button.onclick=()=>{document.querySelectorAll('[data-preview-remember-choice]').forEach(item=>item.setAttribute('aria-pressed',String(item===button)));explain();});explain();
  });

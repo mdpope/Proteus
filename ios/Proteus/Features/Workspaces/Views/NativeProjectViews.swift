@@ -243,8 +243,8 @@ struct NativeWorkspaceTree: View {
                 ForEach(Array(items.prefix(limits[key] ?? 7)), id: \.self) { item in
                     let picked = selected && remote.draft("project-navigation:" + project["id"].string)["selected"].string == item["navigationID"].string
                     Button { open(project, workspace: workspace, remote: remote, item: item) } label: {
-                        HStack(alignment: .top, spacing: 7) { resourceIcon(item, selected: picked).frame(width: 16); Text(item["title"].string).lineLimit(2).frame(maxWidth: .infinity, alignment: .leading); TimelineView(.periodic(from: .now, by: 60)) { timeline in Text(age(item, now: timeline.date)).foregroundStyle(picked ? NativeSidebarStyle.selectedInk : NativeSidebarStyle.muted).font(.system(size: 10)).fixedSize() } }.font(.caption).padding(.leading, NativeDesignPreview.enabled ? 18 : 10).padding(.trailing, 10).padding(.vertical, 8).foregroundStyle(picked ? NativeSidebarStyle.selectedInk : NativeSidebarStyle.ink).background(picked ? NativeSidebarStyle.selected : .clear, in: RoundedRectangle(cornerRadius: 7)).overlay(alignment: .leading) { if picked { Capsule().fill(NativeTheme.accent).frame(width: 3).padding(.vertical, 5) } }
-                    }.accessibilityIdentifier("project-recent-" + item["id"].string).accessibilityValue(picked ? "Active" : "Inactive").accessibilityAddTraits(picked ? .isSelected : [])
+                        HStack(alignment: .top, spacing: 7) { resourceIcon(item, selected: picked).frame(width: 16); Text(item["title"].string + (item["hidden"].bool ? " · Hidden" : "")).lineLimit(2).frame(maxWidth: .infinity, alignment: .leading); TimelineView(.periodic(from: .now, by: 60)) { timeline in Text(age(item, now: timeline.date)).foregroundStyle(picked ? NativeSidebarStyle.selectedInk : NativeSidebarStyle.muted).font(.system(size: 10)).fixedSize() } }.font(.caption).padding(.leading, NativeDesignPreview.enabled ? 18 : 10).padding(.trailing, 10).padding(.vertical, 8).foregroundStyle(picked ? NativeSidebarStyle.selectedInk : NativeSidebarStyle.ink).background(picked ? NativeSidebarStyle.selected : .clear, in: RoundedRectangle(cornerRadius: 7)).overlay(alignment: .leading) { if picked { Capsule().fill(NativeTheme.accent).frame(width: 3).padding(.vertical, 5) } }
+                    }.disabled(item["hidden"].bool && !remote.connected).accessibilityIdentifier("project-recent-" + item["id"].string).accessibilityValue(picked ? "Active" : "Inactive").accessibilityAddTraits(picked ? .isSelected : [])
                 }
                 if items.isEmpty { Text(remote.connected ? "No recent items" : "Offline · no cached items").font(.caption).foregroundStyle(.secondary).padding(8) }
                 if items.count > (limits[key] ?? 7) { Button("More") { limits[key] = (limits[key] ?? 7) + 4 }.font(.caption).padding(8) }
@@ -259,33 +259,13 @@ struct NativeWorkspaceTree: View {
         // The Release trace showed tabs(in:) inside this per-resource map.
         // Resolve aliases once, preserving the same first descriptor per owner ID.
         let browserIDs = Dictionary(shared.tabs(in: scope).map { ($0.contentTabId ?? $0.id, $0.id) }, uniquingKeysWith: { first, _ in first })
-        let runState = remote.sidebarRunState
-        var items = rows.filter { !$0["hidden"].bool }.map { tab in
-            var row = tab.object
-            if tab["type"].string == "chat" {
-                // An owner slot can precede its run page during restore. Keep
-                // the prior visible placeholder until that metadata arrives.
-                let run = runState["index"].object[tab["chatId"].string] ?? .object(["id": tab["chatId"], "title": .string("Chat")])
-                if tab["title"].string.isEmpty { row["title"] = run["title"] }
-                row["lastActivityAt"] = run["lastActivityAt"]; row["chatType"] = run["chatType"]; row["navigationID"] = .string("chat:" + tab["chatId"].string)
-            } else {
-                row["navigationID"] = .string(tab["type"].string == "browser" ? (browserIDs[tab["id"].string] ?? "remote:" + tab["id"].string) : "remote:" + tab["id"].string)
-            }
-            return JSON.object(row)
-        }
-        var chats = Set(items.filter { $0["type"].string == "chat" }.map { $0["chatId"].string })
-        for run in runState["runs"].array {
+        let chats = remote.sidebarRunState["runs"].array.filter { run in
             let member = remote.projectCatalog.membership(for: run)
-            guard !run["archived"].bool, run["archivedAt"].string.isEmpty,
-                  member["workspaceId"].string == workspace.workspaceID, member["projectId"].string == project["id"].string,
-                  !run["id"].string.isEmpty, chats.insert(run["id"].string).inserted else { continue }
-            var row = run.object
-            row["type"] = .string("chat"); row["chatId"] = run["id"]
-            row["navigationID"] = .string("chat:" + run["id"].string)
-            items.append(.object(row))
+            return member["workspaceId"].string == workspace.workspaceID && member["projectId"].string == project["id"].string
         }
-        return NativeProjectActivity.newestFirst(items)
+        return NativeProjectActivity.items(tabs: rows, chats: chats, browserIDs: browserIDs)
     }
+
     private func countLabel(_ items: [JSON], scope: String, remote: RemoteStore) -> String {
         String(items.count)
     }
@@ -301,10 +281,20 @@ struct NativeWorkspaceTree: View {
     private func open(_ project: JSON, workspace: NativeWorkspaceIdentity, remote: RemoteStore, item: JSON = .null) {
         shared.sidebarWorkspaces.insert(workspace.id); shared.sidebarProjects.insert(workspace.hostID + ":" + project["id"].string)
         remote.setDraft("workspace-selected-project:" + workspace.workspaceID, project["id"])
-        if item["type"].string == "chat" { NativeWorkspaceNavigation.openChat(item["chatId"].string, workspaceID: workspace.workspaceID, projectID: project["id"].string, remote: remote, shared: shared) }
+        if item["type"].string == "chat" && !item["hidden"].bool { NativeWorkspaceNavigation.openChat(item["chatId"].string, workspaceID: workspace.workspaceID, projectID: project["id"].string, remote: remote, shared: shared) }
         else if item != .null {
             Task {
                 let scope = "project:" + workspace.hostID + ":" + project["id"].string
+                if item["hidden"].bool {
+                    guard remote.connected else { return }
+                    shared.queueContentOperations([.object(["action": .string("visibility"), "id": item["id"], "hidden": .bool(false)])], scope: scope, remote: remote, kind: "project", id: project["id"].string)
+                    await shared.refreshContentTabs(scope: scope, remote: remote, kind: "project", id: project["id"].string)
+                    guard !shared.hasPendingContent(in: scope) else { remote.error = "Tab restoration is unconfirmed. Reconnect before opening it again."; return }
+                }
+                if item["type"].string == "chat" {
+                    NativeWorkspaceNavigation.openChat(item["chatId"].string, workspaceID: workspace.workspaceID, projectID: project["id"].string, remote: remote, shared: shared)
+                    onOpen(workspace); return
+                }
                 if item["type"].string == "browser", remote.connected { await shared.refreshContentTabs(scope: scope, remote: remote, kind: "project", id: project["id"].string) }
                 let key = "project-navigation:" + project["id"].string
                 var navigation = remote.draft(key).object

@@ -26,6 +26,14 @@ export function installObsidianMarkdown(md) {
     const value=item=>item===null?'—':typeof item==='object'?JSON.stringify(item):String(item);
     return '<details class="md-properties" open><summary>Properties</summary><dl>'+Object.entries(tokens[index].meta).map(([key,item])=>'<dt>'+esc(key)+'</dt><dd>'+esc(Array.isArray(item)?item.map(value).join(', '):value(item))+'</dd>').join('')+'</dl></details>\n';
   };
+  md.inline.ruler.before('image','wiki-image',(state,silent)=>{
+    const from=state.pos;if(state.src.slice(from,from+3)!=='![[')return false;
+    const end=state.src.indexOf(']]',from+3);if(end<0||end-from>2048)return false;
+    const [target,...alias]=state.src.slice(from+3,end).split('|');
+    if(!target||/[\n\r\[\]\\]/.test(target)||/^[a-z][a-z0-9+.-]*:/i.test(target)||target.startsWith('//')||! /\.(png|jpe?g|gif|webp)$/i.test(target))return false;
+    if(!silent){const token=state.push('image','img',0);token.attrSet('src',encodeURI(target.trim()));token.attrSet('alt',alias.join('|')||target);token.children=[];}
+    state.pos=end+2;return true;
+  });
   md.inline.ruler.before('link','wiki-link',(state,silent)=>{
     const from=state.pos;
     if (state.src.slice(from,from+2)!=='[[' || state.linkLevel>0) return false;

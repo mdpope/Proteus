@@ -14,7 +14,7 @@ const pagePreferences=createRequire(import.meta.url)('../desktop/browser/browser
 const copy=value=>JSON.parse(JSON.stringify(value));
 test('a native link menu callback keeps its originating window after focus moves elsewhere',async()=>{
  const scope=new AsyncLocalStorage(),created=[],electron={app:{getApplicationNameForProtocol:()=> 'Browser'},Menu:{buildFromTemplate:items=>({items})}};
- const sandbox={module:{exports:{}},URL,process:{platform:'linux'},require:name=>name==='electron'?electron:name==='node:path'?path:name==='./browser-history.cjs'?{}:name==='./browser-downloads.cjs'?{}:name==='./browser-page-preferences.cjs'?pagePreferences:assert.fail(name)};
+ const sandbox={module:{exports:{}},URL,process:{platform:'linux'},require:name=>name==='electron'?electron:name==='node:path'?path:name==='./browser-history.cjs'?{}:name==='./browser-downloads.cjs'?{}:name==='./browser-page-preferences.cjs'?pagePreferences:name==='../services/edit-context-menu.cjs'?createRequire(import.meta.url)('../desktop/services/edit-context-menu.cjs'):assert.fail(name)};
  vm.createContext(sandbox);vm.runInContext(fs.readFileSync(new URL('../desktop/browser/browser-actions.cjs',import.meta.url),'utf8'),sandbox);
  const source={id:'source',windowId:'first',profileId:'default',parentId:'project:local:one'},browser={options:{},partition:{on(){}},tabs:new Map([[source.id,source]]),appOrigin:'http://app.test',withTabWindow:(tab,fn)=>scope.run(tab.windowId,fn),create:async()=>{await Promise.resolve();created.push(scope.getStore()||'other-focused-window');return {id:'new'};},sendAction(){}};
  const menu=scope.run('first',()=>new sandbox.module.exports.BrowserActions(browser).menu(source,{linkURL:'https://example.test/'}));
@@ -23,7 +23,7 @@ test('a native link menu callback keeps its originating window after focus moves
 });
 test('native link menu keeps foreground/background/unloaded choices distinct and captures source ownership',async()=>{
   const created=[],sent=[],electron={app:{getApplicationNameForProtocol:()=> 'Browser'},Menu:{buildFromTemplate:items=>({items})}};
-  const sandbox={module:{exports:{}},URL,process:{platform:'linux'},require:name=>name==='electron'?electron:name==='node:path'?path:name==='./browser-history.cjs'?{}:name==='./browser-downloads.cjs'?{}:name==='./browser-page-preferences.cjs'?pagePreferences:assert.fail(name)};
+  const sandbox={module:{exports:{}},URL,process:{platform:'linux'},require:name=>name==='electron'?electron:name==='node:path'?path:name==='./browser-history.cjs'?{}:name==='./browser-downloads.cjs'?{}:name==='./browser-page-preferences.cjs'?pagePreferences:name==='../services/edit-context-menu.cjs'?createRequire(import.meta.url)('../desktop/services/edit-context-menu.cjs'):assert.fail(name)};
   vm.createContext(sandbox);vm.runInContext(fs.readFileSync(new URL('../desktop/browser/browser-actions.cjs',import.meta.url),'utf8'),sandbox);
   const source={id:'source',profileId:'profile-a',group:'team',parentId:'chat',destination:{type:'chat',id:'chat'},workspaceName:'Workspace',associationChatId:'chat'};
   const browser={options:{},partition:{on(){}},tabs:new Map([[source.id,source]]),appOrigin:'http://app.test',create:async(url,_owner,_history,descriptor)=>{created.push({url,descriptor:copy(descriptor)});return {id:'created',...descriptor};},sendAction:value=>sent.push(copy(value))};

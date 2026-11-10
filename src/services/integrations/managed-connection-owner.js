@@ -1,3 +1,4 @@
+import {AdoOnboarding} from './managed-ado-onboarding.js';
 import {AtlassianOnboarding,atlassianSetupScopes} from './managed-atlassian-onboarding.js';
 import {adoAlternativeIds,adoReadScopes} from './managed-ado-alternative-profile.js';
 import path from 'node:path';
@@ -27,6 +28,7 @@ export class ManagedConnectionOwner {
   this.auth=authFactory({registry:this.registry,vault:this.vault,openExternal,now,onChange:()=>service.notify()});
   this.onboarding=new AtlassianOnboarding(this.auth,{workspaces:()=>service.context.config().workspaces,onChange:()=>service.notify()});
   this.adoAuth=adoAuthFactory({registry:this.registry,vault:this.vault,openExternal,now,onChange:()=>service.notify()});
+  this.adoOnboarding=new AdoOnboarding({auth:this.adoAuth,registry:this.registry,workspaces:()=>service.context.config().workspaces,onChange:()=>service.notify()});
   this.manager=new ManagedConnections({registry:this.registry,adapters:adapters||{[atlassianOAuthProfile.adapter]:this.auth.adapter(),[adoIdentityProfile.adapter]:this.adoAuth.adapter(),...Object.fromEntries(adoAlternativeIds.map(id=>[id,this.adoAuth.adapter()]))},now,
    onChange:()=>{this.persist();service.notify();},notify:event=>service.activity?.log('warning','managed-connection.attention',event.reason,{connectionId:event.connectionId,code:event.code})});
   this.events=[];
@@ -69,24 +71,30 @@ export class ManagedConnectionOwner {
   const registry=this.registry.read();
   return {schemaVersion:1,ownerId:this.registry.ownerId,revision:registry.revision,observedAt:new Date(this.now()).toISOString(),connections:registry.connections.map(c=>this.row(c)),
    workspaces:this.service.context.config().workspaces.map(w=>({id:w.id,name:w.name})),recoveryEvents:this.events,storageError:this.storageError||null,
-   adapters:this.adapterCatalog(),atlassianSetup:this.onboarding.status()};
+   adapters:this.adapterCatalog(),atlassianSetup:this.onboarding.status(),adoSetup:this.adoOnboarding.status()};
  }
  async action(args){
   if(this.closed)throw Error('Managed connections are closed.');
   if(args.action==='schema')return this.contract();
   if(args.action==='list')return this.snapshot();
+  if(args.action==='ado-setup-status')return this.adoOnboarding.status();
+  if(args.action==='ado-setup-cancel')return this.adoOnboarding.cancel(args.setupId);
   if(args.action==='atlassian-setup-status')return this.onboarding.status();
   if(args.action==='atlassian-setup-cancel'){this.onboarding.cancel(args.setupId);return this.onboarding.status();}
   const current=this.registry.read();if(current.revision!==args.expectedRevision)throw Error('Managed connections changed. Refresh before acting.');
+  if(args.action==='ado-setup-start')return this.adoOnboarding.start(args);
+  if(args.action==='ado-setup-confirm')return this.adoOnboarding.confirm(args);
   if(args.action==='atlassian-setup-start')return this.onboarding.start({accessMode:args.accessMode});
   if(args.action==='atlassian-setup-confirm'){const result=await this.onboarding.confirm(args);this.service.notify();return result;}
   const definition=current.connections.find(c=>c.id===args.connectionId);
   if(args.action==='save'){
-   const input=validateManagedConnection(args.definition);
+   let input=validateManagedConnection(args.definition);
    if(input?.id&&this.active(input.id))throw Error('Wait for captured connection runs to finish before editing.');
    if([adoIdentityProfile.adapter,...adoAlternativeIds].includes(input.authentication.adapter))qualifyAdoProbes(input);else qualifyAtlassianDefinition(input);
    const workspaceIds=new Set(this.service.context.config().workspaces.map(w=>w.id));if(input.workspaceIds.some(id=>!workspaceIds.has(id)))throw Error('Choose current workspaces on this owner.');
-   const prior=current.connections.find(c=>c.id===input.id);if(prior?.enabled)await this.manager.disconnect(this.binding(prior));
+   const prior=current.connections.find(c=>c.id===input.id);
+   if(prior?.authentication.adapter==='ado-pat'&&input.authentication.adapter==='ado-pat')input=await this.adoAuth.pat.reconfigure(prior,input);
+   if(prior?.enabled)await this.manager.disconnect(this.binding(prior));
    this.registry.save(input,{expectedRevision:args.expectedRevision});this.service.notify();return this.snapshot();
   }
   if(!definition)throw Error('Choose an existing managed connection.');
@@ -145,5 +153,5 @@ export class ManagedConnectionOwner {
    }
   })().catch(()=>{this.storageError='Managed connection maintenance could not inspect the current owner configuration.';}).finally(()=>{this.ticking=null;});return this.ticking;
  }
- async close(){this.closed=true;this.onboarding.close();await this.manager.close();await this.auth.close();await this.adoAuth.close();await this.ticking;}
+ async close(){this.adoOnboarding.close();this.closed=true;this.onboarding.close();await this.manager.close();await this.auth.close();await this.adoAuth.close();await this.ticking;}
 }

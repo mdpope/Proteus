@@ -1,0 +1,6 @@
+// Small, shared vector artwork: no font, image downloads or idle renderer.
+export function fileIcon(kind,expanded=false){
+ const page='<path d="M5 2h9l5 5v15H5z M14 2v6h5"/>';
+ const shapes={trash:'<path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7"/>',copy:'<rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V3H3v13h5"/>',move:'<path d="M2 7h8l2 2h10v12H2z M8 15h10m-4-4 4 4-4 4"/>',rename:'<path d="M3 16 16 3l5 5L8 21H3z M13 6l5 5"/>',folder:expanded?'<path d="M2 7h8l2 2h10l-4 11H2z M2 17V4h7l2 3h8v2"/>':'<path d="M2 5h8l2 3h10v12H2z"/>',markdown:page+'<path d="M8 17v-5l3 3 3-3v5 M16 13v4m-1-1 1 1 1-1"/>',code:page+'<path d="M8 11v3m3-3h2v3h-2z M16 11v3 M8 16h2v3H8z M13 16v3m3-3h2v3h-2z"/>',image:page+'<rect x="7" y="11" width="10" height="8" rx="1"/><path d="m8 18 3-3 2 2 2-3 2 3"/><circle cx="10" cy="13" r=".5"/>',audio:'<path d="M9 18V5l11-2v13M9 8l11-2"/><ellipse cx="6" cy="19" rx="3" ry="2"/><ellipse cx="17" cy="17" rx="3" ry="2"/>',video:'<rect x="2" y="5" width="14" height="15" rx="2"/><path d="m16 10 6-4v14l-6-4"/>',pdf:page+'<path d="M8 12h8M8 15h8M8 18h5"/>',file:page+'<path d="M8 12h8M8 16h8"/>'};
+ return '<svg class="proteus-file-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+(shapes[kind]||shapes.file)+'</svg>';
+}

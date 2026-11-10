@@ -1,3 +1,4 @@
+const {editContextItems}=require('./services/edit-context-menu.cjs');
 const {browserUpdateActivity,browserUpdateBlockers}=require('./browser/browser-update-activity.cjs');
 const { app, BrowserWindow, ipcMain, shell, dialog, clipboard, Tray, Menu, nativeImage, screen, safeStorage, Notification, powerMonitor, powerSaveBlocker } = require('electron');
 const path = require('node:path');
@@ -82,7 +83,7 @@ else {
     const records=windows.records(),firstRecord=records[0];
     const makeWindow=record=>new BrowserWindow({ ...windows.bounds(record), ...windowChromeOptions(), minWidth: 850, minHeight: 650, title: desktopPreview?.name||'Proteus', icon: appIcon, backgroundColor: '#121512',
       ...(process.platform==='darwin'?{titleBarStyle:'hidden',trafficLightPosition:{x:15,y:19}}:{}),
-      webPreferences: { additionalArguments:['--proteus-window-id='+record.id,'--proteus-window-preview'],preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true } });
+      webPreferences: { additionalArguments:['--proteus-window-id='+record.id,'--proteus-window-preview'],preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: true } });
     const firstWindow=makeWindow(firstRecord);windows.attach(firstWindow,firstRecord.id);window=windows.proxy();
     if(desktopPreview)window.on('page-title-updated',event=>{event.preventDefault();window.setTitle(desktopPreview.name);});
     const browsingHistory=new HistoryService(service.browserHistory,{onError:error=>window.webContents.send('proteus:browser-action',{type:'error',message:error.message})});
@@ -110,6 +111,7 @@ else {
     windows.handle('proteus:notice',(event,value)=>{trusted(event);if(event.senderFrame!==window.webContents.mainFrame||closing)throw new Error('Notification access unavailable.');return (()=>{const ctx=windows.current();if(!notices.has(ctx.id))notices.set(ctx.id,new (require('./features/notifications/notice-window.cjs').NoticeWindow)(ctx.window));return notices.get(ctx.id).show(value);})();});
     const openBrowserNotification=(item,intent='review')=>{let issue=item?.browserIssue;if(!issue)throw Error('Browser notification not found.');if(item.type==='website.notification'&&issue.logicalTabId){const target=[...browser.tabs.values()].find(tab=>tab.thumbnailId===issue.logicalTabId&&tab.profileId===issue.profileId);if(target)issue={...issue,tabId:target.id,windowId:target.windowId||issue.windowId};}if(issue.kind==='site-notification'&&intent==='review'){intent='open-tab';try{browser.permissions.read(issue.siteNotificationId,true);}catch{}}const actions=issue.kind==='history-conflict'?['review','keep-history','open-copy']:['review','open-tab','reload','logs'];if(!actions.includes(intent))throw Error('Choose an available notification action.');const ctx=windows.contexts.get(issue.windowId);if(!ctx||ctx.window.isDestroyed())throw Error('Restore the original window in Engine Room → Windows before reviewing this browser issue.');windows.run(ctx.id,()=>{ctx.window.show();ctx.window.focus();ctx.window.webContents.send('proteus:notification-open',{browserIssueId:item.id,issueAction:intent,browserIssueTarget:issue});});if(item.type==='website.notification'){service.activity.read(item.id);service.notify();service.remote.changed();}return {dispatched:true};};
     service.openWebsiteNotification=id=>{const item=service.activity.notifications().items.find(item=>item.id===id&&item.type==='website.notification');if(!item)throw Error('Website notification is no longer available.');return openBrowserNotification(item);};
+    windows.handle('proteus:document-find',(event,value)=>{trusted(event);if(event.senderFrame!==event.sender.mainFrame)throw Error('Document search requires the application window.');const query=value?.query;if(typeof query!=='string'||query.length>200)throw Error('Enter a search up to 200 characters.');if(!query){event.sender.stopFindInPage('clearSelection');return {cleared:true};}return {requestId:event.sender.findInPage(query,{forward:value.forward!==false,findNext:true})};});
     windows.handle('proteus:browser-notification',(event,value)=>{trusted(event);if(event.senderFrame!==window.webContents.mainFrame||closing)throw Error('Browser notification access unavailable.');if(value?.action==='record'){const item=service.activity.browserIssue({...value,windowId:windows.current().id});service.notify();return item;}if(value?.action==='act'){const item=service.activity.notifications().items.find(item=>item.id===value.id&&['browser.issue','website.notification'].includes(item.type));return openBrowserNotification(item,value.intent);}throw Error('Choose a browser notification action.');});
     windows.handle('proteus:default-browser',event=>{trusted(event);return app.getApplicationNameForProtocol('https:')||null;});
     windows.handle('proteus:open-link',(event,value)=>{trusted(event);if(event.senderFrame.parent!==null)throw new Error('Untrusted frame.');const url=new URL(value);if(!['http:','https:'].includes(url.protocol)||url.username||url.password)throw new Error('Use an HTTP or HTTPS link without credentials.');return shell.openExternal(url.href);});
@@ -255,6 +257,7 @@ else {
       let result;for(const ctx of matches){const answer=await windows.run(ctx.id,()=>windowRuntime(value));if(answer!==undefined)result=answer;}return result;
     };
     try{service.contentTabs.seedWorkspace(workspaceSession.get());}catch(error){service.activity.log('warning','tabs.restore-failed',error.message);}
+    service.workspaceExplorer.trash=file=>shell.trashItem(file);
     const {readFilePreview}=await import('../src/services/workspaces/workspace-preview.js');
     service.contentTabDocument = value => {
       if(!['chat','workspace','project','main','team'].includes(value.scope)||!/^[a-f0-9]{64}$/.test(value.documentId||''))throw new Error('Choose a host-bound chat document.');
@@ -365,7 +368,7 @@ else {
       const area = screen.getDisplayMatching(window.getBounds()).workArea;
       standupWindow = new BrowserWindow({ x: area.x, y: area.y, width: Math.round(Math.max(180, Math.min(320, Number(width) || 230))), height: area.height,
         title: 'Proteus Standup', frame: false, alwaysOnTop: true, minimizable: false, fullscreenable: false, minWidth: 180, minHeight: 300, backgroundColor: '#19201e',
-        webPreferences: { preload: path.join(__dirname, 'features/standup/standup-preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true } });
+        webPreferences: { preload: path.join(__dirname, 'features/standup/standup-preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: true } });
       standupWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
       standupWindow.webContents.on('will-navigate', event => event.preventDefault());
       standupWindow.on('closed', () => { standupWindow = null; });
@@ -383,6 +386,7 @@ else {
       }),log:detail=>service.activity.log(detail.reason==='recovered'?'info':'warning','desktop.renderer-recovery','Window renderer recovery',{windowId:id,...detail})});
       if(desktopPreview)target.on('page-title-updated',event=>{event.preventDefault();target.setTitle(desktopPreview.name);});
       target.webContents.setWindowOpenHandler(()=>({action:'deny'}));
+      target.webContents.on('context-menu',(event,params)=>{if(!params.isEditable)return;event.preventDefault();Menu.buildFromTemplate(editContextItems(target.webContents,params)).popup({window:target});});
       target.webContents.on('will-navigate',(event,url)=>{if(new URL(url).origin!==service.origin)event.preventDefault();});
       target.webContents.on('did-start-navigation',windows.bind(id,details=>{if(details.isMainFrame&&!details.isSameDocument){ctx.externalURLReady=false;browser.invalidateRendererSelection();}}));
       target.webContents.on('did-finish-load',windows.bind(id,()=>{if(chatLink){target.webContents.send('proteus:open-chat-link',chatLink);chatLink=null;}}));

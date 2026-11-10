@@ -426,6 +426,54 @@ final class RemoteTests: XCTestCase {
         coordinator.invalidate()
     }
 
+    @MainActor func testNativeReaderGestureRejectsStaleRestorationAndFollowing() async throws {
+        let scroll = MomentumScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 600))
+        scroll.contentSize = CGSize(width: 400, height: 2400)
+        let child = UIView(); scroll.addSubview(child)
+        let coordinator = NativeScrollProbe.Coordinator(); coordinator.attach(from: child)
+        defer { coordinator.invalidate() }
+        let stale = NativeScrollCommand(id: UUID(), y: 1600, minimumContentHeight: 4000)
+        var applied: [UUID] = []; var interactions: [Bool] = []
+        coordinator.onApplied = { id, _ in applied.append(id) }
+        coordinator.onInteraction = { interactions.append($0) }
+        coordinator.apply(stale)
+        try await Task.sleep(for: .milliseconds(50))
+        coordinator.beginInteraction()
+        scroll.momentum = true; scroll.contentOffset.y = 700
+        // A SwiftUI update queued before the pan still carries its old props.
+        coordinator.followBottom = true; coordinator.apply(stale)
+        XCTAssertFalse(coordinator.finishInteractionIfSettled())
+        scroll.contentSize.height = 4500
+        try await Task.sleep(for: .milliseconds(50))
+        XCTAssertEqual(scroll.contentOffset.y, 700)
+        scroll.momentum = false
+        XCTAssertTrue(coordinator.finishInteractionIfSettled())
+        coordinator.apply(nil); coordinator.apply(stale)
+        try await Task.sleep(for: .milliseconds(50))
+        XCTAssertEqual(scroll.contentOffset.y, 700, "A cancelled restore must not replay after deceleration or content growth")
+        XCTAssertTrue(applied.isEmpty); XCTAssertEqual(interactions, [true, false])
+        let deliberate = NativeScrollCommand(id: UUID(), y: 900)
+        coordinator.apply(deliberate)
+        try await Task.sleep(for: .milliseconds(50))
+        XCTAssertEqual(scroll.contentOffset.y, 900); XCTAssertEqual(applied, [deliberate.id])
+    }
+    @MainActor func testAcknowledgedNativeScrollCannotReplayAfterParentClearsCommand() async throws {
+        let scroll = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 600))
+        scroll.contentSize = CGSize(width: 400, height: 2400)
+        let child = UIView(); scroll.addSubview(child)
+        let coordinator = NativeScrollProbe.Coordinator(); coordinator.attach(from: child)
+        defer { coordinator.invalidate() }
+        let command = NativeScrollCommand(id: UUID(), y: 1000)
+        var acknowledgments = 0; coordinator.onApplied = { _, _ in acknowledgments += 1 }
+        coordinator.apply(command)
+        try await Task.sleep(for: .milliseconds(50))
+        XCTAssertEqual(scroll.contentOffset.y, 1000); XCTAssertEqual(acknowledgments, 1)
+        coordinator.apply(nil); scroll.contentOffset.y = 650
+        coordinator.apply(command)
+        try await Task.sleep(for: .milliseconds(50))
+        XCTAssertEqual(scroll.contentOffset.y, 650); XCTAssertEqual(acknowledgments, 1)
+    }
+
     private func projectFixture() throws -> JSON {
         try JSONDecoder().decode(JSON.self, from: Data("""
         {"schemaVersion":1,"revision":"catalog-revision","projects":[
@@ -460,6 +508,36 @@ final class RemoteTests: XCTestCase {
         XCTAssertEqual(catalog.membership(for: unknown), unknown)
         XCTAssertEqual(catalog.membership(for: .object(["id": .string("legacy"), "workspaceId": .string("work")]))["projectId"], .string("general"))
         XCTAssertNotEqual(NativeProjectIdentity(hostID: "first", workspaceID: "work", projectID: "general").scope, NativeProjectIdentity(hostID: "second", workspaceID: "work", projectID: "general").scope)
+    }
+    func testProjectSidebarKeepsHiddenTabsOnManagementPage() throws {
+        let tabs = try JSONDecoder().decode([JSON].self, from: Data("""
+        [{"id":"hidden","type":"browser","title":"Hidden browser","hidden":true,"openedAt":"2026-11-08T10:00:00Z"},
+         {"id":"chat:open","type":"chat","chatId":"open","title":"Owner title","lastActivityAt":"2026-11-08T11:00:00Z"},
+         {"id":"chat:archive","type":"chat","chatId":"archive","title":"Open archive","hidden":true}]
+        """.utf8))
+        let runs = try JSONDecoder().decode([JSON].self, from: Data("""
+        [{"id":"open"},{"id":"archive","archived":true},{"id":"closed-archive","archived":true},{"id":"history","title":"History"}]
+        """.utf8))
+        let items = NativeProjectActivity.items(tabs: tabs, chats: runs)
+        XCTAssertEqual(items.count, 2)
+        XCTAssertEqual(items.first?["title"].string, "Owner title")
+        XCTAssertEqual(items.first?["lastActivityAt"].string, "2026-11-08T11:00:00Z")
+        XCTAssertFalse(items.contains { $0["hidden"].bool })
+        XCTAssertFalse(items.contains { $0["chatId"].string == "archive" })
+        XCTAssertFalse(items.contains { $0["chatId"].string == "closed-archive" })
+    }
+    @MainActor func testProjectChildrenUseOwnerSnapshotBeforeNavigationDraftAdoption() {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString), key = RemoteCrypto.random()
+        let shared = SharedAppStore(cacheWriter: NativeSharedCacheWriter(), cacheRoot: root, cacheKey: { key })
+        defer { shared.unloadBrowsers(); try? FileManager.default.removeItem(at: root) }
+        let remote = RemoteStore(connection: nil, legacyCredentials: false), scope = "project:owner:general", navigation = "project-navigation:general"
+        remote.setDraft(navigation, .object(["chats": .array([.string("closed-ghost")])]))
+        shared.applyContentTabs(.object(["revision": .number(1), "tabs": .array([.object(["id": .string("chat:current"), "type": .string("chat"), "chatId": .string("current"), "title": .string("Owner title")])])]), scope: scope)
+        let rows = NativeWorkspaceNavigation.children(scope: scope, navigationKey: navigation, remote: remote, shared: shared)
+        XCTAssertEqual(rows.map { $0["id"].string }, ["chat:current"])
+        XCTAssertEqual(rows.first?["title"].string, "Owner title")
+        shared.applyContentTabs(.object(["revision": .number(2), "tabs": .array([])]), scope: scope)
+        XCTAssertTrue(NativeWorkspaceNavigation.children(scope: scope, navigationKey: navigation, remote: remote, shared: shared).isEmpty)
     }
     func testNativeProjectActivityIgnoresFocusAndRetainsUnknownDates() {
         let created = "2026-10-17T10:00:00Z", active = "2026-10-17T11:00:00Z"
@@ -1661,6 +1739,44 @@ final class RemoteTests: XCTestCase {
         XCTAssertEqual(store.chats[id]?["queuedMessages"].array.count, 0)
         _ = try await store.request("chat.cancel", ["id":.string(id)])
     }
+    @MainActor func testExplicitProjectCacheRepairKeepsOwnerAndOtherProjectAndIsDurable() async throws {
+        let (data, _) = try await URLSession.shared.data(from: URL(string: nativeFixtureHTTPOrigin + "/pair?projects=1")!)
+        let fixture = try JSONDecoder().decode(JSON.self, from: data), remote = RemoteStore()
+        remote.forget(); try remote.pair(fixture["code"].string); defer { remote.forget() }
+        try await wait { remote.connected && remote.supportsProjects }; await remote.refreshProjects()
+        let host = try XCTUnwrap(remote.connection?.hostId), project = fixture["projectId"].string, operation = UUID().uuidString.lowercased()
+        let scope = "project:" + host + ":" + project, other = "project:" + host + ":" + UUID().uuidString.lowercased()
+        let before = try await remote.request("tabs.get", ["scope": .string("project"), "id": .string(project)])
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString), key = RemoteCrypto.random()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let initial = SharedAppStore(cacheWriter: NativeSharedCacheWriter(), cacheRoot: root, cacheKey: { key })
+        initial.applyContentTabs(before, scope: scope)
+        let pending: JSON = .object(["action": .string("open"), "tab": .object(["id": .string("offline-ghost"), "type": .string("browser"), "title": .string("Old cached tab")])])
+        remote.connected = false
+        initial.queueContentOperations([pending], scope: scope, remote: remote, kind: "project", id: project)
+        initial.queueContentOperations([pending], scope: other, remote: remote, kind: "project", id: other.components(separatedBy: ":").last!)
+        let retiredPending = initial.contentPending[scope]
+        let otherPending = initial.contentPending[other]
+        try initial.requestOwnerProjectTabReset(hostID: host, projectID: project, operationID: operation)
+        XCTAssertNil(initial.open(URL(string: "https://example.test/"), scope: scope))
+        XCTAssertNil(initial.flushCachedState())
+        let restored = SharedAppStore(cacheWriter: NativeSharedCacheWriter(), cacheRoot: root, cacheKey: { key })
+        remote.connected = true
+        await restored.refreshContentTabs(scope: scope, remote: remote, kind: "project", id: project)
+        let after = try await remote.request("tabs.get", ["scope": .string("project"), "id": .string(project)])
+        XCTAssertEqual(after["revision"], before["revision"])
+        XCTAssertEqual(after["tabs"], before["tabs"])
+        XCTAssertNil(restored.contentPending[scope]); XCTAssertEqual(restored.contentPending[other], otherPending)
+        let receipt = try XCTUnwrap(restored.legacyContentReview["owner-reset:" + operation])
+        XCTAssertEqual(receipt["phase"].string, "completed"); XCTAssertEqual(receipt["retiredPending"].array, retiredPending)
+        try restored.requestOwnerProjectTabReset(hostID: host, projectID: project, operationID: operation)
+        XCTAssertEqual(restored.legacyContentReview["owner-reset:" + operation], receipt)
+        XCTAssertThrowsError(try restored.requestOwnerProjectTabReset(hostID: host, projectID: UUID().uuidString, operationID: operation))
+        XCTAssertNil(restored.flushCachedState())
+        let final = SharedAppStore(cacheWriter: NativeSharedCacheWriter(), cacheRoot: root, cacheKey: { key })
+        XCTAssertNil(final.contentPending[scope]); XCTAssertEqual(final.contentPending[other], otherPending)
+        XCTAssertEqual(final.legacyContentReview["owner-reset:" + operation], receipt)
+    }
     @MainActor private func wait(_ predicate: () -> Bool) async throws {
         for _ in 0..<200 { if predicate() { return }; try await Task.sleep(for: .milliseconds(100)) }
         XCTFail("Native client did not reach expected state"); throw RemoteError(message: "Timed out")
@@ -2366,6 +2482,47 @@ final class NativeParityTests: XCTestCase {
         let restored = SharedAppStore(cacheWriter: NativeSharedCacheWriter(), cacheRoot: root, cacheKey: { key })
         XCTAssertEqual(restored.contentPending[scope], saved)
         XCTAssertEqual(restored.workspaceContentDescriptors[scope]?.count, 0)
+    }
+    @MainActor func testPushDeviceIdentityPersistsAcrossRelaunchAndPreservesExistingRegistration() {
+        let suite = "synthetic-push-device-" + UUID().uuidString, defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let delegate = UNUserNotificationCenter.current().delegate
+        defer { UNUserNotificationCenter.current().delegate = delegate }
+        let first = NativeNotifications(defaults: defaults).deviceID
+        XCTAssertNotNil(UUID(uuidString: first))
+        XCTAssertEqual(defaults.string(forKey: "notificationDeviceID"), first)
+        XCTAssertEqual(NativeNotifications(defaults: UserDefaults(suiteName: suite)!).deviceID, first)
+        let existing = UUID().uuidString.uppercased()
+        defaults.set(existing, forKey: "notificationDeviceID")
+        XCTAssertEqual(NativeNotifications(defaults: defaults).deviceID, existing.lowercased())
+        defaults.set("invalid", forKey: "notificationDeviceID")
+        let repaired = NativeNotifications(defaults: defaults).deviceID
+        XCTAssertNotNil(UUID(uuidString: repaired))
+        XCTAssertEqual(NativeNotifications(defaults: defaults).deviceID, repaired)
+    }
+    @MainActor func testNotificationUUIDCaseCannotReplayAnAlertAcrossFeedsOrRestart() {
+        let suite = "synthetic-notification-case-" + UUID().uuidString, defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let delegate = UNUserNotificationCenter.current().delegate
+        defer { UNUserNotificationCenter.current().delegate = delegate }
+        let host = UUID().uuidString, id = UUID().uuidString, now = Date()
+        let item: JSON = .object(["id": .string(id), "type": .string("chat.completed"), "createdAt": .string(ISO8601DateFormatter().string(from: now))])
+        let notices = NativeNotifications(defaults: defaults)
+        notices.observe([], hostID: host, now: now); notices.observe([item], hostID: host, now: now); notices.dismissBanner()
+        var lower = item.object; lower["id"] = .string(id.lowercased())
+        notices.observe([.object(lower)], hostID: host.lowercased(), now: now)
+        XCTAssertNil(notices.banner)
+        XCTAssertEqual(defaults.dictionary(forKey: "proteus.notification-receipts.v2")?.count, 1)
+        defaults.set([host + ":" + id: now.timeIntervalSince1970], forKey: "proteus.notification-receipts.v2")
+        let restored = NativeNotifications(defaults: defaults)
+        restored.observe([], hostID: host.lowercased(), now: now); restored.observe([.object(lower)], hostID: host.lowercased(), now: now)
+        XCTAssertNil(restored.banner); restored.dismissBanner()
+    }
+    @MainActor func testConfiguredAccountPushOwnsBackgroundDeliveryOnlyForItsAccount() {
+        XCTAssertTrue(NativeNotifications.usesAccountPush(enabled: true, configured: true, subscriptionID: "subscription", subscriptionAccount: "account", currentAccount: "account"))
+        XCTAssertFalse(NativeNotifications.usesAccountPush(enabled: true, configured: true, subscriptionID: "subscription", subscriptionAccount: "other", currentAccount: "account"))
+        XCTAssertFalse(NativeNotifications.usesAccountPush(enabled: true, configured: false, subscriptionID: "subscription", subscriptionAccount: "account", currentAccount: "account"))
+        XCTAssertFalse(NativeNotifications.usesAccountPush(enabled: false, configured: true, subscriptionID: "subscription", subscriptionAccount: "account", currentAccount: "account"))
     }
     @MainActor func testNotificationHistoryAgeDedupAndRestartDoNotReplay() {
         let suite = "synthetic-notifications-" + UUID().uuidString, defaults = UserDefaults(suiteName: suite)!
@@ -3400,5 +3557,86 @@ extension Nov3PerformanceTests {
         let restore = (ProcessInfo.processInfo.systemUptime - start) * 1000
         XCTAssertEqual(restored.state, store.state)
         print("NOV3_CACHE main_actor_flush_ms=\(flush) main_actor_restore_ms=\(restore)")
+    }
+}
+
+extension DestinationTests {
+    @MainActor func testNotificationConnectionWaitAcceptsDelayedOwnerAuthentication() async throws {
+        let remote = RemoteStore()
+        let authentication = Task { try await Task.sleep(for: .milliseconds(150)); remote.connected = true }
+        try await remote.waitUntilConnected(timeout: 1)
+        XCTAssertTrue(remote.connected)
+        try await authentication.value
+    }
+    @MainActor func testNotificationConnectionWaitCancelsWithoutAnOfflineError() async {
+        let remote = RemoteStore()
+        let request = Task { try await remote.waitUntilConnected(timeout: 1) }
+        request.cancel()
+        do { try await request.value; XCTFail("Cancelled routing must not continue") }
+        catch is CancellationError { }
+        catch { XCTFail("Expected cancellation, received \(error)") }
+    }
+    @MainActor func testNotificationRetainsExactQuestionIdentityAndRejectsMalformedIdentity() {
+        let route = NativeNotifications.NotificationRoute.from(["hostId": "10000000-0000-4000-8000-000000000001", "chatId": "chat", "requestId": "question-one"])
+        XCTAssertEqual(route.questionID, "question-one")
+        let invalid = NativeNotifications.NotificationRoute.from(["hostId": route.hostID, "chatId": "chat", "questionId": "question\nprivate"])
+        XCTAssertEqual(invalid.questionID, "")
+    }
+    func testCertificateMetadataMatchesDesktopPublicX509Validity() throws {
+        let data = try XCTUnwrap(Data(base64Encoded: "MIIEkTCCA3mgAwIBAgIERWtQVDANBgkqhkiG9w0BAQUFADCBsDELMAkGA1UEBhMCVVMxFjAUBgNVBAoTDUVudHJ1c3QsIEluYy4xOTA3BgNVBAsTMHd3dy5lbnRydXN0Lm5ldC9DUFMgaXMgaW5jb3Jwb3JhdGVkIGJ5IHJlZmVyZW5jZTEfMB0GA1UECxMWKGMpIDIwMDYgRW50cnVzdCwgSW5jLjEtMCsGA1UEAxMkRW50cnVzdCBSb290IENlcnRpZmljYXRpb24gQXV0aG9yaXR5MB4XDTA2MTEyNzIwMjM0MloXDTI2MTEyNzIwNTM0MlowgbAxCzAJBgNVBAYTAlVTMRYwFAYDVQQKEw1FbnRydXN0LCBJbmMuMTkwNwYDVQQLEzB3d3cuZW50cnVzdC5uZXQvQ1BTIGlzIGluY29ycG9yYXRlZCBieSByZWZlcmVuY2UxHzAdBgNVBAsTFihjKSAyMDA2IEVudHJ1c3QsIEluYy4xLTArBgNVBAMTJEVudHJ1c3QgUm9vdCBDZXJ0aWZpY2F0aW9uIEF1dGhvcml0eTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBALaVtkNC+sZtKm9I35RMOVcF7sN5EUFoNu3s/poBj6E4KPz3EEZmLk0eGrEaTsbRwJWIsMn/MYszA9u3g3s+IIRe7bJWKKf44LlAcTfFy0cOlypowCKVYhXbR9n10Cv/gkvJrT7eTNuQgFA/CYqEAOwwCj0Yzfv9KlmaI5UXLEWeH25DeW0MXJj+SKfFI0dcXv1u5x609mhF0YaDW6KKjbHjKYD+JXGIrb68j6xSlkuqUY3kEzEZ6E5Nn9uss2rVvDlUccp6en+Q3X0dgNmBu1kmwhH+5pPi94DkZfs0Nw4pgHBNrziGLp5/V6+eF67rHMsoIV+2HNjnogQi+dPa2MsCAwEAAaOBsDCBrTAOBgNVHQ8BAf8EBAMCAQYwDwYDVR0TAQH/BAUwAwEB/zArBgNVHRAEJDAigA8yMDA2MTEyNzIwMjM0MlqBDzIwMjYxMTI3MjA1MzQyWjAfBgNVHSMEGDAWgBRokORnpKZTgMeGZqTx90tD+4S9bTAdBgNVHQ4EFgQUaJDkZ6SmU4DHhmak8fdLQ/uEvW0wHQYJKoZIhvZ9B0EABBAwDhsIVjcuMTo0LjADAgSQMA0GCSqGSIb3DQEBBQUAA4IBAQCT1DCw1wMgKtD5Y+iRDAUgqV8ZyntyTtSx29CW+1RaGSwMCPeyvIWonX9tO1KzKtvn1ISMY/YPyyYBkVBs9F8U4pN0wBOeMDpQ47RgxRzwIkSNcUesyBrJ6ZuaAGAT/3B+XxFNSRuzFVJ7yVTav52Vr2ua2J7p8eRDjeIRRDq/r72DQnNSi6q7pynP9WQcCk3RvKqsnyrQ/39/2n3qse0wJcGE2jTSW3iDVuycNsMm4hH2Z0kdkquM++v/eu6FSqdQgPCnXEqULl8FmTxSQeDNtGPPAUO6nIPcj2A781q0tHuu2guQOHXvgR1m0vdXcDazv/wor3ElhVsT/h5/WrQ8"))
+        let info = NativeCertificateInfo(data: data)
+        XCTAssertFalse(info.subject.isEmpty)
+        XCTAssertFalse(info.issuer.isEmpty)
+        XCTAssertEqual(try XCTUnwrap(info.validFrom).timeIntervalSince1970, 1164659022, accuracy: 0.1)
+        XCTAssertEqual(try XCTUnwrap(info.validTo).timeIntervalSince1970, 1795812822, accuracy: 0.1)
+        for malformed in [Data(), Data([0x30, 0x82, 0xff]), Data([0x30, 0])] {
+            XCTAssertNil(NativeCertificateInfo(data: malformed).validFrom)
+        }
+    }
+
+}
+
+extension DestinationTests {
+    func testBrowserPageCacheEncryptsBindsIdentityAndExpires() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let cache = NativeBrowserPageCache(root: root), key = RemoteCrypto.random(), now = Date()
+        let content = Data("Synthetic saved page content".utf8)
+        try await cache.save(content, identity: "account:owner:profile:tab:url", key: key, now: now)
+        let hit = await cache.read(identity: "account:owner:profile:tab:url", key: key, now: now)
+        XCTAssertEqual(hit?.data, content)
+        let other = await cache.read(identity: "other:owner:profile:tab:url", key: key, now: now)
+        XCTAssertNil(other)
+        let wrongKey = await cache.read(identity: "account:owner:profile:tab:url", key: RemoteCrypto.random(), now: now)
+        XCTAssertNil(wrongKey)
+        let file = try XCTUnwrap(FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil).first)
+        XCTAssertFalse(String(decoding: try Data(contentsOf: file), as: UTF8.self).contains("Synthetic saved page content"))
+        let expired = await cache.read(identity: "account:owner:profile:tab:url", key: key, now: now.addingTimeInterval(8 * 86400))
+        XCTAssertNil(expired)
+    }
+    @MainActor func testNativeWebArchiveRestoresContentWithScriptsDisabled() async throws {
+        let live = WKWebView(frame: CGRect(x: 0, y: 0, width: 350, height: 500)), delegate = NativeMarkdownProbe()
+        live.navigationDelegate = delegate
+        let loaded = expectation(description: "Live fixture loaded")
+        delegate.finished = { loaded.fulfill() }
+        live.loadHTMLString("<html><style>body{color:green}</style><h1>Retained page</h1><script>document.body.appendChild(Object.assign(document.createElement('p'),{id:'executions',textContent:'Script marker'}))</script><p>Cached content survives offline</p></html>", baseURL: URL(string: "https://saved.example.test/path"))
+        await fulfillment(of: [loaded], timeout: 10)
+        _ = try await live.evaluateJavaScript("document.querySelector(\"h1\").textContent=\"Retained dynamic page\"")
+        let archive = try await live.nativeArchiveData()
+        let configuration = WKWebViewConfiguration(); configuration.defaultWebpagePreferences.allowsContentJavaScript = false
+        let rule = try await WKContentRuleListStore.default().compileContentRuleList(forIdentifier: "proteus-test-saved-page", encodedContentRuleList: "[{\"trigger\":{\"url-filter\":\"^https?://\"},\"action\":{\"type\":\"block\"}}]")!
+        configuration.userContentController.add(rule)
+        let restored = WKWebView(frame: live.frame, configuration: configuration), restoredDelegate = NativeMarkdownProbe()
+        restored.navigationDelegate = restoredDelegate
+        let finished = expectation(description: "Archive loaded offline")
+        restoredDelegate.finished = { finished.fulfill() }
+        restored.load(archive, mimeType: "application/x-webarchive", characterEncodingName: "UTF-8", baseURL: URL(string: "https://saved.example.test/path")!)
+        await fulfillment(of: [finished], timeout: 10)
+        let text = try await restored.evaluateJavaScript("document.body.innerText") as? String
+        XCTAssertTrue(text?.contains("Retained dynamic page") == true)
+        XCTAssertTrue(text?.contains("Cached content survives offline") == true)
+        XCTAssertEqual(restored.url?.absoluteString, "https://saved.example.test/path")
+        let executions = try await restored.evaluateJavaScript("document.querySelectorAll(\"#executions\").length") as? Int
+        XCTAssertEqual(executions, 1)
     }
 }

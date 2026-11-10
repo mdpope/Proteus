@@ -26,13 +26,20 @@ import Security
     func dismissBanner() { bannerTask?.cancel(); bannerTask = nil; banner = nil }
 
     @AppStorage("notificationsEnabled") var enabled = false
-    @AppStorage("notificationDeviceID") var deviceID = UUID().uuidString.lowercased()
+    let deviceID: String
+    @AppStorage("pushSubscriptionConfigured") private var subscriptionConfigured = false
+    static func usesAccountPush(enabled: Bool, configured: Bool, subscriptionID: String, subscriptionAccount: String, currentAccount: String) -> Bool {
+        enabled && configured && !subscriptionID.isEmpty && !currentAccount.isEmpty && subscriptionAccount == currentAccount
+    }
+    private var accountPushReady: Bool {
+        Self.usesAccountPush(enabled: enabled, configured: subscriptionConfigured, subscriptionID: subscriptionID, subscriptionAccount: subscriptionAccount, currentAccount: life?.credential?.appAuthorized == true ? life?.accountIdentity ?? "" : "")
+    }
     private let defaults: UserDefaults
     private var delivered: [String: Double]
     private static let deliveredKey = "proteus.notification-receipts.v2"
     private func claim(_ host: String, _ event: String, now: Date = Date(), persist: Bool = true) -> Bool {
-        guard UUID(uuidString: event) != nil else { return false }
-        let key = host + ":" + event
+        guard let hostID = UUID(uuidString: host), let eventID = UUID(uuidString: event) else { return false }
+        let key = hostID.uuidString.lowercased() + ":" + eventID.uuidString.lowercased()
         guard delivered[key] == nil else { return false }
         delivered[key] = now.timeIntervalSince1970
         if delivered.count > 2000 { delivered = Dictionary(uniqueKeysWithValues: delivered.sorted { $0.value > $1.value }.prefix(1500).map { ($0.key, $0.value) }) }
@@ -48,6 +55,7 @@ import Security
         let scheduleID: String
         let type: String
         var notificationID: String = ""
+        var questionID: String = ""
         static func from(_ payload: [AnyHashable: Any]) -> Self {
             func field(_ key: String) -> String {
                 guard let value = payload[key] as? String, value.count <= 128,
@@ -58,11 +66,21 @@ import Security
             let notification = field("notificationId")
             return Self(hostID: UUID(uuidString: host) == nil ? "" : host,
                         chatID: field("chatId"), scheduleID: field("scheduleId"), type: field("type"),
-                        notificationID: UUID(uuidString: notification) == nil ? "" : notification)
+                        notificationID: UUID(uuidString: notification) == nil ? "" : notification, questionID: field("questionId").isEmpty ? field("requestId") : field("questionId"))
         }
     }
     init(defaults: UserDefaults = .standard) {
-        self.defaults = defaults; delivered = defaults.dictionary(forKey: Self.deliveredKey) as? [String: Double] ?? [:]
+        self.defaults = defaults
+        let storedDevice = defaults.string(forKey: "notificationDeviceID").flatMap { UUID(uuidString: $0) }
+        deviceID = (storedDevice ?? UUID()).uuidString.lowercased()
+        defaults.set(deviceID, forKey: "notificationDeviceID")
+        delivered = [:]
+        for (key, time) in defaults.dictionary(forKey: Self.deliveredKey) as? [String: Double] ?? [:] {
+            let parts = key.split(separator: ":")
+            guard parts.count == 2, let host = UUID(uuidString: String(parts[0])), let event = UUID(uuidString: String(parts[1])) else { continue }
+            let canonical = host.uuidString.lowercased() + ":" + event.uuidString.lowercased()
+            delivered[canonical] = max(delivered[canonical] ?? 0, time)
+        }
         super.init(); UNUserNotificationCenter.current().delegate = self
         NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { [weak self] _ in Task { @MainActor in self?.dismissBanner() } }
         NotificationCenter.default.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in Task { @MainActor in self?.expireBanner() } }
@@ -73,7 +91,7 @@ import Security
         catch { status = "Notification permission could not be requested." }
     }
     func disable() async {
-        enabled = false; UIApplication.shared.unregisterForRemoteNotifications(); UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
+        enabled = false; subscriptionConfigured = false; UIApplication.shared.unregisterForRemoteNotifications(); UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
         if let life, life.credential?.appAuthorized == true, !subscriptionID.isEmpty, subscriptionAccount == life.accountIdentity { _ = try? await life.appRequest("/push-subscriptions/" + subscriptionID, method: "DELETE") }
         status = "Notifications are off"
     }
@@ -84,15 +102,18 @@ import Security
         guard let life, life.credential?.appAuthorized == true else { status = "Registered with Apple. Connect shared Team tools in Account & Security to register for background delivery."; return }
         // Xcode's development/release push configuration must match the provisioning profile.
         let environment = Bundle.main.object(forInfoDictionaryKey: "ProteusAPNSEnvironment") as? String ?? "sandbox"
+        let account = life.accountIdentity
         do {
             let response = try await life.appRequest("/push-subscriptions", method: "POST", body: .object(["platform": .string("apns"), "deviceId": .string(deviceID), "token": .string(token), "environment": .string(environment)]))
-            subscriptionID = response["id"].string; subscriptionAccount = life.accountIdentity
+            guard life.accountIdentity == account else { return }
+            subscriptionID = response["id"].string; subscriptionAccount = account
+            subscriptionConfigured = response["configured"].bool
             status = response["configured"].bool ? "Registered with Apple and the shared service" : "Registered with Apple; server APNs credentials are not configured. Background delivery is unavailable."
         } catch { status = life.display(error) }
     }
     func observe(_ items: [JSON], hostID: String, now: Date = Date()) {
         // First sync is history, not new activity. Do not notify an old backlog after reconnect.
-        let first = baselineHosts.insert(hostID).inserted
+        let first = baselineHosts.insert(UUID(uuidString: hostID)?.uuidString.lowercased() ?? hostID).inserted
         var changed = false
         defer { if changed { defaults.set(delivered, forKey: Self.deliveredKey) } }
         for item in items {
@@ -100,13 +121,15 @@ import Security
             guard Self.shouldAlert(item, now: now), claim(hostID, item["id"].string, now: now, persist: false) else { continue }
             changed = true
             guard !first else { continue }
-            let destination = NotificationRoute.from(["hostId": hostID, "chatId": item["chatId"].string, "scheduleId": item["scheduleId"].string, "type": item["type"].string, "notificationId": item["id"].string])
+            let destination = NotificationRoute.from(["hostId": hostID, "chatId": item["chatId"].string, "scheduleId": item["scheduleId"].string, "type": item["type"].string, "notificationId": item["id"].string, "questionId": item["questionId"].string, "requestId": item["requestId"].string])
             if UIApplication.shared.applicationState == .active { presentBanner(Self.notificationBody(item), destination: destination); continue }
-            guard enabled else { continue }
+            // A configured account subscription owns background delivery. The
+            // live owner feed must not schedule a second local alert for it.
+            guard enabled, !accountPushReady else { continue }
             // Same text the computer published: chat title, preview and source computer.
             let content = UNMutableNotificationContent(); content.title = item["title"].string.isEmpty ? "Proteus" : String(item["title"].string.prefix(160)); content.subtitle = String(item["hostName"].string.prefix(80)); content.body = Self.notificationBody(item, includeTitle: false); content.sound = Self.shouldPlaySound(item) ? .default : nil; content.threadIdentifier = item["chatId"].string
             content.userInfo = ["hostId": hostID, "chatId": item["chatId"].string,
-                                "scheduleId": item["scheduleId"].string, "type": item["type"].string, "notificationId": destination.notificationID]
+                                "scheduleId": item["scheduleId"].string, "type": item["type"].string, "notificationId": destination.notificationID, "questionId": destination.questionID]
             UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: id, content: content, trigger: nil))
         }
     }
@@ -123,8 +146,9 @@ import Security
     static func notificationBody(_ item: JSON, includeTitle: Bool = true) -> String {
         // Content arrived through the authenticated/decrypted owner channel.
         // The OS continues to enforce the operator's lock-screen preview policy.
+        let severity = item["level"].string == "error" ? "ERROR · " : ""
         let parts = [includeTitle ? [item["hostName"].string, item["title"].string].filter { !$0.isEmpty }.joined(separator: " · ") : "", item["body"].string].filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-        let text = parts.joined(separator: " — ").unicodeScalars.filter { !CharacterSet.controlCharacters.contains($0) || $0 == "\n" }
+        let text = (severity + parts.joined(separator: " — ")).unicodeScalars.filter { !CharacterSet.controlCharacters.contains($0) || $0 == "\n" }
         let preview = String(String.UnicodeScalarView(text)).trimmingCharacters(in: .whitespacesAndNewlines)
         return preview.isEmpty ? safeBody(item["type"].string) : String(preview.prefix(500))
     }
@@ -172,7 +196,7 @@ import Security
             self.fixtureStatus = "Foreground delivered"
             #endif
             // Use the pushed alert's own text; fall back to the generic label for older servers.
-            self.presentBanner(text.isEmpty ? Self.safeBody(type) : String(text.prefix(500)), destination: NotificationRoute.from(["hostId": host, "chatId": chat, "scheduleId": schedule, "type": type, "notificationId": eventID])); completionHandler(playSound ? [.sound] : []) }
+            self.presentBanner(text.isEmpty ? Self.safeBody(type) : String(text.prefix(500)), destination: NotificationRoute.from(["hostId": host, "chatId": chat, "scheduleId": schedule, "type": type, "notificationId": eventID, "questionId": payload["questionId"] as? String ?? payload["requestId"] as? String ?? ""])); completionHandler(playSound ? [.sound] : []) }
     }
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
         let payload = response.notification.request.content.userInfo
@@ -182,7 +206,7 @@ import Security
         let type = payload["type"] as? String ?? ""
         let eventID = payload["notificationId"] as? String ?? ""
         DispatchQueue.main.async {
-            self.receivedTap(["hostId": host, "chatId": chat, "scheduleId": schedule, "type": type, "notificationId": eventID])
+            self.receivedTap(payload)
             completionHandler()
         }
     }

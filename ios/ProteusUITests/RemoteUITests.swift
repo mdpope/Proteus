@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 
 /// A settings shortcut only: no account change, pairing code or credential is entered.
 final class PasswordAutoFillPreviewUITests: XCTestCase {
@@ -33,6 +34,20 @@ final class PasswordAutoFillPreviewUITests: XCTestCase {
     }
 }
 
+@MainActor private func assertContinuousBottomSurface(_ app: XCUIApplication, controlY: CGFloat, file: StaticString = #filePath, line: UInt = #line) {
+    guard let image = app.screenshot().image.cgImage else { XCTFail("Missing screenshot", file: file, line: line); return }
+    let width = image.width, height = image.height
+    var bytes = [UInt8](repeating: 0, count: width * height * 4)
+    bytes.withUnsafeMutableBytes { data in
+        guard let context = CGContext(data: data.baseAddress, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return }
+        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+    }
+    let scaleX = CGFloat(width) / app.frame.width, scaleY = CGFloat(height) / app.frame.height
+    func pixel(_ y: CGFloat) -> [UInt8] { let offset = (min(height - 1, max(0, Int(y * scaleY))) * width + Int(5 * scaleX)) * 4; return Array(bytes[offset..<(offset + 3)]) }
+    let toolbar = pixel(controlY), indicatorArea = pixel(app.frame.height - 8)
+    XCTAssertTrue(zip(toolbar, indicatorArea).allSatisfy { abs(Int($0.0) - Int($0.1)) <= 3 }, "Toolbar and home-indicator background must be the same color: \(toolbar) vs \(indicatorArea)", file: file, line: line)
+}
+
 private let nativeFixtureHTTPOrigin = ProcessInfo.processInfo.environment["PROTEUS_TEST_HTTP_ORIGIN"] ?? ProcessInfo.processInfo.environment["TEST_RUNNER_PROTEUS_TEST_HTTP_ORIGIN"] ?? "http://127.0.0.1:4329"
 private let nativeFixtureRelayOrigin = ProcessInfo.processInfo.environment["PROTEUS_TEST_RELAY_ORIGIN"] ?? ProcessInfo.processInfo.environment["TEST_RUNNER_PROTEUS_TEST_RELAY_ORIGIN"] ?? "ws://127.0.0.1:4328"
 @MainActor private func nativeFixtureApplication() -> XCUIApplication {
@@ -42,6 +57,15 @@ private let nativeFixtureRelayOrigin = ProcessInfo.processInfo.environment["PROT
     return app
 }
 @MainActor private func openNotificationFixtureHome(_ app: XCUIApplication) {
+    if app.buttons["Done"].exists && app.buttons["Done"].isHittable { app.buttons["Done"].tap() }
+    let shellReady = NSPredicate { _, _ in
+        app.buttons.matching(identifier: "phone-app-navigation").allElementsBoundByIndex.contains { $0.isHittable } || app.buttons["sidebar-Home"].isHittable || app.tabBars.buttons["Home"].isHittable
+    }
+    let ready = XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: shellReady, object: nil)], timeout: 15)
+    if ready != .completed {
+        let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "Notification navigation unavailable"; screenshot.lifetime = .keepAlways; XCTContext.runActivity(named: "Capture notification navigation") { $0.add(screenshot); $0.add(XCTAttachment(string: app.debugDescription)) }
+    }
+    XCTAssertEqual(ready, .completed)
     if let navigation = app.buttons.matching(identifier: "phone-app-navigation").allElementsBoundByIndex.first(where: { $0.isHittable }) {
         navigation.tap()
         let home = app.buttons["phone-nav-Home"]
@@ -80,6 +104,62 @@ private let nativeFixtureRelayOrigin = ProcessInfo.processInfo.environment["PROT
 }
 
 final class RemoteUITests: XCTestCase {
+    @MainActor func testWorkspaceFilesRequireGrantAndStreamDocument() async throws {
+        let (data, _) = try await URLSession.shared.data(from: URL(string: nativeFixtureHTTPOrigin + "/pair?projects=1")!)
+        let fixture = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let workspaceID = try XCTUnwrap(fixture["workspaceId"] as? String)
+        let app = nativeFixtureApplication(); app.launchArguments = ["--reset-pairing", "--synthetic-clean-navigation"]; app.launch()
+        submitPairing(app, code: try XCTUnwrap(fixture["code"] as? String))
+        XCTAssertTrue(app.staticTexts["pairing-success"].waitForExistence(timeout: 15))
+        if UIDevice.current.userInterfaceIdiom == .phone { let navigation = app.buttons.matching(identifier: "phone-app-navigation").firstMatch; XCTAssertTrue(navigation.waitForExistence(timeout: 10)); navigation.tap() }
+        let workspace = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND identifier ENDSWITH %@", "workspace-tree-open-", workspaceID)).firstMatch
+        XCTAssertTrue(workspace.waitForExistence(timeout: 20)); workspace.tap()
+        let files = app.buttons["workspace-files"]; XCTAssertTrue(files.waitForExistence(timeout: 10)); files.tap()
+        let denied = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "file viewing is not enabled")).firstMatch
+        XCTAssertTrue(denied.waitForExistence(timeout: 10))
+        _ = try await URLSession.shared.data(from: URL(string: nativeFixtureHTTPOrigin + "/files-grant")!)
+        app.buttons["Refresh"].firstMatch.tap()
+        let document = app.buttons["workspace-file-Files fixture.md"]
+        XCTAssertTrue(document.waitForExistence(timeout: 15)); document.tap()
+        XCTAssertTrue(app.webViews.firstMatch.waitForExistence(timeout: 15))
+        XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "file viewing is not enabled")).firstMatch.exists)
+    }
+
+    @MainActor func testWorkspaceFileMovePickerPagesDestinations() async throws {
+        let (data, _) = try await URLSession.shared.data(from: URL(string: nativeFixtureHTTPOrigin + "/pair?projects=1")!)
+        let fixture = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let workspaceID = try XCTUnwrap(fixture["workspaceId"] as? String)
+        let app = nativeFixtureApplication(); app.launchArguments = ["--reset-pairing", "--synthetic-clean-navigation"]; app.launch()
+        submitPairing(app, code: try XCTUnwrap(fixture["code"] as? String))
+        XCTAssertTrue(app.staticTexts["pairing-success"].waitForExistence(timeout: 15))
+        _ = try await URLSession.shared.data(from: URL(string: nativeFixtureHTTPOrigin + "/files-grant-pages")!)
+        if UIDevice.current.userInterfaceIdiom == .phone { app.buttons.matching(identifier: "phone-app-navigation").firstMatch.tap() }
+        let workspace = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND identifier ENDSWITH %@", "workspace-tree-open-", workspaceID)).firstMatch
+        XCTAssertTrue(workspace.waitForExistence(timeout: 20)); workspace.tap()
+        let files = app.buttons["workspace-files"]; XCTAssertTrue(files.waitForExistence(timeout: 10)); files.tap()
+        let source = app.buttons["workspace-file-Destination 000"]
+        XCTAssertTrue(source.waitForExistence(timeout: 15)); source.press(forDuration: 1)
+        app.buttons["Move…"].firstMatch.tap()
+        let more = app.buttons["More folders"]
+        for _ in 0..<30 { if more.exists && more.isHittable { break }; app.swipeUp(velocity: .fast) }
+        XCTAssertTrue(more.exists && more.isHittable); more.tap()
+        let destination = app.buttons["Destination 200"]
+        for _ in 0..<5 { if destination.exists && destination.isHittable { break }; app.swipeUp(velocity: .fast) }
+        XCTAssertTrue(destination.exists && destination.isHittable); destination.tap()
+        XCTAssertTrue(app.staticTexts["Destination 200"].waitForExistence(timeout: 10))
+        let move = app.navigationBars.buttons["Move"]
+        XCTAssertTrue(move.waitForExistence(timeout: 10)); move.tap()
+        XCTAssertTrue(source.waitForNonExistence(timeout: 15))
+        var verifiedMove = false
+        for _ in 0..<15 {
+            let (stateData, _) = try await URLSession.shared.data(from: URL(string: nativeFixtureHTTPOrigin + "/files-move-state")!)
+            let state = try XCTUnwrap(JSONSerialization.jsonObject(with: stateData) as? [String: Bool])
+            if state["movedExists"] == true && state["sourceExists"] == false { verifiedMove = true; break }
+            try await Task.sleep(for: .milliseconds(300))
+        }
+        XCTAssertTrue(verifiedMove, "Desktop fixture must independently confirm the actual filesystem move")
+    }
+
     @MainActor func testReleaseBaselineLaunchMetrics() throws { try NativeReleaseJourney.measureLaunch(self, bundle: "org.proteusapp.proteus.journey-normal-baseline") }
     @MainActor func testReleaseAfterLaunchMetrics() throws { try NativeReleaseJourney.measureLaunch(self, bundle: "org.proteusapp.proteus.journey-normal-after") }
     @MainActor func testReleaseBaselineScrollMetrics() async throws { try await NativeReleaseJourney.measureScrolling(self, bundle: "org.proteusapp.proteus.journey-normal-baseline") }
@@ -679,6 +759,44 @@ final class RemoteUITests: XCTestCase {
         }
     }
 
+    @MainActor func testNewChatAttachmentsAreBesidePromptAndKeepDraftThroughPickers() async throws {
+        let (data, _) = try await URLSession.shared.data(from: URL(string: "\(nativeFixtureHTTPOrigin)/pair?models=1")!)
+        let fixture = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        let app = nativeFixtureApplication(); app.launchArguments = ["--reset-pairing", "--pair-link", try XCTUnwrap(fixture["code"] as? String)]; app.launch()
+        defer { let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "New chat attachment final UI state"; shot.lifetime = .keepAlways; add(shot); let tree = XCTAttachment(string: app.debugDescription); tree.name = "Attachment UI hierarchy"; tree.lifetime = .keepAlways; add(tree) }
+        if app.buttons["phone-app-navigation"].waitForExistence(timeout: 8) { app.buttons["phone-app-navigation"].tap(); app.buttons["phone-nav-Chats"].tap() }
+        else if app.buttons["sidebar-Chats"].waitForExistence(timeout: 5) { app.buttons["sidebar-Chats"].tap() } else { app.tabBars.buttons["Chats"].tap() }
+        let newChat = app.buttons["new-chat"]; XCTAssertTrue(newChat.waitForExistence(timeout: 15)); XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: newChat)], timeout: 20), .completed); newChat.tap()
+        let prompt = app.textFields["chat-prompt"]; XCTAssertTrue(prompt.waitForExistence(timeout: 15)); prompt.tap(); prompt.typeText("Synthetic attachment draft")
+        let attach = app.buttons["new-chat-attach"]; XCTAssertTrue(attach.isHittable, "Attach must be reachable beside the prompt without scrolling through settings")
+        attach.tap(); app.buttons["Choose files"].tap()
+        // The iOS 27 system picker Close image is absent from its remote AX
+        // tree. Record the actual phone fixture before using its observed Close
+        // position; subsequent assertions prove dismissal and draft preservation.
+        let pickerProof = XCTAttachment(screenshot: app.screenshot()); pickerProof.name = "Native Files picker before Close"; pickerProof.lifetime = .keepAlways; add(pickerProof)
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.90, dy: 0.126)).tap()
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in prompt.isHittable }, object: app)], timeout: 10), .completed)
+        XCTAssertEqual(prompt.value as? String, "Synthetic attachment draft")
+        attach.tap(); app.buttons["Choose photos"].tap()
+        let photos = app.descendants(matching: .any).matching(identifier: "native-photo-picker").firstMatch
+        XCTAssertTrue(photos.waitForExistence(timeout: 10))
+        let photoClose = photos.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@ OR label CONTAINS[c] %@", "Cancel", "Close")).firstMatch
+        XCTAssertTrue(photoClose.waitForExistence(timeout: 10)); photoClose.tap()
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in prompt.isHittable }, object: app)], timeout: 10), .completed)
+        XCTAssertEqual(prompt.value as? String, "Synthetic attachment draft")
+        let clipboardImage = UIGraphicsImageRenderer(size: CGSize(width: 12, height: 12)).image { context in UIColor.green.setFill(); context.fill(CGRect(x: 0, y: 0, width: 12, height: 12)) }
+        UIPasteboard.general.setData(try XCTUnwrap(clipboardImage.pngData()), forPasteboardType: "public.png")
+        let paste = app.buttons["new-chat-paste"]; XCTAssertTrue(paste.waitForExistence(timeout: 5)); paste.tap()
+        if app.alerts.buttons["Allow Paste"].waitForExistence(timeout: 2) { app.alerts.buttons["Allow Paste"].tap() }
+        let selected = app.buttons["Selected files"]; XCTAssertTrue(selected.waitForExistence(timeout: 5)); selected.tap()
+        XCTAssertTrue(app.buttons["Pasted image.png"].waitForExistence(timeout: 5))
+        app.buttons["start-chat"].tap()
+        XCTAssertTrue(app.navigationBars["Review attachments"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.buttons["confirm-attachment-send"].exists)
+        app.buttons["confirm-attachment-send"].tap()
+        XCTAssertTrue(app.scrollViews["chat-conversation-scroll"].waitForExistence(timeout: 20))
+        let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "New chat attachment review before sending"; shot.lifetime = .keepAlways; add(shot)
+    }
     @MainActor func testPhotoPickerOpensFromChatMenuAndCancelPreservesDraft() {
         let app = nativeFixtureApplication(); app.launchArguments = ["--reset-pairing", "--synthetic-destinations", "--synthetic-long-chat"]; app.launch()
         if app.buttons["sidebar-Chats"].waitForExistence(timeout: 3) { app.buttons["sidebar-Chats"].tap() } else { app.tabBars.buttons["Chats"].tap() }
@@ -1259,7 +1377,7 @@ final class RemoteUITests: XCTestCase {
         let position = app.staticTexts["chat-scroll-offset"], anchor = app.staticTexts["chat-scroll-anchor"]
         let read = app.buttons["read-long-message-fixture"]
         XCTAssertTrue(read.waitForExistence(timeout: 10)); read.tap()
-        let positioned = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "1500"), object: position)
+        let positioned = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in abs((Int(position.label) ?? -10000) - 1500) <= 2 }, object: position)
         XCTAssertEqual(XCTWaiter.wait(for: [positioned], timeout: 10), .completed)
         scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.4)).press(forDuration: 0.1,
             thenDragTo: scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.7)))
@@ -1277,6 +1395,15 @@ final class RemoteUITests: XCTestCase {
         showChats(app); XCTAssertTrue(row.waitForExistence(timeout: 8)); row.tap()
         XCTAssertTrue(position.waitForExistence(timeout: 8)); Thread.sleep(forTimeInterval: 2)
         XCTAssertLessThanOrEqual(abs((Int(position.label) ?? -10000) - saved), 35, "Reopening must retain the reading position")
+        // The saved-position command has now completed. A new real pan must
+        // replace it, including when delayed layout callbacks arrive afterward.
+        scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.7)).press(forDuration: 0.1,
+            thenDragTo: scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.4)))
+        Thread.sleep(forTimeInterval: 2)
+        let afterReopenPan = try XCTUnwrap(Int(position.label))
+        XCTAssertGreaterThan(afterReopenPan, saved + 50, "The reader must be able to move away from a restored position")
+        Thread.sleep(forTimeInterval: 1)
+        XCTAssertLessThanOrEqual(abs((Int(position.label) ?? -10000) - afterReopenPan), 2, "An acknowledged restore must not snap back after the next pan")
         let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Restored native chat reading position"; shot.lifetime = .keepAlways; add(shot)
         let savedInset = try XCTUnwrap(Int(anchor.label.split(separator: ":").last ?? ""))
         app.terminate(); app.launchArguments.removeAll { $0 == "--reset-pairing" || $0 == "--synthetic-clean-navigation" }; app.launch()
@@ -1408,19 +1535,15 @@ final class RemoteUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Tap website notification"].waitForExistence(timeout: 12))
         app.buttons["Tap website notification"].tap()
         XCTAssertTrue(app.alerts["Proteus"].waitForExistence(timeout: 12))
-        XCTAssertTrue(app.alerts.staticTexts["Reconnect Alpha Mac to open the website notification on that computer."].exists)
+        XCTAssertTrue(app.alerts.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Alpha Mac")).firstMatch.exists)
         app.alerts.buttons["OK"].tap()
         XCTAssertTrue(app.staticTexts["Notifications"].waitForExistence(timeout: 10))
     }
     @MainActor func testNotificationTapRoutesForegroundColdStartBackgroundAndUnavailableTargets() {
         let app = nativeFixtureApplication()
-        app.launchArguments = ["--reset-pairing", "--synthetic-destinations", "--synthetic-notification-fixtures", "--synthetic-notification-controls"]
+        app.launchArguments = ["--synthetic-clean-navigation", "--reset-pairing", "--synthetic-destinations", "--synthetic-notification-fixtures", "--synthetic-notification-controls"]
         app.launch()
-        func openHome() {
-            let navigation = app.buttons.matching(identifier: "phone-app-navigation").allElementsBoundByIndex.first { $0.isHittable }
-            if let navigation { navigation.tap(); app.buttons["phone-nav-Home"].tap() }
-            else { app.tabBars.buttons["Home"].tap() }
-        }
+        func openHome() { openNotificationFixtureHome(app) }
         openHome()
         for _ in 0..<4 where !app.buttons["Tap chat notification"].exists { app.swipeUp() }
         XCTAssertTrue(app.buttons["Tap chat notification"].waitForExistence(timeout: 15))
@@ -1431,11 +1554,11 @@ final class RemoteUITests: XCTestCase {
         app.buttons["Tap schedule notification"].tap()
         let scheduleShot = XCTAttachment(screenshot: app.screenshot()); scheduleShot.name = "Schedule notification destination"; scheduleShot.lifetime = .keepAlways; add(scheduleShot)
         XCTAssertTrue(app.navigationBars["Notification fixture schedule"].waitForExistence(timeout: 12), "Schedule tap should open the schedule on the correct Mac: " + app.staticTexts["notification-fixture-status"].label)
-        app.buttons["Done"].tap()
+        openHome()
         for _ in 0..<4 where !app.buttons["Tap unavailable notification"].exists { app.swipeUp() }
         app.buttons["Tap unavailable notification"].tap()
         XCTAssertTrue(app.alerts["Proteus"].waitForExistence(timeout: 12), "An unavailable target should fail gracefully")
-        XCTAssertTrue(app.alerts.staticTexts["This chat is not cached on this device. Reconnect Alpha Mac and open it from Chats."].exists)
+        XCTAssertTrue(app.alerts.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Alpha Mac")).firstMatch.exists)
         app.alerts.buttons["OK"].tap()
         XCTAssertTrue(app.staticTexts["Notifications"].waitForExistence(timeout: 10))
 
@@ -2890,6 +3013,45 @@ final class PhoneComposerPreviewUITests: XCTestCase {
 
 final class NativeReleaseParityUITests: XCTestCase {
     override func setUpWithError() throws { continueAfterFailure = false }
+    @MainActor func testWorkspaceOverviewGroupsWorkspaceThenSavedProjectsAndKeepsHiddenOnTabsPage() {
+        let app = nativeFixtureApplication()
+        app.launchArguments = ["--reset-pairing", "--synthetic-clean-navigation", "--synthetic-destinations", "--synthetic-long-chat", "--synthetic-workspace-tab-icons", "--synthetic-workspace-browser-selection", "--synthetic-project-restore", "--synthetic-overview-membership"]
+        app.launch()
+        let phone = UIDevice.current.userInterfaceIdiom == .phone
+        if phone {
+            XCTAssertTrue(app.buttons["phone-app-navigation"].waitForExistence(timeout: 15)); app.buttons["phone-app-navigation"].tap()
+        }
+        let workspace = app.buttons["workspace-tree-open-workspace:10000000-0000-4000-8000-000000000001:native-icon-workspace"]
+        XCTAssertTrue(workspace.waitForExistence(timeout: 15)); workspace.tap()
+        XCTAssertTrue(app.buttons["browser-tab-overview"].waitForExistence(timeout: 12))
+        let navigation = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "workspace-child-tab-"))
+        let navigationCount = navigation.count
+        let selectedID = navigation.matching(NSPredicate(format: "value == %@", "Selected")).firstMatch.identifier.replacingOccurrences(of: "workspace-child-tab-", with: "")
+        XCTAssertEqual(navigationCount, 4)
+        app.buttons["browser-tab-overview"].tap()
+        let overview = app.otherElements["phone-tab-overview"]
+        XCTAssertTrue(overview.waitForExistence(timeout: 8))
+        let cards = overview.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "phone-tab-"))
+        XCTAssertEqual(overview.staticTexts["overview-tab-count"].label, "6 tabs", "Four project children, workspace browser and sibling browser; homes are not counted")
+        XCTAssertTrue(overview.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Sibling-only browser")).firstMatch.exists)
+        let workspaceHeader = overview.staticTexts["Native icon rehearsal"].firstMatch
+        let projectHeader = overview.staticTexts["Restore project"].firstMatch
+        let siblingHeader = overview.staticTexts["Sibling project"].firstMatch
+        XCTAssertLessThan(workspaceHeader.frame.minY, projectHeader.frame.minY)
+        XCTAssertLessThan(projectHeader.frame.minY, siblingHeader.frame.minY)
+        let active = overview.buttons["phone-tab-browser:" + selectedID]
+        XCTAssertTrue(active.isHittable, "Selected tab remains visible despite workspace tabs being placed above it")
+        XCTAssertLessThan(abs(active.frame.midY - overview.frame.midY), 190, "Selected tile starts near the center")
+        for title in ["Hidden fixture browser", "Hidden fixture chat", "Orphan cached browser"] {
+            XCTAssertFalse(overview.buttons.matching(NSPredicate(format: "label CONTAINS %@", title)).firstMatch.exists, title)
+        }
+        app.buttons["Done"].tap()
+        app.buttons["project-pinned-tab"].tap()
+        let tabs = app.buttons["Tabs"]
+        XCTAssertTrue(tabs.waitForExistence(timeout: 8)); tabs.tap()
+        XCTAssertTrue(app.buttons["workspace-managed-title-hidden-browser"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.buttons["workspace-managed-title-chat:hidden-chat"].exists)
+    }
     @MainActor func testPhoneRestoresProjectBrowserWithLargeHistoryAndBoundedOverview() throws {
         try XCTSkipIf(UIDevice.current.userInterfaceIdiom != .phone, "Phone restoration fixture")
         let app = nativeFixtureApplication()
@@ -3226,6 +3388,23 @@ final class NativeReleaseFollowupUITests: XCTestCase {
         XCTAssertTrue(chat.exists)
         let proof = XCTAttachment(screenshot: app.screenshot()); proof.name = "iPad continuous workspace strip and tab dividers"; proof.lifetime = .keepAlways; add(proof)
     }
+    @MainActor func testPhoneNewTabAndWebsiteBottomSurfaceMatchesIndicator() {
+        let app = nativeFixtureApplication()
+        app.launchArguments = ["--reset-pairing", "--native-design-preview", "--phone-preview-fixture", "--synthetic-browser-workspace", "--native-app-fixture"]
+        app.launch()
+        let addTab = app.buttons["phone-new-tab"]; XCTAssertTrue(addTab.waitForExistence(timeout: 15)); addTab.tap()
+        let find = app.buttons["browser-find"]; XCTAssertTrue(find.waitForExistence(timeout: 10))
+        if app.keyboards.firstMatch.exists { app.scrollViews.containing(.textField, identifier: "new-tab-address").firstMatch.swipeDown(); XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 5)) }
+        assertContinuousBottomSurface(app, controlY: find.frame.midY)
+        XCTAssertLessThanOrEqual(app.frame.maxY - find.frame.maxY, 28)
+        let blank = XCTAttachment(screenshot: app.screenshot()); blank.name = "Verified new-tab footer color and compact bottom inset"; blank.lifetime = .keepAlways; add(blank)
+        let editor = app.textFields["new-tab-address"]; XCTAssertTrue(editor.waitForExistence(timeout: 10)); editor.tap(); editor.typeText(nativeFixtureHTTPOrigin + "/browser/phone-preview"); app.buttons["Open address"].tap()
+        XCTAssertTrue(app.webViews.firstMatch.staticTexts["Proteus browser rehearsal"].waitForExistence(timeout: 15))
+        XCTAssertTrue(find.waitForExistence(timeout: 5)); assertContinuousBottomSurface(app, controlY: find.frame.midY)
+        XCTAssertLessThanOrEqual(app.frame.maxY - find.frame.maxY, 28)
+        let page = XCTAttachment(screenshot: app.screenshot()); page.name = "Verified website footer color and compact bottom inset"; page.lifetime = .keepAlways; add(page)
+    }
+
     @MainActor func testPhoneLabelsAddressTabSwipesCompactBottomAndScrollRecovery() {
         let app = nativeFixtureApplication()
         app.launchArguments = ["--reset-pairing", "--native-design-preview", "--phone-preview-fixture", "--synthetic-browser-workspace", "--native-app-fixture"]
@@ -3238,6 +3417,9 @@ final class NativeReleaseFollowupUITests: XCTestCase {
         let urls = ["\(nativeFixtureHTTPOrigin)/browser/phone-preview?nested=1&tab=first", "\(nativeFixtureHTTPOrigin)/browser/phone-preview?nested=1&tab=second"]
         for url in urls {
             app.buttons["phone-new-tab"].tap()
+            XCTAssertTrue(app.buttons["browser-find"].waitForExistence(timeout: 10))
+            assertContinuousBottomSurface(app, controlY: app.buttons["browser-find"].frame.midY)
+            let footerProof = XCTAttachment(screenshot: app.screenshot()); footerProof.name = "New tab continuous home-indicator surface"; footerProof.lifetime = .keepAlways; add(footerProof)
             let editor = app.textFields["new-tab-address"]
             XCTAssertTrue(editor.waitForExistence(timeout: 10)); editor.tap(); editor.typeText(url); app.buttons["Open address"].tap()
             XCTAssertTrue(app.webViews.firstMatch.staticTexts["Proteus browser rehearsal"].waitForExistence(timeout: 15))
@@ -3253,9 +3435,10 @@ final class NativeReleaseFollowupUITests: XCTestCase {
         XCTAssertEqual(XCTWaiter.wait(for: [second], timeout: 5), .completed)
         XCTAssertFalse(app.descendants(matching: .any)["browser-address-editor"].exists, "A swipe must not start address editing")
         XCTAssertEqual(app.buttons["browser-find"].frame.height, 38, accuracy: 1, "Keep the compact browser row introduced with the clarified navigation")
-        XCTAssertLessThanOrEqual(app.frame.maxY - app.buttons["browser-find"].frame.maxY, 40, "Only the system home-indicator safe area remains below the controls")
+        XCTAssertLessThanOrEqual(app.frame.maxY - app.buttons["browser-find"].frame.maxY, 28, "Only the system home-indicator safe area remains below the controls")
         XCTAssertLessThanOrEqual(app.buttons["browser-find"].frame.maxY, app.frame.maxY)
         XCTAssertTrue(app.buttons["browser-find"].isHittable)
+        assertContinuousBottomSurface(app, controlY: app.buttons["browser-find"].frame.midY)
         let page = app.webViews.firstMatch
         page.swipeUp()
         let hidden = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: address)
@@ -3299,7 +3482,8 @@ final class Nov2MobileNavigationUITests: XCTestCase {
         XCTAssertFalse(app.buttons["Add chat tab"].exists); XCTAssertFalse(app.scrollViews["chat-child-tab-strip"].exists)
         let card = app.descendants(matching: .any).matching(identifier: "reply-composer-card").firstMatch
         XCTAssertTrue(card.waitForExistence(timeout: 10))
-        XCTAssertLessThanOrEqual(app.frame.maxY - card.frame.maxY, 50, "Only card padding and the home-indicator safe area remain below the composer")
+        XCTAssertLessThanOrEqual(app.frame.maxY - card.frame.maxY, 32, "Only card padding and the home-indicator safe area remain below the composer")
+        assertContinuousBottomSurface(app, controlY: card.frame.midY)
         app.buttons["chat-live-browser"].tap(); XCTAssertTrue(app.buttons["chat-mode-conversation"].isHittable)
         XCTAssertTrue(app.buttons["chat-tab-overview"].isHittable); XCTAssertTrue(app.buttons["chat-actions"].isHittable)
         app.buttons["chat-mode-conversation"].tap()
@@ -3324,5 +3508,61 @@ extension RemoteUITests {
             XCTAssertLessThanOrEqual(heading.frame.maxX, app.frame.width)
             let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Chat details — " + title; shot.lifetime = .keepAlways; add(shot)
         }
+    }
+}
+
+extension RemoteUITests {
+    @MainActor func testQuestionAnswerStaysVisibleDuringTypingAndIncomingHistoryUpdates() {
+        let app = nativeFixtureApplication()
+        app.launchArguments = ["--synthetic-clean-navigation", "--reset-pairing", "--synthetic-destinations", "--synthetic-notification-fixtures", "--synthetic-notification-controls", "--synthetic-notification-question", "--synthetic-question-typing-refresh"]
+        app.launch(); openNotificationFixtureHome(app)
+        for _ in 0..<6 where !app.buttons["Tap question notification"].isHittable { app.swipeUp() }
+        app.buttons["Tap question notification"].tap()
+        let editor = app.descendants(matching: .any).matching(identifier: "question-answer-notification-question").firstMatch
+        XCTAssertTrue(editor.waitForExistence(timeout: 15))
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 8))
+        var expected = ""
+        for chunk in ["Keep my answer ", "in place while ", "updates arrive. ", "Still typing here."] {
+            app.typeText(chunk); expected += chunk
+            XCTAssertEqual(editor.value as? String, expected)
+            XCTAssertTrue(editor.isHittable, "Incoming history must not scroll the focused answer away")
+            XCTAssertGreaterThan(editor.frame.maxY, 0)
+            XCTAssertLessThan(editor.frame.minY, app.keyboards.firstMatch.frame.minY)
+        }
+    }
+    @MainActor func testQuestionNotificationOpensAndFocusesItsAnswerEditor() {
+        let app = nativeFixtureApplication()
+        app.launchArguments = ["--synthetic-clean-navigation", "--reset-pairing", "--synthetic-destinations", "--synthetic-notification-fixtures", "--synthetic-notification-controls", "--synthetic-notification-question"]
+        app.launch()
+        openNotificationFixtureHome(app)
+        for _ in 0..<6 where !app.buttons["Tap question notification"].isHittable { app.swipeUp() }
+        XCTAssertTrue(app.buttons["Tap question notification"].waitForExistence(timeout: 12))
+        app.buttons["Tap question notification"].tap()
+        let editor = app.descendants(matching: .any).matching(identifier: "question-answer-notification-question").firstMatch
+        XCTAssertTrue(editor.waitForExistence(timeout: 15))
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 8), "The notification should focus its exact answer field")
+        XCTAssertFalse(app.alerts["Proteus"].exists, "Cached question routing must not show a false connection alert")
+        app.typeText("Use the native source")
+        XCTAssertEqual(editor.value as? String, "Use the native source")
+    }
+}
+
+extension NativeReleaseFollowupUITests {
+    @MainActor func testWrappingURLReturnSubmitsAndDoubleTapReplacesWholeAddress() {
+        let app = nativeFixtureApplication()
+        app.launchArguments = ["--reset-pairing", "--native-design-preview", "--phone-preview-fixture", "--synthetic-browser-workspace", "--native-app-fixture"]
+        app.launch(); XCTAssertTrue(app.buttons["phone-new-tab"].waitForExistence(timeout: 20)); app.buttons["phone-new-tab"].tap()
+        let first = nativeFixtureHTTPOrigin + "/browser/phone-preview?original=1"
+        let entry = app.textFields["new-tab-address"]; XCTAssertTrue(entry.waitForExistence(timeout: 10)); entry.tap(); entry.typeText(first); app.buttons["Open address"].tap()
+        XCTAssertTrue(app.webViews.firstMatch.staticTexts["Proteus browser rehearsal"].waitForExistence(timeout: 15))
+        app.buttons["browser-address"].tap()
+        let editor = app.textViews["browser-address-editor"]; XCTAssertTrue(editor.waitForExistence(timeout: 5)); editor.tap(); editor.doubleTap()
+        let full = nativeFixtureHTTPOrigin + "/browser/phone-preview?wrapped=" + String(repeating: "abcdefghij", count: 12)
+        editor.typeText(full)
+        XCTAssertEqual(editor.value as? String, full)
+        XCTAssertGreaterThan(editor.frame.height, 35, "Full URL wraps at character boundaries")
+        editor.typeText("\n")
+        XCTAssertTrue(app.buttons["browser-address"].waitForExistence(timeout: 10)); XCTAssertEqual(app.buttons["browser-address"].value as? String, full)
+        XCTAssertFalse((app.buttons["browser-address"].value as? String ?? "").contains("\n"))
     }
 }

@@ -194,6 +194,16 @@ const fixture = http.createServer(async (req, res) => {
     res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify({owner:await app.browserHistory.settings(),otherOwner:await second.browserHistory.settings()}));return;
   }
   if(req.url==='/design-update'){previewRevision++;res.end('Updated synthetic preview');return;}
+  if(req.url==='/files-move-state'){
+    const folder=app.context.config().workspaces.find(w=>w.id==='native-studio').cwd;
+    res.setHeader('Content-Type','application/json');res.end(JSON.stringify({sourceExists:fs.existsSync(path.join(folder,'Destination 000')),movedExists:fs.existsSync(path.join(folder,'Destination 200','Destination 000'))}));return;
+  }
+  if(req.url==='/files-grant'||req.url==='/files-grant-pages'){
+    const fixture=await seedProjectFixture(),workspaceId='native-studio',folder=app.context.config().workspaces.find(w=>w.id===workspaceId).cwd;
+    fs.mkdirSync(path.join(folder,'nested-files'),{recursive:true});fs.writeFileSync(path.join(folder,'Files fixture.md'),'# Streamed document\n\n![[pixel.png]]\n\n[Child](nested-files/Child.md)');fs.writeFileSync(path.join(folder,'nested-files','Child.md'),'# Child document');fs.writeFileSync(path.join(folder,'pixel.png'),Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Zl1sAAAAASUVORK5CYII=','base64'));
+    const paged=req.url==='/files-grant-pages';if(paged)for(let i=0;i<201;i++)fs.mkdirSync(path.join(folder,'Destination '+String(i).padStart(3,'0')),{recursive:true});
+    for(const device of app.remote.config.devices)app.remote.setWorkspaceFileAccess(device.id,[workspaceId],paged?[workspaceId]:[]);res.end(paged?'Writable paged fixture grant':'Read-only fixture grant');return;
+  }
   if(req.url==='/preview-grant'){for(const device of app.remote.config.devices)app.remote.setDocumentAccess(device.id,true);res.end('Granted for synthetic test');return;}
   if(req.url==='/design/index.html'){res.setHeader('content-type','text/html');res.end(`<title>Relay design fixture</title><link rel="stylesheet" href="./style.css"><p id="version">Version ${previewRevision}</p><button id="action">Change sample</button><script type="module" src="./main.js"></script>`);return;}
   if(req.url==='/design/style.css'){res.setHeader('content-type','text/css');res.end('body{font:20px system-ui;background:#eef4e9;padding:20px}button{padding:12px}');return;}

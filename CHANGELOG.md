@@ -1,3 +1,27 @@
+## Nov 8 / 0.2.44 — source in progress
+- File move pickers page large destinations; native file views discard stale responses, reset split drags and allow closing preview tabs.
+
+
+- Give recovery verification requests the remaining overall deadline instead of repeatedly aborting healthy slow checks at ten seconds; retain the sixty-second budget and all identity/UI/preservation checks. Record secret-free recovery stage timings.
+
+- Put new-chat file/photo attachments beside the iOS prompt and retain draft/attachment review before starting.
+- Restore native spelling suggestions and dictionary actions in desktop editable fields; preserve browser and iOS system editing menus.
+- Categorize updater owner connection, transport, timeout, HTTP and response failures without recording private response data.
+
+- Group workspace-level overview tabs first, then projects in shared saved order; center the active tab and exclude hidden/closed cache entries.
+- Synchronize desktop project drag order with native project lists and Move up/Move down controls; keep hidden tabs on the project Tabs page.
+- Deduplicate native notification event identities across feeds and use account push as the single configured background delivery path.
+- Prevent stale scroll commands and delayed history responses from moving iPhone chat readers after a gesture.
+- Add human-approved agent folder requests for one chat, with stable retries and next-turn provider activation.
+- Route mobile notification/history/attention taps to their owning chat and pending answer; provide a close action for schedule notifications.
+- Add native drain-first pause/resume/restart controls behind installed-runtime capability checks.
+
+- Compact collapsible Chats filters, window-fitting list, progressive rows and captured model settings on desktop/web.
+- Mnemosyne configured-root storage by file type, expandable dated metadata logs and library delivery evidence guidance.
+- Restore ordinary-question command routing between desktops; dismiss remembered approvals after owner acknowledgment and show inline submission feedback.
+- Integrate previously preserved guided ADO setup/agent-pool controls and scoped local-network website permissions.
+- Release remains open; no web/device deployment or local installation at this checkpoint.
+
 ## Nov 6 updater repair
 
 Bounded quiescent recovery capture, live-owner exclusion, final source/destination verification
@@ -2225,3 +2249,20 @@ Known unfinished work and distribution limitations are tracked in `docs/planned-
 - Show a native-helper connection warning, including iCloud Passwords, only once per extension per app launch across browser profiles and windows. Retries continue without repeating or reviving the banner; restarting Proteus permits one new warning.
 
 - Nov 5 source: preserve up to 256 real reading scrollports, filter non-scrolling visible overflow, validate locators/offsets before replacement, and test the actual owner update checkpoint. Existing-client bootstrap remains unresolved; not yet shipped.
+
+Nov 8 source follow-up: durable explicit schedule access overlay and owner connection pins; actionable unsupported sandbox mappings; durable schedule configuration ERROR history and inline save errors. Provider command portability remains incomplete. See docs/schedule-access-overlay.md.
+
+### Nov 8 continuation (source; target installs pending)
+- Durable schedule approvals and provider/model overrides survive provider changes and canonical reconciliation. Scoped commands use a qualified host sandbox across Codex, Copilot and Claude; native Codex restrictions remain.
+- Schedule configuration places Recent schedule runs between status and Run now, opening editable Chats filters.
+- iPhone URL editing wraps without newlines; saved web archives provide an encrypted, bounded offline copy with explicit refresh; certificate validity dates and additional tab swipe areas are included.
+- Mnemosyne Library distinguishes published inventory from worker wake deltas; safe native service controls have separate installed acceptance.
+
+### Nov 8 follow-up — workspace file browser
+
+- Add resizable previews, lazy folder expansion, column sorting, keyboard opening, selection,
+  custom green vector icons and a file-action toolbar/context menu with native system trash.
+- Add bounded PDF/plain-text previews and Obsidian image embeds using existing viewer libraries.
+- Add on-demand iPhone/iPad workspace browsing, preview resources and a separately consented
+  per-device file-editing permission. No whole-folder mobile replication is introduced.
+- Source/simulator acceptance is separate from physical installation; see docs/file-browser.md.

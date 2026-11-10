@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\User;
 use App\Services\AppRecords;
 use App\Services\PushDelivery;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
@@ -161,6 +162,36 @@ class AppApiTest extends TestCase
         $this->assertSame(0, DB::table('app_records')->where('kind', 'push-outbox')->count());
     }
 
+    public function test_apns_registration_merges_relaunch_duplicates_without_touching_other_destinations(): void
+    {
+        Http::preventStrayRequests();
+        $user = $this->owner();
+        $other = $this->owner();
+        $records = app(AppRecords::class);
+        $token = str_repeat('a', 64);
+        $registration = ['deviceId' => (string) Str::uuid(), 'platform' => 'apns', 'token' => $token, 'environment' => 'sandbox'];
+        $first = $records->save($user, 'push-subscriptions', $registration);
+        $second = $records->save($user, 'push-subscriptions', array_replace($registration, ['deviceId' => (string) Str::uuid(), 'token' => strtoupper($token)]));
+        $production = $records->save($user, 'push-subscriptions', array_replace($registration, ['environment' => 'production']));
+        $different = $records->save($user, 'push-subscriptions', array_replace($registration, ['deviceId' => (string) Str::uuid(), 'token' => str_repeat('b', 64)]));
+        $foreign = $records->save($other, 'push-subscriptions', $registration);
+        Passport::actingAs($user, ['app:read', 'app:write']);
+        $this->postJson('/api/v1/app/notifications', ['eventId' => (string) Str::uuid(), 'type' => 'review.required'])->assertCreated();
+        $this->assertSame(4, $records->query($user, 'push-outbox')->count());
+        $newDevice = (string) Str::uuid();
+        $merged = $this->postJson('/api/v1/app/push-subscriptions', array_replace($registration, ['deviceId' => strtoupper($newDevice)]))
+            ->assertOk()->assertJsonPath('deviceId', $newDevice)->assertDontSee($token)->json('id');
+        $this->assertContains($merged, [$first['id'], $second['id']]);
+        $this->postJson('/api/v1/app/push-subscriptions', array_replace($registration, ['deviceId' => $newDevice]))->assertOk()->assertJsonPath('id', $merged);
+        $this->assertSame(3, $records->query($user, 'push-subscriptions')->count());
+        $this->assertSame(3, $records->query($user, 'push-outbox')->count());
+        foreach ([$production, $different] as $preserved) {
+            $this->assertTrue($records->query($user, 'push-subscriptions')->where('id', $preserved['id'])->exists());
+        }
+        $this->assertTrue($records->query($other, 'push-subscriptions')->where('id', $foreign['id'])->exists());
+        Http::assertNothingSent();
+    }
+
     public function test_configured_push_uses_generic_payload_and_cleans_expired_subscription(): void
     {
         $path = tempnam(sys_get_temp_dir(), 'proteus-test-push-');
@@ -316,5 +347,21 @@ class AppApiTest extends TestCase
         $this->postJson('/api/v1/app/push-subscriptions', ['deviceId' => (string) Str::uuid(), 'platform' => 'apns', 'token' => str_repeat('b', 64), 'environment' => 'sandbox'])->assertOk();
         $this->postJson('/api/v1/app/notifications', ['id' => (string) Str::uuid(), 'type' => 'schedule.completed'])->assertCreated();
         $this->assertSame(0, DB::table('app_records')->where('kind', 'push-outbox')->count());
+    }
+
+    public function test_schedule_errors_keep_severity_correlation_and_owner_isolation_without_request_secrets(): void
+    {
+        Passport::actingAs($this->owner(), ['app:read', 'app:write']);
+        $eventId = (string) Str::uuid();
+        $correlationId = (string) Str::uuid();
+        $payload = ['eventId' => $eventId, 'type' => 'schedule.error', 'scheduleId' => 'synthetic-workflow', 'level' => 'error', 'action' => 'save', 'code' => 'SCHEDULE_EXECUTION_UNSUPPORTED', 'correlationId' => $correlationId, 'body' => 'The selected runtime cannot enforce the required policy.', 'prompt' => 'PRIVATE PROMPT', 'arguments' => ['secret' => 'PRIVATE ARGUMENT']];
+
+        $saved = $this->postJson('/api/v1/app/notifications', $payload)->assertCreated()->assertJsonPath('level', 'error')->assertJsonPath('correlationId', $correlationId)->assertJsonPath('scheduleId', 'synthetic-workflow')->assertDontSee('PRIVATE PROMPT')->assertDontSee('PRIVATE ARGUMENT')->json();
+        $this->postJson('/api/v1/app/notifications', $payload)->assertCreated()->assertJsonPath('id', $saved['id']);
+        $this->getJson('/api/v1/app')->assertJsonCount(1, 'notifications')->assertJsonPath('notifications.0.level', 'error');
+        $this->postJson('/api/v1/app/notifications', array_replace($payload, ['eventId' => (string) Str::uuid(), 'level' => 'info']))->assertUnprocessable()->assertJsonValidationErrors('level');
+
+        Passport::actingAs(User::factory()->create(), ['app:read', 'app:write']);
+        $this->getJson('/api/v1/app')->assertJsonCount(0, 'notifications');
     }
 }

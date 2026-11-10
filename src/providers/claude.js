@@ -1,6 +1,8 @@
+import {claudeToolAllowed} from './claude-tool-policy.js';
 import {subagentJournal} from '../services/chats/subagents.js';
 import { executionSafeguardMs, activeExecutionLimit } from './execution-policy.js';
 import { ClaudeTurnLifecycle } from './claude-turn-lifecycle.js';
+import {mergeManagedServers} from '../services/integrations/managed-run.js';
 import {questionAttachmentTools} from '../services/chats/question-attachments.js';
 import {providerActivity} from '../shared/provider-activity.js';
 import {claudeMessageContent} from './provider-attachment-input.js';
@@ -48,7 +50,7 @@ export function claudeMcpConfig(selected={},cwd,makeLauncher) {
   const mcpServers={};
   for(const [name,definition] of Object.entries(selected)){
     if(!/^[a-zA-Z0-9_-]{1,80}$/.test(name)||!definition||typeof definition!=='object'||Array.isArray(definition))throw new Error('A selected Claude MCP server has an invalid name or definition.');
-    if(definition.tools!=null&&!(Array.isArray(definition.tools)&&definition.tools.length===1&&definition.tools[0]==='*'))throw new Error(`Claude cannot enforce the selected tool filter for ${name}. Remove that filter or deselect this server.`);
+    if(definition.tools!=null&&(!Array.isArray(definition.tools)||definition.tools.length>256||definition.tools.some(tool=>typeof tool!=='string'||!tool||tool.length>128)))throw new Error(`Claude MCP tool filter for ${name} is invalid.`);
     const type=definition.type==='local'?'stdio':definition.type||'stdio',timeout=definition.timeout;
     if(timeout!=null&&(!Number.isSafeInteger(timeout)||timeout<1000||timeout>86_400_000))throw new Error(`Claude MCP timeout for ${name} must be 1 second to 24 hours.`);
     const common=timeout==null?{}:{timeout};
@@ -169,8 +171,8 @@ export class ClaudeRPC extends EventEmitter {
 }
 export class ClaudeProvider {
   dataDirectory() { return this.options.env?.CLAUDE_CONFIG_DIR || process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude'); }
-  constructor(options={}, {context,browser}={}) {this.browser=browser;this.options=options;this.context=context;this.active=null;this.cleanupClients=new Set();this.cleanupError=null;this.acceptedMediaTypes=Object.freeze(['image/png','image/jpeg','image/gif','image/webp','text/plain']);this.acceptedSteeringMediaTypes=this.acceptedMediaTypes;}
-  client(args=[],cwd,mcpConfigPath=null){return this.options.clientFactory ? this.options.clientFactory({args,cwd,mcpConfigPath}) : new ClaudeRPC({...this.options,args,cwd,mcpConfigPath});}
+  constructor(options={}, {context,browser}={}) {this.browser=browser;this.options=options;this.supportsManagedConnections=true;this.context=context;this.active=null;this.cleanupClients=new Set();this.cleanupError=null;this.acceptedMediaTypes=Object.freeze(['image/png','image/jpeg','image/gif','image/webp','text/plain']);this.acceptedSteeringMediaTypes=this.acceptedMediaTypes;}
+  client(args=[],cwd,mcpConfigPath=null,envOverrides={}){const env={...(this.options.env||process.env),...envOverrides};return this.options.clientFactory ? this.options.clientFactory({args,cwd,mcpConfigPath,env}) : new ClaudeRPC({...this.options,args,cwd,mcpConfigPath,env});}
   selectedMcp(run){const snapshot=run.schedule.context,managed=snapshot&&this.context?(this.context.providerMcpContext?.(snapshot)||this.context.providerContext(snapshot)):null;return managed?{...Object.fromEntries(Object.entries(snapshot.includeDefaults!==false?run.schedule.mcpServers||{}:{}).filter(([name])=>!managed.disabledLegacyMcp.includes(name))),...managed.mcpServers}:run.schedule.mcpServers||{};}
   withMcpSelectionBatch(callback){return this.context?.withMcpSelectionBatch?this.context.withMcpSelectionBatch(callback):callback();}
   async mcpState(client,names,timeout=10000,selected={}){
@@ -256,32 +258,31 @@ export class ClaudeProvider {
     if(this.quotaClient===client)this.quotaClient=null;return quota;
   }
 
-  async run({run,prompt,attachments=[],emit,ask,update,signal,stream,permissionProfile}) {
+  async run({run,prompt,attachments=[],emit,ask,update,signal,stream,permissionProfile,scopedTools=[],managedMcp={}}) {
     const content=claudeMessageContent(prompt,attachments,this.acceptedMediaTypes);
     if(this.cleanupError)throw this.cleanupError;
     if(this.active)throw new Error('A Claude turn is already active.');
     if(this.mcpProbe)throw new Error('Wait for the Claude MCP connection check to finish before starting this chat.');
     const snapshot=run.schedule.context,managed=snapshot&&this.context?this.context.providerContext(snapshot):null;
-    if(managed?.customAgents?.some(a=>a.tools!==null))throw new Error('Claude cannot enforce selected editor agent tool filters. Deselect restricted agents.');
-    const selected=this.selectedMcp(run);
+    const selected=mergeManagedServers(this.selectedMcp(run),managedMcp);
     if(Object.hasOwn(selected,'proteus_app'))throw new Error('The proteus_app MCP name is reserved for Proteus document tools.');
     if(run.schedule.skillDirectories?.length&&snapshot?.includeDefaults!==false)throw new Error('For Claude select individual skills; legacy skill directories cannot be isolated.');
     if(signal.aborted)throw new Error('Cancelled');
-    const instructions=`${appInstructions}\nYou are running inside Proteus. Use only the following explicitly supplied instructions and sources. Do not discover instruction, skill, agent, or memory files automatically.\nWorkspace: ${run.schedule.workspace.cwd}\n${managed?.instructionText||''}\n${(managed?.customAgents||[]).map(a=>`Agent ${a.displayName}:\n${a.prompt}`).join('\n\n')}\nEditor context: ${JSON.stringify(run.schedule.editorContext||null)}`;
+    const instructions=`${appInstructions}\n${scopedTools.length?'Scoped schedule: use proteus_exec for all commands. The host enforces scope, captures durable command consent and denies native shells. Preserve stable invocation operation IDs.':''}\nYou are running inside Proteus. Use only the following explicitly supplied instructions and sources. Do not discover instruction, skill, agent, or memory files automatically.\nWorkspace folders: ${[run.schedule.workspace.cwd,...(run.schedule.workspace.additionalDirectories||[]),...(permissionProfile?.().mode!=='ask'?permissionProfile?.().chatFolders||[]:[]).map(folder=>folder.path)].join('\n')}\n${managed?.instructionText||''}\n${(managed?.customAgents||[]).map(a=>`Agent ${a.displayName}:\n${a.prompt}`).join('\n\n')}\nEditor context: ${JSON.stringify(run.schedule.editorContext||null)}`;
     // A custom system prompt omits Claude Code's automatic instruction context. Settings,
     // skills, MCPs and plugins are excluded independently, while native credentials stay native.
     const settings={claudeMdExcludes:['/**'],autoMemoryEnabled:false,enabledPlugins:{},fastMode:run.schedule.serviceTier==='fast'};
-    const args=['--system-prompt',instructions,'--settings',JSON.stringify(settings),'--disallowedTools','Skill,EnterWorktree,ExitWorktree'];
+    const args=['--system-prompt',instructions,'--settings',JSON.stringify(settings),'--disallowedTools',scopedTools.length?'Skill,EnterWorktree,ExitWorktree,Bash,Task,Agent,WebFetch,WebSearch,NotebookEdit':'Skill,EnterWorktree,ExitWorktree'];
     if(run.schedule.model)args.push('--model',run.schedule.model);
     if(run.schedule.reasoningEffort)args.push('--effort',run.schedule.reasoningEffort);
     if(run.providerSessionId)args.push('--resume',run.providerSessionId);
     // Additional roots are conveyed to the native permission system, with skills disabled.
     for(const root of new Set([...(run.schedule.workspace.additionalDirectories||[]),...(permissionProfile?.().chatFolders||[]).map(folder=>folder.path)]))args.push('--add-dir',root);
-    const appTools=[...questionAttachmentTools(this,run.id),...browserTools(this.browser,run.id),...integrationTools(this.integrations,run.id),...chatControlTools(this.chatControl,run.id)];captureAppCapabilities(run,appTools,update);
+    const appTools=[...scopedTools,...questionAttachmentTools(this,run.id),...browserTools(this.browser,run.id),...integrationTools(this.integrations,run.id),...chatControlTools(this.chatControl,run.id)];captureAppCapabilities(run,appTools,update);
     const bridge=await documentBridge(this.browser,run.id,appTools.filter(tool=>tool.name!=='proteus_open_document'));
     const configured={...selected,...(bridge?{proteus_app:bridge.config}:{})};
     let mcpConfig;try{mcpConfig=Object.keys(configured).length?privateClaudeMcpConfig(configured,run.schedule.workspace.cwd):null;}catch(error){await bridge?.close();throw error;}
-    let client;try{client=this.client(args,run.schedule.workspace.cwd,mcpConfig?.file||null);}catch(error){mcpConfig?.dispose();await bridge?.close();throw error;}
+    let client;try{client=this.client(args,run.schedule.workspace.cwd,mcpConfig?.file||null,scopedTools.length?{ENABLE_TOOL_SEARCH:'false'}:{});}catch(error){mcpConfig?.dispose();await bridge?.close();throw error;}
     this.active=client;this.activeRunId=run.id;
     let resolve,reject;const done=new Promise((a,b)=>{resolve=a;reject=b;});done.catch(()=>{});
     const calls=new Map(),initialInputId=randomUUID(),lifecycle=new ClaudeTurnLifecycle(initialInputId,calls,update);let currentId='claude',resultSeen=false,steering=null,accepting=false,activitySucceeded=false,waitingTasks=0;const approved=new Map();
@@ -292,9 +293,14 @@ export class ClaudeProvider {
     const permissionKey=(id,name,input)=>typeof id==='string'&&id.length?JSON.stringify([id,name,input]):null;
     arm();
     const permit=async(name,input,id)=>{
+      if(!claudeToolAllowed(name,{managed,servers:configured}))return {behavior:'deny',message:'The selected source/agent tool filter does not authorize this operation.'};
+      if(scopedTools.some(tool=>name==='mcp__proteus_app__'+tool.name))return {behavior:'allow',updatedInput:input};
+      if(Object.keys(managedMcp).some(server=>name.startsWith('mcp__'+server+'__')))return {behavior:'allow',updatedInput:input};
       if(name==='AskUserQuestion'){const answers={};for(const q of input.questions||[])answers[q.question]=await askUser({type:'question',question:q.question,choices:q.options?.map(x=>x.label),optionDetails:q.options?.map(x=>({label:x.label,description:x.description||''})),providerQuestionId:q.id});return {behavior:'allow',updatedInput:{...input,answers}};}
-      const kind=name==='Bash'?'shell':['Write','Edit','MultiEdit','NotebookEdit'].includes(name)?'write':['Read','Glob','Grep'].includes(name)?'read':'custom-tool';
-      const answer=await askUser({type:'permission',question:`Allow Claude ${name}?`,details:{kind,toolCallId:id,toolName:name,args:input,fullCommandText:input.command,fileName:input.file_path||input.notebook_path||input.path,path:input.file_path||input.path||run.schedule.workspace.cwd,intention:`Claude ${name}`}});
+      if(scopedTools.length&&['Bash','Task','Agent','WebFetch','WebSearch','NotebookEdit'].includes(name))return {behavior:'deny',message:'Use proteus_exec or explicitly authorized connector tools for this scoped schedule.'};
+      const sourceServer=Object.keys(selected).sort((a,b)=>b.length-a.length).find(server=>name.startsWith('mcp__'+server+'__'));
+      const kind=sourceServer?'mcp':name==='WebFetch'?'url':name==='Bash'?'shell':['Write','Edit','MultiEdit','NotebookEdit'].includes(name)?'write':['Read','Glob','Grep'].includes(name)?'read':'custom-tool';
+      const answer=await askUser({type:'permission',question:`Allow Claude ${name}?`,details:{kind,toolCallId:id,toolName:sourceServer?name.slice(('mcp__'+sourceServer+'__').length):name,...(sourceServer?{serverName:sourceServer}:{}),...(kind==='url'?{url:input.url}:{}),args:input,fullCommandText:input.command,fileName:input.file_path||input.notebook_path||input.path,path:input.file_path||input.path||run.schedule.workspace.cwd,intention:`Claude ${name}`}});
       return ['approve','approve-auto'].includes(answer)?{behavior:'allow',updatedInput:input}:{behavior:'deny',message:'The operator declined this tool.'};
     };
     const agents=subagentJournal(run,'claude',update);
@@ -375,10 +381,10 @@ export class ClaudeProvider {
       try{result=await client.initialize({PreToolUse:[{matcher:'.*',hookCallbackIds:['proteus_permission']}]});}
       catch(error){if(Object.keys(selected).length)throw new Error('Claude could not initialize the selected MCP connections on this computer. Check their configuration and retry.');throw error;}
       if(result.hooks_applied!==true)throw new Error('Claude did not confirm the Proteus permission hooks. Update Claude Code before running this chat.');
-      if(Object.keys(selected).length){
-        const names=Object.keys(selected),deadline=Date.now()+30_000;let states=[];
+      if(Object.keys(configured).length){
+        const names=Object.keys(configured),deadline=Date.now()+30_000;let states=[];
         do{
-          states=await this.mcpState(client,names,Math.max(1000,Math.min(5000,deadline-Date.now())),selected);
+          states=await this.mcpState(client,names,Math.max(1000,Math.min(5000,deadline-Date.now())),configured);
           run.mcpConnections=Object.fromEntries(states.map(item=>[item.name,{status:item.status,observedAt:new Date().toISOString(),...(item.error?{error:item.error}:{})}]));update();
           const unavailable=states.find(item=>['failed','needs-auth','disabled','not-connected'].includes(item.status));
           if(unavailable)throw new Error(`Claude MCP ${unavailable.name}: ${unavailable.status}. ${unavailable.error||'Check the selected server on this computer.'}`);
