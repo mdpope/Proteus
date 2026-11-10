@@ -1,4 +1,5 @@
 ## Nov 8 / 0.2.44 — source in progress
+- Reuse one locked simulator compiler cache by default instead of leaving a full compiler tree for every test run.
 - File move pickers page large destinations; native file views discard stale responses, reset split drags and allow closing preview tabs.
 
 

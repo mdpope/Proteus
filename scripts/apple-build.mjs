@@ -5,6 +5,7 @@ import path from 'node:path';
 import net from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { spawn, execFileSync } from 'node:child_process';
+import {acquireAppleBuildCache} from './apple-build-cache.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2);
@@ -40,7 +41,8 @@ const device = options['--device'] ? devices.find(item => item.udid === options[
 if (!device) throw new Error('No matching available iOS simulator. Use doctor to list simulator identifiers.');
 const output = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-apple-'));
 // Reuse a caller-owned simulator compiler cache without reusing result/fixture receipts.
-const derivedData = process.env.PROTEUS_IOS_DERIVED_DATA || path.join(output, 'DerivedData');
+const cache = acquireAppleBuildCache(process.env.PROTEUS_IOS_DERIVED_DATA);
+const derivedData = cache.directory;
 const resultPath = path.join(output, 'Tests.xcresult');
 const releaseMetadata=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
 const buildArgs = ['MARKETING_VERSION='+releaseMetadata.version,'PROTEUS_RELEASE_DATE='+(releaseMetadata.releaseDate||''),'-project', path.join(root, 'ios/Proteus.xcodeproj'), '-scheme', 'Proteus', '-destination', `platform=iOS Simulator,id=${device.udid}`, '-derivedDataPath', derivedData, '-parallel-testing-enabled', 'NO'];
@@ -83,7 +85,8 @@ const stop = async childProcess => {
     childProcess.kill('SIGTERM');
   });
 };
-for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, async () => { await stop(child); await stop(fixture); process.exit(130); });
+for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, async () => { await stop(child); await stop(fixture); cache.release(); process.exit(130); });
+process.once('exit', () => cache.release());
 async function requireFreePort(port) {
   await new Promise((resolve, reject) => {
     const server = net.createServer();
@@ -155,4 +158,4 @@ try {
 
   }
   console.log(`Verified ${action} on ${device.name}. Artifacts: ${output}`);
-} finally { await stop(fixture); }
+} finally { await stop(fixture); cache.release(); }

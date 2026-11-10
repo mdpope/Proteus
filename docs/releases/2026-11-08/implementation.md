@@ -369,3 +369,7 @@ remain in private release evidence; cumulative retry totals are not new failure 
 The exact web-project folder grant is approved, with owner activation next-provider-turn. The
 current provider turn does not yet have that source selected. Deployment remains pending that
 activation; no alternate path was used to bypass the source boundary.
+
+### Disk-pressure follow-up
+
+The operator requested obsolete build/staging/temp cleanup and branch integration. PR32 merged the tested application source into main; the merged branch was retired locally and remotely. Simulator helper defaults now reuse one compiler cache, with overlapping-owner and stale-lock guards. Three cache lifecycle regressions and static checks pass. This is release tooling maintenance; accepted application artifacts retain their original frozen source pin and bytes. Cleanup counts, hashes, actual free-space deltas and protected recovery identities remain in private receipts. Update-owner rollback-attention staging remains blocked by supported reconciliation checks; no journal or unregistered recovery was force-edited.

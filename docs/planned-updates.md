@@ -12459,3 +12459,5 @@ acceptance remain individually tracked. Existing read sharing does not grant fil
 native document tabs are not yet shared owner-navigation tabs; do not claim that parity from compile.
 
 Nov 8 completion pass: large-folder move destination paging and native file request identity/disposal guards are implemented. Electron and iPhone actual move fixtures pass; new packages and iPad acceptance remain separate.
+
+Nov 8 disk-pressure follow-up: shared, locked simulator compiler-cache reuse implemented; obsolete package/build/temp cleanup uses private plans and actual free-space measurements. Owner-blocked rollback-attention recovery remains explicit.

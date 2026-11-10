@@ -692,3 +692,7 @@ leaving room for a bounded diagnostic upload on failure or cancellation. A stuck
 failed/unverified, never a pass; runner loss or forced termination can still prevent diagnostics.
 Manual Apple commands retain their existing defaults unless the opt-in variable is set. Cleanup
 terminates only the helper’s own spawned processes and escalates a stuck child after eight seconds.
+
+### Shared simulator compiler cache
+
+The build helper defaults to one reusable compiler cache under the user Library/Caches/Proteus directory, independent of each run's logs and result bundle. PROTEUS_IOS_DERIVED_DATA remains an explicit override. A process-owned lock refuses overlapping builds; a verified exited owner can be recovered, while malformed or linked locks fail for inspection. Successful runs and termination release the lock. Do not accumulate a full DerivedData tree per test run.

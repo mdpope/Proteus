@@ -3452,3 +3452,5 @@ onto mobile. Paired-device file viewing remains per-workspace. File mutation req
 explicit per-device/workspace grant in Connections, preserving current read-only approvals.
 
 Nov 8 file-browser completion: folder and document results are view-generation and root bound; stale responses cannot change a newer selection. Move destinations use explicit bounded pages rather than downloading a tree. Native preview tabs remain view-local and explicitly closeable, with bytes released on exit.
+
+Apple build retention: use one process-locked compiler cache by default, with per-run evidence stored separately. Reproducible compiler trees must not multiply for every UI test. APFS allocated-file totals and actual reclaimed bytes are reported separately; shared extents and active snapshots can retain deleted blocks.
