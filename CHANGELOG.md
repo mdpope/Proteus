@@ -1,4 +1,5 @@
 ## Nov 8 / 0.2.44 — source in progress
+- Establish the recovery baseline before measuring settlement, budget comparisons from observed scan duration and retain scan-count/timing progress. Reject late comparisons and retain live-owner and snapshot verification checks.
 - Match Claude owner-bridge approvals to captured unprefixed tool/action rules; route Codex scoped-command transport directly to the host identity gate without a redundant outer approval. Preserve command consent, owner checks and containment.
 - Use the loaded iOS page address on browser reselection; honor owner tab closure for private login pages, retire duplicate cached identities and prevent metadata updates from reopening stale tabs.
 - Restore the iPhone Team Tools navigation button so browser tabs can return to other app areas.

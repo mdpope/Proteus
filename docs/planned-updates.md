@@ -6,6 +6,12 @@ These are queued requests; Nov 8 release closeout continues independently.
 
 ## Nov 8 — complete request audit before further deployment
 
+The final Windows rollout exposed a recovery-quiescence failure before replacement. Correct the
+helper's first-scan deadline handling and retain scan timing/count evidence. Validate slow stable
+profiles, continued changes and expired comparisons, then deliver the corrected signed Windows
+package through the normal owner updater. Other accepted platform packages remain recorded in
+the rollout ledger. Actual diagnosis of the original attempt remains limited by its absent timing.
+
 N8-25 follows installed HC acceptance: fix Codex's redundant scoped-command transport prompt,
 Claude's exact owner-tool action matching and stale schedule tool metadata. Command execution,
 durable consent/revocation and Notification Center acceptance on HC remain separately unverified.
