@@ -197,3 +197,30 @@ context to distinguish them without displaying credentials, tokens or private is
 Check managed and ordinary server connections, unavailable display metadata, duplicate names
 and narrow layouts; the named card and decision must remain bound to the same current request.
 This is deferred Nov 10 work, with no new Nov 8 build or deployment.
+
+## N10-11 — Guided installation for desktop-control options
+
+Add an **Install** button beside each supported desktop-control option in Engine Room,
+including Cua Driver and the Mac-only Peekaboo backup. Launch or resume a guided setup chat
+on the selected destination computer using that application's configured default provider,
+model and run options, validated against its current catalog rather than hard-coded choices.
+Identify the destination and backend clearly and reuse an active setup chat to avoid duplicate
+installations. Retain the installation and OS-permission instructions as a reference.
+
+The guided workflow should inspect the platform, existing installation and prerequisites, then
+use available built-in app tools or explicitly approved terminal access to install the backend
+and required dependencies. Support established package-manager routes such as npm and Homebrew
+where appropriate to the platform; install missing supporting tools when needed through the
+normal approval flow. Choose trusted supported package sources and compatible versions, preserve
+working installations, and explain any required privilege, restart or manual OS-permission step.
+An Install click starts the guided task; command approvals and OS grants retain their normal
+human review. Terminal access must remain explicitly shared and revocable.
+
+Show setup progress, actionable failures and a way to return to the same chat. After installation,
+refresh Engine Room and verify backend discovery, required permissions, desktop windows and a
+real read-only observation through the destination's supported desktop-control boundary. Report
+installed, permission-blocked and verified states separately; input requires a separately
+authorized real task. Preserve Cua Driver as primary and Peekaboo as an on-demand Mac backup.
+Test missing dependencies, already-installed backends, interrupted/retried setup, unavailable
+default models, denied approvals and platform-specific support across macOS, Windows and Linux.
+This is Nov 10 planning only; do not install dependencies or rebuild/deploy Nov 8 for this entry.
