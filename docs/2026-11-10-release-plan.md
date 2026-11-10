@@ -224,3 +224,22 @@ authorized real task. Preserve Cua Driver as primary and Peekaboo as an on-deman
 Test missing dependencies, already-installed backends, interrupted/retried setup, unavailable
 default models, denied approvals and platform-specific support across macOS, Windows and Linux.
 This is Nov 10 planning only; do not install dependencies or rebuild/deploy Nov 8 for this entry.
+
+## N10-12 — Route Playwright attachment to the tab's owning window
+
+Installed desktop testing reproduced an authorized browser tab being unavailable to Playwright
+when it belongs to another application window. The standard browser tool could reach the same
+tab with the owning window specified, while the Playwright tool schema offered no window
+selector. This is a browser-tool routing limitation, separate from the tested site's workflow.
+
+Trace backend attachment and tool routing for stable tab IDs across windows. Resolve the owning
+window reliably or support an explicit validated window selector consistently through the
+Playwright catalog/call boundary. Preserve tab/profile authorization, sharing and pause gates;
+do not move or duplicate the tab, focus another window or broaden access merely to attach.
+Report actual unavailable/denied states distinctly from a window-routing failure.
+
+Verify list/catalog, attachment and read-only observation for authorized tabs in current and
+other windows, including hidden/unloaded tabs where supported, moved tabs, closed windows and
+denied sharing. Cross-window attachment must preserve tab identity, history and placement and
+must not interact with unrelated tabs. Keep private site URLs and reproduction data outside
+application source. Queue the correction for Nov 10 without rebuilding or deploying Nov 8.
