@@ -119,3 +119,46 @@ owner identity, workspace/source associations and distinct read/edit grants; do 
 widen authority merely because names or paths look alike. Specify stale/removed-source and
 unavailable-owner behavior. Validate the proposed grouping and labels with realistic duplicate
 examples without copying private folder inventories into source or modifying live grants.
+
+## N10-07 — Relevant iOS tab controls and Copy Proteus tab ID
+
+Audit the desktop tab menu and bring its applicable controls to iPhone and iPad, retaining
+native-specific actions. Make controls relevant to the selected tab type and current state;
+document any desktop action that cannot apply rather than silently omit otherwise useful
+controls. Preserve the distinctions between hide, unload, close, move and restore, and their
+existing authorization and session semantics.
+
+Provide an explicit **Copy Proteus tab ID** action for every supported tab type, including
+browser tabs. Copy the stable logical Proteus identity used to locate the tab, not its website
+URL, a transient WebView identifier or a navigation index. Where local and owner identities
+differ, make the diagnostic identity unambiguous and expose the owner separately if needed.
+Keep identifiers available without granting browser/file access, copying credentials or
+loading an unloaded page. Verify the copied identity resolves to the intended tab across
+desktop/mobile views, including after reconnect and placement changes.
+
+Acceptance includes phone/tablet menus for browser, chat, document and file-browser tabs,
+loaded/unloaded and hidden states where applicable, clipboard feedback, and parity with relevant
+desktop controls. Copying an identifier must not navigate, change tab state or close the menu's
+target accidentally.
+
+## N10-08 — Investigate unsolicited browser URL/history changes
+
+Operator report: on iPad, the Instagram tab in Personal workspace / Social project repeatedly
+changes URL automatically, possibly moving backward through history without an explicit action.
+Treat this as a potentially app-wide browser navigation defect; Instagram-specific behavior and
+an application-driven history replay are hypotheses, not established causes.
+
+Reproduce and distinguish actual page navigation from an address-field-only change. Trace
+explicit navigation intent, Back/Forward commands, redirects and same-document site navigation
+against owner tab metadata, device caches, reconnect/reselection, delayed responses and history
+restoration. Check whether stale owner updates or another device's tab state can navigate a live
+local page unexpectedly. Use stable Proteus tab identity to correlate events and keep any
+diagnostics bounded and free of credentials or unnecessary browsing content.
+
+Required outcome: the page, displayed URL and selected history entry remain consistent; ordinary
+metadata synchronization, polling, tab switching and restoration must not replay old navigation
+or target another tab. Preserve intentional Back/Forward, site redirects, reading position and
+history. Test Instagram and a controlled navigation fixture, multiple tabs/devices, rapid
+navigation, late/out-of-order updates, idle periods and reconnect on iPad/iPhone and relevant
+desktop/web paths. Preserve the operator's real tab/history while collecting reproduction
+evidence; do not claim a site-specific cause or a fix from address-bar assertions alone.

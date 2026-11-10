@@ -3,7 +3,8 @@
 The [Nov 10 plan](2026-11-10-release-plan.md) records clickable links to chats, schedules and
 file-browser resources, a Chats list design investigation, denser headers across features, and
 N10-04 reliable cross-device draft synchronization, N10-05 normal in-context Workspace Files
-tabs, and N10-06 folder discovery/scope/grouping/duplicate design. The folder questions are queued
+tabs, N10-06 folder discovery/scope/grouping/duplicate design, N10-07 relevant iOS tab controls
+and Copy Proteus tab ID, and N10-08 unsolicited browser URL/history changes. The folder questions are queued
 for analysis; no grouping or access-policy decision is implied. The draft correction is isolated on its own source
 branch; the operator explicitly defers another Nov 8 build/deployment for it. Nov 8 closeout
 continues independently; no new package or installed acceptance is implied.
