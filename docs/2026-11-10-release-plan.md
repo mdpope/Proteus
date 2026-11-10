@@ -243,3 +243,29 @@ other windows, including hidden/unloaded tabs where supported, moved tabs, close
 denied sharing. Cross-window attachment must preserve tab identity, history and placement and
 must not interact with unrelated tabs. Keep private site URLs and reproduction data outside
 application source. Queue the correction for Nov 10 without rebuilding or deploying Nov 8.
+
+## N10-13 — Interactive chats incorrectly labeled as scheduled tasks
+
+Operator report from an interactive chat shows a “scheduled task” marker despite no configured
+trigger. Its record carries a synthetic `chat-<timestamp>-<hash>` scheduleId and
+`chatControls.scheduledRecovery=true`. A schedule list in that reporting context returned zero
+entries and reading that ID as a schedule failed. The release coordinator reportedly has the
+same metadata pattern. Retain exact reproduction identities in private records. Catalog scope
+and actual schedule provenance still need verification before concluding which records exist.
+
+Trace interactive chat creation, persisted execution identity, the badge's condition and recovery
+capability metadata. Presence of a synthetic scheduleId or scheduledRecovery may be driving the
+badge, but that cause is unconfirmed. Determine whether the recovery flag denotes shared recovery
+support or actually enables scheduled-run behavior for interactive chats. Preserve legitimate
+interactive session recovery and real scheduled-run recovery when correcting provenance handling.
+
+Display the scheduled-task marker only from authoritative scheduled-origin information. Evaluate
+an explicit origin/type against resolving a real schedule, including deleted schedules and partial,
+offline or permission-limited catalogs. Avoid assigning user-visible scheduling meaning to an
+internal execution identifier. Keep persisted legacy interactive records compatible with the fix.
+
+Add regression coverage for interactive chats carrying synthetic IDs and scheduledRecovery,
+actual scheduled runs, missing/deleted schedules, restricted catalogs, restart and restored old
+records. Verify labels and recovery behavior through normal desktop/web/iOS entry points. Schedule
+this with the Chats list work in N10-02/N10-09 and inspect recovery semantics before changing the
+identifier or capability contract. This entry requests planning only.
