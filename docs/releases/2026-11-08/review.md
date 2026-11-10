@@ -37,7 +37,7 @@ work, beyond the existing smaller source regressions.
 
 | Area | Latest evidence | Remaining work |
 | --- | --- | --- |
-| Mac recovery/preservation | Final installed fingerprint, health and 8 workspaces/19 projects/64 scopes/241 tabs/3 windows verify. | Independently exercise Back/Forward, reading, sources/models, pairings and real Keychain continuity. Desktop peer draft read/save methods were missing from the transport allowlist; mobile/web use a different path. The operator defers the correction to a separate Nov 10 branch and forbids another Nov 8 build/deployment for it. Preserve both drafts; installed synchronization has not passed. Fresh Cua verification was blocked by another chat's desktop lease; installed tools alone are not permission/observation evidence. Resolve legacy attention/unregistered recoveries through supported maintenance. |
+| Mac recovery/preservation | Final installed fingerprint, health and 8 workspaces/19 projects/64 scopes/241 tabs/3 windows verify. | Independently exercise Back/Forward, reading, sources/models, pairings and real Keychain continuity. Desktop peer draft read/save methods were missing from the transport allowlist; mobile/web use a different path. The operator defers the correction to a separate Nov 10 branch and forbids another Nov 8 build/deployment for it. Preserve both drafts; installed synchronization has not passed. Fresh Cua verification passed discovery, permissions, seven windows and real accessibility observation. Input remains separately qualified. Resolve legacy attention/unregistered recoveries through supported maintenance. |
 | iOS new-chat attachments | Simulator Files/Photos dismissal, native Paste consent, image review/upload and chat creation pass. Both devices have corrective build 2611.10.3 installed. | Physical new-chat import/review and retry acceptance remain pending. |
 | Spelling | Desktop native edit routing and replacement callbacks pass their checks. Mac package contains the change. Web assets build. | Actual OS dictionary suggestions/replacement were unavailable in the automated Mac fixture. Verify real desktop/browser correction. Deploy the later web editable-menu guard and validate native iOS spell checking after simulator acceptance. |
 | Physical mobile behavior | Both devices have corrective 2611.10.3 installed and launched. The rollout ledger records the specific phone lock-file exception and tablet final source-stability qualification. Simulator routing, grouped tabs and typing/history cases pass. | Real-chat scrolling/typing, notification-repeat cessation, tap-to-answer and cold/background reconnect remain qualified. A recorded phone cache revision matched the desktop tab IDs, while new phone-tab propagation still needs physical verification. |
@@ -50,8 +50,9 @@ work, beyond the existing smaller source regressions.
 | Release completion | Mac, web and iPhone accepted identities are recorded separately. | Current publication/source-companion reconciliation, release integration/closeout and eligible artifact/recovery cleanup. Nov 8 has no completed closeout. |
 
 Final recovery follow-up reproduced the Windows first-scan deadline defect in the unchanged
-accepted source. The correction is undergoing Windows package acceptance and normal signed
-rollout, with scan counts/timings retained for any later failure. The original installation
+accepted source. The corrected Windows package passed native acceptance, independent publisher verification and
+29 public HTTPS file checks. The normal owner updater accepted preparation and handoff and is
+waiting for unrelated active work to finish, with scan counts/timings available for later failure. The original installation
 receipt cannot establish which failure path occurred.
 
 Web recovery closeout independently reverified the existing isolated restoration against all
