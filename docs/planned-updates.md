@@ -1,5 +1,9 @@
 ## Nov 8 — complete request audit before further deployment
 
+N8-25 follows installed HC acceptance: fix Codex's redundant scoped-command transport prompt,
+Claude's exact owner-tool action matching and stale schedule tool metadata. Command execution,
+durable consent/revocation and Notification Center acceptance on HC remain separately unverified.
+
 Physical follow-up adds N8-23 history-anchor/idle-cascade and N8-24 iPad address/tab-reconciliation
 corrections. Corrective iOS source is under validation. If a mobile device locks, continue the
 remaining authorized device rollout and return to it later; never bypass the device lock.

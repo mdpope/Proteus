@@ -299,8 +299,11 @@ export class ClaudeProvider {
       if(name==='AskUserQuestion'){const answers={};for(const q of input.questions||[])answers[q.question]=await askUser({type:'question',question:q.question,choices:q.options?.map(x=>x.label),optionDetails:q.options?.map(x=>({label:x.label,description:x.description||''})),providerQuestionId:q.id});return {behavior:'allow',updatedInput:{...input,answers}};}
       if(scopedTools.length&&['Bash','Task','Agent','WebFetch','WebSearch','NotebookEdit'].includes(name))return {behavior:'deny',message:'Use proteus_exec or explicitly authorized connector tools for this scoped schedule.'};
       const sourceServer=Object.keys(selected).sort((a,b)=>b.length-a.length).find(server=>name.startsWith('mcp__'+server+'__'));
+      // Normalize only tools from this run's captured owner bridge, never an
+      // arbitrary MCP prefix or a similarly named tool from another server.
+      const appTool=bridge&&appTools.find(tool=>name==='mcp__proteus_app__'+tool.name);
       const kind=sourceServer?'mcp':name==='WebFetch'?'url':name==='Bash'?'shell':['Write','Edit','MultiEdit','NotebookEdit'].includes(name)?'write':['Read','Glob','Grep'].includes(name)?'read':'custom-tool';
-      const answer=await askUser({type:'permission',question:`Allow Claude ${name}?`,details:{kind,toolCallId:id,toolName:sourceServer?name.slice(('mcp__'+sourceServer+'__').length):name,...(sourceServer?{serverName:sourceServer}:{}),...(kind==='url'?{url:input.url}:{}),args:input,fullCommandText:input.command,fileName:input.file_path||input.notebook_path||input.path,path:input.file_path||input.path||run.schedule.workspace.cwd,intention:`Claude ${name}`}});
+      const answer=await askUser({type:'permission',question:`Allow Claude ${name}?`,details:{kind,toolCallId:id,toolName:sourceServer?name.slice(('mcp__'+sourceServer+'__').length):appTool?.name||name,...(sourceServer?{serverName:sourceServer}:{}),...(kind==='url'?{url:input.url}:{}),args:input,fullCommandText:input.command,fileName:input.file_path||input.notebook_path||input.path,path:input.file_path||input.path||run.schedule.workspace.cwd,intention:`Claude ${name}`}});
       return ['approve','approve-auto'].includes(answer)?{behavior:'allow',updatedInput:input}:{behavior:'deny',message:'The operator declined this tool.'};
     };
     const agents=subagentJournal(run,'claude',update);

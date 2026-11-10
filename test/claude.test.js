@@ -389,3 +389,20 @@ test('Claude allowance failures identify provider scope without inventing reset 
  const unknown=claudeAllowanceError('test');assert.equal(unknown.code,'PROVIDER_RATE_LIMIT');assert.match(unknown.message,/did not distinguish/);assert.match(unknown.message,/Reset time was not supplied/);assert.match(unknown.message,/not a Proteus release hold/);
  const known=claudeAllowanceError('test',[{remainingPercent:0,resetAt:'2026-11-06T12:00:00Z'}]);assert.match(known.message,/exhausted allowance/);assert.match(known.message,/2026-11-06T12:00:00Z/);
 });
+
+test('Claude owner bridge exact action grants normalize only captured app tools',async t=>{
+ const root=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'claude-owner-rule-')));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+ const {PermissionStore}=await import('../src/services/settings/permissions.js');const store=new PermissionStore(root);let client;
+ const provider=new ClaudeProvider({clientFactory:()=>{client=new Fake();client.request=async()=>({mcpServers:[{name:'proteus_app',status:'connected'}]});return client;}});provider.integrations={agent:async()=>({})};t.after(()=>{if(client)result(client);});
+ const a=runArgs();a.run.schedule.workspace={cwd:root,additionalDirectories:[]};a.run.schedule.executionPermissions={mode:'custom',readOnlyTools:true,rules:[{kind:'custom-tool',tool:'proteus_integrations',action:'list'}],folders:[]};
+ const requests=[];a.ask=async request=>{requests.push(request.details);return store.decide(a.run.schedule,request.details).allowed?'approve-auto':'decline';};
+ const task=provider.run(a);await new Promise(r=>setImmediate(r));
+ const call=async(id,name,action)=>{const wait=once(client,'response');client.emit('request',{request_id:id,request:{subtype:'can_use_tool',tool_name:name,tool_use_id:id,input:{action}}});await wait;return client.responses.at(-1).response;};
+ assert.equal((await call('list','mcp__proteus_app__proteus_integrations','list')).behavior,'allow');
+ assert.equal(requests.at(-1).toolName,'proteus_integrations');assert.equal(requests.at(-1).args.action,'list');
+ assert.equal((await call('repair','mcp__proteus_app__proteus_integrations','repair')).behavior,'deny');
+ assert.equal((await call('foreign','mcp__other__proteus_integrations','list')).behavior,'deny');
+ assert.equal((await call('unknown','mcp__proteus_app__proteus_unknown','list')).behavior,'deny');
+ assert.equal(requests.at(-1).toolName,'mcp__proteus_app__proteus_unknown');
+ result(client);await task;
+});
