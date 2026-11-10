@@ -1,5 +1,15 @@
 ## Nov 6 — pre-install recovery failure correction
 
+Nov 8 Windows follow-up establishes the first full hash scan before starting the settlement
+budget. The budget is at least sixty seconds and allows three observed baseline scan durations
+plus the quiet interval and polling delay. This accommodates large cold profiles while keeping
+continued changes bounded. Comparisons completed after that deadline fail before acceptance.
+The helper persists attempt count, scan/elapsed time, budget, previous-scan equality and quiet
+duration in the job journal after every complete inspection. Failure messages retain bounded
+timing evidence. Live-owner release checks and full source/destination hash verification remain
+required. A slow scan is a reproducible failure path in the prior implementation, while the
+original failed installation's missing timing prevents assigning that cause to it conclusively.
+
 Recovery capture now waits for a bounded quiet interval after graceful owner shutdown,
 checks that no live owner has reclaimed the data home, and retains strict source/destination
 hash checks. A final verification failure writes the final file count and independent source
