@@ -1,3 +1,9 @@
+## Nov 10 — queued interface follow-up
+
+The [Nov 10 plan](2026-11-10-release-plan.md) records clickable links to chats, schedules and
+file-browser resources, a Chats list design investigation, and denser headers across features.
+These are queued requests; Nov 8 release closeout continues independently.
+
 ## Nov 8 — complete request audit before further deployment
 
 N8-25 follows installed HC acceptance: fix Codex's redundant scoped-command transport prompt,
