@@ -1,6 +1,23 @@
 # Nov 8 implementation
 
-Version: 0.2.44. Branch: nov8-release. Release remains open.
+Version: 0.2.44. Integrated into main. Release remains open.
+
+Current gate: the [complete request audit](request-audit.md) separates source, simulator and
+installed evidence. Build Mac, web, iPhone and iPad are authorized when ready; final native
+interaction and signed-package checks precede deployment. New source adds native toolbar,
+sortable columns, custom green artwork, both adjustable splits, modifier-aware selection and
+inline expansion paging. Shared owner file tabs preserve source authority across placement moves;
+web PDF and opened Markdown resource rendering use the same owner boundary. Notification
+resolution propagates durably and uncertain push sends do not automatically replay. Attachment
+errors have a keyboard-visible Remove action without losing the text draft.
+
+Source verification: 1,753 passed/four skipped; static checks pass. Web: 110 tests/982 assertions.
+Updated Chromium and phone/tablet WebKit fixtures pass. Electron incoming owner file tabs,
+Markdown resources and placement pass. Phone/iPad shared file navigation/layout/menu and visible
+attachment recovery pass in simulators. Phone batch drag passes with an independent two-file
+desktop filesystem check. A failed drag originally invoked the context menu; a dedicated handle
+separates those gestures. Final phone and tablet regressions pass. Native hardware modifier events,
+edge autoscroll and physical behavior retain separate acceptance; failed receipts are preserved.
 
 Current installed outcomes are in [rollout.md](rollout.md). The [November 9 review](review.md)
 consolidates outstanding acceptance and process follow-up. The chronological checkpoints below
@@ -366,9 +383,9 @@ running with a new admission revision and active work. No process was killed or 
 This verifies active drain/restart, not end-to-end filing of every source. Read-only ledger totals
 remain in private release evidence; cumulative retry totals are not new failure counts.
 
-The exact web-project folder grant is approved, with owner activation next-provider-turn. The
-current provider turn does not yet have that source selected. Deployment remains pending that
-activation; no alternate path was used to bypass the source boundary.
+The web-project folder grant became selected on the next provider turn. Ordinary restore,
+activation, served-asset verification and signed-in Chats rendering subsequently passed. The
+latest audit gate applies to further deployments, including new file/notification corrections.
 
 ### Disk-pressure follow-up
 

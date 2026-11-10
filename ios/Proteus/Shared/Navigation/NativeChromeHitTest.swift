@@ -1,5 +1,6 @@
 import UIKit
 import WebKit
+import PDFKit
 
 /// Match the actual glyph under the gesture, preserving WebKit's own text selection.
 @MainActor enum NativeChromeHitTest {
@@ -32,7 +33,7 @@ import WebKit
     static func containsEditorOrControl(_ view: UIView?) -> Bool {
         var current = view
         while let value = current {
-            if value is UIControl || value is UITextView || value is UITextField { return true }
+            if value is UIControl || value is UITextView || value is UITextField || value is PDFView { return true }
             current = value.superview
         }
         return false

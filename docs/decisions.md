@@ -3424,6 +3424,21 @@ account owns background delivery; the live owner feed must not schedule a duplic
 Retain the local fallback for accounts without configured push. Per-event deduplication does not
 collapse distinct permission requests or chats merely because their message text matches.
 
+## Nov 8 follow-up: request audit and notification delivery
+
+Gate the next deployment on the complete platform request audit, preserving explicit implementation
+gaps. A Move button test does not accept pointer drag/autoscroll or hardware modifiers. Use one
+owner-bound renderer for web previews and opened files. Native streaming stays separate from
+whole-tree synchronization and from authority to modify files.
+
+Resolved/read notifications retain event identity and are monotonic in the account store; a delayed
+pending replay cannot reopen the event. Preserve completion events as distinct alerts. Persist a
+push-send intent before external delivery. If acceptance is uncertain, including process death
+after sending, retain the receipt and do not replay it automatically; only explicit rejection is
+retryable. Expiry retires the outbox receipt while history and sanitized diagnostics remain. This
+favors the operator's one-alert requirement; it does not guarantee delivery or exactly-once APNs
+semantics. A screenshot alone does not establish that an owner approval was unnecessary.
+
 ## Nov 9: schedule access belongs to the workflow
 
 Persist explicit schedule consent separately from canonical source configuration, retaining owner grants during reconciliation. Bind authority to resources and named managed owner/workspace/connection identities, while provider/model choices resolve through qualified enforcement adapters. Preserve Codex sandbox enforcement and reject unqualified mappings. Never treat command approval as OS containment. Overlay v1 intentionally excludes shell capture pending command identity enforcement.

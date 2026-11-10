@@ -1,11 +1,15 @@
 # Nov 8 release plan
 
 Status: open successor to closed Nov 5 / 0.2.43. Renamed from Nov 6 by operator request.
+Current deployment gate: check the [complete request audit](releases/2026-11-08/request-audit.md)
+and implement/test remaining platform gaps before any further deployment. Earlier immediate-install
+instructions do not bypass this later sequencing requirement. Physical acceptance follows an
+accepted installation and must not be inferred from source or simulator tests.
 Version: reserved by the named release tool.
-Authorization: implement and validate all carried scope plus the items below. Build Mac 0.2.44,
-web 0.2.44 and iPhone 2611.8.2 have accepted rollout receipts. Later iOS attachment changes require
-completed simulator acceptance and a requested physical installation. iPad and other desktop rollout
-holds remain. Current acceptance and process follow-up are consolidated in
+Authorization: implement and validate all carried scope plus the items below. Build Mac, web,
+iPhone and iPad are authorized for the audited iteration when ready. Installed baselines and exact
+evidence are recorded in the rollout ledger; source/simulator success is not installed acceptance.
+Other desktop rollout holds remain. Current acceptance and process follow-up are consolidated in
 [the November 9 review](releases/2026-11-08/review.md).
 Historical N6 identifiers remain stable for cross references. Prior acceptance limits remain valid.
 
@@ -394,3 +398,28 @@ Build Mac retry is authorized after failed 0.2.44 recovery verification and roll
 ## N8-19 — Browser and iPhone iteration after local acceptance
 
 The operator authorizes fixing and testing Reddit media, intermittent page scrolling stalls, history-menu traversal, background-link menu order, iPhone idle/restoration/foreground screen awake, bottom safe-area layout, tab favicons, text-safe chrome gestures, URL editing/Return behavior, certificate parity, download-start feedback, isolated profile/link-menu parity, image export to a chosen folder, and authoritative cross-device project tab membership. Include the review's release-helper/decision follow-up and Mnemosyne workflow acceptance. Deploy accepted changes to Build Mac and iPhone promptly, then iterate with operator feedback before wider rollout. iOS background suspension/eviction remains controlled by the OS; preserve state and use quiet suspension/restoration. Acceptance must distinguish source/simulator/actual device and published/installed state.
+
+## N8-20 — Full file-browser and document parity
+
+Implement the desktop toolbar, split/columns, keyboard and modifier selection, lazy folder
+expansion, native trash, paged move/drag/autoscroll and document resources described in the request
+audit on desktop/web/iPhone/iPad with appropriate touch controls. Remote files stream only through
+approved connection read/edit grants. No whole-folder replication or implicit sharing authority.
+Use existing lazy Markdown/PDF facilities; opened tabs must retain equivalent resource resolution.
+
+## N8-21 — Durable workflow access and provider switching
+
+Schedules retain explicitly approved workflow grants and resource/command identities across provider
+changes and canonical reconciliation. Once/deny do not persist; revocation and changed authority
+fail closed. Preserve Codex native enforcement and use a qualified host path for other providers.
+Save/preflight/configuration errors must remain durable ERROR notifications with correct UI severity,
+draft preservation and actionable reasons. The Recent runs button belongs between Enabled and Run
+now and selects ordinary editable Chats filters. See the access-overlay contract and request audit.
+
+## N8-22 — Remaining notification and attachment usability
+
+Send one alert per actual event/request, suppress resolved approvals, preserve completion
+notifications and keep uncertain deliveries from automatic replay. Resolution must reach the shared
+account store. Missing/upload-failed attachments need a brief visible notice with obvious Remove
+and applicable Retry actions, including the collapsed composer and keyboard-visible layout.
+Preserve typed text and never automatically replay uncertain messages.

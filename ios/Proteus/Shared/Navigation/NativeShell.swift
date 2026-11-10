@@ -44,7 +44,7 @@ enum NativeTabSymbol {
         case "schedule": return "calendar"
         case "browser": return "globe"
         case "terminal": return "terminal"
-        case "document": return mediaType == "text/html" ? "doc.richtext" : "doc.text"
+        case "document", "workspace-file": return mediaType == "text/html" ? "doc.richtext" : "doc.text"
         case "live": return "rectangle.on.rectangle"
         default: return "square"
         }

@@ -7,8 +7,10 @@ import {fileDates} from '../../shared/file-metadata.js';
 import {readFilePreview} from './workspace-preview.js';
 
 const identity=s=>[s.dev,s.ino,s.size,s.mtimeMs].join(':');
-const mime=name=>({md:'text/markdown',png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',gif:'image/gif',webp:'image/webp',pdf:'application/pdf',json:'application/json',js:'text/javascript',ts:'text/typescript',py:'text/x-python',html:'text/html',css:'text/css',txt:'text/plain',mp3:'audio/mpeg',wav:'audio/wav',mp4:'video/mp4',mov:'video/quicktime'})[path.extname(name).slice(1).toLowerCase()]||'application/octet-stream';
-const kind = (name,directory) => directory?'folder':/\.md$/i.test(name)?'markdown':/\.(png|jpe?g|gif|webp)$/i.test(name)?'image':/\.pdf$/i.test(name)?'pdf':/\.(js|ts|py|json|html|css|swift|sh|c|cpp|rs|go)$/i.test(name)?'code':/\.(mp3|wav|m4a|flac)$/i.test(name)?'audio':/\.(mp4|mov|webm)$/i.test(name)?'video':'file';
+const fileTypes={md:['text/markdown','markdown'],png:['image/png','image'],jpg:['image/jpeg','image'],jpeg:['image/jpeg','image'],gif:['image/gif','image'],webp:['image/webp','image'],pdf:['application/pdf','pdf'],json:['application/json','code'],js:['text/javascript','code'],jsx:['text/jsx','code'],ts:['text/typescript','code'],tsx:['text/tsx','code'],py:['text/x-python','code'],swift:['text/x-swift','code'],sh:['text/x-shellscript','code'],c:['text/x-c','code'],cpp:['text/x-c++','code'],rs:['text/x-rust','code'],go:['text/x-go','code'],php:['text/x-php','code'],rb:['text/x-ruby','code'],java:['text/x-java-source','code'],html:['text/html','code'],css:['text/css','code'],xml:['application/xml','code'],yaml:['application/yaml','code'],yml:['application/yaml','code'],txt:['text/plain','file'],log:['text/plain','file'],csv:['text/csv','file'],mp3:['audio/mpeg','audio'],wav:['audio/wav','audio'],m4a:['audio/mp4','audio'],flac:['audio/flac','audio'],mp4:['video/mp4','video'],mov:['video/quicktime','video'],webm:['video/webm','video']};
+const fileType=name=>fileTypes[path.extname(name).slice(1).toLowerCase()]||['application/octet-stream','file'];
+const mime=name=>fileType(name)[0];
+const kind=(name,directory)=>directory?'folder':fileType(name)[1];
 const within=(file,root)=>{const r=path.relative(root,file);return r===''||r!=='..'&&!r.startsWith('..'+path.sep)&&!path.isAbsolute(r);};
 // Human file browsing uses only the selected workspace's configured roots. No
 // watcher, pre-index or background crawl survives the bounded request.
@@ -20,6 +22,14 @@ export class WorkspaceExplorer {
   return new WorkspaceFiles(()=>({...config,workspaces:[workspace]}));
  }
  roots({workspaceId}={}){return this.files(workspaceId).roots();}
+ reference({workspaceId,file}={}){
+  if(typeof file!=='string'||!path.isAbsolute(file))throw Error('Choose an owner file.');
+  const root=this.roots({workspaceId}).roots.filter(root=>root.available&&within(file,root.path)&&file!==root.path).sort((a,b)=>b.path.length-a.path.length)[0];
+  if(!root)throw Error('This document is outside the shared workspace folders.');
+  // This is navigation metadata only. Preview re-resolves the real file and
+  // checks root/link identity under the current device grant before reading.
+  return {workspaceId,rootId:root.id,file:path.relative(root.path,file).split(path.sep).join('/')};
+ }
  async browse({workspaceId,rootId,directory='',offset=0,query='',sort='name',direction='asc',foldersOnly=false}={}, {signal}={}){
   if(!Number.isSafeInteger(offset)||offset<0||offset>5000||typeof query!=='string'||query.length>160)throw Error('Invalid file search or page.');
   const files=this.files(workspaceId),base=files.resolve(rootId,directory,true),pending=[{file:base.resolved,relative:base.relative,depth:0}],seen=new Set(),entries=[];
@@ -68,15 +78,39 @@ export class WorkspaceExplorer {
   for(const plan of plans){try{if(action==='create')await fs.writeFile(plan.target,'',{flag:'wx'});else if(action==='mkdir')await fs.mkdir(plan.target);else if(action==='duplicate')await fs.cp(plan.source,plan.target,{recursive:true,errorOnExist:true,force:false,dereference:false});else if(action==='trash')await this.trash(plan.source);else await fs.rename(plan.source,plan.target);results.push({path:plan.source||plan.target,ok:true});}catch(error){results.push({path:plan.source||plan.target,ok:false,error:error.message});break;}}
   return {results};
  }
- resolveLink({workspaceId,rootId,file,source,image=false}={}){
+ async resolveLink({workspaceId,rootId,file,source,image=false}={}){
   if(typeof source!=='string'||source.length>4096)throw Error('Invalid document link.');
   if(/^https?:\/\//i.test(source)){if(image)throw Error('External image requires separate consent.');return {external:source};}
   if(/^[a-z][a-z0-9+.-]*:/i.test(source)||source.startsWith('//'))throw Error('Unsupported link.');
-  const relative=path.posix.normalize(path.posix.join(path.posix.dirname(file),decodeURIComponent(source.split('#')[0])));
-  let target;try{target=this.files(workspaceId).resolve(rootId,relative);}catch(error){if(source.startsWith('.')||relative.startsWith('..'))throw error;target=this.files(workspaceId).resolve(rootId,decodeURIComponent(source.split('#')[0]));}const stat=fsSync.statSync(target.resolved);
+  const name=decodeURIComponent(source.split('#')[0]),files=this.files(workspaceId),relative=path.posix.normalize(path.posix.join(path.posix.dirname(file),name));
+  let target;
+  try{target=files.resolve(rootId,relative);}catch(error){
+   if(name.startsWith('.')||relative.startsWith('..'))throw error;
+   try{target=files.resolve(rootId,name);}catch(rootError){
+    if(name.includes('/')||name.includes('\\')||!name)throw rootError;
+    // Obsidian basename links are resolved on demand, never by a background
+    // index. Ambiguity and bounded-search exhaustion require an explicit path.
+    const pending=[''],seen=new Set(),matches=[];let scanned=0;
+    while(pending.length){
+     const directory=pending.shift(),checked=files.resolve(rootId,directory,true);
+     if(seen.has(checked.resolved))continue;seen.add(checked.resolved);
+     for await(const entry of await fs.opendir(checked.resolved)){
+      if(++scanned>5000)throw Error('Link search limit reached. Use the folder path in this link.');
+      if(['.git','.agents','.codex','.aws','node_modules','vendor','.venv'].includes(entry.name)||entry.isSymbolicLink())continue;
+      const child=directory?directory+'/'+entry.name:entry.name;
+      if(entry.isDirectory()&&child.split('/').length<13)pending.push(child);
+      else if(entry.isFile()&&entry.name.toLocaleLowerCase()===name.toLocaleLowerCase())matches.push(child);
+      if(matches.length>1)throw Error('More than one file matches this link. Include its folder path.');
+     }
+    }
+    if(!matches.length)throw rootError;target=files.resolve(rootId,matches[0]);
+   }
+  }
+  target=this.files(workspaceId).resolve(rootId,target.relative);const stat=await fs.stat(target.resolved);
   if(image)return readFilePreview(target.resolved,[target.canonicalRoot]);
   return {name:path.basename(target.relative),path:target.relative,kind:kind(target.relative,stat.isDirectory()),type:mime(target.relative),identity:identity(stat)};
  }
+
  pdf({workspaceId,rootId,file}={}){const t=this.files(workspaceId).resolve(rootId,file);const fd=fsSync.openSync(t.resolved,fsSync.constants.O_RDONLY|fsSync.constants.O_NOFOLLOW);try{const stat=fsSync.fstatSync(fd);if(!stat.isFile()||stat.size>32*1024*1024)throw Error('PDF limit is 32 MB.');const bytes=fsSync.readFileSync(fd);if(bytes.subarray(0,5).toString()!=='%PDF-')throw Error('Invalid PDF.');return bytes;}finally{fsSync.closeSync(fd);}}
  preview({workspaceId,rootId,file}={}){const target=this.files(workspaceId).resolve(rootId,file);const value=readFilePreview(target.resolved,[target.canonicalRoot]);return {...value,imageSources:value.mediaType==='text/markdown'?imageSources(value.content).slice(0,32):[],rootId,relativePath:target.relative};}
 }

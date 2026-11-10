@@ -109,6 +109,21 @@ enum NativeAttachmentBudget {
     store.setDraft(draftKey, records.isEmpty ? .null : .array(records))
 }
 
+private struct NativeAttachmentIssue: View {
+    let count: Int
+    let busy: Bool
+    let remove: () -> Void
+    var body: some View {
+        HStack(spacing: 8) {
+            Label(count == 1 ? "Attachment unavailable. Choose it again or remove it." : "\(count) attachments unavailable. Choose again or remove them.", systemImage: "exclamationmark.triangle")
+                .font(.caption).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+            Button(action: remove) { Text("Remove").frame(minHeight: 44) }.buttonStyle(.bordered).font(.caption)
+                .disabled(busy).accessibilityIdentifier("remove-missing-attachments")
+        }.accessibilityElement(children: .contain).accessibilityIdentifier("missing-attachment-notice")
+    }
+}
+
 struct ChatsView: View {
     @Environment(\.nativeOpenChatSetup) private var openSetup
     @Environment(RemoteStore.self) var store
@@ -220,8 +235,7 @@ struct NewChatView: View {
                         }
                     }
                     if !missingAttachments.isEmpty {
-                        Text("Reattach these files before sending: " + missingAttachments.map { $0["name"].string }.joined(separator: ", ") + ". Their bytes were discarded when Proteus closed.").font(.caption).foregroundStyle(.orange)
-                        Button("Remove missing files") { removeMissingAttachments() }
+                        NativeAttachmentIssue(count: missingAttachments.count, busy: sending, remove: removeMissingAttachments)
                     }
                     if hasUnsupportedAttachment { Text("Remove files this provider does not accept before starting.").font(.caption).foregroundStyle(.orange) }
                 }
@@ -544,7 +558,7 @@ struct ChatView: View {
     @State private var composerAvailableHeight: CGFloat = 500
     @State private var composerWindowHeight = UIScreen.main.bounds.height
     @State private var composerActionsHeight: CGFloat = 44
-    @State private var composerAttachmentsHeight: CGFloat = 0
+    @State private var attachmentFailure = ""
     @State private var queuedEdit: JSON = .null
     @State private var showMoveWorkspace = false
     @State private var showQueuedEdit = false
@@ -1320,9 +1334,8 @@ struct ChatView: View {
     }
     private var hasDraftAttachments: Bool { !attachments.isEmpty || !missingAttachments.isEmpty }
     private var composerCardHeightLimit: CGFloat { min(composerWindowHeight * 0.5, max(120, composerAvailableHeight * 0.5)) }
-    private var composerAttachmentBudget: CGFloat { max(0, composerCardHeightLimit - composerActionsHeight - 84) }
     private var composerEditorChromeHeight: CGFloat {
-        24 + composerActionsHeight + 8 + (hasDraftAttachments ? min(composerAttachmentsHeight, composerAttachmentBudget) + 8 : 0)
+        24 + composerActionsHeight + 8 + (!attachments.isEmpty ? 72 : 0)
     }
     private var composer: some View {
         NativeReplyComposer(draft: replyDraft) { composerContent }
@@ -1330,12 +1343,7 @@ struct ChatView: View {
     }
     private var showsComposerActions: Bool { !NativePhonePreview.enabled || composerExpanded }
     @ViewBuilder private var composerAttachmentSection: some View {
-        if NativeDesignPreview.enabled {
-            ScrollView {
-                composerAttachmentContent.fixedSize(horizontal: false, vertical: true)
-                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { composerAttachmentsHeight = $0 }
-            }.frame(height: min(composerAttachmentsHeight, composerAttachmentBudget))
-        } else { composerAttachmentContent }
+        composerAttachmentContent
     }
     private var composerAttachmentContent: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -1345,11 +1353,6 @@ struct ChatView: View {
                             Button { removeAttachment(item.id) } label: { Image(systemName: "xmark.circle.fill") }.accessibilityLabel("Remove " + item.name).disabled(busy)
                         }.padding(5).background(Color.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
                     } } }.scrollIndicators(.hidden).frame(height: NativeDesignPreview.enabled ? 64 : nil)
-                    Text("Attachments are kept on this device until sent. Closing the app discards unsent selections.").font(.caption2).foregroundStyle(.secondary)
-                    if !missingAttachments.isEmpty {
-                        Text("Reattach before sending: " + missingAttachments.map { $0["name"].string }.joined(separator: ", ") + ". The selected file bytes were discarded when Proteus closed.").font(.caption).foregroundStyle(.orange)
-                        Button("Remove missing files") { removeMissingAttachments() }.font(.caption).disabled(busy)
-                    }
         }
     }
     private func modeLink(_ title: String, mode: String, identifier: String) -> some View {
@@ -1371,11 +1374,24 @@ struct ChatView: View {
     private var composerContent: some View {
         VStack(spacing: 8) {
             composerStatus
+            // Error actions stay outside the editor/attachment scrolling surface,
+            // including the collapsed composer and when the keyboard is visible.
+            if !missingAttachments.isEmpty {
+                NativeAttachmentIssue(count: missingAttachments.count, busy: busy, remove: removeMissingAttachments)
+            } else if !attachmentFailure.isEmpty {
+                HStack(spacing: 8) {
+                    Label("Attachment not sent", systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(.orange)
+                    Spacer(minLength: 0)
+                    Button("Details") { store.error = attachmentFailure }.font(.caption)
+                    Button("Remove") { for item in attachments { removeAttachment(item.id) }; attachmentFailure = "" }.font(.caption).frame(minHeight: 44)
+                    Button("Retry") { confirmAttachmentSend = true }.font(.caption).frame(minHeight: 44).disabled(!store.connected)
+                }.disabled(busy).accessibilityIdentifier("attachment-upload-error")
+            }
             ForEach(run["queuedMessages"].array, id: \.self) { message in
                 HStack { Text(message["prompt"].string).lineLimit(1).font(.caption); Spacer(); if run["status"].string == "running" && run["chatControls"]["steering"].bool && (!message["hasAttachments"].bool || message["canSteer"].bool) { Button("Steer now") { act("chat.steer-queued", ["messageId":message["id"]]) }.font(.caption) }; if store.stateValue("capabilities").array.contains(.string("chat.queue-edit.v1")) { Button("Edit") { queuedEdit = message; showQueuedEdit = true }.font(.caption) }; Button("Remove") { act("chat.remove-queued", ["messageId":message["id"]]) }.font(.caption) }
             }
             VStack(alignment: .leading, spacing: 8) {
-                if showsComposerActions && hasDraftAttachments { composerAttachmentSection }
+                if showsComposerActions && !attachments.isEmpty { composerAttachmentSection }
                 if composerExpanded || NativePadPreview.enabled { replyField } else {
                     HStack(spacing: 0) {
                         Button { composerExpanded = true; composerHasFocus = true } label: {
@@ -1446,6 +1462,7 @@ struct ChatView: View {
     private func sendAttachments() async {
         guard attachmentsEnabled, !busy, store.connected, missingAttachments.isEmpty else { return }
         busy = true
+        attachmentFailure = ""
         defer { busy = false }
         let mode = attachmentSendMode
         guard mode != "steer" || (run["status"].string == "running" && canSteerAttachments) else { store.error = "The active turn or supported attachment types changed. Review the message again."; return }
@@ -1513,7 +1530,7 @@ struct ChatView: View {
             store.setDraft(attachmentDraftKey, .null)
             text = ""; composerHasFocus = false; followLatest = true
             await store.openChat(id)
-        } catch { store.error = "Attachment was not sent: " + error.localizedDescription }
+        } catch { attachmentFailure = "Attachment was not sent: " + error.localizedDescription }
     }
     @discardableResult private func addAttachment(_ data: Data, name: String, mediaType: String, createdAt: String? = nil, modifiedAt: String? = nil) -> Bool {
         guard !busy else { return false }
@@ -1530,6 +1547,7 @@ struct ChatView: View {
         guard !busy else { return }
         shared.draftAttachments[attachmentScope]?.removeAll { $0.id == attachmentID }
         removeAttachmentRecord(store: store, draftKey: attachmentDraftKey, id: attachmentID)
+        if attachments.isEmpty { attachmentFailure = "" }
     }
     private func removeMissingAttachments() {
         guard !busy else { return }

@@ -6,8 +6,8 @@ export function readFilePreview(file,roots){
  if(typeof file!=='string'||!isWithin(file,roots))throw Error('Choose a file in a currently configured workspace.');
  if(/\.md$/i.test(file))return {...readMarkdownFile(file),mediaType:'text/markdown'};
  if(/\.pdf$/i.test(file)){const stat=fs.statSync(file);if(!stat.isFile()||stat.size>32*1024*1024)throw Error('PDF limit is 32 MB.');return {file,mediaType:'application/pdf',title:path.basename(file),content:'',...fileDates(stat)};}
- if(/\.(txt|json|js|ts|py|swift|css|html|sh|c|cpp|rs|go)$/i.test(file)){const stat=fs.statSync(file);if(stat.size>1_000_000)throw Error('Text preview limit is 1 MB.');return {file,mediaType:'text/plain',title:path.basename(file),content:fs.readFileSync(file,'utf8'),...fileDates(stat)};}
- if(!/\.(png|jpe?g|gif|webp)$/i.test(file))throw Error('Preview supports Markdown, PNG, JPEG, GIF and WebP.');
+ if(/\.(txt|json|jsx?|tsx?|py|swift|css|html|sh|c|cpp|rs|go|php|rb|java|xml|ya?ml|csv|log)$/i.test(file)){const stat=fs.statSync(file);if(stat.size>1_000_000)throw Error('Text preview limit is 1 MB.');return {file,mediaType:'text/plain',title:path.basename(file),content:fs.readFileSync(file,'utf8'),...fileDates(stat)};}
+ if(!/\.(png|jpe?g|gif|webp)$/i.test(file))throw Error('Preview supports Markdown, text/code, PDF, PNG, JPEG, GIF and WebP.');
  const real=fs.realpathSync(file),fd=fs.openSync(real,fs.constants.O_RDONLY|(fs.constants.O_NOFOLLOW||0));
  try{
   const stat=fs.fstatSync(fd);if(!stat.isFile()||stat.size>4_000_000)throw Error('Choose an image no larger than 4 MB.');

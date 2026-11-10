@@ -29,13 +29,20 @@ class PushDelivery
         }
     }
 
-    /** Returns accepted, obsolete, expired, unavailable, or failed; provider acceptance is not device delivery. */
-    public function deliver(array $subscription, array $notification = []): string
+    public static function obsolete(array $notification): bool
     {
         $created = strtotime($notification['occurredAt'] ?? $notification['createdAt'] ?? '') ?: 0;
-        if (($notification['silent'] ?? false) || ! empty($notification['readAt']) || ($notification !== [] && ($created < time() - 300 || $created > time() + 60))) {
+
+        return ($notification['silent'] ?? false) || ($notification['read'] ?? false) || ! empty($notification['readAt']) || ! empty($notification['resolvedAt']) || ($notification !== [] && ($created < time() - 300 || $created > time() + 60));
+    }
+
+    /** Provider acceptance is not device delivery; uncertain sends must not be replayed automatically. */
+    public function deliver(array $subscription, array $notification = []): string
+    {
+        if (self::obsolete($notification)) {
             return 'obsolete';
         }
+        $created = strtotime($notification['occurredAt'] ?? $notification['createdAt'] ?? '') ?: 0;
         $platform = $subscription['platform'];
         if (! ($this->status()[$platform] ?? false)) {
             return 'unavailable';
@@ -58,7 +65,7 @@ class PushDelivery
                 // Operator decision (Oct 27): alerts show the chat title, a bounded
                 // plain-text preview and the source computer. Transport stays HTTPS to
                 // APNs; Apple can read alert text. Older desktops send no preview fields.
-                $route = array_intersect_key($notification, array_flip(['hostId', 'chatId', 'scheduleId', 'type']));
+                $route = array_intersect_key($notification, array_flip(['hostId', 'chatId', 'scheduleId', 'type', 'requestId', 'requestKind']));
                 if ($created > 0) {
                     $route['createdAt'] = gmdate('Y-m-d\TH:i:s\Z', $created);
                 }
@@ -82,13 +89,14 @@ class PushDelivery
                 $headers = ['apns-topic' => config('push.apns_topic'), 'apns-push-type' => 'alert', 'apns-priority' => '10', 'apns-expiration' => (string) ($created > 0 ? $created + 300 : time() + 300)];
                 if (is_string($eventId)) {
                     $headers['apns-collapse-id'] = hash('sha256', $eventId);
+                    $headers['apns-id'] = $eventId;
                 }
                 $response = $http->withOptions(['version' => 2.0])->withToken($token)->withHeaders($headers)->post('https://'.$host.'/3/device/'.$subscription['token'], $payload + $route);
             }
 
             return $response->successful() ? 'accepted' : (in_array($response->status(), [404, 410]) ? 'expired' : 'failed');
         } catch (\Throwable) {
-            return 'failed';
+            return 'uncertain';
         }
     }
 }

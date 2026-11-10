@@ -706,13 +706,15 @@ struct NativeWorkspaceContentView: View {
             if selected == "workspace" { Button("Files", systemImage: "folder") { page = "Files" }.accessibilityIdentifier("workspace-files") }
             if selected == "workspace" {
                 if projectID != nil { Picker("Project page", selection: $page) { Text("Chats").tag("Chats"); Text("Tabs").tag("Tabs") }.pickerStyle(.segmented).padding(12) }
-                if page == "Files" { NativeFileBrowser(workspaceID: workspaceID).environment(store) }
+                if page == "Files" { NativeFileBrowser(workspaceID: workspaceID, onOpenFile: openFile).environment(store) }
                 else if page == "Projects" && projectID == nil && store.supportsProjects { NativeProjectsView(workspaceID: workspaceID, onOpen: onOpenProject) }
                 else if page == "Tabs" { NativeWorkspaceTabsView(workspaceID: workspaceID, projectID: projectID, onOpen: openManagedTab).environment(store) }
                 else if page == "Configuration" { ContextView(workspaceID: workspaceID).environment(store) }
                 else { AggregateChatsView(onSelect: { openChat($0.run["id"].string) }, lockedWorkspaceID: workspaceID, lockedHostID: hostID, lockedProjectID: projectID, initialChatType: "all") }
             } else if let setup = setups.first(where: { "draft:" + $0.id == selected }) {
                 NewChatView(internet: setup.internet, lockedWorkspaceID: workspaceID, lockedProjectID: projectID, draftKey: setup.draftKey, onCancel: { closeSetup(setup.id) }) { id in closeSetup(setup.id); openChat(id) }.environment(store).id(setup.id)
+            } else if let file = orderedChildren.first(where: { $0["id"].string == selected })?["workspaceFile"], file != .null {
+                NativeFileBrowser(workspaceID: file["workspaceId"].string, initialFile: file, onOpenFile: openFile).environment(store).id(selected)
             } else if selected.hasPrefix("chat:") { ChatView(id: String(selected.dropFirst(5)), onBack: { selected = "workspace" }, workspaceBrowserScope: scope).environment(store).id(selected) }
             else if selected.hasPrefix("document:"), let document = shared.documents(in: scope).first(where: { "document:" + $0.id == selected }), let chatID = document.sourceChatID {
                 ChatView(id: chatID, onBack: { selected = "workspace" }, workspaceBrowserScope: scope, resourceDocumentID: document.id).environment(store).id(selected)
@@ -721,7 +723,7 @@ struct NativeWorkspaceContentView: View {
                 ChatView(id: chatID, onBack: { selected = "workspace" }, workspaceBrowserScope: scope, resourceDocumentID: preview.id).environment(store).id(selected)
             }
             else if selected.hasPrefix("remote:") {
-                ContentUnavailableView("Available on \(store.displayName)", systemImage: "desktopcomputer", description: Text("This saved terminal or host document tab remains on \(store.displayName). Open it there to reconnect to the terminal; chat documents can be requested through their chat’s approved document controls.")).frame(maxWidth: .infinity, maxHeight: .infinity)
+                ContentUnavailableView("Available on \(store.displayName)", systemImage: "desktopcomputer", description: Text("This saved terminal or host document remains on its computer. For workspace files, allow Browse files in this device’s Connections settings.")).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else { TeamBrowserView(scope: scope, showTabs: false, tabID: selected, onBackToList: { selected = "workspace" }, newTabOptions: [NativeNewTabAction(title: "New chat", symbol: "bubble.left.and.bubble.right", enabled: store.connected, replacesBlank: false, run: { openSetup(internet: false) }), NativeNewTabAction(title: "Internet Search", symbol: "magnifyingglass", enabled: store.connected, replacesBlank: false, run: { openSetup(internet: true) })]) }
         }
         // Children swipe back to this home over its last image; the home swipes forward to the last tab.
@@ -748,7 +750,7 @@ struct NativeWorkspaceContentView: View {
             .environment(\.nativeOpenChatSetup, { request in if request.hostID == hostID { openSetup(internet: request.internet) } })
             .onAppear { let saved = store.draft(scopeKind + "-page:" + scopeID).string; page = saved.isEmpty ? (projectID != nil || !store.supportsProjects ? "Chats" : "Projects") : (saved == "Projects" && !store.supportsProjects ? "Chats" : saved) }
             .onChange(of: page) { _, value in store.setDraft(scopeKind + "-page:" + scopeID, .string(value)) }
-            .onChange(of: shared.scopedSelection[scope]) { _, value in if let value, value != selected { selected = value } }
+            .onChange(of: shared.scopedSelection[scope]) { _, value in if (orderedChildren.first(where: { $0["id"].string == selected })?["workspaceFile"] ?? .null) == .null, let value, value != selected { selected = value } }
             .onChange(of: shared.workspaceContentDescriptors[scope]) { _, value in
                 guard let value else { return }
                 NativeWorkspaceNavigation.adoptOwnerChats(value, navigationKey: navigationKey, remote: store)
@@ -806,6 +808,17 @@ struct NativeWorkspaceContentView: View {
         if tab["type"].string == "chat" { NativeWorkspaceNavigation.openChat(tab["chatId"].string, workspaceID: workspaceID, projectID: projectID, remote: store, shared: shared) }
         else if tab["type"].string == "browser", let browser = shared.tabs(in: scope).first(where: { ($0.contentTabId ?? $0.id) == tab["id"].string }) { shared.select(browser.id, in: scope); selected = browser.id }
         else { selected = "remote:" + tab["id"].string }
+    }
+    private func openFile(_ reference: JSON) {
+        Task {
+            do {
+                guard store.stateValue("capabilities").array.contains(.string("workspace.files.tabs.v1")) else { throw RemoteError(message: "Update this computer to open shared workspace file tabs.") }
+                let sourceWorkspace = reference["workspaceId"].string.isEmpty ? workspaceID : reference["workspaceId"].string
+                let result = try await store.request("files.open", ["workspaceId": .string(sourceWorkspace), "rootId": reference["rootId"], "file": reference["file"], "scope": .string(scopeKind), "scopeId": .string(scopeID)])
+                await shared.refreshContentTabs(scope: scope, remote: store, kind: scopeKind, id: scopeID)
+                selected = "remote:" + result["tabId"].string
+            } catch { store.error = error.localizedDescription }
+        }
     }
     private func openSetup(internet: Bool) {
         let blank = shared.tabs(in: scope).first { $0.id == selected && ($0.url ?? "").isEmpty }

@@ -1,4 +1,10 @@
 ## Nov 8 / 0.2.44 — source in progress
+- Audit requested desktop/web/iPhone/iPad features before deployment; preserve installed acceptance limits.
+- Add native file columns, breadcrumb/action toolbar, green file artwork, adjustable phone split, modifier selection and separate batch-drag handles.
+- Open streamed file documents as shared owner tabs without transferring source authority when their placement changes.
+- Share owner-bound web previews and file tabs, stream remote PDFs, release preview bytes and reflect Edit files consent in controls.
+- Propagate resolved/read notifications monotonically; retain completion alerts and hold uncertain push sends against duplicate delivery.
+- Keep missing-attachment notices and Remove actions outside the iOS editor scroll surface, with visible upload Retry/Remove controls.
 - Reuse one locked simulator compiler cache by default instead of leaving a full compiler tree for every test run.
 - File move pickers page large destinations; native file views discard stale responses, reset split drags and allow closing preview tabs.
 
@@ -21,7 +27,7 @@
 - Mnemosyne configured-root storage by file type, expandable dated metadata logs and library delivery evidence guidance.
 - Restore ordinary-question command routing between desktops; dismiss remembered approvals after owner acknowledgment and show inline submission feedback.
 - Integrate previously preserved guided ADO setup/agent-pool controls and scoped local-network website permissions.
-- Release remains open; no web/device deployment or local installation at this checkpoint.
+- Release remains open. Current installed outcomes are in the rollout ledger; audited packages must pass their own validation before rollout.
 
 ## Nov 6 updater repair
 
