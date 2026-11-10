@@ -407,6 +407,15 @@ final class RemoteTests: XCTestCase {
         let measured = NativeChatEventFrame(start: 80, frame: CGRect(x: 0, y: 420, width: 800, height: 2000))
         XCTAssertEqual(measured.contentTop, 420, "Content anchors remain independent of the viewport offset")
     }
+    func testHistoryAnchorIncludesHeaderAndMessageGaps() {
+        let frames = [80: NativeChatEventFrame(start: 80, frame: CGRect(x: 0, y: 30, width: 400, height: 100)),
+                      81: NativeChatEventFrame(start: 80, frame: CGRect(x: 0, y: 150, width: 400, height: 200)),
+                      79: NativeChatEventFrame(start: 79, frame: CGRect(x: 0, y: 0, width: 400, height: 200))]
+        XCTAssertEqual(NativeChatEventFrame.readingEntry(in: frames, start: 80, top: 0)?.key, 80)
+        XCTAssertEqual(NativeChatEventFrame.readingEntry(in: frames, start: 80, top: 140)?.key, 81)
+        XCTAssertEqual(NativeChatEventFrame.readingEntry(in: frames, start: 80, top: 170)?.key, 81)
+        XCTAssertNil(NativeChatEventFrame.readingEntry(in: frames, start: 80, top: 400))
+    }
     @MainActor func testNativeScrollCommandWaitsForMomentumToFinish() async throws {
         let scroll = MomentumScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 600))
         scroll.contentSize = CGSize(width: 400, height: 2400)
@@ -783,6 +792,52 @@ final class RemoteTests: XCTestCase {
         XCTAssertEqual(refreshed?.history?.currentEntryId, "one"); XCTAssertEqual(refreshed?.history?.revision, 4)
         XCTAssertEqual(refreshed?.history?.entries, entries, "Owner traversal preserves the full Forward list")
         shared.revokeContentHost(String(scope.dropFirst("main:".count)))
+    }
+    @MainActor func testOwnerClosePrunesDevicePrivateBrowserWithoutAReopen() {
+        let shared = SharedAppStore(), host = UUID().uuidString, scope = "main:" + host
+        let tab: JSON = .object(["id": .string("closed-login"), "type": .string("browser"), "url": .string("https://example.test/start")])
+        shared.applyContentTabs(.object(["revision": .number(1), "tabs": .array([tab])]), scope: scope)
+        let id = shared.tabs(in: scope)[0].id
+        let index = shared.browserTabs.firstIndex { $0.id == id }!
+        shared.browserTabs[index].url = "https://example.test/login?token=device-private"
+        shared.applyContentTabs(.object(["revision": .number(2), "tabs": .array([]), "closed": .object(["closed-login": .number(2)])]), scope: scope)
+        XCTAssertTrue(shared.tabs(in: scope).isEmpty, "A private URL does not override owner tab membership")
+        XCTAssertFalse(shared.hasPendingContent(in: scope))
+        var stale = BrowserDescriptor(id: "old-private-cache", title: "Private cached view", url: "about:blank", scope: "main")
+        stale.ownerHostId = host; shared.browserTabs.append(stale)
+        shared.applyContentTabs(.object(["revision": .number(2), "tabs": .array([]), "closed": .object(["closed-login": .number(2)])]), scope: scope)
+        XCTAssertTrue(shared.tabs(in: scope).isEmpty, "An identical snapshot still retires private cache rows omitted from the shared projection")
+        shared.revokeContentHost(host)
+    }
+    @MainActor func testCachedBrowserMetadataCannotCreateAnOwnerTab() async throws {
+        let (data, _) = try await URLSession.shared.data(from: URL(string: "\(nativeFixtureHTTPOrigin)/pair")!)
+        let remote = RemoteStore(); remote.forget(); try remote.pair(try JSONDecoder().decode(JSON.self, from: data)["code"].string)
+        defer { remote.forget() }
+        try await wait { remote.connected && remote.state["capabilities"].array.contains(.string("content-tabs.v1")) }
+        let run = try await remote.request("chat.start", ["prompt": .string("Cached browser authority fixture"), "provider": .string("rehearsal")])
+        let id = run["runId"].string, host = try XCTUnwrap(remote.connection?.hostId), scope = "chat:" + host + ":" + id
+        let shared = SharedAppStore(); defer { shared.revokeContentHost(host) }
+        await shared.refreshContentTabs(scope: scope, remote: remote, kind: "chat", id: id)
+        remote.connected = false
+        shared.browserTabs.append(BrowserDescriptor(id: "orphan-cache", title: "Old cache", url: "https://example.test/old", scope: scope))
+        shared.renameBrowser("orphan-cache", title: "Incidental metadata")
+        XCTAssertTrue(shared.contentPending[scope]?.isEmpty ?? true, "Metadata and reorder must not create an unknown cached browser on the owner")
+        shared.open(nil, scope: scope)
+        XCTAssertEqual(shared.contentPending[scope]?.filter { $0["action"].string == "open" }.count, 1, "An explicit new-tab action still queues one owner open")
+    }
+    @MainActor func testOwnerSnapshotRetiresDuplicateCachedBrowserIdentity() {
+        let shared = SharedAppStore(), host = UUID().uuidString, scope = "workspace:" + host + ":general"
+        let tab: JSON = .object(["id": .string("logical-page"), "type": .string("browser"), "title": .string("Page"), "url": .string("https://example.test/page")])
+        let owner: JSON = .object(["revision": .number(1), "tabs": .array([tab])])
+        shared.applyContentTabs(owner, scope: scope)
+        let original = shared.tabs(in: scope)[0]
+        var duplicate = original; duplicate.id = "old-local-alias"
+        shared.browserTabs.append(duplicate); shared.scopedSelection[scope] = duplicate.id
+        shared.applyContentTabs(owner, scope: scope)
+        XCTAssertEqual(shared.tabs(in: scope).map(\.id), [original.id])
+        XCTAssertEqual(shared.scopedSelection[scope], original.id, "Selection follows the surviving owner identity without opening a new tab")
+        XCTAssertFalse(shared.hasPendingContent(in: scope))
+        shared.revokeContentHost(host)
     }
     @MainActor func testHistoryCacheDayBoundaryUsesCalendarAcrossDST() throws {
         var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(identifier: "America/Denver")!
@@ -1619,7 +1674,8 @@ final class RemoteTests: XCTestCase {
         XCTAssertFalse(NativeHistoryWindow.shouldPrefetch(offset: 2400, viewport: 800, content: 9000, reading: true, ready: true))
         let events: [JSON] = (0..<1000).map { .object(["text": .string("Message \($0)")]) }
         XCTAssertEqual(NativeHistoryWindow.start(events: events, before: 988, preparingOlder: true), 964, "Keep initial rendering small but prepare older history in larger batches")
-        XCTAssertTrue(NativeHistoryWindow.shouldPrefetch(offset: 0, viewport: 1000, content: 500, reading: false, ready: true))
+        XCTAssertFalse(NativeHistoryWindow.shouldPrefetch(offset: 0, viewport: 1000, content: 500, reading: false, ready: true), "A short iPad viewport must not automatically reveal history")
+        XCTAssertTrue(NativeHistoryWindow.shouldPrefetch(offset: 0, viewport: 1000, content: 500, reading: true, ready: true), "A deliberate pull can still reveal history on a short iPad page")
     }
     @MainActor func testCompletedRuntimeDoesNotRunPeriodicClock() {
         let store = RemoteStore(connection: nil)
@@ -3431,6 +3487,7 @@ extension RemoteTests {
         let login = URL(string: "https://example.test/login")!
         shared.completeBrowserNavigation(login, title: "Device login", in: "settled")
         XCTAssertEqual(shared.browserTabs[0].url, entries[0].url)
+        XCTAssertEqual(shared.displayedBrowserAddress(shared.browserTabs[0]), login.absoluteString, "Reselecting a mirrored tab must display the actual page, not the old owner address")
         shared.completeBrowserNavigation(login, title: "Duplicate KVO", in: "settled", sameDocumentObservation: true)
         XCTAssertEqual(shared.browserTabs[0].url, entries[0].url)
         shared.completeBrowserNavigation(URL(string: "https://example.test/delayed-route")!, title: "Delayed SPA route", in: "settled", sameDocumentObservation: true)

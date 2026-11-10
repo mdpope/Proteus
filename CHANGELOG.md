@@ -1,4 +1,7 @@
 ## Nov 8 / 0.2.44 — source in progress
+- Use the loaded iOS page address on browser reselection; honor owner tab closure for private login pages, retire duplicate cached identities and prevent metadata updates from reopening stale tabs.
+- Restore the iPhone Team Tools navigation button so browser tabs can return to other app areas.
+- Preserve the original message and signed offset across history prepends, including header gaps and late Markdown sizing; require a new reader gesture before revealing another page so idle iPad layouts cannot cascade.
 - Audit requested desktop/web/iPhone/iPad features before deployment; preserve installed acceptance limits.
 - Add native file columns, breadcrumb/action toolbar, green file artwork, adjustable phone split, modifier selection and separate batch-drag handles.
 - Open streamed file documents as shared owner tabs without transferring source authority when their placement changes.

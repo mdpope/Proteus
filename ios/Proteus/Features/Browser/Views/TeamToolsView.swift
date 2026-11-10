@@ -210,6 +210,7 @@ struct TeamBrowserView: View {
     private var selectedID: String? { tabID ?? shared.selected(in: scope) }
     private var selectedTab: BrowserDescriptor? { tabs.first { $0.id == selectedID } }
     private var navigation: BrowserNavigationState { shared.browserNavigation[selectedID ?? ""] ?? BrowserNavigationState() }
+    private var displayedAddress: String { selectedTab.map { shared.displayedBrowserAddress($0) } ?? "" }
     private var historyRemote: RemoteStore? { selectedTab?.ownerHostId.flatMap { destinations.remote(for: $0) } ?? destinations.selected }
     private var availableHistory: [JSON] {
         #if DEBUG
@@ -348,9 +349,9 @@ struct TeamBrowserView: View {
                 guard !Task.isCancelled else { return }; matchingHistory = matches
             }
         }
-        .onAppear { if NativePhonePreview.enabled && phoneAreaActive { phoneChrome.browserSurfaceScope = scope }; if tabs.isEmpty && showTabs { shared.open(nil, scope: scope) }; text = selectedTab?.url ?? ""; engine = ["google": "Google", "duckduckgo": "DuckDuckGo", "bing": "Bing"][shared.snapshot["preferences"]["searchEngine"].string] ?? "Google"; if NativePhonePreview.enabled { editingAddress = false } else { addressFocused = false } }
+        .onAppear { if NativePhonePreview.enabled && phoneAreaActive { phoneChrome.browserSurfaceScope = scope }; if tabs.isEmpty && showTabs { shared.open(nil, scope: scope) }; text = displayedAddress; engine = ["google": "Google", "duckduckgo": "DuckDuckGo", "bing": "Bing"][shared.snapshot["preferences"]["searchEngine"].string] ?? "Google"; if NativePhonePreview.enabled { editingAddress = false } else { addressFocused = false } }
         .onChange(of: selectedTab.map { shared.unloadedBrowsers.contains($0.id) } ?? false) { _, unloaded in if unloaded { phoneChrome.setControlsHidden(false) } }
-        .onChange(of: selectedID) { _, _ in text = selectedTab?.url ?? ""; if NativePhonePreview.enabled { editingAddress = false } else { addressFocused = false } }
+        .onChange(of: selectedID) { _, _ in text = displayedAddress; if NativePhonePreview.enabled { editingAddress = false } else { addressFocused = false } }
         .task(id: accountRefreshIdentity) {
             guard addressFocused || selectedTab?.url == nil else { return }
             // Copy once per editing session. Never flatten all tab backstacks or
@@ -1028,6 +1029,7 @@ private struct NativeTeamDesignView: View {
     }
     private var heading: some View {
         HStack(spacing: 8) {
+            if NativePhonePreview.enabled { NativeSidebarButton() }
             NativeFeatureHeading(title: section == "Standup" ? "Standup" : "Team Tools")
             Spacer(minLength: 8)
             if section == "Standup" && list != .null {

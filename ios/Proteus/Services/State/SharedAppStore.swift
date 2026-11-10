@@ -500,9 +500,13 @@ let nativeFixtureRelayOrigin = ""
         guard !applyingContent, !restoring else { return }
         for (scope, snapshot) in contentSnapshots {
             guard contentHosts[scope] != nil, !scope.hasPrefix("main:") else { continue }
-            let prior = snapshot["tabs"].array, current = localContentTabs(scope)
+            let prior = snapshot["tabs"].array
+            let current = localContentTabs(scope).filter { tab in tab["type"].string != "browser" || prior.contains { $0["id"] == tab["id"] } }
             var operations: [JSON] = []
             for tab in current where !prior.contains(tab) {
+                // Explicit user creation owns recordContentOpen. A metadata/KVO
+                // update must never reopen an orphan from an old device cache.
+                if tab["type"].string == "browser", !prior.contains(where: { $0["id"] == tab["id"] }) { continue }
                 var value = tab.object
                 if let old = prior.first(where: { $0["id"] == tab["id"] }), tab["type"].string == "browser" {
                     value["url"] = old["url"]; value["history"] = old["history"]
@@ -526,7 +530,11 @@ let nativeFixtureRelayOrigin = ""
         if Self.isOrganizationalScope(scope), let config = contentSync[scope] {
             NativeWorkspaceNavigation.adoptOwnerChats(response["tabs"].array, navigationKey: config.kind + "-navigation:" + config.id, remote: config.remote)
         }
-        if contentSnapshots[scope] == response && localContentTabs(scope) == response["tabs"].array { return }
+        let cachedBrowsers = tabs(in: scope)
+        let cachedIDs = cachedBrowsers.map { $0.contentTabId ?? $0.id }
+        let ownerIDs = response["tabs"].array.filter { $0["type"].string == "browser" && $0["setup"] == .null }.map { $0["id"].string }
+        if contentSnapshots[scope] == response && localContentTabs(scope) == response["tabs"].array,
+           cachedIDs.count == Set(cachedIDs).count, Set(cachedIDs) == Set(ownerIDs) { return }
         guard response["revision"].int >= cachedRevision || afterReadingRevision == cachedRevision else { return }
         applyingContent = true; defer { applyingContent = false }
         if Self.isOrganizationalScope(scope) { workspaceContentDescriptors[scope] = response["tabs"].array }
@@ -535,7 +543,7 @@ let nativeFixtureRelayOrigin = ""
         let ids = Set(incoming.filter { $0["type"].string == "browser" && $0["setup"] == .null }.map { $0["id"].string })
         let existingBrowsers = tabs(in: scope)
         let privateLocal = existingBrowsers.filter { $0.url != nil && Self.safeURL($0.url ?? "") == nil }
-        for old in existingBrowsers where !privateLocal.contains(old) && !ids.contains(old.contentTabId ?? old.id) { unload(old.id, force: true); unloadedBrowsers.remove(old.id) }
+        for old in existingBrowsers where !ids.contains(old.contentTabId ?? old.id) { unload(old.id, force: true); unloadedBrowsers.remove(old.id) }
         for tab in incoming where tab["type"].string == "browser" && tab["setup"] == .null {
             if let existing = existingBrowsers.first(where: { ($0.contentTabId ?? $0.id) == tab["id"].string }), browserViews[existing.id] != nil,
                !tab["history"]["currentEntryId"].string.isEmpty, existing.history?.currentEntryId != tab["history"]["currentEntryId"].string {
@@ -546,7 +554,7 @@ let nativeFixtureRelayOrigin = ""
             if let existing = existingBrowsers.first(where: { ($0.contentTabId ?? $0.id) == tab["id"].string }), !privateLocal.contains(existing), !explicitBrowserNavigations.contains(existing.id), browserViews[existing.id]?.url.map({ Self.safeURL($0.absoluteString) == nil }) != true, existing.url ?? "" != tab["url"].string, let url = Self.safeURL(tab["url"].string) { if profileAvailable(existing.profileId) && (tab["profileId"].string.isEmpty ? "default" : tab["profileId"].string) == existing.profileId, let view = browserViews[existing.id] { mirroredBrowserLoads.insert(existing.id); pendingBrowserLoads[existing.id] = url.absoluteString; view.load(URLRequest(url: url)) } }
         }
         let localIDs = Set(existingBrowsers.map(\.id))
-        var nextBrowsers = browserTabs.filter { !localIDs.contains($0.id) || (privateLocal.contains($0) && !ids.contains($0.contentTabId ?? $0.id)) }
+        var nextBrowsers = browserTabs.filter { !localIDs.contains($0.id) }
         for tab in incoming where tab["type"].string == "browser" && tab["setup"] == .null {
             let existing = existingBrowsers.first { ($0.contentTabId ?? $0.id) == tab["id"].string }
             // Keep a live login flow local while retaining its full URLs in browsing history.
@@ -554,7 +562,8 @@ let nativeFixtureRelayOrigin = ""
             if let existing, (privateLocal.contains(existing) || explicitBrowserNavigations.contains(existing.id)), existing.profileId == (tab["profileId"].string.isEmpty ? "default" : tab["profileId"].string) { nextBrowsers.append(existing); continue }
             let localID = existing?.id ?? ("sync:" + SHA256.hash(data: Data((scope + "\0" + tab["id"].string).utf8)).map { String(format: "%02x", $0) }.joined())
             let favicon = tab["favicon"].string
-            if favicon.hasPrefix("data:image/png;base64,"), favicon.utf8.count <= 98304,
+            if (browserViews[localID]?.url == nil || browserViews[localID]?.url?.absoluteString == tab["url"].string),
+               favicon.hasPrefix("data:image/png;base64,"), favicon.utf8.count <= 98304,
                let data = Data(base64Encoded: String(favicon.dropFirst(22))), let image = UIImage(data: data) { browserFavicons[localID] = image }
 
             // A shared descriptor can come from an unloaded desktop tab. Its automatic
@@ -596,6 +605,13 @@ let nativeFixtureRelayOrigin = ""
         }
         // Publish one coherent list so a selected child never temporarily disappears.
         if browserTabs != nextBrowsers { browserTabs = nextBrowsers }
+        for old in existingBrowsers where !nextBrowsers.contains(where: { $0.id == old.id }) {
+            unload(old.id, force: true); unloadedBrowsers.remove(old.id)
+            let replacement = nextBrowsers.first { ($0.contentTabId ?? $0.id) == (old.contentTabId ?? old.id) }?.id
+            if scopedSelection[scope] == old.id { scopedSelection[scope] = replacement }
+            if selectedBrowser == old.id { selectedBrowser = replacement }
+            if selectedMainBrowser == old.id { selectedMainBrowser = replacement }
+        }
         for tab in browserTabs where tab.persist && profileAvailable(tab.profileId) { reload(tab.id); _ = webView(tab) }
         let docIDs = Set(incoming.filter { $0["type"].string == "document" }.map { $0["documentId"].string })
         for old in documents(in: scope) where old.previewSource == nil && !docIDs.contains(old.id) { documentContents.removeValue(forKey: scope + ":" + old.id); documentSessions.removeValue(forKey: scope + ":" + old.id) }
@@ -2013,6 +2029,14 @@ let nativeFixtureRelayOrigin = ""
         #endif
     }
     func isBrowserLoaded(_ id: String) -> Bool { browserViews[id] != nil }
+    func displayedBrowserAddress(_ tab: BrowserDescriptor) -> String {
+        // The owner controls membership and logical navigation. Its mirrored
+        // login/redirect page can differ locally: the address must describe the
+        // actual loaded page without publishing private URLs back to the owner.
+        if isBrowserLoaded(tab.id), browserSavedPages[tab.id] == nil,
+           let actual = browserNavigation[tab.id]?.url, !actual.isEmpty { return actual }
+        return tab.url ?? ""
+    }
     func isCurrentBrowserView(_ view: WKWebView, id: String) -> Bool { browserViews[id] === view }
     func webView(_ tab: BrowserDescriptor, allowLocalNavigation: Bool = false) -> WKWebView {
         if let view = browserViews[tab.id] { return view }

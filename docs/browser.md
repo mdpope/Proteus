@@ -1748,3 +1748,14 @@ text-free. No Enter, focus of the native window, retry or automatic fallback is 
 The existing fill permission and tab sharing/profile/run boundaries remain mandatory. This
 option does not authorize Playwright server evaluation or grant access to an unrelated tab.
 It is diagnostic support, not a proven fix for Slack input loss or whole-page stalls.
+# Nov 8 iOS owner reconciliation follow-up
+
+Desktop membership removes closed browser identities even when the device is in a private login
+flow. Duplicate cached aliases collapse to one identity and selection follows the surviving tab.
+Passive metadata changes cannot acquire new-tab intent; explicit creation retains its normal
+owner operation. Visible unloaded tabs remain in navigation and hidden tabs remain management-only.
+The address field uses the actual loaded page on reselection, while private redirect URLs stay
+local. Incoming owner favicons do not overwrite a different live page's icon. Source tests and
+physical device acceptance are recorded separately in the release rollout.
+The phone Team Tools header also retains the shared drawer button while a browser is selected;
+its absence previously trapped navigation between app areas during the reselection regression.
