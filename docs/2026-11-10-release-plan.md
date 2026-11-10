@@ -162,3 +162,22 @@ history. Test Instagram and a controlled navigation fixture, multiple tabs/devic
 navigation, late/out-of-order updates, idle periods and reconnect on iPad/iPhone and relevant
 desktop/web paths. Preserve the operator's real tab/history while collecting reproduction
 evidence; do not claim a site-specific cause or a fix from address-bar assertions alone.
+
+## N10-09 — Fix Chats list scrolling and progressively load more chats
+
+Operator report: scrolling while the pointer or touch gesture is inside the Chats list does
+not scroll it; scrolling only works outside the list's borders. Investigate nested scroll
+containers, frames, overflow sizing and wheel/touch event handling rather than assuming a
+confirmed cause. Coordinate this fix with the Chats design investigation in N10-02.
+
+Evaluate one page-level scrolling surface for the Chats view, with more chats progressively
+loaded when the user reaches the bottom. Scrolling must work from anywhere over the list,
+including its rows and empty space, without requiring the user to move outside its borders.
+Preserve search, filters and row actions, and provide clear loading, retry and end-of-list states.
+Prevent overlapping loads, duplicate rows and stale results after a filter or owner change.
+Appending results must preserve the visible position and must not jump the page or repeatedly
+load the entire history without user scrolling. Restore position when returning from a chat.
+
+Verify mouse wheel, trackpad, touch and keyboard scrolling across desktop, web, iPhone and iPad,
+with short and long lists, narrow layouts, slow responses and failed page loads. This is queued
+for Nov 10; it does not authorize another Nov 8 build or deployment.
