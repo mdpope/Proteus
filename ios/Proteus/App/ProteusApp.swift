@@ -146,6 +146,9 @@ struct ProteusRoot: View {
                         let run: JSON = .object(["id": .string("long-chat"), "title": .string("Long fixture"), "status": .string("completed"), "createdAt": .string("2026-10-05T20:00:00Z"), "updatedAt": .string("2026-10-05T21:00:00Z"), "eventStart": .number(0), "events": .array(events), "schedule": .object(["provider": .string("codex")]), "nextModelOptions": .object(["model": .string("gpt-6-sol")])])
                         remote.state = .object(["runs": .array([run]), "runCount": .number(1), "attentionCount": .number(0), "schedules": .array([]), "capabilities": .array([.string("chat.attachments.v1")]), "attachmentMediaTypes": .object(["codex": .array([.string("image/png")])])])
                         remote.chats["long-chat"] = run
+                        if ProcessInfo.processInfo.arguments.contains("--synthetic-missing-attachment") {
+                            remote.setDraft("reply-attachments:long-chat", .array([.object(["id": .string("missing-fixture"), "name": .string("Missing fixture.png"), "mediaType": .string("image/png")])]))
+                        }
                         if ProcessInfo.processInfo.arguments.contains("--synthetic-workspace-tab-icons") {
                             configureNativeIconFixture(remote: remote, shared: shared, life: life)
                         }

@@ -1,3 +1,14 @@
+## Nov 8 current continuation — request audit gates deployment
+
+The operator requires verifying the full desktop/web/iPhone/iPad feature scope before another
+deployment. Use [the request audit](releases/2026-11-08/request-audit.md), then the implementation
+and rollout records. Native file-browser parity is implemented with simulator interaction evidence;
+final package checks precede rollout to the authorized Build Mac, web, iPhone and iPad. Earlier
+Mac/iPhone candidates are superseded and must not be handed off. Web activated before this gate;
+later corrections are source only. Preserve pending human
+approvals, unrelated work and the decision to let Time Machine continue. Dated checkpoints below
+are historical and do not supersede this gate.
+
 ## Nov 6 — all-device build and rollout authorized
 
 The operator explicitly requests building and deploying all current changes to all devices through

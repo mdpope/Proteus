@@ -104,6 +104,26 @@ private let nativeFixtureRelayOrigin = ProcessInfo.processInfo.environment["PROT
 }
 
 final class RemoteUITests: XCTestCase {
+    @MainActor func testMissingAttachmentActionStaysVisibleWhileTyping() {
+        let app = nativeFixtureApplication()
+        app.launchArguments = ["--reset-pairing", "--synthetic-clean-navigation", "--native-design-preview", "--synthetic-destinations", "--synthetic-long-chat", "--synthetic-missing-attachment"]
+        defer { let tree = XCTAttachment(string: app.debugDescription); tree.name = "Attachment notice hierarchy"; tree.lifetime = .keepAlways; add(tree) }
+        app.launch(); showChats(app)
+        let row = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Long fixture")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 10)); row.tap()
+        if app.buttons["chat-conversation-tab"].waitForExistence(timeout: 5) { app.buttons["chat-conversation-tab"].tap() }
+        let remove = app.buttons["remove-missing-attachments"]
+        XCTAssertTrue(remove.waitForExistence(timeout: 10)); XCTAssertTrue(remove.isHittable)
+        if app.buttons["composer-preview"].exists { app.buttons["composer-preview"].tap() }
+        let editor = app.textViews["reply-text"]
+        XCTAssertTrue(editor.waitForExistence(timeout: 8)); editor.tap(); editor.typeText("Draft survives removing unavailable file")
+        XCTAssertTrue(remove.isHittable, "The action must not be inside the clipped editor or require scrolling")
+        XCTAssertGreaterThanOrEqual(remove.frame.height, 44)
+        let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Visible attachment error above keyboard"; shot.lifetime = .keepAlways; add(shot)
+        remove.tap(); XCTAssertFalse(remove.exists)
+        XCTAssertEqual(editor.value as? String, "Draft survives removing unavailable file")
+    }
+
     @MainActor func testWorkspaceFilesRequireGrantAndStreamDocument() async throws {
         let (data, _) = try await URLSession.shared.data(from: URL(string: nativeFixtureHTTPOrigin + "/pair?projects=1")!)
         let fixture = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
@@ -123,6 +143,43 @@ final class RemoteUITests: XCTestCase {
         XCTAssertTrue(document.waitForExistence(timeout: 15)); document.tap()
         XCTAssertTrue(app.webViews.firstMatch.waitForExistence(timeout: 15))
         XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "file viewing is not enabled")).firstMatch.exists)
+        XCTAssertTrue(app.descendants(matching: .any)["workspace-file-toolbar"].firstMatch.exists)
+        if UIDevice.current.userInterfaceIdiom == .phone {
+            let divider = app.descendants(matching: .any)["workspace-file-vertical-divider"].firstMatch
+            XCTAssertTrue(divider.waitForExistence(timeout: 5))
+            let before = divider.frame.minY
+            let start = divider.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: 0, dy: -60)))
+            XCTAssertLessThan(divider.frame.minY, before - 25)
+            let restore = divider.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            restore.press(forDuration: 0.05, thenDragTo: restore.withOffset(CGVector(dx: 0, dy: 60)))
+            XCTAssertEqual(divider.frame.minY, before, accuracy: 12, "Each gesture starts from the current split")
+        } else {
+            XCTAssertTrue(app.buttons["workspace-file-sort-name"].exists)
+            let columns = app.scrollViews["workspace-file-columns"].firstMatch
+            func panColumns(_ distance: CGFloat) {
+                let start = columns.coordinate(withNormalizedOffset: CGVector(dx: distance < 0 ? 0.8 : 0.2, dy: 0.03))
+                start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: distance, dy: 0)), withVelocity: .slow, thenHoldForDuration: 0.3)
+            }
+            for _ in 0..<6 where !app.buttons["workspace-file-sort-size"].isHittable { panColumns(-90) }
+            app.buttons["workspace-file-sort-size"].tap()
+            app.buttons["workspace-file-sort-size"].tap()
+            XCTAssertTrue(app.buttons["workspace-file-sort-size"].label.contains("↓"))
+            for _ in 0..<8 where !document.isHittable { panColumns(90) }
+        }
+        document.press(forDuration: 1); app.buttons["Open in new tab"].firstMatch.tap()
+        let (tabData, _) = try await URLSession.shared.data(from: URL(string: nativeFixtureHTTPOrigin + "/files-tab-state")!)
+        let tabState = try XCTUnwrap(JSONSerialization.jsonObject(with: tabData) as? [String: Any])
+        let tab = try XCTUnwrap((tabState["tabs"] as? [[String: Any]])?.first { $0["title"] as? String == "Files fixture.md" })
+        let tabID = try XCTUnwrap(tab["id"] as? String)
+        let navigationTab = app.buttons["workspace-child-tab-remote:" + tabID]
+        XCTAssertTrue(navigationTab.waitForExistence(timeout: 15), "A new file must be an owner-backed project/workspace navigation tab")
+        XCTAssertTrue(app.webViews.firstMatch.waitForExistence(timeout: 10))
+        app.buttons["Close Files fixture.md"].tap()
+        XCTAssertTrue(document.waitForExistence(timeout: 10))
+        let (closedData, _) = try await URLSession.shared.data(from: URL(string: nativeFixtureHTTPOrigin + "/files-tab-state")!)
+        let closed = try XCTUnwrap(JSONSerialization.jsonObject(with: closedData) as? [String: Any])
+        XCTAssertFalse((closed["tabs"] as? [[String: Any]] ?? []).contains { $0["id"] as? String == tabID })
     }
 
     @MainActor func testWorkspaceFileMovePickerPagesDestinations() async throws {
@@ -158,6 +215,30 @@ final class RemoteUITests: XCTestCase {
             try await Task.sleep(for: .milliseconds(300))
         }
         XCTAssertTrue(verifiedMove, "Desktop fixture must independently confirm the actual filesystem move")
+    }
+    @MainActor func testWorkspaceFilesDragSelectedBatchToFolder() async throws {
+        let (data, _) = try await URLSession.shared.data(from: URL(string: nativeFixtureHTTPOrigin + "/pair?projects=1")!)
+        let fixture = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let workspaceID = try XCTUnwrap(fixture["workspaceId"] as? String)
+        let app = nativeFixtureApplication(); app.launchArguments = ["--reset-pairing", "--synthetic-clean-navigation"]; app.launch()
+        defer { let tree = XCTAttachment(string: app.debugDescription); tree.name = "Native file batch drag hierarchy"; tree.lifetime = .keepAlways; add(tree) }
+        submitPairing(app, code: try XCTUnwrap(fixture["code"] as? String)); XCTAssertTrue(app.staticTexts["pairing-success"].waitForExistence(timeout: 15))
+        _ = try await URLSession.shared.data(from: URL(string: nativeFixtureHTTPOrigin + "/files-grant-drag")!)
+        if UIDevice.current.userInterfaceIdiom == .phone { app.buttons["phone-app-navigation"].firstMatch.tap() }
+        let workspace = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND identifier ENDSWITH %@", "workspace-tree-open-", workspaceID)).firstMatch
+        XCTAssertTrue(workspace.waitForExistence(timeout: 20)); workspace.tap(); app.buttons["workspace-files"].tap()
+        let a = app.buttons["workspace-file-! Drag A.md"], target = app.buttons["workspace-file-00 Drag target"]
+        XCTAssertTrue(a.waitForExistence(timeout: 15)); app.buttons["Select ! Drag A.md"].tap(); app.buttons["Select ! Drag B.md"].tap()
+        XCTAssertTrue(app.buttons["Deselect ! Drag A.md"].exists); XCTAssertTrue(app.buttons["Deselect ! Drag B.md"].exists)
+        app.buttons["workspace-file-drag-! Drag A.md"].press(forDuration: 0.5, thenDragTo: target, withVelocity: .slow, thenHoldForDuration: 1)
+        var moved = false
+        for _ in 0..<20 {
+            let (result, _) = try await URLSession.shared.data(from: URL(string: nativeFixtureHTTPOrigin + "/files-drag-state")!)
+            let state = try XCTUnwrap(JSONSerialization.jsonObject(with: result) as? [String: Any])
+            if state["sources"] as? [Bool] == [false, false] && state["moved"] as? [Bool] == [true, true] { moved = true; break }
+            try await Task.sleep(for: .milliseconds(300))
+        }
+        XCTAssertTrue(moved, "The native drag must move both selected files on the desktop owner")
     }
 
     @MainActor func testReleaseBaselineLaunchMetrics() throws { try NativeReleaseJourney.measureLaunch(self, bundle: "org.proteusapp.proteus.journey-normal-baseline") }

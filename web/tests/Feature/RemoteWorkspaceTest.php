@@ -37,7 +37,7 @@ class RemoteWorkspaceTest extends TestCase
         $this->signedIn($user)->get('/remote')->assertOk()
             ->assertSee('The computer supplies its name.')->assertDontSee('Build Mac')->assertDontSee('Work Mac')
             ->assertSee('relay carries encrypted packets')->assertSee('website server stores destination keys encrypted')->assertHeader('Cache-Control', 'no-store, private')
-            ->assertHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self' wss://relay.proteus.example; img-src 'self' data: blob:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
+            ->assertHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self' wss://relay.proteus.example; img-src 'self' data: blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
         $this->postJson('/remote/command', ['prompt' => 'Must not be handled by Laravel'])->assertNotFound();
     }
 

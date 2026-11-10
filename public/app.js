@@ -1007,7 +1007,7 @@ function renderFileBrowser(tab){
 function markdownDialog(parentId=null) { openMarkdownPicker('open',parentId); }
 async function renderMarkdown() {
   const tab=state.tabs.find(t=>t.id===state.tab);let markdown=tab?.markdown||state.markdown;
-  if(tab&&markdown?.content===undefined&&!markdown?.error){$('#main').dataset.positionLoading=$('#main').dataset.viewKey;$('#main').innerHTML='<p class="note">Loading document…</p>';try{tab.markdown=await api('/api/markdown',{file:markdown?.file||tab.file});}catch(error){tab.markdown={file:markdown?.file||tab.file,error:error.message};}if(!state.tabs.includes(tab))return;retainDocument(tab,()=>state.tab===tab.id);if(state.tab!==tab.id)return;markdown=tab.markdown;}delete $('#main').dataset.positionLoading;
+  if(tab&&markdown?.content===undefined&&!markdown?.error){$('#main').dataset.positionLoading=$('#main').dataset.viewKey;$('#main').innerHTML='<p class="note">Loading document…</p>';try{tab.markdown={...markdown,...await api('/api/markdown',{file:markdown?.file||tab.file})};}catch(error){tab.markdown={file:markdown?.file||tab.file,error:error.message};}if(!state.tabs.includes(tab))return;retainDocument(tab,()=>state.tab===tab.id);if(state.tab!==tab.id)return;markdown=tab.markdown;}delete $('#main').dataset.positionLoading;
   if(tab)retainDocument(tab,()=>state.tab===tab.id);
   if(markdown?.error){$('#main').innerHTML=`<div class="heading"><h1>${escape(markdown.file?.split('/').pop())}</h1></div><p class="banner">${escape(markdown.error)}</p><p class="note">This file must still be inside a currently authorized workspace.</p><button id="markdown-retry">Retry file</button>`;$('#markdown-retry').onclick=async()=>{try{const value=await api('/api/markdown',{file:markdown.file});Object.assign(markdown,value,{error:null});renderMarkdown();}catch(error){toast(error.message);}};return;}
   if(markdown?.mediaType==='text/plain'){$('#main').innerHTML='<h1>'+escape(markdown.file.split('/').pop())+'</h1><pre class="file-text-preview"></pre>';$('.file-text-preview').textContent=markdown.content;return;}
@@ -1016,8 +1016,17 @@ async function renderMarkdown() {
   $('#main').innerHTML=`<div class="heading"><div><div class="eyebrow">Markdown preview</div><h1>${escape(markdown?.file.split('/').pop())}</h1><div class="filepath">${escape(markdown?.file)}</div><p class="note file-dates">${escape(fileDatesText(markdown))}</p></div></div><article class="card markdown-preview"></article><details><summary>Markdown source</summary><pre class="markdown">${escape(markdown?.content||'')}</pre></details>`;
   ProteusMarkdown.mount($('.markdown-preview'), markdown?.content || '', {
     copy: text => window.desktop ? window.desktop.copyText(text) : navigator.clipboard.writeText(text),
-    link: source => openMessageLink(source, markdown.file.slice(0, markdown.file.lastIndexOf('/'))),
-    image: async source => (await api('/api/markdown', { file: markdown.file, image: source })).dataURL
+    link: async source => {
+      if(!markdown.rootId||!markdown.relativePath){await openMessageLink(source,markdown.file.slice(0,markdown.file.lastIndexOf('/')));return;}
+      try{const binding={workspaceId:markdown.workspaceId||tab.workspaceId,rootId:markdown.rootId},target=await api('/api/workspace-explorer/resolve-link',{...binding,file:markdown.relativePath,source});if(state.tab!==tab.id)return;
+       if(target.external){await openMessageLink(target.external,markdown.file.slice(0,markdown.file.lastIndexOf('/')));return;}
+       if(target.kind==='folder')throw Error('This link points to a folder. Open Files to browse it.');
+       const value=await api('/api/workspace-explorer/preview',{...binding,file:target.path});if(state.tab!==tab.id)return;
+       const existing=state.tabs.find(row=>row.type==='markdown'&&row.parentId===tab.parentId&&(row.file||row.markdown?.file)===value.file);
+       openTab({id:existing?.id||'markdown:'+value.file,type:'markdown',label:target.name,parentId:tab.parentId,workspaceId:binding.workspaceId,markdown:value});
+      }catch(error){toast(error.message);}
+    },
+    image: async source => markdown.rootId&&markdown.relativePath?(await api('/api/workspace-explorer/resolve-link',{workspaceId:markdown.workspaceId||tab.workspaceId,rootId:markdown.rootId,file:markdown.relativePath,source,image:true})).dataURL:(await api('/api/markdown',{file:markdown.file,image:source})).dataURL
   });
   restoreDocumentView($('#main'),$('#main').dataset.viewKey);
 }

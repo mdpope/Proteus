@@ -68,7 +68,7 @@ export class ActivityStore extends EventEmitter {
   }
   read(id) {
     const item = this.data.notifications.find(item => item.id === id); if (!item) throw new Error('Notification not found.');
-    item.readAt ||= this.clock().toISOString(); this.save(); return { ok: true };
+    item.readAt ||= this.clock().toISOString(); this.save(); this.queue('notifications',{...item,silent:true}); return { ok: true };
   }
   scheduleError({scheduleId,action='save',code='SCHEDULE_CONFIGURATION_FAILED',correlationId}={}) {
     const reasons={SCHEDULE_EXECUTION_UNSUPPORTED:'The selected provider cannot enforce the required filesystem, network and child-process restrictions. Keep the current provider or choose a verified execution adapter.',SCHEDULE_EXECUTOR_UNAVAILABLE:'The host command sandbox could not be verified on this computer. Refresh or repair its native runtime and retry with the same access policy.',SCHEDULE_CONFIGURATION_FAILED:'Schedule configuration was rejected. Review the error in the schedule editor and retry; the previous saved configuration is retained.'};
@@ -154,7 +154,7 @@ export class ActivityStore extends EventEmitter {
     const snapshot = run => ({ status: run.status, pending:reviewRequests({...run,userQuestions:[]})[0]?.id, questions:(run.userQuestions||[]).filter(question=>question.status==='pending').map(question=>question.id) });
     const reconcile=run=>{
       const active=new Set(reviewRequests(run).map(request=>request.id));let changed=false;
-      for(const item of this.data.notifications)if(item.type==='review.required'&&item.chatId===run.id&&!item.readAt&&(!item.requestId||!active.has(item.requestId))){item.resolvedAt=this.clock().toISOString();item.readAt=item.resolvedAt;changed=true;}
+      for(const item of this.data.notifications)if(item.type==='review.required'&&item.chatId===run.id&&!item.resolvedAt&&(!item.requestId||!active.has(item.requestId))){item.resolvedAt=this.clock().toISOString();item.readAt||=item.resolvedAt;changed=true;this.queue('notifications',{...item,silent:true});}
       if(changed)this.save();
     };
     for (const run of engine.listRuns()){this.states.set(run.id, snapshot(run));reconcile(run);}
@@ -188,7 +188,7 @@ export class ActivityStore extends EventEmitter {
         const historical=(row.kind||'notifications')==='notifications'&&(saved?.readAt||saved?.resolvedAt||this.clock().getTime()-Date.parse(row.item.createdAt)>300000);
         // Preserve history, but delayed upload must not turn an old/resolved
         // event into a fresh alert on another device.
-        const item=historical?{...row.item,silent:true}:row.item;
+        const item=historical?{...row.item,...saved,silent:true}:row.item;
         try { await this.publish(item, current,row.kind||'notifications'); } catch (error) {
           // Older servers do not accept website events yet. Keep those bounded
           // retry receipts until the coordinated web rollout, while allowing

@@ -96,7 +96,7 @@ class AppApiController extends Controller
             'team-lists' => ['name' => 'required|string|max:100', 'instructions' => 'sometimes|nullable|string|max:4000', 'timezone' => ['sometimes', Rule::in(timezone_identifiers_list())], 'members' => 'present|array|max:200', 'members.*' => 'array:id,name,mode', 'members.*.id' => 'required|string|max:100|distinct', 'members.*.name' => 'required|string|max:100', 'members.*.mode' => 'required|in:fixed,random', 'links' => 'sometimes|array|max:50', 'links.*' => 'array:id,title,url', 'links.*.id' => 'required|string|max:100|distinct', 'links.*.title' => 'required|string|max:100', 'links.*.url' => 'required|string|max:2048'],
             'links' => ['title' => 'required|string|max:100', 'url' => 'required|string|max:2048'],
             'history' => ['visitedAt' => ['sometimes', 'string', 'max:40', 'date', 'regex:/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/'], 'deviceId' => 'sometimes|nullable|uuid', 'deviceName' => ['sometimes', 'nullable', 'string', 'max:100', 'regex:/\A[^\x00-\x1f\x7f]*\z/u'], 'eventId' => 'sometimes|nullable|uuid', 'url' => 'required|string|max:2048', 'title' => 'sometimes|string|max:160', 'source' => 'required|in:desktop,mobile,web', 'hostId' => 'sometimes|nullable|uuid'],
-            'notifications' => ['occurredAt' => ['sometimes', 'nullable', 'date', 'max:40'], 'eventId' => 'required|uuid', 'type' => 'required|in:chat.completed,approval.required,review.required,schedule.completed,device.added,device.reconnected,website.notification,schedule.error', 'origin' => 'required_if:type,website.notification|prohibited_unless:type,website.notification|string|max:2048', 'sound' => 'sometimes|boolean', 'silent' => 'sometimes|boolean', 'hostId' => 'sometimes|nullable|uuid', 'chatId' => 'sometimes|nullable|string|max:100|regex:/^[a-zA-Z0-9_-]+$/', 'scheduleId' => 'sometimes|nullable|string|max:100|regex:/^[a-zA-Z0-9_-]+$/', 'downtimeSeconds' => 'sometimes|nullable|integer|between:0,31536000', 'level' => 'required_if:type,schedule.error|prohibited_unless:type,schedule.error|in:error', 'action' => 'required_if:type,schedule.error|prohibited_unless:type,schedule.error|in:save,preview,preflight,reconcile,revoke-access,clear-provider-override', 'code' => 'required_if:type,schedule.error|prohibited_unless:type,schedule.error|in:SCHEDULE_EXECUTION_UNSUPPORTED,SCHEDULE_EXECUTOR_UNAVAILABLE,SCHEDULE_CONFIGURATION_FAILED', 'correlationId' => 'required_if:type,schedule.error|prohibited_unless:type,schedule.error|uuid', 'title' => ['sometimes', 'nullable', 'string', 'max:160', 'regex:/\A[^\x00-\x1f\x7f]*\z/u'], 'body' => ['sometimes', 'nullable', 'string', 'max:500', 'regex:/\A[^\x00-\x1f\x7f]*\z/u'], 'hostName' => ['sometimes', 'nullable', 'string', 'max:80', 'regex:/\A[^\x00-\x1f\x7f]*\z/u']],
+            'notifications' => ['requestId' => ['sometimes', 'nullable', 'string', 'max:128', 'not_regex:/[\x00-\x1f\x7f]/'], 'requestKind' => 'sometimes|nullable|in:permission,question', 'readAt' => 'sometimes|nullable|date|max:40', 'resolvedAt' => 'sometimes|nullable|date|max:40', 'occurredAt' => ['sometimes', 'nullable', 'date', 'max:40'], 'eventId' => 'required|uuid', 'type' => 'required|in:chat.completed,approval.required,review.required,schedule.completed,device.added,device.reconnected,website.notification,schedule.error', 'origin' => 'required_if:type,website.notification|prohibited_unless:type,website.notification|string|max:2048', 'sound' => 'sometimes|boolean', 'silent' => 'sometimes|boolean', 'hostId' => 'sometimes|nullable|uuid', 'chatId' => 'sometimes|nullable|string|max:100|regex:/^[a-zA-Z0-9_-]+$/', 'scheduleId' => 'sometimes|nullable|string|max:100|regex:/^[a-zA-Z0-9_-]+$/', 'downtimeSeconds' => 'sometimes|nullable|integer|between:0,31536000', 'level' => 'required_if:type,schedule.error|prohibited_unless:type,schedule.error|in:error', 'action' => 'required_if:type,schedule.error|prohibited_unless:type,schedule.error|in:save,preview,preflight,reconcile,revoke-access,clear-provider-override', 'code' => 'required_if:type,schedule.error|prohibited_unless:type,schedule.error|in:SCHEDULE_EXECUTION_UNSUPPORTED,SCHEDULE_EXECUTOR_UNAVAILABLE,SCHEDULE_CONFIGURATION_FAILED', 'correlationId' => 'required_if:type,schedule.error|prohibited_unless:type,schedule.error|uuid', 'title' => ['sometimes', 'nullable', 'string', 'max:160', 'regex:/\A[^\x00-\x1f\x7f]*\z/u'], 'body' => ['sometimes', 'nullable', 'string', 'max:500', 'regex:/\A[^\x00-\x1f\x7f]*\z/u'], 'hostName' => ['sometimes', 'nullable', 'string', 'max:80', 'regex:/\A[^\x00-\x1f\x7f]*\z/u']],
             'logs' => ['eventId' => 'required|uuid', 'code' => 'required|in:connected,disconnected,reconnected,command_failed,push_failed,permission_denied,run_started,run_completed,run_failed,device_added,device_revoked,chat.queued,chat.running,chat.awaiting_input,chat.completed,chat.failed,chat.cancelled,chat.interrupted,transport.online,transport.offline,transport.device_added,browser.open,browser.unload,app.started,app.stopping,api.failed', 'level' => 'required|in:info,warning,error', 'source' => 'sometimes|in:desktop,mobile,web,server', 'hostId' => 'sometimes|nullable|uuid'],
             default => abort(404),
         };
@@ -123,7 +123,11 @@ class AppApiController extends Controller
             $value['links'][$index]['url'] = $this->records->safeUrl($link['url'], false);
         }
         if ($kind === 'notifications') {
-            $value['read'] = false;
+            $value['read'] = ! empty($value['readAt']) || ! empty($value['resolvedAt']);
+            $value['eventId'] = strtolower($value['eventId']);
+            if ($value['read']) {
+                $value['silent'] = true;
+            }
             // The desktop's chat title wins; the generic label covers older desktops.
             $value['title'] = filled($value['title'] ?? null) ? $value['title'] : match ($value['type']) {
                 'chat.completed' => 'Chat completed', 'approval.required' => 'Approval required', 'review.required' => 'Review required', 'schedule.completed' => 'Schedule completed', 'device.added' => 'Device added', 'device.reconnected' => 'Computer reconnected', 'website.notification' => 'Website notification', 'schedule.error' => 'Schedule configuration failed',
@@ -137,7 +141,24 @@ class AppApiController extends Controller
             User::whereKey($request->user()->id)->lockForUpdate()->firstOrFail();
             if (isset($value['eventId'])) {
                 foreach ($this->records->all($request->user(), $kind) as $old) {
-                    if (($old['eventId'] ?? '') === $value['eventId']) {
+                    if (strtolower($old['eventId'] ?? '') === $value['eventId'] || ($kind === 'notifications' && in_array($value['type'], ['review.required', 'approval.required']) && ! empty($value['requestId']) && ($old['requestId'] ?? null) === $value['requestId'] && ($old['hostId'] ?? null) === ($value['hostId'] ?? null) && ($old['chatId'] ?? null) === ($value['chatId'] ?? null) && $old['type'] === $value['type'])) {
+                        // Event identity/content is immutable. Resolution is monotonic,
+                        // including a replay arriving after a newer owner resolution.
+                        if ($kind === 'notifications' && (! empty($value['readAt']) || ! empty($value['resolvedAt']))) {
+                            abort_unless(($old['hostId'] ?? null) === ($value['hostId'] ?? null) && ($old['chatId'] ?? null) === ($value['chatId'] ?? null) && $old['type'] === $value['type'] && (empty($old['requestId']) || ($old['requestId'] === ($value['requestId'] ?? null))), 409, 'Notification identity changed.');
+                            $payload = $old;
+                            unset($payload['id'], $payload['revision'], $payload['createdAt'], $payload['updatedAt']);
+                            foreach (['readAt', 'resolvedAt'] as $field) {
+                                if (empty($payload[$field]) && ! empty($value[$field])) {
+                                    $payload[$field] = $value[$field];
+                                }
+                            }
+                            $payload['read'] = true;
+                            $payload['silent'] = true;
+
+                            return $this->records->save($request->user(), $kind, $payload, $old['id']);
+                        }
+
                         return $old;
                     }
                 }

@@ -241,6 +241,53 @@ class AppApiTest extends TestCase
         }
     }
 
+    public function test_resolved_approval_cannot_be_reopened_or_realerted_by_replayed_host_events(): void
+    {
+        Passport::actingAs($this->owner(), ['app:read', 'app:write']);
+        $this->postJson('/api/v1/app/push-subscriptions', ['deviceId' => (string) Str::uuid(), 'platform' => 'apns', 'token' => str_repeat('b', 64), 'environment' => 'sandbox'])->assertOk();
+        $event = ['eventId' => (string) Str::uuid(), 'hostId' => (string) Str::uuid(), 'chatId' => 'synthetic', 'type' => 'review.required', 'requestId' => 'permission-one', 'requestKind' => 'permission', 'title' => 'Approval required · Fixture'];
+        $saved = $this->postJson('/api/v1/app/notifications', $event)->assertCreated()->json();
+        $this->postJson('/api/v1/app/notifications', array_replace($event, ['eventId' => (string) Str::uuid()]))->assertCreated()->assertJsonPath('id', $saved['id']);
+        $resolved = now()->toIso8601String();
+        $this->postJson('/api/v1/app/notifications', array_replace($event, ['requestId' => 'different-permission', 'resolvedAt' => $resolved]))->assertConflict();
+        $this->postJson('/api/v1/app/notifications', $event + ['readAt' => $resolved, 'resolvedAt' => $resolved, 'silent' => true])->assertCreated()->assertJsonPath('resolvedAt', $resolved)->assertJsonPath('read', true);
+        $this->postJson('/api/v1/app/notifications', $event + ['silent' => false])->assertCreated()->assertJsonPath('resolvedAt', $resolved)->assertJsonPath('silent', true);
+        $this->artisan('proteus:deliver-push')->assertSuccessful();
+        $this->assertSame(0, DB::table('app_records')->where('kind', 'push-outbox')->count());
+        $this->assertSame(1, DB::table('app_records')->where('kind', 'notifications')->count());
+        $this->postJson('/api/v1/app/notifications', ['eventId' => (string) Str::uuid(), 'hostId' => $event['hostId'], 'chatId' => 'synthetic', 'type' => 'chat.completed'])->assertCreated()->assertJsonPath('silent', null);
+        $this->assertSame(1, DB::table('app_records')->where('kind', 'push-outbox')->count(), 'Completion alerts remain enabled');
+    }
+
+    public function test_uncertain_push_is_not_replayed_and_does_not_starve_later_completion(): void
+    {
+        $user = $this->owner();
+        Passport::actingAs($user, ['app:read', 'app:write']);
+        $this->postJson('/api/v1/app/push-subscriptions', ['deviceId' => (string) Str::uuid(), 'platform' => 'apns', 'token' => str_repeat('c', 64), 'environment' => 'sandbox'])->assertOk();
+        $this->mock(PushDelivery::class, function ($mock) {
+            $mock->shouldReceive('deliver')->once()->andReturn('uncertain');
+            $mock->shouldReceive('deliver')->once()->andReturn('accepted');
+        });
+        // Enqueue through the real service: the mocked boundary only controls
+        // the irreversible provider outcome, not persistence or worker logic.
+        $records = app(AppRecords::class);
+        $push = new PushDelivery($records);
+        $first = $records->save($user, 'notifications', ['eventId' => (string) Str::uuid(), 'type' => 'review.required']);
+        $push->enqueue($user, $first);
+        $this->artisan('proteus:deliver-push')->assertSuccessful();
+        $this->artisan('proteus:deliver-push')->assertSuccessful();
+        $second = $records->save($user, 'notifications', ['eventId' => (string) Str::uuid(), 'type' => 'chat.completed']);
+        $push->enqueue($user, $second);
+        $this->artisan('proteus:deliver-push --limit=1')->assertSuccessful();
+        $outbox = $records->all($user, 'push-outbox');
+        $this->assertCount(1, $outbox);
+        $this->assertSame('uncertain', $outbox[0]['state']);
+        $this->assertSame($first['id'], $outbox[0]['notificationId']);
+        $records->save($user, 'notifications', ['eventId' => $first['eventId'], 'type' => 'review.required', 'readAt' => now()->toIso8601String()], $first['id']);
+        $this->artisan('proteus:deliver-push')->assertSuccessful();
+        $this->assertCount(0, $records->all($user, 'push-outbox'), 'Read uncertain receipts retire without another provider request');
+    }
+
     public function test_website_notifications_preserve_safe_origin_and_reject_owner_references(): void
     {
         Passport::actingAs($this->owner(), ['app:read', 'app:write']);

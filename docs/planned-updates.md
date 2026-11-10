@@ -1,3 +1,16 @@
+## Nov 8 — complete request audit before further deployment
+
+The operator requires checking all new features and full file-browser parity on desktop, web,
+iPhone and iPad before another deployment. The [request audit](releases/2026-11-08/request-audit.md)
+retains every requested interaction, evidence and remaining gap. Native columns/modifier selection,
+phone split resizing and shared owner file navigation are implemented; final package checks remain.
+Web remote PDF and
+opened-document resource parity, durable notification resolution and visible attachment errors
+are corrected in new source and still require their own accepted package. Existing installed
+outcomes remain in [rollout](releases/2026-11-08/rollout.md); the release is open.
+
+The dated entries below retain historical decisions and qualifications.
+
 ## Nov 5 closed 2026-11-06
 
 Release 0.2.43 is closed. Work Mac native inbox/digest/planning, actual managed tracker/Slack reads,

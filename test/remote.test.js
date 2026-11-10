@@ -417,3 +417,31 @@ test('workspace file browsing needs its own exact grant and rechecks revocation 
  await assert.rejects(pending,/file|workspace/i);
  assert.equal(app.remote.config.devices.find(row=>row.id===client.device.id).documentAccess,true);
 });
+
+test('workspace file tabs converge through the owner without granting other devices or chat document access',async t=>{
+ const {app,connect,workspace}=await fixture(t),client=await connect(),other=await connect(),workspaceId=app.context.get().defaultWorkspaceId;
+ fs.writeFileSync(path.join(workspace,'shared-file.md'),'# Owner file');
+ app.remote.setWorkspaceFileAccess(client.device.id,[workspaceId]);
+ const {roots}=await client.request('files.roots',{workspaceId}),rootId=roots.find(root=>root.path===workspace).id;
+ const args={workspaceId,rootId,file:'shared-file.md',scope:'workspace',scopeId:workspaceId};
+ const first=await client.request('files.open',args),again=await client.request('files.open',args);
+ assert.equal(first.tabId,again.tabId);assert.equal(again.tabs.filter(tab=>tab.id===first.tabId).length,1);
+ assert.equal(app.contentTabs.documentSource(workspaceId,first.tabId.slice(9),'workspace'),path.join(workspace,'shared-file.md'));
+ const tab=(await client.request('tabs.get',{scope:'workspace',id:workspaceId})).tabs.find(tab=>tab.id===first.tabId);
+ assert.deepEqual(tab.workspaceFile,{workspaceId,rootId,file:'shared-file.md',title:'shared-file.md',mediaType:'text/markdown'});
+ assert.notEqual(app.remote.config.devices.find(device=>device.id===client.device.id).documentAccess,true);
+ assert.equal((await other.request('tabs.get',{scope:'workspace',id:workspaceId})).tabs.some(tab=>tab.id===first.tabId),false);
+ const config=app.context.config(),otherFolder=path.join(path.dirname(workspace),'file-view-container');fs.mkdirSync(otherFolder);
+ app.context.mutate(value=>value.workspaces.push({...value.workspaces.find(row=>row.id===workspaceId),id:'file-view-container',name:'Other file view container',cwd:otherFolder,additionalDirectories:[]}),config.revision);
+ const placed=await client.request('files.open',{...args,scopeId:'file-view-container'});
+ assert.equal(placed.tabs.find(tab=>tab.id===placed.tabId).workspaceFile.workspaceId,workspaceId,'Viewer source authority must not change with presentation workspace');
+ assert.deepEqual(app.remote.config.devices.find(device=>device.id===client.device.id).workspaceFileAccess,[workspaceId]);
+ await assert.rejects(other.request('files.preview',{workspaceId,rootId,file:'shared-file.md'}),/file|workspace/i);
+ await assert.rejects(client.request('files.open',{...args,scope:'chat',scopeId:'other'}),/workspace|project/);
+ await assert.rejects(client.request('files.open',{...args,workspaceId:'other'}),/workspace|file/);
+ await client.request('tabs.mutate',{scope:'workspace',id:workspaceId,expectedRevision:again.revision,operations:[{action:'visibility',id:tab.id,hidden:true}]});
+ assert.equal(app.contentTabs.get('workspace',workspaceId).tabs.find(item=>item.id===tab.id).hidden,true);
+ app.remote.setWorkspaceFileAccess(client.device.id,[]);
+ assert.equal((await client.request('tabs.get',{scope:'workspace',id:workspaceId})).tabs.some(item=>item.id===tab.id),false);
+ await assert.rejects(client.request('tabs.mutate',{scope:'workspace',id:workspaceId,expectedRevision:app.contentTabs.get('workspace',workspaceId).revision,operations:[{action:'close',id:tab.id}]}),/document/i);
+});

@@ -1,4 +1,4 @@
-import {mountFileBrowser} from '../../../public/features/workspaces/file-browser.js';
+import {mountFileBrowser,mountFileDocument} from '../../../public/features/workspaces/file-browser.js';
 import '../../../public/features/workspaces/file-browser.css';
 import {updateWebState} from './remote-state.js';
 import {acceptWebTabs as acceptTabs} from "./workspace-tab-state.js";
@@ -104,47 +104,44 @@ export function createWebWorkspaces(ui){
   renderRecents();const stamp=active?JSON.stringify([active.hostId,active.id,active.projectId,projectCatalog()?.revision,record().selected,record().page,tabStamp(record().tabs),record().fileTabs,record().catalog?.revision,record().catalog?.refreshedAt,ui.rows().filter(row=>row.hostId===active.hostId&&row.workspaceId===active.id).map(row=>[row.id,row.updatedAt,row.title,row.status,row.archivedAt])]):null;if(active&&lastRender?.container===container&&lastRender.stamp===stamp&&container.querySelector('[data-workspace-page]'))return;const addOpen=!!container.querySelector('.remote-inner-add')?.open;lastRender={container,stamp};if(!active){const catalogs=[...ui.sessions].map(([hostId,s])=>({hostId,hostName:ui.hosts.get(hostId)?.label||'computer',online:s.client?.status==='online',context:s.state?.context}));renderWorkspaceList(container,{catalogs,recent:saved.recent.map(key=>'workspace:'+key),open:attempt((row,page)=>enter(row,page==='chats'&&ui.sessions.get(row.hostId)?.state?.capabilities?.includes('projects.v1')?'projects':page)),copy,create,notify:ui.notify});return;}
   const tab=viewTabs().find(t=>t.id===record().selected);disposeFiles?.();disposeFiles=null;container.innerHTML=nav()+'<div data-workspace-page></div>';bindNav(container);container.querySelector('.remote-inner-add').open=addOpen;const page=container.querySelector('[data-workspace-page]');
   if(tab?.type==='workspace-file'){renderFileTab(page,tab);return;}
+  if(tab?.type==='document'&&tab.workspaceFile){renderFileTab(page,{...tab,...tab.workspaceFile});return;}
   if(tab&&tab.type!=='chat'){
    if(tab.type==='browser'){page.innerHTML=`<section class="card"><h2>${e(tab.title||'Browser')}</h2><div class="actions"><button data-workspace-back ${!tab.history||tab.history.index<=0?'disabled':''} aria-label="Back">← Back</button><button data-workspace-forward ${!tab.history||tab.history.index>=tab.history.entries.length-1?'disabled':''} aria-label="Forward">Forward →</button></div><form data-workspace-browser><label>Website address or search<input name="url" value="${e(tab.url||'')}" placeholder="Search or enter a URL"></label><button class="primary">Open website ↗</button></form><p class="note">This tab’s address stays in the workspace. Websites use this browser’s session. The owning computer keeps its own browser sessions.</p></section>`;page.querySelector('form').onsubmit=event=>{event.preventDefault();let url;try{url=browserTarget(page.querySelector('input').value);}catch(error){ui.notify(error.message);return;}window.open(url,'_blank','noopener,noreferrer');void attempt(()=>navigateBrowser(tab,url))();};for(const [selector,delta] of [['[data-workspace-back]',-1],['[data-workspace-forward]',1]])page.querySelector(selector).onclick=()=>{const entry=tab.history?.entries[tab.history.index+delta];if(!entry)return;window.open(entry.url,'_blank','noopener,noreferrer');void attempt(()=>navigateBrowser(tab,entry.url,entry))();};}
    else page.innerHTML=`<section class="card"><h2>${e(browserLabel(tab)||tab.type)}</h2><p>${tab.type==='terminal'?'Terminal session '+e(tab.terminalId||'')+' belongs to '+e(current().host.label)+'. Open it on that computer to reconnect; no command is replayed.':'Open this workspace document on its owning computer. Chat-linked approved documents remain available from their chat.'}</p></section>`;return;
   }
   page.innerHTML=`<div class="workspace-button-pages actions"><button data-workspace-page-button="chats" class="${record().page==='chats'?'primary':''}">Chats</button><button data-workspace-page-button="tabs" class="${record().page==='tabs'?'primary':''}">Tabs</button><button data-workspace-page-button="files">Files</button><button data-workspace-page-button="configuration" class="${record().page==='configuration'?'primary':''}">Configuration</button><button data-workspace-delete class="danger">Delete workspace</button></div><div data-workspace-content></div>`;page.querySelectorAll('[data-workspace-page-button]').forEach(button=>button.onclick=()=>selectWorkspace(button.dataset.workspacePageButton));page.querySelector('[data-workspace-delete]').onclick=attempt(deleteWorkspace);if(projectEnabled())page.querySelector('.workspace-button-pages').remove();const target=page.querySelector('[data-workspace-content]');if(projectEnabled()){const heading=document.createElement('header');heading.className='web-workspace-heading heading';heading.innerHTML=`<div><h1>${e(project()?.name||workspace()?.name||'Workspace')}</h1><p class="muted">${e(current().host.label)}${project()?' · '+e(workspace()?.name):''}</p></div>`;target.before(heading);const files=document.createElement('button');files.textContent='Workspace files';files.onclick=()=>selectWorkspace('files');heading.append(files);}if(record().page==='files'){
     const owner=current(),binding=active.id;
-    disposeFiles=mountFileBrowser(target,{workspaceId:binding,escape:e,request:(action,args)=>ui.request(owner,'files.'+action,args),open:value=>openFileTab({rootId:value.rootId,file:value.relativePath,title:value.title||value.relativePath.split('/').pop()})
+    disposeFiles=mountFileBrowser(target,{workspaceId:binding,escape:e,remote:true,request:(action,args)=>ui.request(owner,'files.'+action,args),open:value=>openFileTab({rootId:value.rootId,file:value.relativePath,title:value.title||value.relativePath.split('/').pop()})
     });
    }else if(record().page==='projects'&&projectEnabled()){renderProjects(target);}else if(record().page==='tabs'){mountWorkspaceTabs(target,{tabs:managedTabs(),preview:projectEnabled(),allowReorder:!!active.projectId,act:manageTab,refresh:managedTabs,notify:ui.notify,reorder:async(source,target,after)=>{const tabs=reorderWorkspaceTabSiblings(managedTabs(),{id:source.id,targetId:target.id,parentId:source.parentId,after});await mutateTabs([{action:'reorder',ids:tabs.map(t=>t.id)}]);}});}else if(record().page==='configuration')configuration(target);else ui.renderIndex(target,{workspaceId:active.id,projectId:active.projectId,hostId:active.hostId,name:workspace()?.name,projectName:project()?.name,rows:projectRows(),open:(id,hostId)=>attempt(openChat)(id,ui.rows().find(r=>r.id===id&&r.hostId===hostId)?.title)});
  }
 
 
- // These are browser-local views of owner files, not copied owner tab descriptors.
- // Persist only the bound root/path; every revisit rechecks the paired-device grant.
- function openFileTab({rootId,file,title}){
-  const id='workspace-file:'+encodeURIComponent(JSON.stringify([rootId,file]));
-  const rows=record().fileTabs||=[];
-  if(!rows.some(row=>row.id===id)){if(rows.length>=50)throw Error('Close a file tab before opening another.');rows.push({id,type:'workspace-file',rootId,file,title});}
-  record().selected=id;persist();ui.render();
+ // The owner registers file navigation. Every viewer still needs its current
+ // paired workspace grant; opening a tab never grants another device file access.
+ async function openFileTab({rootId,file,workspaceId=active.id}){
+  const owner=current(),view=record(),binding=ownerScope();
+  try{
+   if(!owner.state?.capabilities?.includes('workspace.files.tabs.v1'))throw Error('Update this computer to open shared workspace file tabs.');
+   const result=await ui.request(owner,'files.open',{workspaceId,rootId,file,scope:binding.scope,scopeId:binding.id});
+   view.tabs=result;view.selected=result.tabId;view.fileTabs=(view.fileTabs||[]).filter(row=>row.rootId!==rootId||row.file!==file);persist();if(record()===view)ui.render();
+  }catch(error){ui.notify(error.message);}
  }
  function renderFileTab(target,tab){
-  const owner=current(),workspaceId=active.id;let disposed=false,generation=0;
+  const owner=current(),workspaceId=tab.workspaceId||active.id,binding={workspaceId,rootId:tab.rootId};let disposed=false,generation=0,documentView;
+  const request=(action,args)=>ui.request(owner,'files.'+action,{...binding,...args});
   const render=async()=>{
-   const mine=++generation;target.replaceChildren();if(document.hidden)return;
+   const mine=++generation;documentView?.dispose();documentView=null;target.replaceChildren();if(document.hidden)return;
    target.innerHTML='<p role="status">Loading file from its owning computer…</p>';
    try{
-    const value=await ui.request(owner,'files.preview',{workspaceId,rootId:tab.rootId,file:tab.file});
+    const value=await request('preview',{file:tab.file});
     if(disposed||mine!==generation||!target.isConnected||document.hidden)return;
-    target.innerHTML='<header class="heading"><h2>'+e(tab.title)+'</h2><span class="muted">File view · '+e(owner.host.label)+'</span></header><article class="markdown-preview"></article>';
-    const article=target.querySelector('article');
-    if(value.mediaType.startsWith('image/')){const img=document.createElement('img');img.className='file-image-preview';img.src=value.dataURL;img.alt=tab.title;article.append(img);}
-    else ProteusMarkdown.mount(article,value.content,{allowExternalImages:false,link:href=>{
-     if(/^https?:/i.test(href)){window.open(href,'_blank','noopener,noreferrer');return;}
-     if(href.startsWith('#'))return;
-     if(/^[a-z][a-z0-9+.-]*:/i.test(href)||href.startsWith('//')){ui.notify('Unsupported file link.');return;}
-     try{const base=new URL(tab.file,'https://workspace.invalid/'),url=new URL(href,base);if(url.origin!==base.origin)throw Error('Unsupported file link.');const file=decodeURIComponent(url.pathname.slice(1));openFileTab({rootId:tab.rootId,file,title:file.split('/').pop()});}catch(error){ui.notify(error.message);}
-    }});
+    target.innerHTML='<header class="heading"><h2>'+e(tab.title)+'</h2><span class="muted">File view · '+e(owner.host.label)+'</span></header><p role="status" data-file-error></p><article class="markdown-preview"></article>';
+    documentView=mountFileDocument(target.querySelector('article'),{value,request,open:entry=>openFileTab({workspaceId,rootId:tab.rootId,file:entry.path,title:entry.name}),onError:error=>{if(!disposed&&mine===generation)target.querySelector('[data-file-error]').textContent=error.message;}});
    }catch(error){if(!disposed&&mine===generation&&target.isConnected)target.textContent=error.message;}
   };
   const visibility=()=>{void render();};document.addEventListener('visibilitychange',visibility);
-  disposeFiles=()=>{disposed=true;generation++;document.removeEventListener('visibilitychange',visibility);target.replaceChildren();};
+  disposeFiles=()=>{disposed=true;generation++;documentView?.dispose();document.removeEventListener('visibilitychange',visibility);target.replaceChildren();};
   void render();
  }
 

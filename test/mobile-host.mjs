@@ -198,10 +198,26 @@ const fixture = http.createServer(async (req, res) => {
     const folder=app.context.config().workspaces.find(w=>w.id==='native-studio').cwd;
     res.setHeader('Content-Type','application/json');res.end(JSON.stringify({sourceExists:fs.existsSync(path.join(folder,'Destination 000')),movedExists:fs.existsSync(path.join(folder,'Destination 200','Destination 000'))}));return;
   }
+  if(req.url==='/files-tab-state'){
+    const value=app.contentTabs.get('workspace','native-studio');
+    res.setHeader('Content-Type','application/json');res.end(JSON.stringify({tabs:value.tabs.filter(tab=>tab.type==='document').map(tab=>({id:tab.id,title:tab.title,mediaType:tab.mediaType})),revision:value.revision}));return;
+  }
+  if(req.url==='/files-drag-state'){
+    const folder=app.context.config().workspaces.find(w=>w.id==='native-studio').cwd;
+    res.setHeader('Content-Type','application/json');res.end(JSON.stringify({sources:['! Drag A.md','! Drag B.md'].map(name=>fs.existsSync(path.join(folder,name))),moved:['! Drag A.md','! Drag B.md'].map(name=>fs.existsSync(path.join(folder,'00 Drag target',name)))}));return;
+  }
+  if(req.url==='/files-grant-drag'){
+    await seedProjectFixture();const workspaceId='native-studio',folder=app.context.config().workspaces.find(w=>w.id===workspaceId).cwd;
+    fs.rmSync(path.join(folder,'00 Drag target'),{recursive:true,force:true});fs.mkdirSync(path.join(folder,'00 Drag target'));
+    for(const name of ['! Drag A.md','! Drag B.md'])fs.writeFileSync(path.join(folder,name),'# Synthetic drag fixture');
+    for(const device of app.remote.config.devices)app.remote.setWorkspaceFileAccess(device.id,[workspaceId],[workspaceId]);res.end('Writable drag fixture grant');return;
+  }
   if(req.url==='/files-grant'||req.url==='/files-grant-pages'){
     const fixture=await seedProjectFixture(),workspaceId='native-studio',folder=app.context.config().workspaces.find(w=>w.id===workspaceId).cwd;
     fs.mkdirSync(path.join(folder,'nested-files'),{recursive:true});fs.writeFileSync(path.join(folder,'Files fixture.md'),'# Streamed document\n\n![[pixel.png]]\n\n[Child](nested-files/Child.md)');fs.writeFileSync(path.join(folder,'nested-files','Child.md'),'# Child document');fs.writeFileSync(path.join(folder,'pixel.png'),Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Zl1sAAAAASUVORK5CYII=','base64'));
-    const paged=req.url==='/files-grant-pages';if(paged)for(let i=0;i<201;i++)fs.mkdirSync(path.join(folder,'Destination '+String(i).padStart(3,'0')),{recursive:true});
+    const paged=req.url==='/files-grant-pages';
+    if(!paged)for(const name of fs.readdirSync(folder))if(/^Destination \d{3}$/.test(name))fs.rmSync(path.join(folder,name),{recursive:true,force:true});
+    if(paged)for(let i=0;i<201;i++)fs.mkdirSync(path.join(folder,'Destination '+String(i).padStart(3,'0')),{recursive:true});
     for(const device of app.remote.config.devices)app.remote.setWorkspaceFileAccess(device.id,[workspaceId],paged?[workspaceId]:[]);res.end(paged?'Writable paged fixture grant':'Read-only fixture grant');return;
   }
   if(req.url==='/preview-grant'){for(const device of app.remote.config.devices)app.remote.setDocumentAccess(device.id,true);res.end('Granted for synthetic test');return;}
