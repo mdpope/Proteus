@@ -39,6 +39,11 @@ The three previously added JSON files are absent from its resources folder; thei
 await direct verification. The clean baseline differs from the modified pre-update rollback target,
 explaining that exact-hash rejection without establishing the earlier forward-install cause.
 Retained quiescence metrics confirm two matching scans in 6.884 seconds against a 60-second budget.
+Independent native extraction subsequently verified that the accepted NSIS embedded payload and
+update archive produce the same accepted application hash. Their only difference is the archive's
+expected cached setup executable. This rules out differing extracted application bytes; it does
+not qualify the live installer transition or identify its failed post-install check. Temporary
+comparison trees were removed and a compact private receipt retained.
 
 Corrective iOS validation passes the phone and iPad prepend/idle/paging cases and six native
 owner/browser regressions. Actual iPhone and iPad SPA/reselection/Back/Forward/hash navigation
