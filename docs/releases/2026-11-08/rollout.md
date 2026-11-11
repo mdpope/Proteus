@@ -32,6 +32,14 @@ The running app reports the prior `windows.30f8b6596e38` build; successful rollb
 are not established. The operator approved read-only access to the exact new job for file-level
 diagnosis. Installation remains incomplete, with no blind retry or further build initiated.
 
+The subsequent granted installation inspection matches the clean signed 0.2.43 payload hash
+`00c3b5f5911e3510ecc82aca675e4fdcbaf3bfecfbdb5aef14d400251b540549` and its accepted
+cached installer. It contains 14,443 payload files, versus 14,446 recorded before the update.
+The three previously added JSON files are absent from its resources folder; their recovery copies
+await direct verification. The clean baseline differs from the modified pre-update rollback target,
+explaining that exact-hash rejection without establishing the earlier forward-install cause.
+Retained quiescence metrics confirm two matching scans in 6.884 seconds against a 60-second budget.
+
 Corrective iOS validation passes the phone and iPad prepend/idle/paging cases and six native
 owner/browser regressions. Actual iPhone and iPad SPA/reselection/Back/Forward/hash navigation
 passes. The phone run also exposed and verified the missing Team Tools drawer button correction.
