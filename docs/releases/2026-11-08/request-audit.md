@@ -35,7 +35,7 @@ connection grants are separate and checked again by the desktop for every operat
 
 | Request group | Implemented / existing evidence | Remaining qualification or work |
 | --- | --- | --- |
-| Convert Nov 6 plan to Nov 8 and implement carried fixes | Named Nov 8 / 0.2.44 plan retains N6 identifiers | Release is open; no closeout or broader rollout inferred |
+| Convert Nov 6 plan to Nov 8 and implement carried fixes | Named Nov 8 / 0.2.44 plan retains N6 identifiers | See the final rollout and closeout records; source, installed and independently verified evidence remain distinct |
 | Chats fixed viewport, hide/dense filters, four per row, progressive loading, provider/model/level/speed before computer | Desktop/web controls and Chromium/WebKit fixtures pass | Signed-in production interaction and representative large live indexes |
 | Mnemosyne disk usage by type, Library explanation, service pause/drain/restart, readable expandable logs | Storage/log/UI tests; native installed active pause/drain/restart observed | End-to-end destination/artifact reconciliation, phone Library sync and unattended schedule output validation |
 | Moved Build Mac schedules run with narrowly approved access | Future profiles and portable host command path implemented | Real retained output checks; captured pending approvals remain human decisions |

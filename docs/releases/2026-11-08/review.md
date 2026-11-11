@@ -1,12 +1,19 @@
-# Nov 8 release review — November 9
+# Nov 8 release review — November 10
 
-The Build Mac runs 0.2.44 with verified owner health and zero navigation differences.
-Build Mac ca7005e9f9c5 and iPhone 2611.9.3 have verified installation/preservation receipts.
-Web release 20261110T044941Z activated before the latest gate. The operator now requires the
-[complete request audit](request-audit.md) before further deployment. Native file-browser parity
-is implemented with final interaction checks in progress. The source suite passes 1,753 tests with four skipped; audit corrections are not installed
-on Mac/iPhone or deployed to web. iPad is now included in the authorized rollout when ready.
-Nov 8 remains open.
+Build Mac runs the final `281a24894d9e+src.41d00617717d` build with verified owner health
+and zero automatic navigation differences. Work Mac and Linux have also updated with verified
+health; broader destination acceptance is still separate. Both physical iOS devices have
+2611.10.3 installed, with the specific preservation exceptions recorded in the
+[rollout](rollout.md). Web release 20261110T063757Z passed endpoint/asset checks and signed-in
+interaction. Native file-browser parity and provider bridge changes have source and synthetic
+package evidence; that does not certify every physical gesture or real workflow.
+Windows native acceptance and publisher verification passed. One consumer is updated with
+verified health and navigation preservation. The designated builder subsequently installed corrected build `windows.9d5818f5c5fc` with verified health, zero navigation differences and Cua observation after preserved failed attempts. HC native command portability/replay now passes for Codex, Copilot and Claude using
+the same explicitly approved schedule grant. The fixture retains its narrow policy, artifacts,
+ledger and source-aware owner selection. This does not certify once/deny/revocation or Notification
+Center error visibility and persistence.
+The [complete request audit](request-audit.md) still distinguishes implementation from acceptance.
+Nov 8 rollout is complete and the release record is closed. The operator reports a cross-device draft mismatch; draft sync has not passed.
 
 ## Lessons and follow-up changes
 
@@ -29,16 +36,31 @@ work, beyond the existing smaller source regressions.
 
 | Area | Latest evidence | Remaining work |
 | --- | --- | --- |
-| Mac recovery/preservation | Exact installed fingerprint, health and 8 workspaces/19 projects/64 scopes/244 tabs/3 windows verify. | Independently exercise Back/Forward, reading position, drafts, sources, pairings and captured model options. Resolve legacy attention/unregistered recoveries through supported maintenance. |
-| iOS new-chat attachments | Simulator Files/Photos dismissal, native Paste consent, image review/upload and chat creation pass. | Physical new-chat import/review and retry acceptance remain pending; build 2611.9.3 is installed; simulator acceptance is distinct from physical import/retry testing. |
+| Mac recovery/preservation | Final installed fingerprint, health and 8 workspaces/19 projects/64 scopes/241 tabs/3 windows verify. | Independently exercise Back/Forward, reading, sources/models, pairings and real Keychain continuity. Desktop peer draft read/save methods were missing from the transport allowlist; mobile/web use a different path. The operator defers the correction to a separate Nov 10 branch and forbids another Nov 8 build/deployment for it. Preserve both drafts; installed synchronization has not passed. Fresh Cua verification passed discovery, permissions, seven windows and real accessibility observation. Input remains separately qualified. Resolve legacy attention/unregistered recoveries through supported maintenance. |
+| iOS new-chat attachments | Simulator Files/Photos dismissal, native Paste consent, image review/upload and chat creation pass. Both devices have corrective build 2611.10.3 installed. | Physical new-chat import/review and retry acceptance remain pending. |
 | Spelling | Desktop native edit routing and replacement callbacks pass their checks. Mac package contains the change. Web assets build. | Actual OS dictionary suggestions/replacement were unavailable in the automated Mac fixture. Verify real desktop/browser correction. Deploy the later web editable-menu guard and validate native iOS spell checking after simulator acceptance. |
-| Physical mobile behavior | iPhone 2611.9.3 preserved 339 files and four destinations before launch. Simulator routing, grouped tabs and typing/history cases pass. | Real-chat scrolling/typing, notification-repeat cessation, tap-to-answer and cold/background reconnect acceptance. A recorded phone General-project cache revision matched all 17 desktop tab IDs, including five hidden; new phone-tab propagation still needs verification. iPad is authorized when ready; other desktop rollout holds remain. |
+| Physical mobile behavior | Both devices have corrective 2611.10.3 installed and launched. The rollout ledger records the specific phone lock-file exception and tablet final source-stability qualification. Simulator routing, grouped tabs and typing/history cases pass. | Real-chat scrolling/typing, notification-repeat cessation, tap-to-answer and cold/background reconnect remain qualified. A recorded phone cache revision matched the desktop tab IDs, while new phone-tab propagation still needs physical verification. |
 | Folder access | Owner grant, stable retry and permission transition regressions pass. | Installed desktop/web/iPhone/iPad request/approve/deny and next-turn sandbox activation acceptance. |
+| Schedule provider portability | HC native first ingestion totals 10; unchanged-evidence replay passes on Codex, Copilot and Claude with no new prompt. Exact saved grant, artifacts/mtimes, two-entry ledger, paused state and source/owner selection remain intact. | Once/deny/revocation and actual Notification Center severity/correlation/dedup/restart remain unverified. Synthetic replay does not establish all professional workflows or first ingestion on every provider. Live schedules remain unchanged. |
 | Remote questions/remembered approvals | Ordinary question transport and acknowledgment-driven dialog correction are implemented. | Actual Mac-to-Windows text/choice questions and stale/reconnect/double-click cases. Full cross-owner remembered-approval fault matrix. |
-| Mnemosyne | Storage/log/Library guidance is implemented. Native service controls are installed with guarded pause/resume and exact runtime-source verification; the native suite passes 382 tests/one skip. Processing and schedule firing were observed. | Active-work pause/drain/restart and new runtime revision were observed; end-to-end output reconciliation remains incomplete. Independently verify unattended study runs under the saved future permissions. Native library/phone synchronization and independent product extraction remain broader open scope. |
-| Atlassian/ADO | Managed read workflows and bounded prior organization workflows digest/replay acceptance exist. Guided ADO source/catalog/UI tests pass. | Full Jira write/reauthorization and provider exposure acceptance on the authorized fixture, account-scoped ADO family reads/pool writes, and qualified PAT lifecycle/CLI design. Recheck actual managed-connection availability before calling an old approval blocker current. |
+| Mnemosyne | Storage/log/Library guidance and guarded native controls are installed. November 10 read-only checks found an available runtime, active running control status, loaded native services and a fresh library index. Storage returns a correctly labeled partial lower bound. Both transcript schedules are enabled and have recent runs. | Latest schedule reports explicitly remain incomplete; successful native wake/sync is not completed filing. Intake verified bounded context updates, while broader reconciliation and follow-up verification remain open. The large native intake snapshot exceeds the observer's bounded JSON read, so queue metadata is unavailable; do not infer no work. Native library/phone synchronization and independent product extraction remain broader scope. |
+| Atlassian/ADO | Reconsented managed Jira exposes 18 tools. Issue/JQL/comment reads and nine canonical team queries pass. Live queue comparison matches 16 open items in order and 33 resolved items in membership. The disposable fixture accepted a comment and Resolve transition, each independently read back, and is completed. Guided ADO source/catalog/UI tests pass. | Jira multi-page results and create/edit/link/worklog runtime acceptance remain open. Workflow validation required resolution notes/customer fields omitted from required-field metadata and ADF formatting. Account-scoped ADO family reads/pool writes and PAT lifecycle/CLI design remain separate. |
 | Proxmox/local networking | Native permission correction and browser/CDP source tests pass. | Installed local-network permission delivery, live page/noVNC connection and DevTools responsiveness. |
-| Release completion | Mac, web and iPhone accepted identities are recorded separately. | Current publication/source-companion reconciliation, release integration/closeout and eligible artifact/recovery cleanup. Nov 8 has no completed closeout. |
+| Release completion | Mac, web and iPhone accepted identities are recorded separately. | Current publication/source-companion reconciliation, release integration/closeout and eligible artifact/recovery cleanup. See [closeout.md](closeout.md) for the completed rollout, integration, retention and protected holds. |
+
+Final recovery follow-up reproduced the Windows first-scan deadline defect in the unchanged
+accepted source. The corrected Windows package passed native acceptance, independent publisher verification and
+29 public HTTPS file checks. The normal owner updater accepted preparation and handoff and is
+now complete after a clean-baseline retry, with verified health, navigation and Cua observation. Earlier failed attempts and their scan counts/timings remain preserved. The original installation
+receipt cannot establish which failure path occurred.
+
+Web recovery closeout independently reverified the existing isolated restoration against all
+18 captured protected tables, schema, native ledger and nutrition. Current live snapshots were
+stable and differ in app records from the earlier capture. The original failed rehearsal remains
+retained with its unrecorded cause. The reviewed retention plan verified current code, previous
+recovery code, one server recovery and both local recovery generations before retiring eligible
+duplicates. Measured server free space increased by 655,704,064 bytes. All 14 endpoints passed
+the subsequent audit.
 
 ## Carried acceptance from earlier closed releases
 

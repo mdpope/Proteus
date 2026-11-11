@@ -3,11 +3,12 @@
   "id": "2026-11-08",
   "name": "Nov 8",
   "version": "0.2.44",
-  "status": "open",
+  "status": "closed",
   "openedOn": "2026-11-08",
   "plan": "docs/2026-11-08-release-plan.md",
   "implementation": "docs/releases/2026-11-08/implementation.md",
   "rollout": "docs/releases/2026-11-08/rollout.md",
   "closeout": "docs/releases/2026-11-08/closeout.md",
-  "sourceCommit": null
+  "sourceCommit": "bcff078e8e621e7fe53c63f779e6d425c260eae1",
+  "closedOn": "2026-11-10"
 }
