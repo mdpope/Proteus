@@ -1,6 +1,6 @@
 # Nov 8 implementation
 
-Version: 0.2.44. Integrated into main. Release remains open.
+Version: 0.2.44. Integrated into main. Release closed November 10 after verified rollout.
 
 Final Windows recovery correction `c235d2aaf6ce2f1b3c6ba8e80108103ca849df7d` is integrated through PR #37 at `bcff078e8e621e7fe53c63f779e6d425c260eae1`. A large cold baseline can exceed the old one-minute budget before
 any comparison. Settlement now starts after baseline discovery, allows measured comparison
@@ -8,7 +8,7 @@ cost and records attempt/timing evidence. The three added regressions pass, alon
 local source tests/four skipped, 1,750 native Windows tests/12 skipped and static checks on both
 hosts. Exact extracted Windows package UI/PTY/restart/integrity checks and independent publisher
 package/source verification also passed. The signed corrected release is published, with 29
-public files verified. Installation is waiting for the destination idle barrier. The accepted
+public files verified. The corrected Windows build subsequently completed installation, owner package/health verification, zero-difference navigation preservation and Cua observation. Failed attempts and their qualifications remain in the rollout record. The accepted
 packages on other platforms retain their previously recorded identities.
 
 Current gate: the [complete request audit](request-audit.md) separates source, simulator and

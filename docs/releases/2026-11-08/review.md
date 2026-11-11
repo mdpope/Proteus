@@ -8,13 +8,12 @@ health; broader destination acceptance is still separate. Both physical iOS devi
 interaction. Native file-browser parity and provider bridge changes have source and synthetic
 package evidence; that does not certify every physical gesture or real workflow.
 Windows native acceptance and publisher verification passed. One consumer is updated with
-verified health and navigation preservation. The designated builder returned to its healthy
-baseline after a pre-replacement recovery-quiescence failure. HC native command portability/replay now passes for Codex, Copilot and Claude using
+verified health and navigation preservation. The designated builder subsequently installed corrected build `windows.9d5818f5c5fc` with verified health, zero navigation differences and Cua observation after preserved failed attempts. HC native command portability/replay now passes for Codex, Copilot and Claude using
 the same explicitly approved schedule grant. The fixture retains its narrow policy, artifacts,
 ledger and source-aware owner selection. This does not certify once/deny/revocation or Notification
 Center error visibility and persistence.
 The [complete request audit](request-audit.md) still distinguishes implementation from acceptance.
-Nov 8 remains open. The operator reports a cross-device draft mismatch; draft sync has not passed.
+Nov 8 rollout is complete and the release record is closed. The operator reports a cross-device draft mismatch; draft sync has not passed.
 
 ## Lessons and follow-up changes
 
@@ -47,12 +46,12 @@ work, beyond the existing smaller source regressions.
 | Mnemosyne | Storage/log/Library guidance and guarded native controls are installed. November 10 read-only checks found an available runtime, active running control status, loaded native services and a fresh library index. Storage returns a correctly labeled partial lower bound. Both transcript schedules are enabled and have recent runs. | Latest schedule reports explicitly remain incomplete; successful native wake/sync is not completed filing. Intake verified bounded context updates, while broader reconciliation and follow-up verification remain open. The large native intake snapshot exceeds the observer's bounded JSON read, so queue metadata is unavailable; do not infer no work. Native library/phone synchronization and independent product extraction remain broader scope. |
 | Atlassian/ADO | Reconsented managed Jira exposes 18 tools. Issue/JQL/comment reads and nine canonical team queries pass. Live queue comparison matches 16 open items in order and 33 resolved items in membership. The disposable fixture accepted a comment and Resolve transition, each independently read back, and is completed. Guided ADO source/catalog/UI tests pass. | Jira multi-page results and create/edit/link/worklog runtime acceptance remain open. Workflow validation required resolution notes/customer fields omitted from required-field metadata and ADF formatting. Account-scoped ADO family reads/pool writes and PAT lifecycle/CLI design remain separate. |
 | Proxmox/local networking | Native permission correction and browser/CDP source tests pass. | Installed local-network permission delivery, live page/noVNC connection and DevTools responsiveness. |
-| Release completion | Mac, web and iPhone accepted identities are recorded separately. | Current publication/source-companion reconciliation, release integration/closeout and eligible artifact/recovery cleanup. Nov 8 has no completed closeout. |
+| Release completion | Mac, web and iPhone accepted identities are recorded separately. | Current publication/source-companion reconciliation, release integration/closeout and eligible artifact/recovery cleanup. See [closeout.md](closeout.md) for the completed rollout, integration, retention and protected holds. |
 
 Final recovery follow-up reproduced the Windows first-scan deadline defect in the unchanged
 accepted source. The corrected Windows package passed native acceptance, independent publisher verification and
 29 public HTTPS file checks. The normal owner updater accepted preparation and handoff and is
-waiting for unrelated active work to finish, with scan counts/timings available for later failure. The original installation
+now complete after a clean-baseline retry, with verified health, navigation and Cua observation. Earlier failed attempts and their scan counts/timings remain preserved. The original installation
 receipt cannot establish which failure path occurred.
 
 Web recovery closeout independently reverified the existing isolated restoration against all

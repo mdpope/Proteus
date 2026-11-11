@@ -4,7 +4,7 @@ Version: 0.2.44
 
 The released runtime corrections are in `2d659fe3f06becea7ca91e795e8297651c375fae`.
 Mac source `281a24894d9e9fdeb24f34858af2d0f6879a7a8a` also includes the queued Nov 10
-planning document. The release remains open; the following is the November 10 current status.
+planning document. The release rollout is complete; this is the November 10 closeout status.
 
 | Target | Stage | Evidence and remaining work |
 | --- | --- | --- |
@@ -12,10 +12,10 @@ planning document. The release remains open; the following is the November 10 cu
 | Web | Deployed, recovery reconciled and retention complete | Release `20261110T063757Z`; canonical activation, 14 endpoints, eight served asset hashes and signed-in Chats interaction pass. The retained isolated restoration was independently reverified against all 18 captured protected tables, DDL, native ledger and nutrition. Current live state was stable and differs from the capture in app records. The original failed ordinary rehearsal is retained with its unrecorded cause. One verified server recovery and two verified local generations remain. Exact-plan cleanup freed 655,704,064 measured bytes, followed by another passing 14-endpoint audit. |
 | iPhone | Corrective 2611.10.3 installed and launched | Four destinations and Keychain access groups retained. Strict preservation found one changed 8,256-byte OS Metal LMDB lock. Separate bounded readback verified the other 345 original files before controlled launch; original failure and exact exception are retained. Whole-profile equality is not claimed. Physical scrolling/reconnect/notification acceptance remains separate. |
 | iPad | Corrective 2611.10.3 installed and launched | Four destinations retained. Initial per-file readback matched 262 protected files, but the final stopped/source-stability guard failed; the candidate was later observed running. A separate historical readback qualification records before-launch verification as false and does not establish current whole-profile equality. Controlled launch and the authorized one-shot project cache repair were recorded; physical reconciliation remains unverified. |
-| Work Mac | Updated; native provider portability and replay pass | Build `281a24894d9e+src.41d00617717d`; health verified. Navigation 3 workspaces, 13 projects, 84 scopes, 299 tabs, 4 windows, zero differences. Human-approved first native command processed two records totaling 10. Codex, Copilot and Claude each replayed unchanged evidence with exit 0, skipped 2, total 10 and no new prompts. Four artifact hashes and nanosecond mtimes, two-record ledger, exact saved grant, narrow folders, paused state and source/owner selection survive provider switches and reconciliation. Once/deny/revocation, Notification Center error severity/correlation/dedup/restart, Jira and broader preservation remain unverified. Live schedules are unchanged; this synthetic fixture does not qualify full professional workloads or first ingestion on every provider. |
+| Work Mac | Updated; native provider portability and replay pass | Build `281a24894d9e+src.41d00617717d`; health verified. Navigation 3 workspaces, 13 projects, 84 scopes, 299 tabs, 4 windows, zero differences. Human-approved first native command processed two records totaling 10. Codex, Copilot and Claude each replayed unchanged evidence with exit 0, skipped 2, total 10 and no new prompts. Four artifact hashes and nanosecond mtimes, two-record ledger, exact saved grant, narrow folders, paused state and source/owner selection survive provider switches and reconciliation. Once/deny/revocation, Notification Center error severity/correlation/dedup/restart and broader preservation remain unverified. Managed Jira acceptance is detailed below. Live schedules are unchanged; this synthetic fixture does not qualify full professional workloads or first ingestion on every provider. |
 | Linux | Final package updated and health verified | Build `2d659fe3f06b+src.e6ba2990cf5e`; owner job complete/updated. Automatic navigation reports zero differences across 2 workspaces, 2 projects, 10 scopes, 18 tabs and 1 window. Native builder acceptance passed 1,749 tests with 10 skipped, extraction/UI/terminal/restart and disposable update/rollback/failure rehearsals. Cua is installed/catalog available, but verification sees no desktop windows; graphical-session observation remains unverified. Real installed keyring, full histories/drafts, sources/models, pairings, notifications and workflows remain separately qualified. |
 | Windows consumer | Updated and health verified | Build `windows.9f6e1047d807`, source fingerprint `9f6e1047d8077de08db87cb33b4e8f8c78aa44c241dd0b0191c60f46df6eef96`. Owner reports complete/updated with verified health. Navigation 1 workspace, 1 project, 5 scopes, 7 tabs and 1 window reports zero differences. Cua discovery, permissions, windows and real UIAutomation observation passed. Input and broader preserved-state checks remain open. The transition envelope used an existing trusted publisher key. |
-| Windows designated builder | Corrected release prepared and handed off | Corrected build `windows.9d5818f5c5fc`, source fingerprint `9d5818f5c5fc036f8dd0360814d3c19959a122ea7233f875fe6052925b85a8a2`, passed native extraction/UI/PTY/restart/integrity checks. Mac independently verified the complete package and source companion, signed its payload and published it with all 29 public files verified. The owner prepared the candidate and accepted handoff. It is waiting for unrelated active work to finish. The healthy prior `windows.30f8b6596e38` baseline remains installed until that barrier clears. |
+| Windows designated builder | Updated, complete and health verified | Corrected build `windows.9d5818f5c5fc`, fingerprint `9d5818f5c5fc036f8dd0360814d3c19959a122ea7233f875fe6052925b85a8a2`. Owner job completed with outcome updated, no error or failure history, and verified health. Navigation matched one workspace, two projects, six scopes, 20 tabs and one window with zero differences. Three operator JSON files remain verified in the earlier recovery. Cua discovery, permissions, windows and read-only observation passed. Broader history/drafts/models/sources/reading/pairings/keyring/notifications/terminal and individual migration outcomes remain separately qualified. |
 
 The public Mac archive passes the official updater extractor and actual HTTPS hashes. The first
 unpublished archive had the wrong top-level layout; it was rejected before distribution, corrected
@@ -23,14 +23,22 @@ without rebuilding the app, then its duplicate staging was retired with receipts
 keys and platform trust remain unchanged.
 
 Historical update timing and maintenance qualifications follow; they do not supersede the current
-target table.
+target table. The failed attempts below were followed by the successful clean-baseline update.
 
-Subsequent Windows observation supersedes the designated-builder row: exact-byte verification
-failed during both installation and recovery of the corrected package. Its journal is in attention.
+Final closeout: the clean-baseline retry completed, with package and health verification and zero
+navigation differences. The original forward mismatch remains unproven; the later successful
+transition does not retrospectively establish its cause. Only the current public generation for
+each desktop target remains. Final public retirement freed 1,248,649,216 measured server bytes.
+Verified duplicate Windows staging cleanup freed a further 624,369,664 server bytes and
+614,400,000 local bytes. Accepted original artifacts and protected recovery evidence remain.
+
+Earlier corrective Windows attempt: exact-byte verification failed during both installation and
+recovery of the corrected package. That historical journal remains in attention.
 After Task Manager showed no Proteus or Node process, one normal app launch restored connectivity.
 The running app reports the prior `windows.30f8b6596e38` build; successful rollback and preservation
 are not established. The operator approved read-only access to the exact new job for file-level
-diagnosis. Installation remains incomplete, with no blind retry or further build initiated.
+diagnosis. At that checkpoint installation was incomplete; the later clean-baseline retry above
+completed without another application build.
 
 The subsequent granted installation inspection matches the clean signed 0.2.43 payload hash
 `00c3b5f5911e3510ecc82aca675e4fdcbaf3bfecfbdb5aef14d400251b540549` and its accepted
@@ -82,8 +90,8 @@ operations remain catalog evidence. Cross-window Playwright attachment is queued
 
 The final Mac, Linux and Windows public packages have verified signatures, seven complete immutable HTTPS
 hashes and 22 catalog/page hashes. Hosting and unrelated public files were preserved. Three
-superseded public releases were retired under a fresh hash-bound plan; the previous Windows
-generation still awaits verified retirement after publication of its replacement. Source companions,
+superseded public releases were retired under a fresh hash-bound plan; the final old Windows
+generations have also been retired after verified installation of the replacement. Source companions,
 native receipts and failed attempts remain private. Routine cleanup preserves Time Machine and
 unresolved owner-managed recovery evidence.
 
