@@ -25,6 +25,13 @@ keys and platform trust remain unchanged.
 Historical update timing and maintenance qualifications follow; they do not supersede the current
 target table.
 
+Subsequent Windows observation supersedes the designated-builder row: exact-byte verification
+failed during both installation and recovery of the corrected package. Its journal is in attention.
+After Task Manager showed no Proteus or Node process, one normal app launch restored connectivity.
+The running app reports the prior `windows.30f8b6596e38` build; successful rollback and preservation
+are not established. The operator approved read-only access to the exact new job for file-level
+diagnosis. Installation remains incomplete, with no blind retry or further build initiated.
+
 Corrective iOS validation passes the phone and iPad prepend/idle/paging cases and six native
 owner/browser regressions. Actual iPhone and iPad SPA/reselection/Back/Forward/hash navigation
 passes. The phone run also exposed and verified the missing Team Tools drawer button correction.
