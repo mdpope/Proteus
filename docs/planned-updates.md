@@ -12494,3 +12494,9 @@ native document tabs are not yet shared owner-navigation tabs; do not claim that
 Nov 8 completion pass: large-folder move destination paging and native file request identity/disposal guards are implemented. Electron and iPhone actual move fixtures pass; new packages and iPad acceptance remain separate.
 
 Nov 8 disk-pressure follow-up: shared, locked simulator compiler-cache reuse implemented; obsolete package/build/temp cleanup uses private plans and actual free-space measurements. Owner-blocked rollback-attention recovery remains explicit.
+# Source distribution configuration
+
+The sanitized source distribution uses reserved example endpoints and neutral application IDs.
+Configure deployment endpoints and signing identities before a packaged release; migrate existing
+installation identities explicitly before deploying a distribution build over an installed app.
+
