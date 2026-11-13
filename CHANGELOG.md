@@ -2280,3 +2280,9 @@ Nov 8 source follow-up: durable explicit schedule access overlay and owner conne
 - Add on-demand iPhone/iPad workspace browsing, preview resources and a separately consented
   per-device file-editing permission. No whole-folder mobile replication is introduced.
 - Source/simulator acceptance is separate from physical installation; see docs/file-browser.md.
+# Source distribution privacy
+
+Sanitize source history, contributor metadata, operator paths, device references and private
+service defaults for distribution. Remove historical documentation screenshots. Distribution
+builds require explicit service and signing configuration; installed applications are unchanged.
+

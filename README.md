@@ -1,5 +1,10 @@
 # Proteus
 
+This source distribution uses neutral application identifiers and reserved example service
+domains. Configure your own website, relay, release service and Apple signing settings before
+packaging or connecting services. Historical source commits are preserved with private operator
+details removed; private binary-transfer archives are excluded.
+
 A local control room for scheduled AI work: set the cadence, watch each run, and return to the
 conversation when it needs you. Provider-independent scheduling and storage, with GitHub Copilot,
 Codex and Claude adapters, native Omi processing schedules, and optional native Life records.
