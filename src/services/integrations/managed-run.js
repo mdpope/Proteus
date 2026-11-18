@@ -15,13 +15,13 @@ export async function prepareManagedRun(manager,args){
  if(!requirements.length)return null;
  if(!manager)throw Error('This owner does not provide managed MCP connections.');
  const workspaceId=managedWorkspace(run.schedule);
- const bindings=[],selected=[],unavailable=[];
+ const bindings=[],selected=[],unavailable=[],labels=new Map();
  for(const requirement of requirements){
   try{
    const [binding]=manager.registry.capture({ownerId:manager.registry.ownerId,workspaceId,names:[requirement.name]});
    const definition=manager.definition(binding);
    if(!requirement.capabilities.every(c=>definition.capabilities.includes(c)))throw Error('Missing semantic capability.');
-   bindings.push(binding);selected.push(requirement);
+   bindings.push(binding);selected.push(requirement);labels.set(binding.name,definition.label);
   }catch{
    if(requirement.required)throw Error(`Required managed connection ${requirement.name} has no matching workspace binding or capabilities.`);
    unavailable.push({...requirement,state:'configuration-mismatch'});
@@ -39,7 +39,9 @@ export async function prepareManagedRun(manager,args){
  const ready=[];run.managedConnectionReadiness=unavailable;update();
  for(const [index,binding]of bindings.entries()){
   if(signal.aborted)throw Error('Cancelled');
-  const answer=await ask({type:'permission',question:`Connect managed ${binding.name} for this turn?`,details:{kind:'mcp-connect',serverName:binding.name,toolName:'*',readOnly:false,intention:'Connect the captured managed binding. Each tool retains its own permission check.'}},signal);
+  // N11-10: name the service and exact configured connection, never only a generic action.
+  const label=labels.get(binding.name),service=label&&label!==binding.name?label+' · ':'';
+  const answer=await ask({type:'permission',question:`Connect ${service}${binding.name} for this turn?`,details:{kind:'mcp-connect',serverName:binding.name,...(label?{serverLabel:label}:{}),managed:true,approvalScope:'turn',toolName:'*',readOnly:false,intention:'Connect the captured managed binding for this turn. Each tool call retains its own permission check.'}},signal);
   if(!['approve','approve-auto'].includes(answer)){
    if(selected[index].required)throw Error('A required managed connection was declined.');
    run.managedConnectionReadiness.push({...selected[index],state:'permission-denied'});update();

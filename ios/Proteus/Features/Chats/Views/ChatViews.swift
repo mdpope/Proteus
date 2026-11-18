@@ -81,15 +81,46 @@ struct ChatReturnKey: ViewModifier {
     }
 }
 
+/// N11-18: no file type or size limits. The owning computer checks its own free disk space and
+/// delivers files its provider cannot take inline as paged references.
+/// N11-19: human-readable times in the user's (device) time zone; unparseable values pass through.
+enum NativeHumanTime {
+    static func text(_ iso: String) -> String {
+        let fractional = ISO8601DateFormatter(); fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        guard let date = fractional.date(from: iso) ?? ISO8601DateFormatter().date(from: iso) else { return iso }
+        let calendar = Calendar.current
+        let style = Date.FormatStyle(date: .omitted, time: .omitted).month(.abbreviated).day().hour().minute().timeZone(.specificName(.short))
+        return calendar.component(.year, from: date) == calendar.component(.year, from: Date()) ? date.formatted(style) : date.formatted(style.year())
+    }
+}
+
+/// N11-33: visible state of an attachment submission.
+struct NativeUploadProgress: Equatable {
+    var total: Int; var files: Int; var sent = 0; var file = 1; var stage = ""
+    var fraction: Double { min(1, Double(sent) / Double(max(1, total))) }
+    var label: String {
+        if !stage.isEmpty { return stage }
+        let noun = files == 1 ? "file" : "files"
+        return "Uploading \(min(file, files)) of \(files) \(noun) · \(Int(fraction * 100))%"
+    }
+}
+
 enum NativeAttachmentBudget {
     static let maxFiles = 256
-    static let maxFileBytes = 8 * 1024 * 1024
-    static let maxTotalBytes = 32 * 1024 * 1024
     static func rejection(existingCount: Int, existingBytes: Int, incomingBytes: Int) -> String? {
-        if incomingBytes <= 0 || incomingBytes > maxFileBytes { return "Choose a file between 1 byte and 8 MB." }
+        if incomingBytes < 0 { return "This file could not be read." }
         if existingCount >= maxFiles { return "This selection is full. Remove a file before adding another." }
-        if existingBytes < 0 || existingBytes > maxTotalBytes - incomingBytes { return "Selected files exceed the 32 MB total. Remove a file or choose smaller files." }
         return nil
+    }
+    /// Copies a picked file into private temporary storage and memory-maps it, so a large file is
+    /// uploaded in chunks without being loaded into app memory and stays valid after the
+    /// security-scoped picker access ends.
+    static func mappedCopy(of url: URL) throws -> Data {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("attachment-imports/" + UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let copy = directory.appendingPathComponent(url.lastPathComponent.isEmpty ? "attachment" : url.lastPathComponent)
+        try FileManager.default.copyItem(at: url, to: copy)
+        return try Data(contentsOf: copy, options: [.alwaysMapped])
     }
 }
 
@@ -173,6 +204,7 @@ struct NewChatView: View {
     @State private var agent = ""
     @State private var includeDefaults = true
     @State private var sending = false
+    @State private var startProgress: NativeUploadProgress?
     @State private var loading = true
     @State private var photoPicker = false
     @State private var filePicker = false
@@ -251,7 +283,16 @@ struct NewChatView: View {
                 }
                 }
                 if !internet && lockedWorkspaceID == nil { ContextSelection(selected: $selected, agent: $agent, includeDefaults: $includeDefaults, workspaceID: workspace) }
-                if internet { Section { HStack { Spacer(); ForEach(store.stateValue("providerStatuses").object.keys.sorted().filter { !["local-process", "rehearsal"].contains($0) }, id: \.self) { id in Button("Search with " + id.capitalized) { provider = id; if store.stateValue("defaults")["internetSearches"][id]["model"].string.isEmpty { store.error = "Configure Internet Search defaults in Engine Room on \(store.displayName) first." } else if attachments.isEmpty { start() } else { confirmAttachmentStart = true } }.disabled((prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && attachments.isEmpty) || sending || !store.connected) } } } }
+                if let startProgress {
+                    Section {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(startProgress.label).font(.caption.weight(.semibold))
+                            ProgressView(value: startProgress.fraction).tint(NativeTheme.accent)
+                            Text("You can switch apps; keep Proteus open if this takes longer than a moment.").font(.caption2).foregroundStyle(.secondary)
+                        }.accessibilityElement(children: .combine).accessibilityIdentifier("chat-start-upload-progress")
+                    }
+                }
+                if internet { Section { LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 8)], spacing: 8) { ForEach(store.stateValue("providerStatuses").object.keys.sorted().filter { !["local-process", "rehearsal"].contains($0) }, id: \.self) { id in Button { searchWith(id) } label: { Text(nativeProviderName(id)).lineLimit(1).minimumScaleFactor(0.8).frame(maxWidth: .infinity, minHeight: 44) }.buttonStyle(.bordered).accessibilityLabel("Search with " + nativeProviderName(id)).disabled((prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && attachments.isEmpty) || sending || !store.connected) } } } header: { Text("Search with") } }
                 if startIntent != .null { Section { Text("Start awaiting confirmation. Retry uses the same request and saved choices.").font(.caption) } }; if let error = store.error { Section { Text(error).foregroundStyle(.orange) } }
             }.scrollDismissesKeyboard(.interactively).disabled(loading || sending || startIntent != .null).accessibilityIdentifier("new-chat-form").navigationTitle(internet ? "Internet Search" : "New chat").toolbar {
                 ToolbarItem(placement: .cancellationAction) { HStack { if NativePhonePreview.enabled && onCancel != nil && lockedWorkspaceID == nil { NativeSidebarButton() }; Button("Cancel") { if let onCancel { onCancel() } else { dismiss() } } } }
@@ -282,7 +323,10 @@ struct NewChatView: View {
         if startIntent == .null && internet && store.stateValue("defaults")["internetSearches"][provider]["model"].string.isEmpty { store.error = "Configure Internet Search defaults for " + provider + " first."; return }
         guard startIntent != .null || missingAttachments.isEmpty else { store.error = "Remove or reattach the missing files before starting this chat."; return }
         sending = true
-        Task { defer { sending = false }
+        // N11-33: progress plus a connection hold/background task for the whole submission.
+        let release = store.holdConnection(), work = NativeBackgroundWork.begin("Start Proteus chat")
+        if !attachments.isEmpty { startProgress = NativeUploadProgress(total: max(1, attachments.reduce(0) { $0 + $1.bytes.count }), files: attachments.count) }
+        Task { defer { sending = false; startProgress = nil; release(); NativeBackgroundWork.end(work) }
             do {
                 if startIntent == .null, lockedWorkspaceID != nil, draftKey.hasPrefix("chat-setup:") {
                     let kind = lockedProjectID == nil ? "workspace" : "project", container = lockedProjectID ?? lockedWorkspaceID ?? ""
@@ -318,7 +362,8 @@ struct NewChatView: View {
     }
     private func prepareStartAttachments() async throws -> (ids: [JSON], consentID: String) {
         var ids: [JSON] = [], claims: [JSON] = []
-        for item in attachments {
+        for (fileIndex, item) in attachments.enumerated() {
+            startProgress?.file = fileIndex + 1
             let digest = SHA256.hash(data: item.bytes).map { String(format: "%02x", $0) }.joined()
             let begun = try await store.request("chat.attachments.begin", ["draftId": .string(attachmentDraftID), "providerId": .string(provider), "messageId": .string(attachmentMessageID), "name": .string(item.name), "mediaType": .string(item.mediaType), "size": .number(Double(item.bytes.count)), "sha256": .string(digest)].merging(item.fileDates) { current, _ in current })
             let uploadID = begun["uploadId"].string
@@ -327,16 +372,20 @@ struct NewChatView: View {
             for (index, offset) in stride(from: 0, to: item.bytes.count, by: chunkSize).enumerated() {
                 let chunk = item.bytes.subdata(in: offset..<min(offset + chunkSize, item.bytes.count))
                 _ = try await store.request("chat.attachments.chunk", ["uploadId": .string(uploadID), "index": .number(Double(index)), "dataBase64": .string(chunk.base64EncodedString())])
+                startProgress?.sent += chunk.count
             }
             let finished = try await store.request("chat.attachments.finish", ["uploadId": .string(uploadID)])
             guard !finished["attachmentId"].string.isEmpty else { throw RemoteError(message: "\(store.displayName) did not confirm the attachment.") }
             ids.append(finished["attachmentId"])
             claims.append(.object(["attachmentId": finished["attachmentId"], "name": .string(item.name), "mediaType": .string(item.mediaType), "size": .number(Double(item.bytes.count)), "sha256": .string(digest)].merging(item.fileDates) { current, _ in current }))
         }
+        startProgress?.stage = "Starting chat…"
         let consent = try await store.request("chat.attachments.authorize", ["draftId": .string(attachmentDraftID), "providerId": .string(provider), "messageId": .string(attachmentMessageID), "attachments": .array(claims)])
         guard !consent["consentId"].string.isEmpty, consent["providerId"].string == provider else { throw RemoteError(message: "\(store.displayName) did not confirm the exact attachment destination.") }
         return (ids, consent["consentId"].string)
     }
+    /// N11-22: provider choices for a new Internet Search, laid out as a readable grid.
+    private func searchWith(_ id: String) { provider = id; if store.stateValue("defaults")["internetSearches"][id]["model"].string.isEmpty { store.error = "Configure Internet Search defaults in Engine Room on \(store.displayName) first." } else if attachments.isEmpty { start() } else { confirmAttachmentStart = true } }
     @discardableResult private func addAttachment(_ data: Data, name: String, mediaType: String, createdAt: String? = nil, modifiedAt: String? = nil) -> Bool {
         guard !sending else { return false }
         guard !supportedAttachmentTypes.isEmpty else { store.error = "\(providerName) does not accept attachments through Proteus."; return false }
@@ -370,7 +419,7 @@ struct NewChatView: View {
         let access = url.startAccessingSecurityScopedResource(); defer { if access { url.stopAccessingSecurityScopedResource() } }
         let types = ["png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "gif": "image/gif", "webp": "image/webp", "pdf": "application/pdf", "txt": "text/plain"]
         let mediaType = types[url.pathExtension.lowercased()] ?? "application/octet-stream"
-        do { let values = try url.resourceValues(forKeys: [.fileSizeKey, .creationDateKey, .contentModificationDateKey]); let size = values.fileSize ?? 0; guard size > 0, size <= NativeAttachmentBudget.maxFileBytes else { throw RemoteError(message: "Choose a file between 1 byte and 8 MB.") }; return addAttachment(try Data(contentsOf: url), name: url.lastPathComponent, mediaType: mediaType, createdAt: values.creationDate.map { ISO8601DateFormatter().string(from: $0) }, modifiedAt: values.contentModificationDate.map { ISO8601DateFormatter().string(from: $0) }) }
+        do { let values = try url.resourceValues(forKeys: [.fileSizeKey, .creationDateKey, .contentModificationDateKey]); return addAttachment(try NativeAttachmentBudget.mappedCopy(of: url), name: url.lastPathComponent, mediaType: mediaType, createdAt: values.creationDate.map { ISO8601DateFormatter().string(from: $0) }, modifiedAt: values.contentModificationDate.map { ISO8601DateFormatter().string(from: $0) }) }
         catch { store.error = error.localizedDescription; return false }
     }
     private func pasteAttachment(_ providers: [NSItemProvider]) {
@@ -510,9 +559,10 @@ private struct NativeReplyComposer<Content: View>: View {
     private var events: [JSON] = []
     private var start: Int? = nil
     private var indices: [Int] = []
-    func values(events: [JSON], start: Int, build: () -> [Int]) -> [Int] {
-        if self.start == start && self.events == events { return indices }
-        self.events = events; self.start = start; indices = build(); return indices
+    private var boundaries: Set<Int> = []
+    func values(events: [JSON], start: Int, boundaries: Set<Int>, build: () -> [Int]) -> [Int] {
+        if self.start == start && self.events == events && self.boundaries == boundaries { return indices }
+        self.events = events; self.start = start; self.boundaries = boundaries; indices = build(); return indices
     }
 }
 
@@ -564,6 +614,8 @@ struct ChatView: View {
     @State private var showQueuedEdit = false
     @State private var busy = false
     @State private var followLatest = true
+    @State private var awayFromLatest = false
+    @State private var uploadProgress: NativeUploadProgress?
     @State private var scrollCommand: NativeScrollCommand?
     @State private var fixtureScrollID: UUID?
     @State private var scrollMeasurements = NativeChatScrollMeasurements()
@@ -575,6 +627,7 @@ struct ChatView: View {
     @State private var pendingAnchorRestore: NativeChatScrollLocation?
     @State private var pendingHistoryRestore: NativeChatScrollLocation?
     @State private var historyWindowChanged = false
+    @State private var historyGroupBoundaries: Set<Int> = []
     @State private var pendingInitialRestore: NativeChatScrollLocation?
     @State private var readingRestoreTask: Task<Void, Never>?
     @State private var readingRestoreToken: UUID?
@@ -655,7 +708,7 @@ struct ChatView: View {
         let events = run["events"].array
         let start = run["eventStart"].int
         let first = max(0, renderedEventStart - start)
-        return eventIndexCache.values(events: events, start: renderedEventStart) {
+        return eventIndexCache.values(events: events, start: renderedEventStart, boundaries: historyGroupBoundaries) {
         #if DEBUG
         if NativeTypingDiagnostics.enabled {
             NativeTypingDiagnostics.historyPasses += 1
@@ -666,13 +719,16 @@ struct ChatView: View {
         // even a zero-height row adds the conversation's inter-message spacing.
         return events.indices.dropFirst(first).filter { index in
             let event = events[index]
-            if routineActivity(event) { return index == first || !routineActivity(events[index - 1]) }
+            if routineActivity(event) { return index == first || historyGroupBoundaries.contains(start + index) || !routineActivity(events[index - 1]) }
             return event["role"].string != "assistant" || !event["text"].string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }.map { start + $0 }
         }
     }
     private func activityGroup(startingAt index: Int) -> [JSON] {
-        NativeActivity.group(events: run["events"].array, startingAt: index, provider: run["schedule"]["provider"].string)
+        let group = NativeActivity.group(events: run["events"].array, startingAt: index, provider: run["schedule"]["provider"].string)
+        let absolute = run["eventStart"].int + index
+        let count = historyGroupBoundaries.filter { $0 > absolute }.min().map { $0 - absolute } ?? group.count
+        return Array(group.prefix(count))
     }
     private var pending: JSON { run["pending"] }
     private var desiredDraftKey: String { pending["type"].string == "question" && !inlinePendingQuestion ? "answer:" + id + ":" + pending["id"].string : "reply:" + id }
@@ -921,6 +977,7 @@ struct ChatView: View {
         return run["events"].array.contains { $0["role"].string == "assistant" && $0["data"]["turnId"].string == turn["id"].string && !$0["text"].string.isEmpty } ? .null : turn
     }
     private var conversation: some View {
+        let presentationStart = renderedEventStart
         let recovery = ["chat", "scheduled", "manual", "schedule"].contains(run["trigger"].string) && run["chatControls"]["recovery"].bool ? NativeChatRecoveryState.read(run) : nil
         // Derive question and turn associations once per presentation update,
         // not once for every message (which repeatedly scanned the full history).
@@ -976,9 +1033,10 @@ struct ChatView: View {
                         .accessibilityIdentifier("chat-event-\(absoluteIndex)")
                         // Content coordinates remain stable while UIKit scrolls. Global
                         // frames arrive asynchronously and cannot be paired with a newer offset.
-                        .onGeometryChange(for: CGRect.self) { geometry in geometry.frame(in: .named("conversation-content")) } action: { frame in
+                        .onGeometryChange(for: NativeChatEventFrame.self) { geometry in NativeChatEventFrame(start: presentationStart, frame: geometry.frame(in: .named("conversation-content"))) } action: { measured in
+                            guard measured.start == renderedEventStart else { return }
+                            let frame = measured.frame
                             let previous = eventFrames[absoluteIndex]
-                            let measured = NativeChatEventFrame(start: renderedEventStart, frame: frame)
                             eventFrames[absoluteIndex] = measured
                             if let reading = pendingAnchorRestore, reading.anchor == absoluteIndex,
                                frame.height >= max(1, (reading.eventRevision == run["updatedAt"].string && abs(reading.viewportWidth - conversationViewportWidth) < 2) ? reading.anchorHeight - 2 : 1),
@@ -1006,7 +1064,7 @@ struct ChatView: View {
                 if pending != .null && !inlinePendingQuestion {
                     VStack(alignment: .leading, spacing: 12) {
                         Label("Your input is needed", systemImage: "person.crop.circle.badge.questionmark").font(.headline)
-                        Text(pending["question"].string)
+                        Text(NativeChatLink.attributed(pending["question"].string))
                         if pending["details"] != .null { PermissionRequestSummary(request: pending["details"]); DisclosureGroup("Request details") { Text(pending["details"].pretty).font(.caption.monospaced()).textSelection(.enabled) } }
                         if pending["type"].string == "permission" {
                             Text("Approve once applies only to this request on \(store.displayName). Saved workspace choices survive restart and affect matching chats and schedules until revoked.").font(.caption).foregroundStyle(.secondary)
@@ -1082,6 +1140,9 @@ struct ChatView: View {
                     traceScroll("snap \(Int(snapshot.offset))/\(Int(snapshot.maxOffset)) h\(Int(snapshot.contentHeight)) v\(Int(snapshot.viewportHeight)) r\(restoringConversation ? 1 : 0) f\(followLatest ? 1 : 0)")
                 }
                 if snapshot.atEnd || !snapshot.canScroll { conversationReady = true }
+                // Publish only threshold crossings, never per-frame offsets.
+                let away = snapshot.canScroll && !snapshot.atEnd && snapshot.maxOffset - snapshot.offset > max(240, snapshot.viewportHeight * 0.75)
+                if away != awayFromLatest { withAnimation(.easeOut(duration: 0.15)) { awayFromLatest = away } }
                 // Layout, keyboard and programmatic offsets never turn reading
                 // back into following. Only the end of a real native pan can.
                 if !followLatest && conversationReady && !restoringConversation && snapshot.canScroll {
@@ -1212,8 +1273,28 @@ struct ChatView: View {
                     questionRevealTask = Task { await revealQuestion(question, request: request, with: proxy) }
                 }
             }
+            // N11-26: compact jump-to-latest control while reading history.
+            .overlay(alignment: .bottom) {
+                if awayFromLatest && !followLatest {
+                    Button { jumpToLatest(proxy) } label: {
+                        Image(systemName: "arrow.down").font(.system(size: 15, weight: .semibold)).foregroundStyle(.primary)
+                            .frame(width: 36, height: 36).background(.regularMaterial, in: Circle())
+                            .overlay(Circle().stroke(Color.secondary.opacity(0.25), lineWidth: 0.5)).contentShape(Circle())
+                    }.buttonStyle(.plain).padding(.bottom, 10).transition(.opacity)
+                    .accessibilityLabel("Scroll to latest message").accessibilityIdentifier("chat-jump-latest")
+                }
+            }
         }
             .safeAreaInset(edge: .bottom, spacing: 0) { if nativeRun { VStack { Text("Native Omi processing · outcomes are recorded by the worker.").font(.caption); if active { Button("Stop process", role: .destructive) { act("chat.cancel", [:]) } } }.padding().background(NativeTheme.surface) } else { composer } }
+    }
+    /// Return to the newest message and resume following new output.
+    private func jumpToLatest(_ proxy: ScrollViewProxy) {
+        cancelReadingRestore(); restoreID = nil; pendingAnchorRestore = nil; pendingInitialRestore = nil
+        restoringConversation = false; userReadingGesture = false; scrollCommand = nil
+        scrollMeasurements.preservedHistoryAnchor = nil
+        shared.clearChatScrollLocation(for: chatBrowserScope)
+        followLatest = true; awayFromLatest = false
+        withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo("chat-end", anchor: .bottom) }
     }
     private func rememberReadingAnchor(_ snapshot: NativeScrollSnapshot) {
         guard !followLatest, conversationReady, !restoringConversation else { return }
@@ -1350,10 +1431,12 @@ struct ChatView: View {
     private var hasDraftAttachments: Bool { !attachments.isEmpty || !missingAttachments.isEmpty }
     private var composerCardHeightLimit: CGFloat { min(composerWindowHeight * 0.5, max(120, composerAvailableHeight * 0.5)) }
     private var composerEditorChromeHeight: CGFloat {
-        24 + composerActionsHeight + 8 + (!attachments.isEmpty ? 72 : 0)
+        24 + composerActionsHeight + 8 + (!attachments.isEmpty ? 72 : 0) + (uploadProgress != nil ? 72 : 0)
     }
     private var composer: some View {
-        NativeReplyComposer(draft: replyDraft) { composerContent }
+        NativeReplyComposer(draft: replyDraft) {
+            composerContent
+        }
             .animation(NativePhonePreview.enabled && !reduceMotion ? .easeInOut(duration: 0.24) : nil, value: composerExpanded)
     }
     private var showsComposerActions: Bool { !NativePhonePreview.enabled || composerExpanded }
@@ -1406,6 +1489,13 @@ struct ChatView: View {
                 HStack { Text(message["prompt"].string).lineLimit(1).font(.caption); Spacer(); if run["status"].string == "running" && run["chatControls"]["steering"].bool && (!message["hasAttachments"].bool || message["canSteer"].bool) { Button("Steer now") { act("chat.steer-queued", ["messageId":message["id"]]) }.font(.caption) }; if store.stateValue("capabilities").array.contains(.string("chat.queue-edit.v1")) { Button("Edit") { queuedEdit = message; showQueuedEdit = true }.font(.caption) }; Button("Remove") { act("chat.remove-queued", ["messageId":message["id"]]) }.font(.caption) }
             }
             VStack(alignment: .leading, spacing: 8) {
+            if let uploadProgress {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(uploadProgress.label).font(.caption.weight(.semibold))
+                    ProgressView(value: uploadProgress.fraction).tint(NativeTheme.accent)
+                    Text("You can switch apps; keep Proteus open if this takes longer than a moment.").font(.caption2).foregroundStyle(.secondary)
+                }.padding(.horizontal, 12).padding(.vertical, 8).accessibilityElement(children: .combine).accessibilityIdentifier("chat-attachment-upload-progress")
+            }
                 if showsComposerActions && !attachments.isEmpty { composerAttachmentSection }
                 if composerExpanded || NativePadPreview.enabled { replyField } else {
                     HStack(spacing: 0) {
@@ -1478,7 +1568,11 @@ struct ChatView: View {
         guard attachmentsEnabled, !busy, store.connected, missingAttachments.isEmpty else { return }
         busy = true
         attachmentFailure = ""
-        defer { busy = false }
+        // N11-33: show progress, keep the connection and process alive if the user switches apps
+        // or locks the phone, and release both when the submission settles.
+        let release = store.holdConnection(), work = NativeBackgroundWork.begin("Send Proteus attachments")
+        uploadProgress = NativeUploadProgress(total: max(1, attachments.reduce(0) { $0 + $1.bytes.count }), files: attachments.count)
+        defer { busy = false; uploadProgress = nil; release(); NativeBackgroundWork.end(work) }
         let mode = attachmentSendMode
         guard mode != "steer" || (run["status"].string == "running" && canSteerAttachments) else { store.error = "The active turn or supported attachment types changed. Review the message again."; return }
         let key = attachmentScope
@@ -1510,7 +1604,8 @@ struct ChatView: View {
             }
             var attachmentIDs: [JSON] = []
             var attachmentClaims: [JSON] = []
-            for item in selectedFiles {
+            for (fileIndex, item) in selectedFiles.enumerated() {
+                uploadProgress?.file = fileIndex + 1
                 let digest = SHA256.hash(data: item.bytes).map { String(format: "%02x", $0) }.joined()
                 let started = try await store.request("chat.attachments.begin", ["id": .string(id), "messageId": .string(messageID), "providerId": .string(providerID), "name": .string(item.name), "mediaType": .string(item.mediaType), "size": .number(Double(item.bytes.count)), "sha256": .string(digest)].merging(item.fileDates) { current, _ in current })
                 let uploadID = started["uploadId"].string
@@ -1520,12 +1615,14 @@ struct ChatView: View {
                     let end = min(offset + chunkSize, item.bytes.count)
                     let chunk = item.bytes.subdata(in: offset..<end)
                     _ = try await store.request("chat.attachments.chunk", ["uploadId": .string(uploadID), "index": .number(Double(index)), "dataBase64": .string(chunk.base64EncodedString())])
+                    uploadProgress?.sent += chunk.count
                 }
                 let finished = try await store.request("chat.attachments.finish", ["uploadId": .string(uploadID)])
                 guard !finished["attachmentId"].string.isEmpty else { throw RemoteError(message: "\(store.displayName) did not confirm the attachment.") }
                 attachmentIDs.append(finished["attachmentId"])
                 attachmentClaims.append(.object(["attachmentId": finished["attachmentId"], "name": .string(item.name), "mediaType": .string(item.mediaType), "size": .number(Double(item.bytes.count)), "sha256": .string(digest)].merging(item.fileDates) { current, _ in current }))
             }
+            uploadProgress?.stage = "Sending message…"
             let consent = try await store.request("chat.attachments.authorize", ["id": .string(id), "providerId": .string(providerID), "messageId": .string(messageID), "attachments": .array(attachmentClaims)])
             guard !consent["consentId"].string.isEmpty, consent["providerId"].string == providerID else { throw RemoteError(message: "\(store.displayName) did not confirm the exact attachment destination.") }
             try await verifySteering()
@@ -1550,8 +1647,6 @@ struct ChatView: View {
     @discardableResult private func addAttachment(_ data: Data, name: String, mediaType: String, createdAt: String? = nil, modifiedAt: String? = nil) -> Bool {
         guard !busy else { return false }
         guard attachmentsEnabled else { store.error = "\(store.displayName) has not enabled approved attachments for this provider yet."; return false }
-        guard pending["type"].string != "question" || inlinePendingQuestion || supportedAttachmentTypes.contains(mediaType) else { store.error = "This question accepts images or plain text."; return false }
-        if pending["type"].string == "question", !inlinePendingQuestion, attachments.count >= 4 { store.error = "Question replies accept up to four files."; return false }
         if let reason = NativeAttachmentBudget.rejection(existingCount: attachments.count, existingBytes: attachments.reduce(0) { $0 + $1.bytes.count }, incomingBytes: data.count) { store.error = reason; return false }
         let item = NativeDraftAttachment(id: UUID().uuidString, name: String(name.prefix(120)), mediaType: mediaType, bytes: data, createdAt: createdAt, modifiedAt: modifiedAt)
         shared.draftAttachments[attachmentScope, default: []].append(item)
@@ -1586,9 +1681,8 @@ struct ChatView: View {
         let types = ["png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "gif": "image/gif", "webp": "image/webp", "pdf": "application/pdf", "txt": "text/plain"]
         let mediaType = types[suffix] ?? "application/octet-stream"
         do {
-            let values = try url.resourceValues(forKeys: [.fileSizeKey, .creationDateKey, .contentModificationDateKey]); let size = values.fileSize ?? 0
-            guard size > 0, size <= NativeAttachmentBudget.maxFileBytes else { throw RemoteError(message: "Choose a file between 1 byte and 8 MB.") }
-            let data = try Data(contentsOf: url)
+            let values = try url.resourceValues(forKeys: [.fileSizeKey, .creationDateKey, .contentModificationDateKey])
+            let data = try NativeAttachmentBudget.mappedCopy(of: url)
             return addAttachment(data, name: url.lastPathComponent, mediaType: mediaType, createdAt: values.creationDate.map { ISO8601DateFormatter().string(from: $0) }, modifiedAt: values.contentModificationDate.map { ISO8601DateFormatter().string(from: $0) })
         } catch { store.error = error.localizedDescription; return false }
     }
@@ -1675,6 +1769,9 @@ struct ChatView: View {
         let loadedFirst = run["eventStart"].int
         let oldFirst = renderedEventStart
         guard oldFirst > loadedFirst || store.connected else { return }
+        // Keep the formerly first activity group as a stable row. Absorbing it
+        // into a newly revealed group would remove the reader's anchor entirely.
+        historyGroupBoundaries.insert(oldFirst)
         loadingEarlier = true; earlierError = false
         let keepBottom = followLatest
         let offset = run["eventCount"].int - oldFirst
@@ -1959,7 +2056,7 @@ private struct NativeChatRecoveryControls: View {
         if state.recoverable, state.allowance, run["chatControls"]["allowanceContinuation"].bool {
             let pending = run["allowanceContinuation"]["pending"]
             if pending["state"].string == "waiting", pending["failureEventAt"] == state.failureEventAt {
-                Text("Waiting until " + pending["nextAttemptAt"].string).font(.caption)
+                Text("Waiting until " + NativeHumanTime.text(pending["nextAttemptAt"].string)).font(.caption)
                 Button("Cancel allowance continuation") { recover("allowance-cancel") }.accessibilityIdentifier("allowance-cancel")
             } else if run["allowanceStatus"]["failureEventAt"] == state.failureEventAt, let reset = ProviderAllowance.date(run["allowanceStatus"]["resetAt"].string), reset > Date() {
                 Button("Continue chat when allowance resets at " + reset.formatted(date: .abbreviated, time: .complete)) { recover("allowance-arm") }.accessibilityIdentifier("allowance-arm")
@@ -2523,7 +2620,7 @@ struct LiveBrowserView: View {
                 } else { ContentUnavailableView("Desktop browser", systemImage: "rectangle.on.rectangle", description: Text(status)) }
             }.background(NativeTheme.surface) }
             HStack { Image(systemName: "minus.magnifyingglass"); Slider(value: $zoom, in: 0.5...3); Image(systemName: "plus.magnifyingglass") }
-            if pending != .null { Text(pending["question"].string).font(.callout).lineLimit(6) }
+            if pending != .null { Text(NativeChatLink.attributed(pending["question"].string)).font(.callout).lineLimit(6) }
             if pending["type"].string == "permission" {
                 ScrollView(.horizontal) { HStack {
                     Button("Approve once") { decision("approve") }
@@ -2565,7 +2662,7 @@ struct LiveBrowserView: View {
             let next = try await store.request("browser.live.frame", ["id": .string(chatID), "tabId": tab["id"]])
             guard !Task.isCancelled, !frozen else { return }
             guard let encoded = next["image"].string.split(separator: ",", maxSplits: 1).last, let bytes = Data(base64Encoded: String(encoded)), let decoded = UIImage(data: bytes) else { throw NSError(domain: "LiveBrowser", code: 1, userInfo: [NSLocalizedDescriptionKey: "Invalid browser frame"]) }
-            frame = next; receivedAt = Date(); image = decoded; point = nil; status = "Live · " + next["capturedAt"].string
+            frame = next; receivedAt = Date(); image = decoded; point = nil; status = "Live · " + NativeHumanTime.text(next["capturedAt"].string)
         } catch { guard !Task.isCancelled else { return }; image = nil; frame = .null; status = error.localizedDescription }
     }
     private func decision(_ answer: String) {
@@ -2582,6 +2679,27 @@ struct LiveBrowserView: View {
 }
 
 struct NativeChatLink {
+    // Keep question text literal except for validated chat references and their Markdown labels.
+    static func attributed(_ text: String) -> AttributedString {
+        let pattern = #"\[([^\]\n]+)\]\((proteus://[^\s<>()\[\]{}]+)\)|proteus://[^\s<>()\[\]{}]+"#
+        guard let expression = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { return AttributedString(text) }
+        var result = AttributedString(), cursor = text.startIndex
+        for match in expression.matches(in: text, range: NSRange(text.startIndex..., in: text)) {
+            guard let range = Range(match.range, in: text) else { continue }
+            result.append(AttributedString(String(text[cursor..<range.lowerBound])))
+            let urlRange = Range(match.range(at: 2), in: text)
+            let raw = String(text[urlRange ?? range])
+            let value = urlRange == nil ? raw.trimmingCharacters(in: CharacterSet(charactersIn: ".,!;:")) : raw
+            if let url = URL(string: value), parse(url) != nil {
+                let label = Range(match.range(at: 1), in: text).map { String(text[$0]) } ?? value
+                var linked = AttributedString(label); linked.link = url; result.append(linked)
+                if urlRange == nil { result.append(AttributedString(String(raw.dropFirst(value.count)))) }
+            } else { result.append(AttributedString(String(text[range]))) }
+            cursor = range.upperBound
+        }
+        result.append(AttributedString(String(text[cursor...])))
+        return result
+    }
     static func url(host: String, id: String) -> URL? {
         guard UUID(uuidString: host) != nil, UUID(uuidString: id) != nil else { return nil }
         var components = URLComponents(); components.scheme = "proteus"; components.host = "chat"

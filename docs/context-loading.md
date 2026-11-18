@@ -321,6 +321,16 @@ The selected starting folder must still exist, and an explicitly selected main a
 
 ## October 19 desktop-control implementation checkpoint
 
+Engine Room → Desktop Control has a Computer selector and per-backend Install/Review setup and
+Open setup chat controls. Setup captures that destination's configured update-chat model/options
+against its current catalog, starts unassigned, and reuses active work for the same backend.
+It carries neither updater instructions nor updater tool authorization. A paired remote computer
+also requires its current management/resource grant; revocation is rechecked before chat creation.
+Stable operation identities preserve retries through completion. Cua Driver is available on its
+supported desktop platforms; Peekaboo is offered only on Mac. The guided task inspects prerequisites,
+uses official sources through ordinary command approvals and leaves manual OS grants to the person.
+Installed, permission-blocked and verified are distinct. Input delivery still needs a real task.
+
 The authorized implementation registers `proteus_desktop` with on-demand catalogs and two-minute
 owned-connection cleanup. Both signed Mac backends pass native input/image adapter acceptance
 on a disposable app with explicit OS grants. A fresh backend process/window receipt and single-use

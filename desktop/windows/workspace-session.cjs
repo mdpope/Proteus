@@ -17,9 +17,12 @@ function normalizeTeam(value,options={},historyBudget={bytes:0}){
   if(!value||typeof value!=='object')return undefined;
   const tabs=[],seen=new Set();
   for(const item of Array.isArray(value.tabs)?value.tabs.slice(0,50):[]){
-    const id=text(item?.id,256),type=['browser','terminal','markdown','unavailable','remote-document','agent-terminal'].includes(item?.type)?item.type:'browser',url=item?.url?safeHistoryURL(item.url):'';
+    if(item?.incognito||item?.info?.incognito)continue;
+    const id=text(item?.id,256),type=['reminder','scratch','browser','terminal','markdown','unavailable','remote-document','agent-terminal'].includes(item?.type)?item.type:'browser',url=item?.url?safeHistoryURL(item.url):'';
     if(!id||seen.has(id)||item?.url&&!url)continue;seen.add(id);
     const common={...(item.hidden===true?{hidden:true}:{}),...(text(item.contentTabId,256)?{contentTabId:text(item.contentTabId,256)}:{}),...(text(item.customTitle,200)?{customTitle:text(item.customTitle,200)}:{}),...(text(item.associationChatId,256)?{associationChatId:text(item.associationChatId,256)}:{})};for(const field of ['openedAt','lastTouchedAt','lastActivityAt'])if(Number.isFinite(Date.parse(item[field])))common[field]=new Date(item[field]).toISOString();
+    if(type==='reminder'){if(typeof item.lifeBinding==='string'&&item.lifeBinding.length<=1024&&(!item.reminderId||/^[a-f0-9-]{36}$/i.test(item.reminderId)))tabs.push({id,type,...common,title:text(item.title||item.label,200),lifeBinding:item.lifeBinding,reminderId:item.reminderId||null,reminderListId:text(item.reminderListId,128)});continue;}
+    if(type==='scratch'){if(/^[a-f0-9-]{36}$/i.test(item.scratchId||''))tabs.push({id,type,...common,title:text(item.title||item.label,200),scratchId:item.scratchId});continue;}
     if(type==='agent-terminal'){if(!/^[a-zA-Z0-9_-]{1,128}$/.test(item.runId||''))continue;tabs.push({id,type,...common,title:text(item.title||item.label,200),runId:item.runId});continue;}
     if(type==='remote-document'){if(!/^[a-f0-9-]{36}$/i.test(item.hostId||'')||!/^[a-f0-9]{64}$/i.test(item.documentId||''))continue;tabs.push({id,type,...common,title:text(item.title||item.label,200),hostId:item.hostId,runId:text(item.runId,128),workspaceId:text(item.workspaceId,128),projectId:text(item.projectId,128),documentId:item.documentId,mediaType:['text/html','image/png','image/jpeg','image/gif','image/webp'].includes(item.mediaType)?item.mediaType:'text/markdown',preview:item.preview===true});continue;}
     if(type==='unavailable'){const unavailable=unavailableDocument(item);if(!unavailable)continue;tabs.push({id,type,...common,...unavailable,title:text(item.title||item.label,200)});continue;}
@@ -74,7 +77,8 @@ function normalizeSession(value, options={}) {
   if(Array.isArray(value?.tabs)&&value.tabs.length>MAX_SESSION_TABS)throw new Error('Workspace has too many saved tabs. The original record was preserved.');
   const tabs = [], seen = new Set(),historyBudget={bytes:0};
   for (const item of Array.isArray(value?.tabs) ? value.tabs : []) {
-    if (!item || !['files','overview','schedule','run','markdown','unavailable','browser','standup','omi','life','terminal','agent-terminal','remote-run','remote-document','team','engine','home','workspace'].includes(item.type)) continue;
+    if(item?.incognito||item?.info?.incognito)continue;
+    if (!item || !['reminder','scratch','files','overview','schedule','run','markdown','unavailable','browser','standup','omi','life','terminal','agent-terminal','remote-run','remote-document','team','engine','home','workspace'].includes(item.type)) continue;
     const tab = {id:text(item.id,256),type:item.type,label:text(item.label,200)};
     if(/^[a-zA-Z0-9_:.\-]{1,256}$/.test(item.associationChatId||''))tab.associationChatId=item.associationChatId;
     for(const field of ['openedAt','lastTouchedAt','lastActivityAt'])if(Number.isFinite(Date.parse(item[field])))tab[field]=new Date(item[field]).toISOString();
@@ -87,7 +91,7 @@ function normalizeSession(value, options={}) {
     if(item.type==='browser'){tab.persist=item.persist===true;tab.audioMuted=item.audioMuted===true;}
     if(text(item.customTitle,200))tab.customTitle=text(item.customTitle,200);
     if(text(item.contentTabId,256))tab.contentTabId=text(item.contentTabId,256);
-    if(['browser','markdown','unavailable','terminal','agent-terminal','remote-document','run','remote-run'].includes(tab.type)&&typeof item.parentId==='string')tab.parentId=text(item.parentId,256);
+    if(['scratch','reminder','files','browser','markdown','unavailable','terminal','agent-terminal','remote-document','run','remote-run'].includes(tab.type)&&typeof item.parentId==='string')tab.parentId=text(item.parentId,256);
     if (!tab.id || seen.has(tab.id) || (tab.id==='overview') !== (tab.type==='overview')) continue;
     if (tab.type === 'workspace') {
       if(!/^[a-zA-Z0-9_-]{1,128}$/.test(item.workspaceId||''))continue;
@@ -122,6 +126,8 @@ function normalizeSession(value, options={}) {
       tab.url=url||'';if(!tab.url&&item.newChatDraft)tab.newChatDraft=normalizeChatSetupDraft(item.newChatDraft);tab.group=item.group==='team'?'team':'main';tab.unloaded=item.unloaded===true||item.loaded===false;if(Number.isFinite(Date.parse(item.lastTouchedAt)))tab.lastTouchedAt=new Date(item.lastTouchedAt).toISOString();
       Object.assign(tab,savedNavigation);
     }
+    if(tab.type==='reminder'){if(typeof item.lifeBinding!=='string'||item.lifeBinding.length>1024)continue;tab.lifeBinding=item.lifeBinding;if(item.reminderId&& !/^[a-f0-9-]{36}$/i.test(item.reminderId))continue;tab.reminderId=item.reminderId||null;tab.reminderListId=text(item.reminderListId,128);}
+    if(tab.type==='scratch'){if(!/^[a-f0-9-]{36}$/i.test(item.scratchId||''))continue;tab.scratchId=item.scratchId;}
     if (tab.type === 'terminal') {
       if(item.hostId){if(!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(item.hostId))continue;tab.hostId=item.hostId;}
       if (!item.terminal?.id) continue;
@@ -137,7 +143,7 @@ function normalizeSession(value, options={}) {
   // Project roots retain their top-level view identity but are organizational
   // children of the same owner/workspace for remembered selection.
   const selectedChildren=Object.fromEntries(Object.entries(value?.selectedChildren&&typeof value.selectedChildren==='object'&&!Array.isArray(value.selectedChildren)?value.selectedChildren:{}).slice(0,MAX_SESSION_TABS).filter(([parentId,childId])=>typeof parentId==='string'&&parentId.length<=256&&typeof childId==='string'&&childId.length<=256&&validTabs.some(parent=>parent.id===parentId&&['run','remote-run','workspace'].includes(parent.type)&&validTabs.some(child=>child.id===childId&&(child.parentId===parentId||parent.type==='workspace'&&!parent.projectId&&child.type==='workspace'&&child.projectId&&child.workspaceId===parent.workspaceId&&(child.hostId||'')===(parent.hostId||''))))));
-  const pages=['schedules','runs','attention','context','credentials','providers','remote','settings','team','engine','home','workspaces'];
+  const pages=['schedules','runs','internet','attention','context','credentials','providers','remote','settings','team','engine','home','workspaces','omi','life','reminders','scratchpad'];
   const chatDrafts={};let draftBytes=0;for(const [key,draftValue]of Object.entries(value?.chatDrafts&&typeof value.chatDrafts==='object'&&!Array.isArray(value.chatDrafts)?value.chatDrafts:{}).slice(-200)){if(!/^[a-zA-Z0-9_:.\-]{1,256}$/.test(key)||typeof draftValue!=='string')continue;const draft=draftValue.slice(0,100000),bytes=Buffer.byteLength(draft);if(draftBytes+bytes>500000)continue;chatDrafts[key]=draft;draftBytes+=bytes;}
   const team=normalizeTeam(value?.team,options,historyBudget);
   return {schemaVersion:1,...(options.windowId?{windowId:options.windowId}:{}),...(options.sharedTeam?{sharedTeam:true}:{}),chatDrafts,tabs:validTabs,selectedChildren,active:validTabs.some(tab=>tab.id===value?.active&&!tab.hidden)?value.active:'overview',page:pages.includes(value?.page)?value.page:'home',...(team?{team}:{}),...([...engineSections,'windows','palette'].includes(value?.engineSection)?{engineSection:value.engineSection}:{})};

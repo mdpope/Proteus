@@ -37,6 +37,45 @@ test('AES-GCM authenticates the payload and routing context', () => {
   assert.throws(() => unseal(secret(), box, 'connection:client:1'));
   const corrupt = Buffer.from(box, 'base64'); corrupt[14] ^= 1; assert.throws(() => unseal(key, corrupt.toString('base64'), 'connection:client:1'));
 });
+test('Scratchpad device sharing is opt-in, checked on every read and save, and revocable',async t=>{
+ const {app,home,connect}=await fixture(t);
+ const folder=path.join(home,'scratch-storage');fs.mkdirSync(folder);
+ await app.scratchpad.configure({folder,expectedRevision:app.scratchpad.settings().revision});
+ const client=await connect();
+ await assert.rejects(client.request('scratchpad.command',{action:'list'}),/Read and edit Scratchpad/);
+ app.remote.setScratchpadAccess(client.device.id,true);
+ const args={action:'create',title:'Remote scratch',body:'Synthetic note',operationId:randomUUID()};
+ const first=await client.request('scratchpad.command',args),retry=await client.request('scratchpad.command',args);
+ assert.equal(first.id,retry.id);assert.equal((await client.request('scratchpad.command',{action:'list'})).items.length,1);
+ assert.equal((await client.request('scratchpad.command',{action:'read',id:first.id})).body,'Synthetic note');
+ app.remote.setScratchpadAccess(client.device.id,false);
+ await assert.rejects(client.request('scratchpad.command',{action:'read',id:first.id}),/Read and edit Scratchpad/);
+ await assert.rejects(client.request('scratchpad.command',args),/Read and edit Scratchpad/);
+ assert.equal(app.remote.info().devices.find(row=>row.id===client.device.id).scratchpadAccess,false);
+ app.remote.config.devices.push({id:'synthetic-ask',scope:'mnemosyne.ask'});
+ assert.throws(()=>app.remote.setScratchpadAccess('synthetic-ask',true),/ordinary paired/);
+ assert.throws(()=>app.remote.requireCommandGrants({device:{id:'synthetic-ask',scope:'mnemosyne.ask'}},'scratchpad.command',{action:'list'}),/limited to Life Ask/);
+});
+test('remote desktop setup requires current management access and captures destination defaults', async t => {
+  const model = {id: 'setup-fixture', controls: {reasoningEfforts: ['high'], contextTiers: [{id: 'default'}], serviceTiers: []}};
+  const {app, connect} = await fixture(t, {codex: {status: async () => ({available: true, models: [model]}), run: async () => {}}});
+  app.engine.drain = async () => {};
+  app.settings.save({...app.settings.get(), updateCoordinator: {provider: 'codex', model: model.id, reasoningEffort: 'high'}}, app.settings.get().revision);
+  const client = await connect();
+  await assert.rejects(client.request('desktop.setup.status'), /resource|management/i);
+  app.remote.setResourceAccess(client.device.id, true);
+  const status = await client.request('desktop.setup.status');
+  assert.equal(status.hostId, app.remote.info().hostId);
+  const args = {backend: 'cua', operationId: randomUUID()};
+  const started = await client.request('desktop.setup.start', args);
+  assert.equal(started.hostId, status.hostId);
+  assert.equal(app.engine.getRun(started.id).schedule.model, model.id);
+  assert.equal((await client.request('desktop.setup.start', args)).id, started.id);
+  await assert.rejects(client.request('desktop.setup.start', {...args, agentControl: true}), /human interface/);
+  app.remote.setResourceAccess(client.device.id, false);
+  await assert.rejects(client.request('desktop.setup.start', args), /resource|management/i);
+  assert.equal(app.engine.listRuns().length, 1);
+});
 test('encrypted reply measurements identify fixed read methods at actual wire send',async t=>{
  const {app,connect}=await fixture(t),client=await connect();
  const snapshot=await client.request('sync');assert.ok(snapshot.state.context);

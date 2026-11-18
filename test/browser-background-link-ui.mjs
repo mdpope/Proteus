@@ -27,7 +27,7 @@ try{
  await native((main,id)=>{const browser=main.getBrowser(),wc=browser.get(id).view.webContents;process.mainModule.require('electron').app.focus({steal:true});browser.window.focus();wc.focus();return wc.executeJavaScript('document.querySelector("#draft").focus();document.querySelector("#draft").value="unfinished local draft";true');},source.id);
  await page.bringToFront();await native((main,id)=>{const tab=main.getBrowser().get(id),window=main.getWindows().contexts.get(tab.windowId).window;window.show();window.focus();tab.view.webContents.focus();},source.id);
  await until(()=>native((main,id)=>main.getBrowser().get(id).view.webContents.isFocused(),source.id),'native source focus before menu');
- const labels=await click(source.id,origin+'/background','Open Link in Background Tab');assert.deepEqual(labels.slice(0,3),['Open Link in New Default Browser Tab','Open Link in Background Tab','Open Link in Unloaded Tab']);
+ const labels=await click(source.id,origin+'/background','Open Link in Background Tab');assert.deepEqual(labels.slice(0,5),['Open Link in New Default Browser Tab','Open Link in Background Tab','Open Link in Incognito Tab','Open Link in New Fixture profile Browser Tab','Open Link in Unloaded Tab']);
  await until(()=>page.evaluate(url=>backgroundFixture.state.tabs.some(tab=>tab.info?.url===url&&tab.info?.loaded&&!tab.info.loading),origin+'/background'),'background loaded');
  const background=(await command({action:'list'})).find(tab=>tab.url===origin+'/background');
  assert.equal(background.profileId,named);assert.equal(background.parentId,parentId);assert.equal(background.loaded,true);assert.equal(background.hidden,false);

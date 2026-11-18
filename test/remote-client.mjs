@@ -16,7 +16,7 @@ export class RemoteClient extends EventEmitter {
         if (packet.type === 'challenge') {
           this.challenge = packet.challenge;
           if (this.device) this.auth();
-          else this.raw({ type: 'pair', box: seal(this.capsule.key, { name: 'Synthetic mobile client' }, `${this.challenge}:pair`) });
+          else this.raw({ type: 'pair', box: seal(this.capsule.key, { name: 'Synthetic mobile client', ...(this.capsule.purpose ? { purpose: this.capsule.purpose } : {}) }, `${this.challenge}:pair`) });
         } else if (packet.type === 'paired') { this.device = unseal(this.capsule.key, packet.box, `${this.challenge}:paired`); this.auth(); }
         else if (packet.type === 'ready') { unseal(this.device.key, packet.box, `${this.prefix}:ready`); this.ready = true; }
         else if (packet.type === 'data') {

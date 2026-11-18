@@ -1,3 +1,4 @@
+import {beginDesktopPackage} from './desktop-package-output.mjs';
 // Linux build of the accepted source; Mac signing and iOS packaging stay independent.
 import { packager } from '@electron/packager';
 import { rebuild } from '@electron/rebuild';
@@ -12,13 +13,15 @@ import {linuxBuildIdentity} from './linux-build-identity.mjs';
 
 if (process.platform !== 'linux') throw new Error('Build the Linux application on Linux.');
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const output = beginDesktopPackage();
+try {
 await import('./build-terminal.mjs');
 const metadata = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-const { runtimeFiles, buildInputs, verifySource, verifyCopied } = createDesktopSnapshot(root, ['package.json', 'package-lock.json', 'scripts/package-linux.mjs', 'scripts/linux-build-identity.mjs', 'scripts/desktop-build.mjs', 'scripts/build-terminal.mjs', 'scripts/prepare-pty.mjs','scripts/prepare-extensions.mjs', 'docs/linux-upstream-source.json']);
+const { runtimeFiles, buildInputs, verifySource, verifyCopied } = createDesktopSnapshot(root, ['package.json', 'package-lock.json', 'scripts/package-linux.mjs', 'scripts/linux-build-identity.mjs', 'scripts/desktop-build.mjs','scripts/desktop-package-output.mjs','scripts/build-cache-lock.mjs', 'scripts/build-terminal.mjs', 'scripts/prepare-pty.mjs','scripts/prepare-extensions.mjs', 'docs/linux-upstream-source.json']);
 const upstream = JSON.parse(fs.readFileSync(path.join(root, 'docs/linux-upstream-source.json'), 'utf8'));
 const provenance = linuxBuildIdentity({root,version:metadata.version,upstream,runtimeFiles,buildInputs});
 const {sourceFingerprint,buildRevision}=provenance;
-const out = process.env.PROTEUS_PACKAGE_OUTPUT || path.join(root, 'dist');
+const out = output.directory;
 const bundles = await packager({
   dir: root, out, overwrite: true, name: 'Proteus', executableName: 'proteus',
   platform: 'linux', arch: process.arch, asar: false, icon: path.join(root, 'desktop/icon.png'),
@@ -46,3 +49,5 @@ for (const bundle of bundles) {
   fs.writeFileSync(archive + '.sha256', digest(archive) + '  ' + path.basename(archive) + '\n');
   console.log(JSON.stringify({ executable: path.join(bundle, 'proteus'), archive, version: metadata.version, buildRevision, sourceFingerprint, runtimeFiles: Object.keys(runtimeFiles).length, upstream }));
 }
+output.complete({sourceFingerprint, buildRevision});
+} finally { output.release(); }

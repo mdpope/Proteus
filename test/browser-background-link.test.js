@@ -18,8 +18,8 @@ test('a native link menu callback keeps its originating window after focus moves
  vm.createContext(sandbox);vm.runInContext(fs.readFileSync(new URL('../desktop/browser/browser-actions.cjs',import.meta.url),'utf8'),sandbox);
  const source={id:'source',windowId:'first',profileId:'default',parentId:'project:local:one'},browser={options:{},partition:{on(){}},tabs:new Map([[source.id,source]]),appOrigin:'http://app.test',withTabWindow:(tab,fn)=>scope.run(tab.windowId,fn),create:async()=>{await Promise.resolve();created.push(scope.getStore()||'other-focused-window');return {id:'new'};},sendAction(){}};
  const menu=scope.run('first',()=>new sandbox.module.exports.BrowserActions(browser).menu(source,{linkURL:'https://example.test/'}));
- for(const action of menu.items.slice(0,3)){scope.run('other-focused-window',()=>action.click());await new Promise(resolve=>setImmediate(resolve));}
- assert.deepEqual(created,['first','first','first']);
+ for(const action of menu.items.slice(0,4)){scope.run('other-focused-window',()=>action.click());await new Promise(resolve=>setImmediate(resolve));}
+ assert.deepEqual(created,['first','first','first','first']);
 });
 test('native link menu keeps foreground/background/unloaded choices distinct and captures source ownership',async()=>{
   const created=[],sent=[],electron={app:{getApplicationNameForProtocol:()=> 'Browser'},Menu:{buildFromTemplate:items=>({items})}};
@@ -28,12 +28,12 @@ test('native link menu keeps foreground/background/unloaded choices distinct and
   const source={id:'source',profileId:'profile-a',group:'team',parentId:'chat',destination:{type:'chat',id:'chat'},workspaceName:'Workspace',associationChatId:'chat'};
   const browser={options:{},partition:{on(){}},tabs:new Map([[source.id,source]]),appOrigin:'http://app.test',create:async(url,_owner,_history,descriptor)=>{created.push({url,descriptor:copy(descriptor)});return {id:'created',...descriptor};},sendAction:value=>sent.push(copy(value))};
   const actions=new sandbox.module.exports.BrowserActions(browser),menu=actions.menu(source,{linkURL:'https://example.test/page'});
-  assert.deepEqual(copy(menu.items.slice(0,3).map(item=>item.label)),['Open Link in New Default Browser Tab','Open Link in Background Tab','Open Link in Unloaded Tab']);
+  assert.deepEqual(copy(menu.items.slice(0,4).map(item=>item.label)),['Open Link in New Default Browser Tab','Open Link in Background Tab','Open Link in Incognito Tab','Open Link in Unloaded Tab']);
   source.profileId='later-profile';source.parentId='later-chat';
   menu.items[1].click();await new Promise(resolve=>setImmediate(resolve));
-  assert.deepEqual(created[0],{url:'https://example.test/page',descriptor:{profileId:'profile-a',group:'team',parentId:'chat',destination:{type:'chat',id:'chat'},workspaceName:'Workspace',associationChatId:'chat',hidden:false,unloaded:false,background:true}});
+  assert.deepEqual(created[0],{url:'https://example.test/page',descriptor:{incognito:false,profileId:'profile-a',group:'team',parentId:'chat',destination:{type:'chat',id:'chat'},workspaceName:'Workspace',associationChatId:'chat',hidden:false,unloaded:false,background:true}});
   assert.equal(sent[0].type,'background-tab');assert.equal(sent[0].afterId,'source');
-  menu.items[0].click();menu.items[2].click();await new Promise(resolve=>setImmediate(resolve));
+  menu.items[0].click();menu.items[3].click();await new Promise(resolve=>setImmediate(resolve));
   assert.deepEqual(sent.map(value=>value.type),['background-tab','select-tab','unloaded-tab']);
   assert.equal(created[1].descriptor.unloaded,undefined);assert.equal(created[2].descriptor.unloaded,true);assert.equal(created[2].descriptor.hidden,true);
 });

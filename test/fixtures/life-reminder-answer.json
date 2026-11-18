@@ -1,0 +1,22 @@
+{
+  "id": "10000000-0000-4000-8000-000000000001",
+  "status": "completed",
+  "transcript": "Remind me to water the plants tomorrow.",
+  "answer": "Saved **Water the plants** in **Inbox**, due **November 14, 2026**. This is date-only; no timed alert was scheduled. [Open reminder](https://example.test/life/reminders?id=20000000-0000-4000-8000-000000000002)",
+  "savedPath": null,
+  "executor": "proteus",
+  "reminder": {
+    "id": "20000000-0000-4000-8000-000000000002",
+    "revision": 1,
+    "listId": "30000000-0000-4000-8000-000000000003",
+    "title": "Water the plants",
+    "dueKind": "date",
+    "dueDate": "2026-11-14",
+    "dueAt": null,
+    "timeZone": null
+  },
+  "destination": {
+    "kind": "reminder",
+    "reminderId": "20000000-0000-4000-8000-000000000002"
+  }
+}

@@ -42,7 +42,7 @@ class ExternalProtocols {
   /** Ask, then open. Resolves true when the URL was handed to its application. */
   async request(tab, target, requesting) {
     const url = externalProtocolURL(target);
-    if (!url || !tab || this.browser.shuttingDown) return false;
+    if (!url || !tab || tab.incognito || this.browser.shuttingDown) return false;
     const site = siteOf(requesting || tab.view?.webContents?.getURL?.() || ''), scheme = url.protocol.slice(0, -1);
     let name = ''; try { name = String(this.handlerName(url.href) || '').trim(); } catch {}
     if (!name) { this.browser.actions?.send?.({ type: 'error', id: tab.id, message: `No application on this computer opens ${scheme}: links.` }); return false; }
@@ -54,10 +54,10 @@ class ExternalProtocols {
         const result = await this.show(parent && !parent.isDestroyed?.() ? parent : undefined, {
           type: 'question', buttons: ['Open ' + name, 'Cancel'], defaultId: 0, cancelId: 1, noLink: true,
           message: `Open ${name}?`, detail: `${site || 'This page'} wants to open this link in ${name}.\n\n${url.href.slice(0, 300)}`,
-          ...(site ? { checkboxLabel: `Always allow ${new URL(site).host} to open ${scheme}: links in ${name}`, checkboxChecked: false } : {})
+          ...(site && !tab.incognito ? { checkboxLabel: `Always allow ${new URL(site).host} to open ${scheme}: links in ${name}`, checkboxChecked: false } : {})
         });
         if (result.response !== 0) return false;
-        if (result.checkboxChecked) this.remember(tab.profileId, site, scheme);
+        if (result.checkboxChecked && !tab.incognito) this.remember(tab.profileId, site, scheme);
       } finally { this.pending.delete(tab.id); }
     }
     if (this.browser.shuttingDown || !this.browser.tabs.has(tab.id)) return false;

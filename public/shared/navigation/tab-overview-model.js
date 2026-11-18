@@ -1,12 +1,16 @@
 const visible=tab=>!tab.hidden&&!tab.navigationClosed&&!tab.connectionPaused;
 const features=new Set(['overview','omi','life','team','engine','home','standup']);
-export function tabOverviewGroups({tabs,catalog,scope='main',selectedId,topId,team={tabs:[]}}){
+export function tabOverviewGroups({tabs,catalog,scope='main',selectedId,topId,team={tabs:[]},featureGroups=[]}){
  const byId=new Map(tabs.map(tab=>[tab.id,tab]));
  const ancestors=tab=>{const rows=[],seen=new Set();while(tab&&!seen.has(tab.id)){seen.add(tab.id);rows.push(tab);tab=byId.get(tab.parentId);}return rows;};
  const eligible=tab=>visible(tab)&&ancestors(tab).every(visible);
  const selected=byId.get(selectedId),selectedChain=ancestors(selected);
  const scopeTab=byId.get(scope),scoped=ancestors(scopeTab).find(tab=>tab.type==='workspace')||scopeTab||selectedChain.find(tab=>tab.type==='workspace');
- if(scope==='main')return [{id:'main',title:'Top-level tabs',tabs:tabs.filter(tab=>eligible(tab)&&!tab.parentId&&!tab.projectId&&!features.has(tab.type)),selectedId:topId||selectedId}];
+ if(scope.startsWith('feature:'))return featureGroups.filter(group=>group.id===scope.slice(8)).map(group=>({id:group.id,title:group.title,selectedId,home:group.home,tabs:group.ids.map(id=>byId.get(id)).filter(tab=>tab&&eligible(tab))}));
+ if(scope==='main'){
+  const grouped=new Set(featureGroups.flatMap(group=>group.ids));
+  return [{id:'main',title:'Top-level tabs',tabs:tabs.filter(tab=>eligible(tab)&&!grouped.has(tab.id)&&!tab.parentId&&!tab.projectId&&!features.has(tab.type)),selectedId:topId||selectedId},...featureGroups.map(group=>({id:group.id,title:group.title,selectedId,home:group.home,tabs:group.ids.map(id=>byId.get(id)).filter(tab=>tab&&eligible(tab))}))];
+ }
  if(scope==='team')return [{id:'team',title:'Team Tools',team:true,tabs:team.tabs.filter(visible),selectedId:team.active}];
  const host=scoped?.hostId||'local',workspaceId=scoped?.workspaceId;
  if(workspaceId){

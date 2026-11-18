@@ -38,14 +38,28 @@ function retire(file,job,{inspect=inspectPackage}={}){
  // previous generation can retire. Budget the temporary third copy up front.
  if(!job.health||!['verifying','awaiting-chat-resume','complete'].includes(job.phase)||!rows.some(row=>row.directory===job.recovery))throw Error('Verify the new recovery and live outcome before retirement.');
  const {verifyGeneration}=require('./update-maintenance.cjs');
- for(const row of rows)verifyGeneration(row,job,{inspect});
- const retired=rows.slice(0,-2);if(retired.some(row=>row.eligible!==true))throw Error('An older unresolved recovery generation was preserved.');
+ const verified=[],damaged=[];
+ for(const row of rows){
+  try{verifyGeneration(row,job,{inspect});verified.push(row);}
+  catch(error){
+   // A damaged historical data copy must not permanently prevent rotation
+   // after two other complete generations (including this update) verify.
+   // Never relax path, application, receipt or unsupported-file checks.
+   if(error.message!=='Recovery data differs from its receipt.'||row.directory===job.recovery)throw error;
+   damaged.push({...row,actualTree:tree(row.directory),verificationError:error.message});
+  }
+ }
+ const survivors=verified.slice(-2),retired=rows.filter(row=>!survivors.some(keep=>keep.id===row.id));
+ if((retired.length&&verified.length<2)||!verified.some(row=>row.directory===job.recovery))throw Error('Two complete recovery generations including this update must verify before retirement.');
+ if(retired.some(row=>row.eligible!==true))throw Error('An older unresolved recovery generation was preserved.');
  for(const row of retired){const commands=process.platform==='win32'?'':require('node:child_process').execFileSync('/bin/ps',['-ax','-o','command='],{encoding:'utf8'});if(process.platform==='win32'?require('./windows-installation.cjs').inUse(row.directory):commands.split('\n').some(command=>command.includes(row.directory+path.sep)))throw Error('A retained recovery application is in use. Finish that process before updating.');}
  const receiptFile=path.join(path.dirname(job.file),'recovery-retirement.json'),intentFile=path.join(path.dirname(job.file),'recovery-retirement-intent.json');
  if(fs.existsSync(intentFile))throw Error('A prior recovery retirement needs receipt-based reconciliation before retry.');
  const available=()=>{const stat=fs.statfsSync(path.dirname(file));return Number(stat.bavail)*Number(stat.bsize);},before=available();
- atomic(intentFile,{schemaVersion:1,jobId:job.id,at:new Date().toISOString(),policyBefore:inventory,retiredReceipts:retired.map(row=>({id:row.id,receipt:JSON.parse(fs.readFileSync(row.receiptFile,'utf8'))})),survivors:rows.slice(-2).map(row=>({id:row.id,receiptHash:row.receiptHash}))});
+ atomic(intentFile,{schemaVersion:1,jobId:job.id,at:new Date().toISOString(),policyBefore:inventory,retiredReceipts:retired.map(row=>({id:row.id,receipt:JSON.parse(fs.readFileSync(row.receiptFile,'utf8'))})),damaged,survivors:survivors.map(row=>({id:row.id,receiptHash:row.receiptHash}))});
  for(const row of retired){
+  const invalid=damaged.find(item=>item.id===row.id);
+  if(invalid&&tree(row.directory).hash!==invalid.actualTree.hash)throw Error('The damaged historical recovery changed before retirement.');
   fs.rmSync(row.directory,{recursive:true});inventory.generations=inventory.generations.filter(item=>item.directory!==row.directory);atomic(file,inventory);
  }
  atomic(receiptFile,{schemaVersion:1,jobId:job.id,at:new Date().toISOString(),retired:retired.map(row=>row.id),retained:inventory.generations.map(row=>row.id),freeSpaceChange:available()-before});

@@ -45,6 +45,7 @@ struct RemoteHostInfo: Equatable {
 /// Per-property observation: a view redraws only when the host values it reads change.
 /// Streaming one chat no longer invalidates every view that holds this store.
 @MainActor @Observable final class RemoteStore {
+    let scratchpad = ScratchpadWorkspace()
     var state: JSON = .null { didSet {
         updateTitleProjection()
         if let attentionRunField, oldValue["runs"] != state["runs"] {
@@ -208,20 +209,30 @@ struct RemoteHostInfo: Equatable {
     }
     /// Downloads a file kept with a chat on its owner into a private temporary copy.
     func attachmentFile(chatID: String, sha256: String, name: String) async throws -> URL {
-        var data = Data(), offset = 0
+        // N11-18: no size cap. Pages are hashed incrementally and appended to a private file, so a
+        // large attachment never has to fit in memory.
         let host = connection?.hostId
-        for _ in 0..<400 {
-            let page = try await request("chat.attachments.get", ["id": .string(chatID), "sha256": .string(sha256), "offset": .number(Double(offset))])
-            guard let chunk = Data(base64Encoded: page["dataBase64"].string) else { throw RemoteError(message: "The attachment could not be read.") }
-            guard connection?.hostId == host, data.count + chunk.count <= NativeAttachmentBudget.maxFileBytes else { throw RemoteError(message: "The attachment destination changed or the file exceeds 8 MB.") }; data.append(chunk); offset += chunk.count
-            if page["done"].bool || chunk.isEmpty { break }
-        }
-        guard SHA256.hash(data: data).map({ String(format: "%02x", $0) }).joined() == sha256 else { throw RemoteError(message: "The saved attachment bytes changed.") }
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("chat-attachments/" + sha256, isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let safe = name.replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: ":", with: "_").trimmingCharacters(in: .whitespacesAndNewlines)
         let url = directory.appendingPathComponent(safe.isEmpty ? "attachment" : String(safe.prefix(120)))
-        try data.write(to: url, options: [.atomic, .completeFileProtection]); return url
+        let partial = directory.appendingPathComponent(UUID().uuidString + ".partial")
+        FileManager.default.createFile(atPath: partial.path, contents: nil, attributes: [.protectionKey: FileProtectionType.complete])
+        defer { try? FileManager.default.removeItem(at: partial) }
+        let handle = try FileHandle(forWritingTo: partial)
+        var hasher = SHA256(), offset = 0
+        do {
+            while true {
+                let page = try await request("chat.attachments.get", ["id": .string(chatID), "sha256": .string(sha256), "offset": .number(Double(offset))])
+                guard let chunk = Data(base64Encoded: page["dataBase64"].string) else { throw RemoteError(message: "The attachment could not be read.") }
+                guard connection?.hostId == host else { throw RemoteError(message: "The attachment destination changed.") }
+                hasher.update(data: chunk); try handle.write(contentsOf: chunk); offset += chunk.count
+                if page["done"].bool || chunk.isEmpty { break }
+            }
+            try handle.close()
+        } catch { try? handle.close(); throw error }
+        guard hasher.finalize().map({ String(format: "%02x", $0) }).joined() == sha256 else { throw RemoteError(message: "The saved attachment bytes changed.") }
+        try? FileManager.default.removeItem(at: url); try FileManager.default.moveItem(at: partial, to: url); return url
     }
     func draft(_ id: String) -> JSON { _ = draftRevision; return drafts[id] ?? .null }
     func setDraft(_ id: String, _ value: JSON, notifyObservers: Bool = true) {
@@ -405,7 +416,7 @@ struct RemoteHostInfo: Equatable {
                     return
                 }
                 if value["event"].string == "tabs" { onContentTabsChanged?(value["data"]) }
-                if value["event"].string == "run" { mergeChat(value["data"]) }
+                if value["event"].string == "run" { enqueueChatPush(value["data"]) }
                 if value["event"].string == "chat.lifecycle" { applyLifecycle(value["data"]); Task { await refresh() } }
                 saveCache()
             }
@@ -626,6 +637,7 @@ struct RemoteHostInfo: Equatable {
         do { _ = try await request("chat.watch", ["id": .string(id), "watch": .string("none"), "watchToken": .string(token.uuidString)]) } catch { }
     }
     @discardableResult func openChat(_ id: String) async -> Bool {
+        flushChatPushes()
         let watching = !chatVisibilityManaged || visibleChat?.id == id
         if watching { selectedChat = id }
         guard connected else { return false }
@@ -667,6 +679,24 @@ struct RemoteHostInfo: Equatable {
             snapshot["runs"] = .array(state["runs"].array.map { row in guard row["id"].string == id else { return row }; var item = row.object; item["attentionRequired"] = .bool(false); item["failureReviewedAt"] = reviewed["failureReviewedAt"]; return .object(item) })
             state = .object(snapshot); saveCache(); await refresh()
         } catch { self.error = error.localizedDescription }
+    }
+    /// N11-28: owner pushes for a streaming chat arrive many times per second. Buffer them for
+    /// 250 ms and apply in order in one main-actor turn, so SwiftUI renders the transcript once per
+    /// batch instead of once per push. Paths that read a chat call `flushChatPushes()` first.
+    @ObservationIgnored private var pendingChatPushes: [JSON] = []
+    @ObservationIgnored private var chatPushFlush: Task<Void, Never>?
+    private func enqueueChatPush(_ value: JSON) {
+        pendingChatPushes.append(value)
+        guard chatPushFlush == nil else { return }
+        chatPushFlush = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(250))
+            self?.flushChatPushes()
+        }
+    }
+    func flushChatPushes() {
+        chatPushFlush?.cancel(); chatPushFlush = nil
+        let batch = pendingChatPushes; pendingChatPushes = []
+        for value in batch { mergeChat(value) }
     }
     func mergeChat(_ value: JSON) {
         #if DEBUG
@@ -750,7 +780,25 @@ struct RemoteHostInfo: Equatable {
     // A visible owner-bound project may outlive a different computer selection.
     // Resume only an explicitly suspended owner; leave reconnect backoff alone.
     func resumeIfSuspended() { guard !active else { return }; activity(true) }
-    func activity(_ isActive: Bool) { active = isActive; if active { connect() } else { flushCache(); disconnect() } }
+    func activity(_ isActive: Bool) {
+        active = isActive
+        if active { deferredDisconnect = false; connect(); return }
+        flushChatPushes(); flushCacheInBackground()
+        // An in-flight submission keeps the socket until it settles (under its background task).
+        if connectionHolds > 0 { deferredDisconnect = true } else { disconnect() }
+    }
+    /// N11-33: keep the connection open for an in-flight user submission across a background
+    /// transition. Call the returned closure exactly once when the submission settles.
+    @ObservationIgnored private var connectionHolds = 0
+    @ObservationIgnored private var deferredDisconnect = false
+    func holdConnection() -> () -> Void {
+        connectionHolds += 1; var released = false
+        return { [weak self] in
+            guard let self, !released else { return }; released = true
+            self.connectionHolds -= 1
+            if self.connectionHolds == 0, self.deferredDisconnect, !self.active { self.deferredDisconnect = false; self.disconnect() }
+        }
+    }
     private func lost() {
         socket?.cancel(with: .goingAway, reason: nil); socket = nil; connected = false; status = paired ? "\(displayName) offline · reconnecting" : "Pairing connection lost"
         if active && (paired || invite != nil) { retryTask?.cancel(); retryTask = Task { try? await Task.sleep(for: .seconds(3)); if !Task.isCancelled { connect() } } }
@@ -762,6 +810,13 @@ struct RemoteHostInfo: Equatable {
         flushCache(); active = false; disconnect(); sendTask?.cancel(); sendTask = nil
         for continuation in waiting.values { continuation.resume(throwing: RemoteError(message: reason)) }
         waiting.removeAll(); pendingCommands.removeAll(); timeouts.values.forEach { $0.cancel() }; timeouts.removeAll()
+    }
+    /// N11-24: lifecycle variant. The main thread only snapshots the payload; encoding, encryption
+    /// and the write run on the serial cache queue (after older snapshots) under a background task.
+    func flushCacheInBackground() {
+        cacheTimer?.cancel(); cacheDirtySince = nil; guard let connection else { return }
+        let payload = cachePayload(), url = cacheURL, key = connection.key, task = NativeBackgroundWork.begin("Save Proteus state")
+        cacheWriter.async { Self.writeCache(payload, key: key, url: url); NativeBackgroundWork.end(task) }
     }
     func flushCache() {
         cacheTimer?.cancel(); cacheDirtySince = nil; guard let connection else { return }
@@ -795,7 +850,10 @@ struct RemoteHostInfo: Equatable {
     private func saveCache() {
         cacheTimer?.cancel()
         if cacheDirtySince == nil { cacheDirtySince = Date() }
-        let delay = min(3.0, max(0, 15 - Date().timeIntervalSince(cacheDirtySince!)))
+        // N11-28: the cache only serves cold launches and is flushed when leaving the foreground.
+        // Re-encoding/encrypting the whole cached owner state every few seconds during streaming
+        // or typing was a large, constant CPU cost. Write after 10 s of quiet, at most every 60 s.
+        let delay = min(10.0, max(0, 60 - Date().timeIntervalSince(cacheDirtySince!)))
         cacheTimer = Task {
             try? await Task.sleep(for: .seconds(delay))
             guard !Task.isCancelled, let connection else { return }
@@ -842,6 +900,7 @@ struct PairingCompletion: Equatable {
 
 /// Credentials and cached records are independent even when every computer uses the same relay.
 @MainActor final class DestinationStore: ObservableObject {
+    @Published var scratchpadOwnerID: String?
     @Published private(set) var destinations: [HostDestination] = []
     @Published private(set) var selectedID: String?
     @Published private(set) var selected: RemoteStore?
@@ -894,9 +953,14 @@ struct PairingCompletion: Equatable {
             guard let credentials = DeviceKeychain.load(hostID: id, service: service), credentials.hostId == id else { throw RemoteError(message: "This computer’s pairing key is unavailable. Add it again using a new pairing code.") }
             remote = RemoteStore(connection: credentials, cacheRoot: cacheRoot(id), legacyCredentials: false); stores[id] = remote
         }
-        if selectedID != id || selected !== remote { selected?.suspend() }
-        observeHostName(remote, id: id)
-        selectedID = id; selected = remote; try persist()
+        let selectionChanged = selectedID != id
+        // Restoring or reselecting the same owner changes no durable navigation.
+        if selectionChanged {
+            let previousID = selectedID; selectedID = id
+            do { try persist() } catch { selectedID = previousID; throw error }
+        }
+        if selectionChanged || selected !== remote { selected?.suspend() }
+        observeHostName(remote, id: id); selected = remote
         if connect && active { remote.activity(true) }
     }
     private func observeHostName(_ remote: RemoteStore, id: String) {
@@ -1007,6 +1071,15 @@ struct PairingCompletion: Equatable {
         for destination in destinations { if let remote = remote(for: destination.id) { remote.activity(active); if remote.connected { await remote.refresh() } } }
     }
     func status(_ id: String) -> String { if let remote = stores[id] { return remote.status }; return "Saved · not connected" }
-    func activity(_ value: Bool) { active = value; for destination in destinations { remote(for: destination.id)?.activity(value) }; pairing?.activity(value) }
+    func activity(_ value: Bool) {
+        active = value
+        if value { for destination in destinations { remote(for: destination.id)?.activity(true) } }
+        else {
+            // Backgrounding must not decrypt/load dormant owner caches just to
+            // disconnect and rewrite them. Existing uploads keep their normal holds.
+            for remote in stores.values { remote.activity(false) }
+        }
+        pairing?.activity(value)
+    }
     func resetForTesting() { cancelPairing(); for id in destinations.map(\.id) { try? forget(id) }; DeviceKeychain.clear(service: service) }
 }

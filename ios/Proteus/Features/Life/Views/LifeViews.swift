@@ -3,28 +3,95 @@ import UniformTypeIdentifiers
 import PDFKit
 
 private enum LifeSection:String,CaseIterable,Identifiable{
-    case overview,nutrition,garage,fuel,captures,security,connections
+    case overview,ask,home,reminders,nutrition,garage,fuel,captures,capture,security,connections
     var id:String{rawValue}
-    var title:String{switch self{case .overview:"Overview";case .nutrition:"Nutrition";case .garage:"Garage";case .fuel:"Fuel";case .captures:"Evidence";case .security:"Account & security";case .connections:"Connections"}}
-    var icon:String{switch self{case .overview:"square.grid.2x2";case .nutrition:"fork.knife";case .garage:"car";case .fuel:"fuelpump";case .captures:"tray.full";case .security:"person.crop.circle";case .connections:"link"}}
+    var title:String{switch self{case .overview:"Overview";case .ask:"Ask";case .home:"Smart Home";case .reminders:"Reminders";case .nutrition:"Nutrition";case .garage:"Garage";case .fuel:"Fuel & mileage";case .captures:"Capture inbox";case .capture:"New capture";case .security:"Account";case .connections:"Connections"}}
+    var icon:String{switch self{case .overview:"square.grid.2x2";case .ask:"waveform.bubble";case .home:"house";case .reminders:"checklist";case .nutrition:"fork.knife";case .garage:"car";case .fuel:"fuelpump";case .captures:"tray.full";case .capture:"plus.square";case .security:"person.crop.circle";case .connections:"link"}}
 }
-struct LifeRootView:View{
-    @EnvironmentObject var life:LifeStore
-    @State private var section:LifeSection? = .overview
-    @AppStorage("nativeLifeSection") private var selectedSection = "overview"
-    @State private var account=false
-    var body:some View{
-        Group{
-            if life.signedIn{
-                NavigationSplitView{
-                    List(LifeSection.allCases.filter{life.profile["sections"].array.isEmpty || life.profile["sections"].array.contains(.string($0.rawValue))},selection:$section){item in NavigationLink(value:item){Label(item.title,systemImage:item.icon)}}
-                        .navigationTitle(NativeDesignPreview.enabled ? "" : "Life").nativeFeaturePage("Life")
-                        .safeAreaInset(edge:.bottom){VStack(alignment:.leading,spacing:4){Text(life.profile["displayName"].string).font(.caption.bold());Text("Website account · separate from computers").font(.caption2).foregroundStyle(.secondary)}.padding()}
-                }detail:{LifePage(section:section ?? .overview).id(life.accountIdentity+"|"+(section ?? .overview).rawValue)}
-                    .toolbar{ToolbarItem(placement:.primaryAction){Button{account=true}label:{Image(systemName:"person.crop.circle")}.accessibilityLabel("Life account")}}
-                    .sheet(isPresented:$account){NavigationStack{LifeAccountView()}}
-            }else{NavigationStack{LifeAccountView().nativeFeaturePage("Life")}}
-        }.task{section = LifeSection(rawValue: selectedSection) ?? .overview; await life.restore()}.onChange(of: selectedSection) { _, value in section = LifeSection(rawValue: value) ?? .overview }.onChange(of: section) { _, value in selectedSection = value?.rawValue ?? "overview" }
+struct LifeRootView: View {
+    @EnvironmentObject var life: LifeStore
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    @State private var section: LifeSection?
+    @State private var initialized = false
+    @AppStorage("nativeLifeSection") private var selectedSection = ""
+    @State private var account = false
+    private var sections: [LifeSection] {
+        // Fuel & mileage lives under Garage; Reminders has its own feature.
+        LifeSection.allCases.filter { $0 != .reminders && $0 != .fuel }
+    }
+    private var path: Binding<[LifeSection]> {
+        Binding(get: { section.map { [$0] } ?? [] }, set: { section = $0.last })
+    }
+    @ViewBuilder private func page(_ item: LifeSection) -> some View {
+        Group {
+            switch item {
+            case .home: LifeHomeWorkspaceView()
+            case .capture: LifeNewCaptureView()
+            case .reminders: LifeRemindersView()
+            case .ask: LifeAskView()
+            default: LifePage(section: item)
+            }
+        }.nativeFeaturePage(item.title, persistentHeader: true)
+    }
+    var body: some View {
+        Group {
+            if life.signedIn {
+                if sizeClass == .compact {
+                    NavigationStack(path: path) {
+                        List(sections) { item in
+                            NavigationLink(value: item) { Label(item.title, systemImage: item.icon) }
+                        }.scrollContentBackground(.hidden).background(NativeTheme.background)
+                            .nativeFeaturePage("Life", persistentHeader: true)
+                            .navigationDestination(for: LifeSection.self) { page($0) }
+                    }
+                } else {
+                    NavigationStack {
+                        VStack(spacing: 0) {
+                            NativeTabStrip(ids: sections.map(\.id), selection: section?.id ?? "overview") {
+                                HStack(spacing: 0) {
+                                    ForEach(sections) { item in
+                                        Button { section = item } label: {
+                                            NativeContentTabLabel(title: item.title, symbol: item.icon).padding(.horizontal, 16).frame(height: 44)
+                                        }.buttonStyle(.plain).background(section == item ? NativeTheme.surface : Color.clear)
+                                        Divider().frame(height: 24)
+                                    }
+                                }
+                            }.nativeTabBar()
+                            Divider()
+                            page(section ?? .overview)
+                        }
+                    }
+                }
+            } else { NavigationStack { LifeAccountView().nativeFeaturePage("Life", persistentHeader: true) } }
+        }
+        .toolbar { ToolbarItem(placement: .primaryAction) { Button { account = true } label: { Image(systemName: "person.crop.circle") }.accessibilityLabel("Life account") } }
+        .sheet(isPresented: $account) { NavigationStack { LifeAccountView() } }
+        .task {
+            if !initialized { initialized = true; section = LifeSection(rawValue: selectedSection) }
+            await life.restore()
+        }
+        .onChange(of: selectedSection) { _, value in
+            let next = LifeSection(rawValue: value)
+            if next != section { section = next }
+        }
+        .onChange(of: section) { _, value in selectedSection = value?.rawValue ?? "" }
+    }
+}
+private struct LifeNewCaptureView: View {
+    @EnvironmentObject private var life: LifeStore
+    @AppStorage("nativeLifeSection") private var selectedSection = ""
+    @State private var choices: JSON = .null
+    @State private var failure: String?
+    var body: some View {
+        Group {
+            if let failure { ContentUnavailableView("Capture unavailable", systemImage: "doc", description: Text(failure)) }
+            else if choices == .null { ProgressView("Loading capture choices…") }
+            else { LifeForm(action: "capture.save", initial: [:], choices: choices) { selectedSection = "captures" } }
+        }.task(id: life.accountIdentity) {
+            let owner = life.accountIdentity
+            do { let value = try await life.data(section: "captures", query: [:]); if owner == life.accountIdentity { choices = value; failure = nil } }
+            catch { if owner == life.accountIdentity { failure = life.display(error) } }
+        }
     }
 }
 struct LifeAccountView:View{
@@ -70,7 +137,10 @@ private struct LifePage:View{
     @State private var form:LifeActionSheet?
     @State private var evidence:LifeEvidence?
     @State private var search=""
-    @State private var nutritionTab="averages"
+    @State private var nutritionTab="overview"
+    @State private var garageTab="overview"
+    @State private var today:JSON = .null
+    @State private var fuelValue:JSON = .null
     @State private var date=Date()
     @State private var from=Calendar.current.date(byAdding:.day,value:-29,to:Date()) ?? Date()
     @State private var through=Date()
@@ -83,17 +153,20 @@ private struct LifePage:View{
     @State private var uploading=false
     private var canWrite:Bool{!life.readOnly && !value["readOnly"].bool}
     private func allowed(_ capability:String)->Bool{canWrite && life.capabilities.contains(capability)}
-    private var refreshKey:String{section.rawValue+"|"+String(life.dataRevision)}
+    private var refreshKey:String{section.rawValue+"|"+(section == .garage ? garageTab : "")+"|"+String(life.dataRevision)}
+    /// Garage's Fuel & mileage page reads the fuel report; every other page reads its own section.
+    private var dataSection:String{section == .garage && garageTab == "fuel" ? "fuel" : section.rawValue}
     var body:some View{
         ScrollView{
             LazyVStack(alignment:.leading,spacing:18){
-                HStack{VStack(alignment:.leading){Text(section.title).font(.largeTitle.bold());Text("Life · website account").font(.caption).foregroundStyle(.secondary)};Spacer();if busy{ProgressView()}}
+                HStack{VStack(alignment:.leading){Text(section.title).font(.title2.bold());Text("Life · website account").font(.caption).foregroundStyle(.secondary)};Spacer();if busy{ProgressView()}}
                 if let failure{LifeCard("Could not refresh"){Text(failure).foregroundStyle(.orange);Button("Retry"){Task{await load()}}}}
                 if value == .null && !busy{Text("Choose refresh to load your records.").foregroundStyle(.secondary)}
                 switch section{
+                case .ask,.home,.reminders,.capture:EmptyView()
                 case .overview:overview
                 case .nutrition:nutrition
-                case .garage:garage
+                case .garage:garagePages
                 case .fuel:fuel
                 case .captures:captures
                 case .security:security
@@ -101,7 +174,7 @@ private struct LifePage:View{
                 }
                 if value["readOnly"].bool{Text("This account connection is read-only. Changes are unavailable.").font(.footnote).foregroundStyle(.secondary)}
             }.padding().frame(maxWidth:1100,alignment:.leading).frame(maxWidth:.infinity)
-        }.background(Color(.systemGroupedBackground)).navigationTitle(section.title).navigationBarTitleDisplayMode(.inline)
+        }.background(NativeTheme.background).navigationTitle(section.title).navigationBarTitleDisplayMode(.inline)
             .toolbar{ToolbarItem(placement:.primaryAction){Button{Task{await load()}}label:{Image(systemName:"arrow.clockwise")}.disabled(busy).accessibilityLabel("Refresh Life records")}}
             .task(id:refreshKey){await load()}
             .onChange(of:section){_,_ in value = .null;query=[:];vehicleID="";captureID="";page=1}
@@ -119,10 +192,14 @@ private struct LifePage:View{
     private func load()async{
         guard !busy else{return};busy=true;defer{busy=false};failure=nil
         var q=query
-        if section == .nutrition{q["page"] = .number(Double(page));q["tab"] = .string(nutritionTab);q["date"] = .string(Self.day(date));q["from"] = .string(Self.day(from));q["through"] = .string(Self.day(through));q["search"] = .string(search);if !foodID.isEmpty{q["foodId"] = .string(foodID)}}
+        if section == .nutrition{q["page"] = .number(Double(page));q["tab"] = .string(nutritionTab == "overview" ? "averages" : nutritionTab);q["date"] = .string(Self.day(date));q["from"] = .string(Self.day(from));q["through"] = .string(Self.day(through));q["search"] = .string(search);if !foodID.isEmpty{q["foodId"] = .string(foodID)}}
         if section == .garage || section == .fuel{if !vehicleID.isEmpty{q["vehicleId"] = .string(vehicleID)}}
         if section == .captures{q["page"] = .number(Double(page));q["status"] = .string(captureStatus);if !captureID.isEmpty{q["captureId"] = .string(captureID)}}
-        do{value=try await life.data(section:section.rawValue,query:q)}catch{failure=life.display(error)}
+        do{
+            value=try await life.data(section:dataSection,query:q)
+            if section == .nutrition && nutritionTab == "overview"{today=(try? await life.data(section:"overview",query:[:])) ?? .null}
+            if section == .garage && garageTab == "overview"{fuelValue=(try? await life.data(section:"fuel",query:[:])) ?? .null;today=(try? await life.data(section:"overview",query:[:])) ?? .null}
+        }catch{failure=life.display(error)}
     }
     static func day(_ date:Date)->String{let f=DateFormatter();f.locale=Locale(identifier:"en_US_POSIX");f.dateFormat="yyyy-MM-dd";return f.string(from:date)}
     private func open(_ action:String,_ input:[String:JSON]=[:]){form=LifeActionSheet(action:action,input:input)}
@@ -142,15 +219,22 @@ private struct LifePage:View{
     private var nutrition:some View{
         Group{
             LifeCard("Nutrition"){
-                Picker("View",selection:$nutritionTab){Text("Averages").tag("averages");Text("Days").tag("days");Text("Day").tag("day");Text("Foods").tag("foods");Text("Versions").tag("versions")}.pickerStyle(.menu).onChange(of:nutritionTab){_,_ in page=1;Task{await load()}}
+                ScrollView(.horizontal,showsIndicators:false){HStack(spacing:6){ForEach([("overview","Overview"),("days","Meal days"),("day","Daily log"),("averages","Averages"),("foods","Food Library")],id:\.0){id,title in Button(title){nutritionTab=id}.buttonStyle(.bordered).tint(nutritionTab == id || (id == "foods" && nutritionTab == "versions") ? NativeTheme.accent : .secondary)}}}.onChange(of:nutritionTab){_,_ in page=1;Task{await load()}}
+                if nutritionTab=="overview"{EmptyView()}
                 if nutritionTab=="day"{DatePicker("Day",selection:$date,displayedComponents:.date)}
                 if ["days","averages"].contains(nutritionTab){DatePicker("From",selection:$from,displayedComponents:.date);DatePicker("Through",selection:$through,displayedComponents:.date)}
-                TextField("Filter foods or entries",text:$search).textFieldStyle(.roundedBorder)
+                if nutritionTab != "overview"{TextField("Filter foods or entries",text:$search).textFieldStyle(.roundedBorder)}
                 if nutritionTab=="versions"{Picker("Food",selection:$foodID){Text("Choose food").tag("");ForEach(value["foods"].array,id: \.self){food in Text(food["name"].string).tag(lifeID(food["id"]))}}}
-                Button("Apply filters"){page=1;Task{await load()}}.buttonStyle(.bordered).accessibilityIdentifier("life-nutrition-filter")
+                if nutritionTab != "overview"{Button("Apply filters"){page=1;Task{await load()}}.buttonStyle(.bordered).accessibilityIdentifier("life-nutrition-filter")}
                 HStack{writeButton("Log meal","meal.log","nutrition.add",input:["date":.string(Self.day(date))]);writeButton("Add food","food.save","nutrition.add")}
             }
-            if nutritionTab=="averages"{
+            if nutritionTab=="overview"{
+                LifeCard("Today"){if today["nutrition"] == .null{Text("No meals logged today.").foregroundStyle(.secondary)}else{LifeMacros(value:today["nutrition"])}}
+                ForEach(value["periodSummaries"].array,id:\.self){period in LifeCard(period["label"].string){
+                    LifeMacros(value:period)
+                    Text("Daily average · \(period["completeDays"].int) complete days").font(.caption).foregroundStyle(.secondary)
+                }}
+            }else if nutritionTab=="averages"{
                 ForEach(value["periodSummaries"].array,id:\.self){period in LifeCard(period["label"].string){
                     LifeMacros(value:period)
                     Text("Daily average · \(period["completeDays"].int) complete days").font(.caption).foregroundStyle(.secondary)
@@ -169,12 +253,42 @@ private struct LifePage:View{
             }else{
                 ForEach(value["versions"].array,id:\.self){version in LifeCard("Version "+lifeID(version["id"])){LifeMacros(value:version);source(version);Text(version["created_at"].string).font(.caption).foregroundStyle(.secondary)}}
             }
-            HStack{Button("Previous"){page=max(1,page-1);Task{await load()}}.disabled(page==1);Spacer();Text("Page \(page)");Spacer();Button("Next"){page += 1;Task{await load()}}.disabled(!value["hasMore"].bool)}
+            if nutritionTab != "overview"{HStack{Button("Previous"){page=max(1,page-1);Task{await load()}}.disabled(page==1);Spacer();Text("Page \(page)");Spacer();Button("Next"){page += 1;Task{await load()}}.disabled(!value["hasMore"].bool)}}
         }
     }
     static func parseDay(_ value:String)->Date?{let f=DateFormatter();f.locale=Locale(identifier:"en_US_POSIX");f.dateFormat="yyyy-MM-dd";return f.date(from:value)}
     @ViewBuilder private func source(_ item:JSON)->some View{Text(lifeBool(item["is_estimate"]) ? "Estimated nutrition" : item["source_type"].string).font(.caption).foregroundStyle(.secondary);if !item["source_note"].string.isEmpty{Text(item["source_note"].string).font(.caption)}}
     private var vehiclePicker:some View{Picker("Vehicle",selection:$vehicleID){Text("All vehicles").tag("");ForEach(value["vehicles"].array,id:\.self){vehicle in Text(vehicle["name"].string).tag(lifeID(vehicle["id"]))}}.onChange(of:vehicleID){_,_ in Task{await load()}}}
+    private var garagePages:some View{
+        Group{
+            ScrollView(.horizontal,showsIndicators:false){HStack(spacing:6){ForEach([("overview","Overview"),("vehicles","Vehicles"),("fuel","Fuel & mileage")],id:\.0){id,title in Button(title){garageTab=id;value = .null;vehicleID=""}.buttonStyle(.bordered).tint(garageTab == id ? NativeTheme.accent : .secondary)}}}
+            switch garageTab{
+            case "vehicles":garage
+            case "fuel":fuel
+            default:garageOverview
+            }
+        }
+    }
+    /// A scorecard per vehicle: odometer, measured MPG, history and open tasks, plus upcoming work.
+    private var garageOverview:some View{
+        var fuelCards:[String:JSON]=[:];for card in fuelValue["vehicleCards"].array{fuelCards[lifeID(card["vehicle"]["id"])]=card}
+        return Group{
+            LifeCard("Mileage scorecard"){
+                if value["vehicleCards"].array.isEmpty{Text("No vehicles recorded yet.").foregroundStyle(.secondary)}
+                ForEach(value["vehicleCards"].array,id:\.self){card in
+                    let id=lifeID(card["vehicle"]["id"]),fuel=fuelCards[id]
+                    VStack(alignment:.leading,spacing:8){
+                        Text(card["vehicle"]["name"].string).font(.headline)
+                        HStack{LifeMetric("Odometer",value:lifeNumber(card["latestObservation"]["miles"]));LifeMetric("MPG",value:lifeNumber(fuel?["report"]["weightedMpg"] ?? .null));LifeMetric("Open tasks",value:lifeNumber(card["openTaskCount"]));LifeMetric("History",value:lifeNumber(card["historyCount"]))}
+                        Button("Open vehicle"){vehicleID=id;garageTab="vehicles";Task{await load()}}.buttonStyle(.bordered)
+                    }
+                    Divider()
+                }
+            }
+            LifeCard("Upcoming maintenance"){taskRows(today["tasks"].array.filter{$0["status"].string == "open"}.prefix(6).map{$0})}
+            LifeCard("Recent activity"){auditRows(Array(today["recentAudit"].array.prefix(6)))}
+        }
+    }
     private var garage:some View{
         Group{
             LifeCard("Garage"){vehiclePicker;writeButton("Add vehicle","vehicle.save","garage.add")}

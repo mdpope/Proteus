@@ -15,5 +15,29 @@ try{
  await page.locator('[data-desktop-verification]').waitFor();
  const report=await page.locator('[data-desktop-verification]').innerText();
  assert.match(report,/Not ready yet/);assert.match(report,/not installed where Proteus can find it/);assert.doesNotMatch(report,/Verified on this computer/);
- console.log('PASS Engine Room shows first-run steps, and Verify reports a missing driver honestly');
+ assert.equal(await page.locator('[data-desktop-install]').count(),process.platform==='darwin'?2:1);
+ await page.locator('[data-desktop-install="cua"]').click();
+ await page.waitForFunction(()=>document.querySelector('[data-desktop-result]')?.textContent.includes('Configure the update coordinator'));
+ await app.evaluate(async ({app})=>{
+  const service=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getService();
+  service.engine.drain=async()=>{};
+  service.catalogs.codex.get=async()=>({models:[{id:'synthetic-setup',controls:{reasoningEfforts:['high'],contextTiers:[{id:'default'}],serviceTiers:[]}}]});
+  service.settings.save({...service.settings.get(),updateCoordinator:{provider:'codex',model:'synthetic-setup',reasoningEffort:'high'}},service.settings.get().revision);
+ });
+ const backend=process.platform==='darwin'?'peekaboo':'cua';
+ await page.locator(`[data-desktop-install="${backend}"]`).click();
+ const setup=await app.evaluate(async ({app})=>{
+  const service=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getService();
+  const rows=service.engine.listRuns().filter(run=>run.schedule.purpose==='desktop-control-setup');
+  return rows.map(run=>({id:run.id,backend:run.schedule.desktopSetup.backend,model:run.schedule.model,authorization:run.schedule.updateAuthorization}));
+ });
+ assert.equal(setup.length,1);assert.equal(setup[0].backend,backend);assert.equal(setup[0].model,'synthetic-setup');assert.equal(setup[0].authorization,undefined);
+ await page.evaluate(()=>document.querySelector('[data-page="engine"]')?.click());
+ await page.locator('[data-engine-section="desktop-control"],[data-section="desktop-control"]').first().click();
+ await page.locator(`[data-desktop-install="${backend}"]`).waitFor();
+ assert.equal(await page.locator(`[data-desktop-install="${backend}"]`).innerText(),'Continue setup');
+ assert.equal(await page.locator(`[data-desktop-open="${backend}"]`).isVisible(),true);
+ await page.locator(`[data-desktop-install="${backend}"]`).click();
+ assert.equal(await app.evaluate(async ({app})=>process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getService().engine.listRuns().filter(run=>run.schedule.purpose==='desktop-control-setup').length),1);
+ console.log('PASS Engine Room reports missing drivers/defaults, starts selected-backend setup and reopens the same chat without an installer or model turn');
 }finally{if(app){const timer=setTimeout(()=>app.process().kill('SIGKILL'),10000);try{await app.close();}finally{clearTimeout(timer);}}fs.rmSync(home,{recursive:true,force:true});}

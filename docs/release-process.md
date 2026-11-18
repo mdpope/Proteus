@@ -109,6 +109,24 @@ Every release keeps these repository records:
 
 ## Build once for each native target
 
+Default `package:mac`, `package:linux` and `package:windows` outputs live under the operating
+system's user cache directory in `Proteus/DesktopPackages`, shared across worktrees and preview
+flavors. Read the exact output path from the package receipt; do not assume checkout-local `dist`.
+The locked cache retains one verified development package. A new build preserves it until native
+package verification finishes, then removes the superseded generated output. Failed builds remove
+their own partial output; the next build reclaims a recognizable interrupted generation after its
+process exits. Unknown entries, invalid receipts, linked generations and running packages stop
+retirement. Close an older development application before building its replacement.
+
+Use an explicit `PROTEUS_PACKAGE_OUTPUT` for a frozen release or updater candidate. Explicit
+outputs are locked against concurrent packaging but are never pruned by development retention;
+their existing publication/update acceptance and two-generation recovery workflow owns retirement.
+Do not leave additional historical app copies in development outputs. Existing checkout `dist`
+folders are not automatically adopted: inventory and retire those exact reproducible artifacts
+after verifying their replacement and confirming that no process or pending updater uses them.
+Mac icon compilation now stays with its output instead of creating another checkout-local cache.
+Pass the emitted bundle path explicitly to `test/packaged-mac.mjs`.
+
 Before preparing another version, reconcile a superseded nonterminal job. An agent-bound job
 can be cancelled by its original update chat, not a new coordinator. Have the authorized command
 center request limited cancellation there and verify the owner result; keep the new coordinator

@@ -4,11 +4,14 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {WorkspaceFiles} from './workspace-files.js';
 import {fileDates} from '../../shared/file-metadata.js';
-import {readFilePreview} from './workspace-preview.js';
+import {readFilePreview,TEXT_PREVIEW_LIMIT} from './workspace-preview.js';
+import {languageForName} from '../../shared/file-kind.js';
+import {atomicRenameAsync} from '../../shared/atomic-rename.cjs';
+import {randomUUID} from 'node:crypto';
 
-const identity=s=>[s.dev,s.ino,s.size,s.mtimeMs].join(':');
+const identity=s=>[s.dev,s.ino,s.size,s.mtimeMs].join(':'),identityOf=identity;
 const fileTypes={md:['text/markdown','markdown'],png:['image/png','image'],jpg:['image/jpeg','image'],jpeg:['image/jpeg','image'],gif:['image/gif','image'],webp:['image/webp','image'],pdf:['application/pdf','pdf'],json:['application/json','code'],js:['text/javascript','code'],jsx:['text/jsx','code'],ts:['text/typescript','code'],tsx:['text/tsx','code'],py:['text/x-python','code'],swift:['text/x-swift','code'],sh:['text/x-shellscript','code'],c:['text/x-c','code'],cpp:['text/x-c++','code'],rs:['text/x-rust','code'],go:['text/x-go','code'],php:['text/x-php','code'],rb:['text/x-ruby','code'],java:['text/x-java-source','code'],html:['text/html','code'],css:['text/css','code'],xml:['application/xml','code'],yaml:['application/yaml','code'],yml:['application/yaml','code'],txt:['text/plain','file'],log:['text/plain','file'],csv:['text/csv','file'],mp3:['audio/mpeg','audio'],wav:['audio/wav','audio'],m4a:['audio/mp4','audio'],flac:['audio/flac','audio'],mp4:['video/mp4','video'],mov:['video/quicktime','video'],webm:['video/webm','video']};
-const fileType=name=>fileTypes[path.extname(name).slice(1).toLowerCase()]||['application/octet-stream','file'];
+const fileType=name=>fileTypes[path.extname(name).slice(1).toLowerCase()]||(languageForName(name)?['text/plain','code']:['application/octet-stream','file']);
 const mime=name=>fileType(name)[0];
 const kind=(name,directory)=>directory?'folder':fileType(name)[1];
 const within=(file,root)=>{const r=path.relative(root,file);return r===''||r!=='..'&&!r.startsWith('..'+path.sep)&&!path.isAbsolute(r);};
@@ -19,7 +22,10 @@ export class WorkspaceExplorer {
  files(workspaceId){
   const config=this.configuration(),workspace=config.workspaces.find(w=>w.id===workspaceId);
   if(!workspace)throw Error('Choose an existing workspace.');
-  return new WorkspaceFiles(()=>({...config,workspaces:[workspace]}));
+  // ContextStore.config() projects the default workspace's scoped fields onto
+  // its top level. They are not global file grants for the selected workspace.
+  // WorkspaceFiles already reads this workspace's library/every-chat roots.
+  return new WorkspaceFiles(()=>({workspaces:[workspace]}));
  }
  roots({workspaceId}={}){return this.files(workspaceId).roots();}
  reference({workspaceId,file}={}){
@@ -112,5 +118,23 @@ export class WorkspaceExplorer {
  }
 
  pdf({workspaceId,rootId,file}={}){const t=this.files(workspaceId).resolve(rootId,file);const fd=fsSync.openSync(t.resolved,fsSync.constants.O_RDONLY|fsSync.constants.O_NOFOLLOW);try{const stat=fsSync.fstatSync(fd);if(!stat.isFile()||stat.size>32*1024*1024)throw Error('PDF limit is 32 MB.');const bytes=fsSync.readFileSync(fd);if(bytes.subarray(0,5).toString()!=='%PDF-')throw Error('Invalid PDF.');return bytes;}finally{fsSync.closeSync(fd);}}
+ // Saving a text document is a human edit: it needs the same Edit-files grant as
+ // other mutations (enforced by the transport) and the identity returned by preview,
+ // so a file that changed on disk is never overwritten silently.
+ async save({workspaceId,rootId,file,content,identity}={}){
+  if(typeof content!=='string'||Buffer.byteLength(content,'utf8')>TEXT_PREVIEW_LIMIT||content.includes('\0'))throw Error('Saved text must be UTF-8 text no larger than 2 MB.');
+  if(typeof identity!=='string'||!identity)throw Error('Reload the file before saving it.');
+  if(typeof file!=='string'||file.split('/').some(part=>['.git','.agents','.codex','.aws'].includes(part)))throw Error('Protected metadata cannot be changed.');
+  const target=this.files(workspaceId).resolve(rootId,file),stat=fsSync.lstatSync(target.resolved);
+  if(stat.isSymbolicLink()||!stat.isFile()||fsSync.realpathSync(path.join(target.canonicalRoot,file))!==path.join(target.canonicalRoot,file))throw Error('Linked paths cannot be modified.');
+  if(identity!==identityOf(stat))throw Error('This file changed on disk. Reload it before saving so no newer change is lost.');
+  const temp=target.resolved+'.'+randomUUID()+'.proteus-save';let handle,created=false;
+  try{
+   handle=await fs.open(temp,'wx',stat.mode&0o777);created=true;await handle.writeFile(content,'utf8');await handle.sync();await handle.close();handle=undefined;
+   const again=fsSync.lstatSync(target.resolved);if(identityOf(again)!==identity)throw Error('This file changed on disk. Reload it before saving so no newer change is lost.');
+   await atomicRenameAsync(temp,target.resolved);created=false;
+  }finally{if(handle)await handle.close().catch(()=>{});if(created)await fs.unlink(temp).catch(()=>{});}
+  return {file:target.resolved,identity:identityOf(fsSync.statSync(target.resolved)),size:Buffer.byteLength(content,'utf8'),...fileDates(fsSync.statSync(target.resolved))};
+ }
  preview({workspaceId,rootId,file}={}){const target=this.files(workspaceId).resolve(rootId,file);const value=readFilePreview(target.resolved,[target.canonicalRoot]);return {...value,imageSources:value.mediaType==='text/markdown'?imageSources(value.content).slice(0,32):[],rootId,relativePath:target.relative};}
 }

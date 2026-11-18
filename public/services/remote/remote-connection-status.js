@@ -2,6 +2,7 @@
 export function watchRemoteConnection(root, { api, initial, interval = 3000 }) {
   const status = root.querySelector('[data-remote-status]');
   const pair = root.querySelector('#remote-pair');
+  const pairAsk = root.querySelector('#remote-pair-ask');
   const hint = root.querySelector('#remote-pair-status');
   const error = root.querySelector('#remote-connection-error');
   const refresh = root.querySelector('#remote-check-connection');
@@ -12,6 +13,7 @@ export function watchRemoteConnection(root, { api, initial, interval = 3000 }) {
     if (!alive()) return;
     text(status, data.status);
     pair.disabled = data.status !== 'online';
+    if(pairAsk)pairAsk.disabled=pair.disabled;
     text(error, data.error || ''); error.hidden = !data.error;
     const managed=data.computerAccess?.managed===true;
     text(hint, data.status === 'online'
@@ -33,6 +35,7 @@ export function watchRemoteConnection(root, { api, initial, interval = 3000 }) {
     pending = Promise.resolve().then(() => api('/api/remote')).then(show).catch(cause => {
       if (!alive()) return;
       pair.disabled = true; error.hidden = false;
+      if(pairAsk)pairAsk.disabled=true;
       text(error, 'Could not check this computer’s relay connection: ' + cause.message);
     }).finally(() => { pending = null; if (alive()) { refresh.disabled = false; schedule(); } });
     return pending;

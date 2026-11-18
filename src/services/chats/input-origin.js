@@ -8,5 +8,5 @@ export function inputOrigin(value,{hostId,deviceId='local-desktop',client='deskt
 export function localInputOrigin(value,service){
  if(!value)return null;
  const peer=value.client!=='desktop'&&service.remote.config.devices.find(device=>device.id===value.deviceId);
- return inputOrigin(value,{hostId:service.remote.info().hostId,...(peer?{deviceId:peer.id,client:value.client==='mobile'?'mobile':value.client==='website'?'website':'remote-desktop'}:{})});
+ return inputOrigin(value,{hostId:(service.remote.identity?.()||service.remote.info()).hostId,...(peer?{deviceId:peer.id,client:value.client==='mobile'?'mobile':value.client==='website'?'website':'remote-desktop'}:{})});
 }

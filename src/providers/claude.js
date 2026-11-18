@@ -1,3 +1,4 @@
+import {humanTime} from '../shared/human-time.js';
 import {claudeToolAllowed} from './claude-tool-policy.js';
 import {subagentJournal} from '../services/chats/subagents.js';
 import { executionSafeguardMs, activeExecutionLimit } from './execution-policy.js';
@@ -95,7 +96,7 @@ export function claudeAllowanceError(model,windows=[]){
  const exhausted=windows.filter(window=>window.remainingPercent===0||window.status==='rejected');
  const reset=exhausted.map(window=>window.resetAt).filter(value=>typeof value==='string'&&Number.isFinite(Date.parse(value))).sort()[0];
  const reason=exhausted.length?'Claude reports an exhausted allowance window.':'Claude returned rate_limit; it did not distinguish subscription exhaustion from temporary throttling.';
- return Object.assign(new Error(`${reason} Model: ${model||'provider default'}. Account: this computer’s Claude Code sign-in. ${reset?'Provider-reported reset: '+reset+'.':'Reset time was not supplied.'} This is a provider limit, not a Proteus release hold. Retry when available; switching providers requires an explicit choice.`),{code:'PROVIDER_RATE_LIMIT'});
+ return Object.assign(new Error(`${reason} Model: ${model||'provider default'}. Account: this computer’s Claude Code sign-in. ${reset?'Provider-reported reset: '+humanTime(reset)+'.':'Reset time was not supplied.'} This is a provider limit, not a Proteus release hold. Retry when available; switching providers requires an explicit choice.`),{code:'PROVIDER_RATE_LIMIT'});
 }
 
 export function claudeAccountAvailable(account={}) {

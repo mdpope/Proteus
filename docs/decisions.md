@@ -1,3 +1,98 @@
+## 2026-11-16 — share the desktop owner event stream
+
+The per-origin HTTP/1 connection pool can be exhausted by one long-lived event stream per
+window. A same-origin SharedWorker owns one EventSource and forwards the existing three event
+types to attached windows; ownership and authorization stay on the server. EventSource handles
+reconnection, and clients fall back to direct connections if worker startup fails. This fallback
+preserves compatibility but cannot eliminate the limit when workers are unavailable.
+
+## 2026-11-14 — resource selection is separate from tab placement
+
+A resource workbench has a stable view identity and a separately selected reminder/file ID.
+Switching the resource changes its title and details, not its parent or permissions. Reopening
+an already selected reminder focuses that view; completion/deletion always remains explicit.
+The persistent Reminders master is an overview; item workspaces retain lists, items and details.
+New records use the details column and remain there after the server confirms the write.
+
+Use the project chrome metrics and the universal New Tab page for feature workspaces. The plus
+button and blank-strip double click perform the same action; they do not introduce a second
+feature-specific menu. Hover hints are delegated and local, with no destination fetch or snapshot.
+Native browser-selection updates may follow a conversion/close; adopt them only while a browser
+is still selected so they cannot overwrite a newer deliberate record selection.
+
+## 2026-11-14 — Smart Home groups existing resources and discovers services
+
+The operator explicitly authorized all Home Assistant-exposed devices and services. Refresh the live catalog for model context and before executing a command; never retain an entity allowlist that hides newly added devices. Keep account/connection revision checks and durable operation identities. On/Off can verify observed state; arbitrary service acknowledgement is acceptance only. Preserve older operation digests across upgrades.
+
+Smart Home navigation is presentation over ordinary content resources. It grants no workspace, chat, filesystem, browser-control or terminal authority. Keep Smart Home and Home Assistant persistent; reuse the dashboard browser and retain page login/history. Private membership never persists. Native/web keep their platform tab capabilities; an HTTPS website must not bypass mixed-content or framing protections to embed an HTTP LAN dashboard.
+
+## 2026-11-13 — distinguish steering eligibility from native input
+
+Codex accepts PDF steering via the existing turn attachment reader. Advertised eligibility includes PDF, while inlineSteeringMediaTypes retains native text/image inputs. The engine emits a bounded indexed reference and keeps the exact original in the active-turn reader. This follows initial/queued attachment semantics without inventing a native PDF RPC type or granting filesystem access. PDF extraction is not guaranteed by original-byte storage.
+
+## 2026-11-13 — allow cold recovery verification to complete
+
+Use a bounded three-minute restart verification budget. Real startup evidence shows successful preservation work taking approximately 28 seconds after owner admission, with the previous total one-minute window exhausted. Keep strict checks and late-response rejection; preserve original rollback evidence.
+
+## 2026-11-12 — Life Ask effects keep independent durable identities
+
+Persist the chat claim before creation and resolve that same chat on restart. An interrupted or
+deleted model run cannot be replaced automatically. Freeze transcription, structured result and
+filing intent separately; Omi's helper owns idempotent personal filing. Use a stable request-derived
+notification event and publish before the delayed iCloud answer mirror. Cloud unavailability must
+not stall subsequent requests. Mirrors publish complete bytes without replacing an existing answer;
+human edits and foreign execution records are preserved. Account changes stop all pending effects.
+These component invariants still require host/provider wiring and full physical acceptance.
+
+## 2026-11-12 — Incognito is a local session boundary
+
+Incognito belongs to one local tab, not a saved or synchronized profile. Private state uses
+nonpersistent browser stores and never enters owner descriptors, relay inventories, follow
+presentations, resource lists, Live Browser or agent access. Reading shared-history suggestions
+does not authorize uploading private query text: native mobile filters its local cache.
+Private navigation keeps an in-memory back/forward stack; close and process exit discard it.
+Previews use generic privacy artwork. Do not implement privacy by saving data and deleting it later.
+Automatic downloads and transfer/share actions are unavailable; explicit clipboard export remains
+a human action. A crash must never cause a private tab to restore as an ordinary tab.
+
+## 2026-11-12 — Resource links reuse owner navigation
+
+Rendered app links use a shared strict identity parser and existing navigation paths rather than
+file-path or external-browser fallbacks. A link selects an already authorized owner/resource;
+it grants no pairing, filesystem access or approval. Question attachment support separates
+original storage from bounded model previews, sharing the ordinary attachment paging primitive.
+
+## 2026-11-12 — Failed-update evidence and bounded payload retention
+
+A later healthy installation can supersede obsolete failed attempts without rewriting their
+outcomes. Reconciliation preserves immutable journal evidence and requires two verified full
+recovery generations. Bulk payload retention is separate from compact historical receipts.
+Two intact recovery generations take precedence over retaining a newer but damaged historical
+data copy; the new update's own recovery must always verify before rotation.
+
+## Nov 11 — renderer and main-thread work must not scale with idle content
+
+Scroll smoothness is limited by the Electron main thread as much as by the renderer: it routes
+input and frames for every window and embedded page and also hosts the owner server. Repeated
+updates (streaming, page titles, follow positions, session saves) must write only changed DOM and
+must not re-parse or re-validate whole stores. The content-tab registry is cached by its file stamp
+(device, inode, size, mtime, ctime) and copied for mutating callers; read-only callers use the
+shared validated view. Oversized inactive transcripts keep the tested immediate-release policy;
+callers on periodic paths should avoid hydrating them. Measure with
+`test/scroll-smoothness-profile.mjs`, including an isolated live-data copy when available.
+
+## Nov 11 — the desktop Chats page has one scrolling surface
+
+A nested, overscroll-contained list trapped wheel/touch input when its height followed content.
+The page scroller now owns scrolling and progressive loading on desktop. The web client keeps its
+existing contained list until N11-02 settles the shared Chats design.
+
+## Nov 11 — chat type comes from recorded origin
+
+Interactive chats keep an internal schedule record and may advertise scheduled-run recovery
+support. Neither is user-visible scheduling meaning: classify by `chatType`, then `trigger`, and
+use a schedule name only for legacy rows with neither.
+
 ## Nov 6 — recovery capture owns the data-home transition
 
 A process exit alone is not a stable-filesystem witness. Wait for bounded quiet hashes and check
@@ -3469,3 +3564,70 @@ explicit per-device/workspace grant in Connections, preserving current read-only
 Nov 8 file-browser completion: folder and document results are view-generation and root bound; stale responses cannot change a newer selection. Move destinations use explicit bounded pages rather than downloading a tree. Native preview tabs remain view-local and explicitly closeable, with bytes released on exit.
 
 Apple build retention: use one process-locked compiler cache by default, with per-run evidence stored separately. Reproducible compiler trees must not multiply for every UI test. APFS allocated-file totals and actual reclaimed bytes are reported separately; shared extents and active snapshots can retain deleted blocks.
+# November 12 — development packages are reproducible cache, not recovery generations
+
+Default native desktop builds share one machine-local cache across checkouts and flavors. Keep
+the last verified output until its replacement passes package checks, then retire the older
+generated output. Use process ownership, an exclusive build lock and narrowly validated receipts
+to reclaim interrupted builds; refuse unknown entries and running applications. Explicit frozen
+release destinations remain under release/updater retention. This prevents an extra development
+archive chain beside the two full update recoveries without silently deleting legacy folders.
+
+## November 13 — bounded command receipts and recovery admission
+
+Keep the retry ledger as incremental SQLite WAL records in its dedicated worker, with lossless
+per-receipt compression. Raise the logical receipt budget to 512 MiB; reserve 32 MiB and 256
+of the 10,000 receipt slots for owner-classified update starts, cancellation, recovery and
+revocation. Ordinary operations cannot claim this reserve. Existing claims may still complete
+above a budget so their outcomes are never discarded; diagnostics expose both total and ordinary
+admission limits. Database/WAL allocation can exceed the logical budget.
+
+Use paged navigation in tab mutation replies just as in reads: default 32 entries per browser,
+explicit page sizes capped at 200. Save the exact returned revision/window for retry, never
+regenerate a reply from newer state or trim an already-recorded result. Authoritative history
+remains complete and pageable. Preserve the full 24-hour completed retry window and all uncertain
+claims; neither capacity pressure nor upgrade is permission to delete them early.
+
+## November 13 — Life effects and permission boundaries
+
+Life Reminders is canonical per account on the website, shared by UI and scoped tools, with revision protection, stable operation IDs and tombstones. Action confirmation and eventual due alert have distinct identities. Typed notification targets carry scoped resource IDs rather than paths or grants. Memories retain private notes filing and normal authorized document access.
+
+Home Assistant credentials and commands belong to the desktop owner. Model proposals cannot broaden the operator-selected device allowlist. Explicit desired state and a submitted-before-POST journal prevent duplicate effects after uncertainty; retries observe rather than replay. Home control uses the normal paired owner channel, never an expanded Mnemosyne ingress key. Other sensitive voice requests require the protected human permission surface; a voice signature alone is not authorization.
+
+A folder grant that needs a new provider sandbox schedules one continuation after a normally completed turn. It does not kill work, replay its prompt, override Stop or add another turn when user input is already queued. Grant and pending intent are persisted together.
+## Nov 14 — feature workspaces and storage reindexing
+
+Reminders and Scratchpad present their master/record tabs alongside ordinary resource views.
+Grouping is presentation only: it neither creates a synthetic project nor changes a resource's
+execution owner, profile, file grant or agent scope. The desktop uses existing resource creation
+and close operations; native/web use available browser/file capabilities. Private metadata stays
+local and is excluded from persisted grouping. Website frames do not claim incognito isolation.
+
+Changing Scratchpad roots leaves old Markdown and interrupted-operation receipts intact. The
+selected root gets its own opaque identity and worker-owned index. Reconciliation yields between
+batches so list reads can return partial indexed results; mutations wait behind the one scan.
+External filesystem changes still require explicit synchronization. Demo data and simulator
+fixtures stay independent from production Life accounts, credentials and device recoveries.
+## Nov 14 — Markdown workbench and demo correction
+
+Use CodeMirror 6 with the existing Markdown renderer; Markdown is the canonical save payload,
+never HTML reconstructed from editable preview widgets. Desktop live preview decorates inactive
+blocks. Source and read-only preview stay available. Reuse Workspace Files navigation and viewers
+with a narrow Scratchpad adapter instead of inventing a parallel path-list implementation.
+
+CodeMirror injects generated styles. The application grants those styles a host-generated nonce
+advertised in its trusted shell; global inline styles remain disallowed. Tests must check rendered
+styles, complete document visibility and formatting/Undo preservation, not only text-save success.
+Active demo editors must not be automatically reloaded during source iteration. Preserve a reported
+loss before diagnosis; a folded display and an unchanged saved file are separate evidence.
+
+
+## Nov 15: CodeMirror 6 for code display and editing
+
+VS Code uses Monaco with TextMate/Oniguruma grammars, which is far larger than this application
+needs. CodeMirror 6 (Lezer parsers and small legacy stream modes) gives incremental highlighting,
+folding, search and editing with a lazily loaded chunk per language, so only a file you open pays
+for its grammar. Language is chosen from the file name, then from content (shebang/markers); file
+*type* (text versus binary, encoding) is decided from bytes. Unsupported languages stay plain text
+rather than adding grammars. Saving is a human action that needs the Edit-files grant and the
+identity returned by preview.

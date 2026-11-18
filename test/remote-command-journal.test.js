@@ -261,3 +261,36 @@ test('sub-64KiB completed snapshots recover capacity losslessly while pending cl
  records.forEach((record,i)=>assert.deepEqual(store.claim('saved-'+i,record.digest,'expired').previous,record));
  assert.deepEqual(store.lookup('pending'),pending);assert.equal(store.claim('next','next',new Date(at).toISOString(),at,'chat.send').claimed,true);
 });
+
+test('ordinary traffic cannot consume update/recovery count reserve and replay survives restart',t=>{
+ const dir=home(t),limits={maxRecords:32,maxBytes:1024*1024};let store=new RemoteCommandStore(dir,limits);
+ for(let i=0;i<30;i++){store.claim('tab'+i,'d'+i,now(),undefined,'tabs.mutate');store.complete('tab'+i,'d'+i,{result:{revision:i}});}
+ assert.throws(()=>store.claim('blocked','b',now(),undefined,'chat.start'),{code:'JOURNAL_BUSY'});
+ assert.equal(store.claim('update','u',now(),undefined,'update.start').claimed,true);
+ store.complete('update','u',{result:{runId:'one-update'}});
+ assert.equal(store.claim('cancel','c',now(),undefined,'chat.cancel').claimed,true);
+ assert.throws(()=>store.claim('full','f',now(),undefined,'update.start'),{code:'JOURNAL_BUSY'});
+ store.close();store=new RemoteCommandStore(dir,limits);closeBeforeRemove(dir,()=>store.close());
+ assert.deepEqual(store.claim('update','u','expired',undefined,'update.start').previous.result,{runId:'one-update'});
+ assert.equal(store.lookup('cancel').pending,true);assert.equal(store.diagnostics().records,32);
+ assert.equal(store.diagnostics().ordinaryAdmission.reservedRecords,2);
+});
+
+test('byte reserve admits recovery without deleting protected results',t=>{
+ const dir=home(t),store=new RemoteCommandStore(dir,{maxBytes:16000});closeBeforeRemove(dir,()=>store.close());
+ const record={digest:'bulk',at:Date.now(),result:''},empty=store.encode('bulk',record);
+ record.result='x'.repeat(14999-empty.bytes);const encoded=store.encode('bulk',record);
+ store.insert.run('bulk','bulk',0,record.at,encoded.payload,encoded.bytes);
+ assert.throws(()=>store.claim('ordinary','o',now(),undefined,'tabs.mutate'),{code:'JOURNAL_BUSY'});
+ assert.equal(store.claim('repair','r',now(),undefined,'chat.recover').claimed,true);
+ assert.deepEqual(store.lookup('bulk'),record);
+});
+
+test('owner classifies update starts, not caller priority hints',async()=>{
+ const {journalMethod}=await import('../src/services/remote/command-journal-policy.js');
+ assert.equal(journalMethod('chat.start',{purpose:'update'}),'update.start');
+ assert.equal(journalMethod('chat.start',{purpose:'build',priority:'update'}),'chat.start');
+ assert.equal(journalMethod('tabs.mutate',{purpose:'update'}),'tabs.mutate');
+ const {commandJournalLimits}=await import('../src/services/remote/remote-command-store.js');
+ assert.equal(commandJournalLimits.maxBytes,512*1024*1024);
+});

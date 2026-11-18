@@ -117,3 +117,27 @@ export function neighborAfterRemoval(tabs, tab, visible = item => !item.hidden &
   const index = siblings.indexOf(tab), next = siblings[index + 1] || siblings[index - 1];
   return next ? next.id : (tab.parentId || 'overview');
 }
+
+// One delegated hint serves every strip, including dynamically mounted feature
+// tabs. Text stays in this window; private page metadata is never captured.
+let hintsInstalled=false;
+export function installTabHints(){
+ if(hintsInstalled||typeof document==='undefined')return;hintsInstalled=true;
+ let timer,hint,target;
+ const selector='[data-tab-hint],[data-tab],[data-chat-subtab],[data-team-tab],[data-preview-page],.shell-tab>a,.feature-tab-bar button:not([aria-label^="Close"]):not(.tabclose),.shell-tabbar [data-shell-tab],.remote-inner-tabs [data-chat-document],.remote-inner-tabs [data-chat-panel]';
+ const hide=()=>{clearTimeout(timer);hint?.remove();hint=null;target=null;};
+ const show=node=>{
+  hide();target=node;timer=setTimeout(()=>{
+   if(!node.isConnected)return;hint=document.createElement('div');hint.className='proteus-tab-hint';hint.setAttribute('role','tooltip');
+   const name=node.dataset.tabHint||node.querySelector('span:last-child')?.textContent||node.textContent;
+   const title=document.createElement('strong');title.textContent=name?.trim()||'Tab';hint.append(title);
+   const url=node.dataset.tabUrl||(node.title&&node.title!==name?node.title:'');if(/^https?:/.test(url)){const detail=document.createElement('span');detail.textContent=url;hint.append(detail);}
+   document.body.append(hint);const bounds=node.getBoundingClientRect();hint.style.left=Math.max(8,Math.min(bounds.left,innerWidth-hint.offsetWidth-8))+'px';hint.style.top=Math.min(innerHeight-hint.offsetHeight-8,bounds.bottom+6)+'px';
+  },450);
+ };
+ document.addEventListener('pointerover',event=>{if(event.pointerType==='touch')return;const node=event.target.closest(selector);if(node&&node!==target)show(node);else if(!node)hide();});
+ document.addEventListener('pointerout',event=>{if(target&&!target.contains(event.relatedTarget))hide();});
+ document.addEventListener('focusin',event=>{const node=event.target.closest(selector);if(node)show(node);});
+ document.defaultView?.addEventListener('blur',hide);
+ for(const name of ['pointerdown','keydown','scroll','visibilitychange'])document.addEventListener(name,hide,{capture:true,passive:true});
+}

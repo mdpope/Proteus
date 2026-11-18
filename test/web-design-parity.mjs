@@ -5,7 +5,7 @@ export async function exerciseWebDesignParity({page,origin,app,workspaceId,proje
  await page.goto(`${origin}/remote?view=workspaces&host=${host}&workspace=${workspaceId}&page=configuration`);
  await page.locator('[data-starting-folder]').waitFor();await page.locator('.main').evaluate(node=>node.scrollTop=0);
  assert.equal(await page.locator('[data-workspace-home]').count(),0);
- assert.deepEqual(await page.locator('.workspace-fixed-tabs button').allTextContents(),['Projects','Chats','Tabs','Configuration']);
+ assert.deepEqual(await page.locator('.workspace-fixed-tabs button').allTextContents(),['Projects','Chats','Tabs','Scratches','Reminders','Configuration']);
  assert.equal(await page.locator('.workspace-fixed-tabs button svg').count(),4);
  assert.equal(await page.locator('.workspace-fixed-tabs [data-workspace-close]').count(),0);
  await page.screenshot({path:'/private/tmp/proteus-web-parity-configuration.png'});

@@ -17,3 +17,10 @@ test('workspace tabs precede projects in saved order and hidden ancestors exclud
 test('each open project section carries its home tab for a Project home card',()=>{const groups=tabOverviewGroups({tabs,catalog,scope:'p1',selectedId:'browser'});assert.deepEqual(groups.map(g=>g.home?.id),['p2','p1']);assert.equal(groups.flatMap(g=>g.tabs).some(tab=>tab.type==='workspace'),false);const closed=tabOverviewGroups({tabs:tabs.filter(tab=>tab.id!=='p2'),catalog,scope:'p1',selectedId:'browser'});assert.equal(closed.find(g=>g.title==='Two').home,null);});
 
  test('project reorder changes overview without changing current selection or membership',()=>{const reordered={projects:[...catalog.projects].reverse()};const groups=tabOverviewGroups({tabs,catalog:reordered,scope:'p1',selectedId:'browser'});assert.deepEqual(groups.map(g=>g.id),['project:local:a','project:local:b']);assert.ok(groups.every(g=>g.selectedId==='browser'));assert.deepEqual(groups[0].tabs.map(t=>t.id),['chat','browser']);});
+
+test('feature overview groups contain their own resources without duplicating root tabs',()=>{
+ const tabs=[{id:'root-scratch',type:'scratch'},{id:'feature-scratch',type:'scratch'},{id:'feature-reminder',type:'reminder'},{id:'lookup',type:'files'},{id:'closed',type:'browser',navigationClosed:true}];
+ const groups=tabOverviewGroups({tabs,scope:'main',selectedId:'lookup',featureGroups:[{id:'reminders',title:'Reminders',ids:['feature-reminder','lookup','closed']},{id:'scratchpad',title:'Scratchpad',ids:['feature-scratch','missing']}]});
+ assert.deepEqual(groups.map(g=>g.tabs.map(t=>t.id)),[['root-scratch'],['feature-reminder','lookup'],['feature-scratch']]);
+ assert.equal(groups[1].selectedId,'lookup');
+});

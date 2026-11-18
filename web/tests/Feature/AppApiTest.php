@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Services\AppRecords;
 use App\Services\PushDelivery;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
@@ -241,6 +242,138 @@ class AppApiTest extends TestCase
         }
     }
 
+    public function test_life_answer_push_is_immediate_and_replay_keeps_its_exact_chat_and_acceptance_time(): void
+    {
+        Http::preventStrayRequests();
+        $path = tempnam(sys_get_temp_dir(), 'proteus-test-push-');
+        $key = openssl_pkey_new(['private_key_type' => OPENSSL_KEYTYPE_EC, 'curve_name' => 'prime256v1']);
+        openssl_pkey_export($key, $pem);
+        file_put_contents($path, $pem);
+        $workerLock = Cache::lock('proteus-push-delivery', 1200);
+        try {
+            config(['push.apns_key_path' => $path, 'push.apns_key_id' => 'SYNTHETIC', 'push.apns_team_id' => 'TEAM', 'push.apns_topic' => 'org.proteusapp.review.proteus']);
+            Http::fake(['api.sandbox.push.apple.com/*' => Http::response([], 200)]);
+            $user = $this->owner();
+            Passport::actingAs($user, ['app:read', 'app:write']);
+            $this->postJson('/api/v1/app/push-subscriptions', ['deviceId' => (string) Str::uuid(), 'platform' => 'apns', 'token' => str_repeat('d', 64), 'environment' => 'sandbox'])->assertOk();
+            $event = ['eventId' => (string) Str::uuid(), 'type' => 'life.answer', 'requestId' => (string) Str::uuid(), 'hostId' => (string) Str::uuid(), 'chatId' => (string) Str::uuid(), 'title' => 'Iceland', 'body' => 'The capital is Reykjavík.', 'sound' => false];
+            $this->assertTrue($workerLock->get());
+
+            $saved = $this->postJson('/api/v1/app/notifications', $event + ['pushAcceptedAt' => 1])->assertCreated()->json();
+
+            $this->assertIsInt($saved['pushAcceptedAt']);
+            $this->assertGreaterThan(1, $saved['pushAcceptedAt']);
+            Http::assertSentCount(1);
+            Http::assertSent(fn ($request) => $request['type'] === 'life.answer' && $request['hostId'] === $event['hostId'] && $request['chatId'] === $event['chatId'] && $request['requestId'] === $event['requestId'] && $request['notificationId'] === $event['eventId'] && $request['aps']['thread-id'] === $event['chatId'] && $request['aps']['alert']['body'] === $event['body'] && ! isset($request['aps']['sound']) && $request->hasHeader('apns-id', $event['eventId']) && $request->hasHeader('apns-collapse-id', hash('sha256', $event['eventId'])));
+            $this->assertDatabaseCount('app_records', 2);
+            $this->patchJson('/api/v1/app/notifications/'.$saved['id'], ['read' => true])->assertOk();
+            $this->postJson('/api/v1/app/notifications', $event)->assertCreated()->assertJsonPath('id', $saved['id'])->assertJsonPath('read', true)->assertJsonPath('pushAcceptedAt', $saved['pushAcceptedAt']);
+            foreach (['hostId', 'chatId', 'requestId'] as $field) {
+                $this->postJson('/api/v1/app/notifications', array_replace($event, [$field => (string) Str::uuid()]))->assertConflict();
+            }
+            $this->postJson('/api/v1/app/notifications', array_replace($event, ['type' => 'chat.completed']))->assertConflict();
+            Http::assertSentCount(1);
+        } finally {
+            $workerLock->release();
+            unlink($path);
+        }
+    }
+
+    public function test_life_answer_requires_binding_and_app_scope_without_exposing_another_accounts_receipt(): void
+    {
+        Http::preventStrayRequests();
+        $user = $this->owner();
+        $event = ['eventId' => (string) Str::uuid(), 'type' => 'life.answer', 'requestId' => (string) Str::uuid(), 'hostId' => (string) Str::uuid(), 'chatId' => (string) Str::uuid()];
+        Passport::actingAs($user, ['app:read']);
+        $this->postJson('/api/v1/app/notifications', $event)->assertForbidden();
+        Passport::actingAs($user, ['app:read', 'app:write']);
+        foreach (['requestId', 'hostId', 'chatId'] as $field) {
+            $invalid = $event;
+            unset($invalid[$field]);
+            $this->postJson('/api/v1/app/notifications', $invalid)->assertUnprocessable()->assertJsonValidationErrors($field);
+        }
+        $this->assertDatabaseCount('app_records', 0);
+        $saved = $this->postJson('/api/v1/app/notifications', $event)->assertCreated()->assertJsonMissingPath('pushAcceptedAt')->json();
+        Passport::actingAs($this->owner(), ['app:read', 'app:write']);
+
+        $this->getJson('/api/v1/app')->assertJsonCount(0, 'notifications');
+        $this->patchJson('/api/v1/app/notifications/'.$saved['id'], ['read' => true])->assertNotFound();
+        $other = $this->postJson('/api/v1/app/notifications', $event)->assertCreated()->json();
+
+        $this->assertNotSame($saved['id'], $other['id']);
+        Http::assertNothingSent();
+    }
+
+    public function test_life_action_destinations_are_account_bound_immutable_and_have_no_paths(): void
+    {
+        $user = $this->owner();
+        Passport::actingAs($user, ['app:read', 'app:write']);
+        $account = hash_hmac('sha256', 'proteus-life:'.$user->id, config('app.key'));
+        $event = ['eventId' => (string) Str::uuid(), 'type' => 'life.answer', 'requestId' => (string) Str::uuid(), 'hostId' => (string) Str::uuid(), 'chatId' => (string) Str::uuid()];
+        $event['destination'] = ['kind' => 'document', 'accountId' => $account, 'hostId' => $event['hostId'], 'documentId' => (string) Str::uuid()];
+        $saved = $this->postJson('/api/v1/app/notifications', $event)->assertCreated()->json();
+        $this->assertSame($event['destination'], $saved['destination']);
+        $other = $event;
+        $other['destination']['documentId'] = (string) Str::uuid();
+        $this->postJson('/api/v1/app/notifications', $other)->assertConflict();
+        $other = $event;
+        $other['destination']['accountId'] = str_repeat('f', 64);
+        $this->postJson('/api/v1/app/notifications', $other)->assertConflict();
+        $other = $event;
+        $other['destination']['file'] = '/private/vault/note.md';
+        $this->postJson('/api/v1/app/notifications', $other)->assertUnprocessable();
+    }
+
+    public function test_life_answer_keeps_unavailable_delivery_pending_and_never_replays_an_uncertain_send(): void
+    {
+        $user = $this->owner();
+        Passport::actingAs($user, ['app:read', 'app:write']);
+        $this->postJson('/api/v1/app/push-subscriptions', ['deviceId' => (string) Str::uuid(), 'platform' => 'apns', 'token' => str_repeat('d', 64), 'environment' => 'sandbox'])->assertOk();
+        $records = app(AppRecords::class);
+        $push = \Mockery::mock(PushDelivery::class, [$records])->makePartial();
+        $push->shouldReceive('deliver')->once()->andReturn('unavailable');
+        $push->shouldReceive('deliver')->once()->andReturn('uncertain');
+        $this->instance(PushDelivery::class, $push);
+        $event = ['eventId' => (string) Str::uuid(), 'type' => 'life.answer', 'requestId' => (string) Str::uuid(), 'hostId' => (string) Str::uuid(), 'chatId' => (string) Str::uuid()];
+
+        $saved = $this->postJson('/api/v1/app/notifications', $event)->assertCreated()->assertJsonMissingPath('pushAcceptedAt')->json();
+
+        $this->assertSame('pending', $records->all($user, 'push-outbox')[0]['state']);
+        $this->artisan('proteus:deliver-push')->assertSuccessful();
+        $this->assertSame('uncertain', $records->all($user, 'push-outbox')[0]['state']);
+        $this->postJson('/api/v1/app/notifications', $event)->assertCreated()->assertJsonPath('id', $saved['id'])->assertJsonMissingPath('pushAcceptedAt');
+        $this->artisan('proteus:deliver-push')->assertSuccessful();
+        $this->assertCount(1, $records->all($user, 'push-outbox'));
+    }
+
+    public function test_life_answer_recipient_lock_defers_delivery_and_silent_answers_never_alert(): void
+    {
+        $user = $this->owner();
+        Passport::actingAs($user, ['app:read', 'app:write']);
+        $this->postJson('/api/v1/app/push-subscriptions', ['deviceId' => (string) Str::uuid(), 'platform' => 'apns', 'token' => str_repeat('d', 64), 'environment' => 'sandbox'])->assertOk();
+        $records = app(AppRecords::class);
+        $push = \Mockery::mock(PushDelivery::class, [$records])->makePartial();
+        $push->shouldReceive('deliver')->once()->andReturn('accepted');
+        $this->instance(PushDelivery::class, $push);
+        $event = ['eventId' => (string) Str::uuid(), 'type' => 'life.answer', 'requestId' => (string) Str::uuid(), 'hostId' => (string) Str::uuid(), 'chatId' => (string) Str::uuid()];
+        $notification = $records->save($user, 'notifications', $event);
+        $push->enqueue($user, $notification);
+        $row = $records->all($user, 'push-outbox')[0];
+        $lock = Cache::lock('proteus-push-item-'.$row['id'], 120);
+        $this->assertTrue($lock->get());
+        try {
+            $this->postJson('/api/v1/app/notifications', $event)->assertCreated()->assertJsonMissingPath('pushAcceptedAt');
+            $this->assertSame('pending', $records->all($user, 'push-outbox')[0]['state']);
+        } finally {
+            $lock->release();
+        }
+        $this->artisan('proteus:deliver-push')->assertSuccessful();
+        $accepted = $records->all($user, 'notifications')[0]['pushAcceptedAt'];
+        $this->postJson('/api/v1/app/notifications', $event)->assertCreated()->assertJsonPath('pushAcceptedAt', $accepted);
+        $this->postJson('/api/v1/app/notifications', array_replace($event, ['eventId' => (string) Str::uuid(), 'silent' => true]))->assertCreated()->assertJsonMissingPath('pushAcceptedAt');
+        $this->assertCount(0, $records->all($user, 'push-outbox'));
+    }
+
     public function test_resolved_approval_cannot_be_reopened_or_realerted_by_replayed_host_events(): void
     {
         Passport::actingAs($this->owner(), ['app:read', 'app:write']);
@@ -264,10 +397,10 @@ class AppApiTest extends TestCase
         $user = $this->owner();
         Passport::actingAs($user, ['app:read', 'app:write']);
         $this->postJson('/api/v1/app/push-subscriptions', ['deviceId' => (string) Str::uuid(), 'platform' => 'apns', 'token' => str_repeat('c', 64), 'environment' => 'sandbox'])->assertOk();
-        $this->mock(PushDelivery::class, function ($mock) {
-            $mock->shouldReceive('deliver')->once()->andReturn('uncertain');
-            $mock->shouldReceive('deliver')->once()->andReturn('accepted');
-        });
+        $mock = \Mockery::mock(PushDelivery::class, [app(AppRecords::class)])->makePartial();
+        $mock->shouldReceive('deliver')->once()->andReturn('uncertain');
+        $mock->shouldReceive('deliver')->once()->andReturn('accepted');
+        $this->instance(PushDelivery::class, $mock);
         // Enqueue through the real service: the mocked boundary only controls
         // the irreversible provider outcome, not persistence or worker logic.
         $records = app(AppRecords::class);

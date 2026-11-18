@@ -75,7 +75,7 @@ function maintenanceRetirements(root,owner,issues){
 }
 function maintenancePlan(root,options={},dependencies={}){
  const owner=binding(root,options),policyFile=ordinaryPath(path.join(root,'recovery-policy.json')),policyHash=fs.existsSync(policyFile)?fileDigest(policyFile):null;
- const issues=[],missing=[],verified=[],discovered=[],jobs=[];
+ const issues=[],missing=[],verified=[],discovered=[],jobs=[],obsolete=[];
  let policy;
  try{policy=recoveryPolicy(policyFile,owner);}catch(error){issues.push({kind:'policy',error:error.message});}
  const retirements=maintenanceRetirements(root,owner,issues),retiredBy=new Map(retirements.flatMap(operation=>operation.targets.map(row=>[row.directory,operation])));
@@ -101,6 +101,16 @@ function maintenancePlan(root,options={},dependencies={}){
    const file=path.join(jobsRoot,name,'job.json');ordinaryPath(file);const job=readJob(file);
    if(job.home!==owner.home||job.installation!==owner.installation)throw Error('Update journal belongs to another installation.');
    const resolution=job.phase==='attention'?require('./attention-reconciliation.cjs').readAttentionResolution(job,owner):null;
+   if(resolution?.kind==='superseded-failed-update'&&resolution.obsoleteRecovery){
+    const row=resolution.obsoleteRecovery;ordinaryPath(row.directory);
+    if(row.directory!==path.join(root,'recoveries',job.id))throw Error('The obsolete recovery escaped its owning attempt.');
+    const intentFile=path.join(path.dirname(file),'obsolete-recovery-retirement.json');
+    if(fs.existsSync(row.directory)){
+     directory(row.directory);
+     if(tree(row.directory).hash!==row.hash)throw Error('The obsolete recovery changed after reconciliation.');
+     obsolete.push({...row,id:job.id,jobHash:fileDigest(file),resolutionHash:resolution.receiptHash});
+    }else if(!fs.existsSync(intentFile)||json(intentFile).resolutionHash!==resolution.receiptHash)throw Error('The obsolete recovery disappeared without a retirement receipt.');
+   }
    jobs.push({...job,attentionResolutionHash:resolution?.receiptHash||null});
    if(!['complete','cancelled'].includes(job.phase)&&!resolution)issues.push({kind:'active-update',id:job.id,phase:job.phase,error:'Finish or reconcile the current update before maintenance.'});
   }catch(error){issues.push({kind:'journal',id:name,error:error.message});}
@@ -109,7 +119,7 @@ function maintenancePlan(root,options={},dependencies={}){
   if(!fs.existsSync(scan))continue;
   const entries=fs.readdirSync(directory(scan),{withFileTypes:true});if(entries.length>1000)throw Error('Recovery scan exceeds 1,000 entries.');
   for(const entry of entries){
-   const location=path.join(scan,entry.name);if(known.has(location))continue;
+   const location=path.join(scan,entry.name);if(known.has(location)||obsolete.some(row=>row.directory===location))continue;
    try{
     if(!entry.isDirectory()||entry.isSymbolicLink())throw Error('Unrecognized recovery entry was preserved.');
     const job=jobs.find(job=>job.recovery===location);
@@ -125,7 +135,8 @@ function maintenancePlan(root,options={},dependencies={}){
  // Preserve the newest two complete generations. Unresolved generations never
  // become eligible merely because maintenance found their files.
  const ordered=verified.slice().sort((a,b)=>b.at.localeCompare(a.at)),retire=ordered.slice(2).filter(row=>row.eligible===true).map(row=>row.id);
- const state={owner,policyHash,roots,missing,verified,discovered,retire,retirements,issues,jobs:jobs.map(job=>({id:job.id,revision:job.revision,phase:job.phase,...(job.phase==='attention'?{attentionResolution:job.attentionResolutionHash}:{})})),staging:storage?.jobs||[]};
+ if(obsolete.length&&verified.length<2)issues.push({kind:'obsolete-recovery',error:'Two verified recovery generations must survive obsolete-attempt cleanup.'});
+ const state={owner,policyHash,roots,missing,verified,discovered,retire,obsolete,retirements,issues,jobs:jobs.map(job=>({id:job.id,revision:job.revision,phase:job.phase,...(job.phase==='attention'?{attentionResolution:job.attentionResolutionHash}:{})})),staging:storage?.jobs||[]};
  const planDigest=digest(JSON.stringify(state));
  return {schemaVersion:1,...state,planDigest,paths:{installation:owner.installation,home:owner.home,browserHome:owner.browserHome||null,updates:root,recoveries:path.join(root,'recoveries')},storage,canApply:!!policy&&!issues.length};
 }
@@ -169,9 +180,21 @@ function applyMaintenance(root,options={},dependencies={}){
   fs.rmSync(row.directory,{recursive:true});next.generations=next.generations.filter(item=>item.directory!==row.directory);atomic(policyFile,next);retired.push(id);
  }
  if(plan.retire.length)atomic(retirementFile,{schemaVersion:1,planDigest:plan.planDigest,intentHash:fileDigest(intentFile),at:new Date().toISOString(),retired,retained:next.generations.map(row=>row.id),freeSpaceChange:available(fs.statfsSync(root))-available(before)});
+ const obsolete=[];
+ for(const row of plan.obsolete){
+  const jobFile=path.join(root,'jobs',row.id,'job.json'),resolutionFile=path.join(path.dirname(jobFile),'attention-resolution.json');
+  ordinaryPath(row.directory);directory(row.directory);
+  if(fileDigest(jobFile)!==row.jobHash||fileDigest(resolutionFile)!==row.resolutionHash||tree(row.directory).hash!==row.hash||inUse(row.directory))throw Error('The obsolete recovery changed or is in use; its files were preserved.');
+  const sourceReceipt=path.join(row.directory,'recovery.json');
+  const archived=fs.existsSync(sourceReceipt)?json(sourceReceipt):null;
+  // The journal, failure/preservation records and full tree digest remain even
+  // if the process exits after deletion and before the aggregate receipt.
+  atomic(path.join(path.dirname(jobFile),'obsolete-recovery-retirement.json'),{schemaVersion:1,at:new Date().toISOString(),...row,recoveryReceipt:archived});
+  fs.rmSync(row.directory,{recursive:true});obsolete.push(row.id);
+ }
  const staging=[];
  for(const row of plan.staging.filter(row=>row.eligible))staging.push(retireStaging(path.join(root,'jobs',row.id,'job.json')));
- const receipt={schemaVersion:1,planDigest:plan.planDigest,at:new Date().toISOString(),registered:plan.discovered,unavailable:plan.missing.map(row=>row.id),retired,staging,retained:next.generations.map(row=>row.id),freeSpaceChange:available(fs.statfsSync(root))-available(before)};
+ const receipt={schemaVersion:1,planDigest:plan.planDigest,at:new Date().toISOString(),registered:plan.discovered,unavailable:plan.missing.map(row=>row.id),retired,obsolete,staging,retained:next.generations.map(row=>row.id),freeSpaceChange:available(fs.statfsSync(root))-available(before)};
  atomic(receiptFile,receipt);return {...receipt,receiptFile};
 }
 module.exports={maintenancePlan,applyMaintenance,verifyGeneration};

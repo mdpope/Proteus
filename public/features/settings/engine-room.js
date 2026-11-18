@@ -1,3 +1,4 @@
+import {mountDesktopControl} from "./desktop-control-panel.js";
 import {mountResources} from './resources.js';
 import {renderPalette} from '../../shared/ui/palette.js';
 import {mountBrowserIssueActions} from '../browser/browser-notifications.js';
@@ -18,14 +19,6 @@ const sections = [['palette','Colors'],['resources','Resources'],['providers','P
 export function initEngineRoom(options){ui=options;}
 async function activity(kind){const local=await ui.api('/api/'+kind);if(!ui.state.data.life?.identity)return local;try{const account=await ui.api('/api/app'),merged=new Map((local.items||[]).map(item=>[item.id,{...item,localId:item.id}]));for(const item of account[kind]||[]){const key=item.eventId||item.id,previous=merged.get(key);merged.set(key,{...previous,...item,localId:previous?.localId,shared:true,identity:account.identity});}return {...local,items:[...merged.values()].sort((a,b)=>Date.parse(b.createdAt||b.at)-Date.parse(a.createdAt||a.at))};}catch{return {...local,sharedUnavailable:true};}}
 
-// Setup and verification as reported by the owner: installed is not the same as usable.
-function desktopSetupMarkup(status,escape){
- const verification=status.verification;
- const report=verification?`<div data-desktop-verification><strong>${verification.verified?'Verified on this computer. Agents can observe its windows; input is proven only by a real task.':'Not ready yet.'}</strong><ul>${verification.steps.map(step=>`<li>${step.status==='pass'?'✓':'✗'} ${escape(step.detail)}${Number.isFinite(step.count)?' ('+step.count+')':''}</li>`).join('')}</ul></div>`:'<p class="note">Not verified since Proteus started.</p>';
- const installed=status.backends.find(backend=>backend.id===status.primary)?.installed;
- const steps=installed&&verification?.verified?'':`<ol data-desktop-steps>${(status.setupSteps||[]).map(step=>`<li>${escape(step.text)}${step.command?`<pre>${escape(step.command)}</pre>`:''}</li>`).join('')}</ol>`;
- return report+steps;
-}
 export function engineSections(){const result=previewEnabled(ui?.state)?sections.map(([key,label])=>[key,key==='setup'?'App settings':label]):sections;return window.desktop?.windowPreview?[['windows','Windows'],...result]:result;}
 export function renderEngineRoom(section='resources',force=false){
   const main=$('#main');
@@ -42,7 +35,7 @@ export function renderEngineRoom(section='resources',force=false){
       if(section==='palette'){renderPalette(mounted,ui);
       } else if(section==='windows'){await renderWindowLayouts(mounted,{...ui,active});
       } else if(section==='updates'){await renderUpdates(mounted,ui,active);
-      } else if(section==='desktop-control'){await renderDesktopControl(mounted,active);
+      } else if(section==='desktop-control'){await mountDesktopControl(mounted,ui,active);
       } else if(section==='history'){const peers=await window.desktop?.peers({action:'list'})||[];const profiles=await ui.api('/api/browser-profiles');if(!active())return;await mountBrowserHistory(mounted,{hosts:[{hostId:ui.state.data.hostId,label:ui.state.data.hostName||'This computer'},...(Array.isArray(peers)?peers:peers.items||peers.peers||[]).filter(peer=>!peer.paused)],profiles:profiles.items,defaultHostId:ui.state.data.hostId,timezone:ui.state.data.settings.timezone,active,notify:ui.toast,request:(host,action,args)=>host===ui.state.data.hostId?ui.api('/api/browser-history',{...args,action}):window.desktop.peers({action:'request',hostId:host,method:'browser.history.'+action,args}),open:async(item)=>{const info=await window.desktop.browser({action:'create',url:item.url,profileId:item.profileId||'default'});ui.openBrowser?.(info);}});
       } else if(section==='internet-searches'){await renderInternetDefaults(ui,$('#engine-content'),active);
       } else if(section==='integrations'){
@@ -67,6 +60,7 @@ export function renderEngineRoom(section='resources',force=false){
         const value=await activity('notifications');if(!active())return;
         const p=value.preferences||{};
         $('#engine-content').innerHTML=`<section class="card"><h2>Preferences</h2><label class="checkbox-row"><input id="notify-system" type="checkbox" ${p.systemEnabled?'checked':''}>Enable system notifications</label><label><input id="notify-schedule" type="checkbox" ${p['schedule.completed']!==false?'checked':''}> Notify when a schedule completes</label><p class="note">Chat completion and requests for review remain visible in notification history.</p></section><section class="card"><h2>History</h2>${value.sharedUnavailable?'<p class="note">Shared history unavailable. Showing this computer’s history; authorize shared features in App Setup.</p>':''}${(value.items||[]).map(n=>`<article class="resource-row" data-browser-notification="${ui.escape(n.localId||n.id)}"><div><strong>${n.level==='error'?'ERROR · ':''}${ui.escape(n.title||n.event||'Notification')}</strong><p>${ui.escape(n.message||n.body||'')}</p><small>${ui.escape(ui.time(n.at||n.createdAt))}</small></div>${n.read||n.readAt?'':`<button data-notification-read="${ui.escape(n.id)}">Mark read</button>`}</article>`).join('')||'<p class="empty">No notifications yet.</p>'}</section>`;
+        for(const item of value.items||[]){if(item.destination&&['reminder','document'].includes(item.destination.kind)){const card=mounted.querySelector('[data-browser-notification="'+CSS.escape(item.localId||item.id)+'"]');if(card){const button=document.createElement('button');button.textContent='Open '+item.destination.kind;button.onclick=()=>ui.openLifeDestination(item.destination).catch(error=>ui.toast(error.message));card.append(button);}}}
         for(const item of value.items||[]){if(item.browserIssue){const card=mounted.querySelector('[data-browser-notification="'+CSS.escape(item.localId||item.id)+'"]');if(card)mountBrowserIssueActions(card,item);}}
         for(const [key,title]of [['quietMode','Quiet notifications (soundless completions, no routine device alerts)'],['inAppEnabled','Show in-app notification banners']]){
           const label=document.createElement('label');label.className='checkbox-row';const input=document.createElement('input');input.type='checkbox';input.checked=p[key]!==false;input.dataset.notificationPreference=key;label.append(input,title);$('#notify-system').closest('section').append(label);
@@ -91,14 +85,4 @@ export function renderEngineRoom(section='resources',force=false){
     }catch(error){if(active())$('#engine-content').innerHTML=`<p class="banner">${ui.escape(error.message)}</p>`;}
   };
   void render();
-}
-
-async function renderDesktopControl(container,active){
- const status=await ui.api('/api/desktop-control');if(!active())return;
- container.innerHTML=`<section class="card"><h2>Desktop Control</h2><p>Cua Driver is primary. Peekaboo is an on-demand Mac backup. Your current chat remains the planner; tools start when requested and Proteus-owned connections stop after two idle minutes.</p>${status.backends.map(backend=>`<div class="resource-row"><div><strong>${ui.escape(backend.id==='cua'?'Cua Driver':'Peekaboo')}</strong><p>${backend.installed?'Installed':'Not installed'} · ${backend.running?'Connected':'Idle'}</p><a href="${ui.escape(backend.setup)}" data-desktop-setup="${backend.id}">Installation and OS permission instructions ↗</a></div></div>`).join('')}${desktopSetupMarkup(status,ui.escape)}<p class="note">macOS requires Accessibility and Screen Recording for the signed driver. Windows needs no administrator access, and the driver must run in your signed-in desktop session. Linux requires its supported graphical session/accessibility service. A backend permission refusal cannot be bypassed by choosing the backup.</p><p>${status.lease?'Active target: '+ui.escape(status.lease.owner)+' · process '+ui.escape(status.lease.pid||'discovery')+' · window '+ui.escape(status.lease.windowId||'pending')+(status.lease.uncertain?' · Observe before retrying input.':''):'No active desktop control.'}</p><div class="actions"><button data-desktop-verify>Verify this computer</button><button data-desktop-test>Test discovery</button><button data-desktop-stop>Stop / revoke control</button><button data-desktop-refresh>Refresh</button></div><pre data-desktop-result role="status"></pre></section>`;
- container.querySelector('[data-desktop-refresh]').onclick=()=>void renderDesktopControl(container,active).catch(error=>ui.toast(error.message));
- container.querySelector('[data-desktop-verify]').onclick=async event=>{event.target.disabled=true;try{await ui.api('/api/desktop-control',{action:'verify'});await renderDesktopControl(container,active);}catch(error){const output=container.querySelector('[data-desktop-result]');if(output)output.textContent=error.message;event.target.disabled=false;}};
- container.querySelector('[data-desktop-stop]').onclick=async()=>{await ui.api('/api/desktop-control',{action:'stop'});await renderDesktopControl(container,active);};
- container.querySelector('[data-desktop-test]').onclick=async event=>{const output=container.querySelector('[data-desktop-result]');event.target.disabled=true;try{const value=await ui.api('/api/desktop-control',{action:'test'});output.textContent='Cua Driver catalog: '+value.tools+' tools. Permission report: '+JSON.stringify(value.permissionResult)+'. Desktop input and provider image delivery still need a real task check.';}catch(error){output.textContent=error.message;}finally{event.target.disabled=false;}};
- container.querySelectorAll('[data-desktop-setup]').forEach(link=>link.onclick=event=>{if(window.desktop){event.preventDefault();void window.desktop.openExternal(link.href).catch(error=>ui.toast(error.message));}});
 }

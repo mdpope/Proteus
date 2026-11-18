@@ -32,6 +32,8 @@ Follow `docs/code-organization.md` for source placement and boundary commentary.
 state, services and feature views in their related folders; keep root files for composition
 entry points. Reuse shared navigation controls across tab types and preserve owner/permission
 boundaries when moving files or UI resources.
+Read `docs/feature-navigation.md` before adding or changing feature surfaces, resource tabs or
+navigation. It defines shared container placement, ordering, hover targets, theme and editing rules.
 Keep workflow-specific policy in the source repository that owns a schedule. Keep app formats,
 provider adapters, interface behavior, and scheduler rules here. Never commit credentials,
 browser profiles, actual workplace prompts, chats, usage data, or machine-specific paths.

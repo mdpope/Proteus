@@ -6,6 +6,17 @@ import os from 'node:os';
 import path from 'node:path';
 import { render } from '../src/shared/markdown-renderer.js';
 import { readChatImage } from '../src/services/chats/chat-images.js';
+import {chatLink} from '../public/shared/navigation/chat-links.js';
+import {linkKind} from '../src/shared/markdown-parser.js';
+
+test('owner-bound chat links render from Markdown and bare prose without enabling other app commands',()=>{
+ const url=chatLink({hostId:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',id:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'}),escaped=url.replaceAll('&','&amp;');
+ assert.equal(linkKind(url),'proteus');
+ for(const prose of ['[Previous chat]('+url+')',url,'See ('+url+').'])assert.ok(render(prose).includes('data-link="'+escaped+'"'),prose);
+ for(const invalid of [url+'&id=bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',url+'#part',url.replace('chat?','user@chat?'),'proteus://pair?key=private','proteus://oauth?code=private','proteus://chat?host=local&id=unknown']){
+  assert.equal(linkKind(invalid),null);assert.ok(!render('[Open]('+invalid+')').includes('data-link="proteus:'),invalid);
+ }
+});
 
 test('rich Markdown supports tables, task lists, code, links and inert image placeholders', () => {
   const html = render('# Heading\n\n**Bold** and *italic* ~~old~~\n\n|Name|State|\n|---|---|\n|Mac|Ready|\n\n- [x] Done\n- [ ] Next\n\n```js\nconst n = 42;\n```\n\n![diagram](./plot.png)\n\n[Docs](https://example.com)');

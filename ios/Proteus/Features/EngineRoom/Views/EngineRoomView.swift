@@ -74,7 +74,7 @@ struct EngineRoomView: View {
                             Text(session["chatTitle"].string).font(.headline)
                             Text(session["provider"].string + " · " + session["connection"].string)
                             Text("Authentication: " + session["authentication"].string + " · Resource access: " + session["access"].string).font(.caption)
-                            Text("Last checked: " + session["checkedAt"].string + (session["stale"].bool ? " · Stale" : "")).font(.caption).foregroundStyle(.secondary)
+                            Text("Last checked: " + NativeHumanTime.text(session["checkedAt"].string) + (session["stale"].bool ? " · Stale" : "")).font(.caption).foregroundStyle(.secondary)
                         }
                     }
                     if configuration["sessionCount"].int > 20 { Text("Showing 20 sessions. Open the owning desktop for the complete list.").font(.caption) }
@@ -673,6 +673,11 @@ struct NativePaletteValue: Codable, Equatable {
     static func uiColor(_ hex: String) -> UIColor {
         let bits = UInt32(hex.dropFirst(), radix: 16) ?? 0
         return UIColor(red: CGFloat((bits >> 16) & 255) / 255, green: CGFloat((bits >> 8) & 255) / 255, blue: CGFloat(bits & 255) / 255, alpha: 1)
+    }
+    var colorScheme: ColorScheme {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        UIColor(color("background")).getRed(&r, green: &g, blue: &b, alpha: &a)
+        return r * 0.299 + g * 0.587 + b * 0.114 > 0.6 ? .light : .dark
     }
     func color(_ key: String, adjusted: Bool = true) -> Color {
         let color = Self.uiColor(value.colors[key] ?? Self.defaults[key] ?? "#ffffff")

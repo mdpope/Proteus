@@ -4,12 +4,13 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import assert from 'node:assert/strict';
-const bundle = path.resolve(process.argv[2] || `dist/Proteus-darwin-${process.arch}/Proteus.app`);
+if (!process.argv[2]) throw Error('Pass the exact verified bundle path printed by package:mac.');
+const bundle = path.resolve(process.argv[2]);
 execFileSync('codesign', ['--verify', '--deep', '--strict', bundle]);
 const plist = JSON.parse(execFileSync('plutil', ['-convert', 'json', '-o', '-', path.join(bundle, 'Contents/Info.plist')], { encoding:'utf8' }));
 assert.equal(plist.CFBundleDisplayName, 'Proteus');assert.equal(plist.CFBundleIdentifier, 'org.proteusapp.proteus.desktop');
 assert.equal(plist.CFBundleExecutable, 'Proteus');
-assert.deepEqual(fs.readFileSync(path.join(bundle,'Contents/Resources',plist.CFBundleIconFile)),fs.readFileSync('dist/Proteus.icns'));
+assert.deepEqual(fs.readFileSync(path.join(bundle,'Contents/Resources',plist.CFBundleIconFile)),fs.readFileSync(path.join(path.dirname(path.dirname(bundle)), 'Proteus.icns')));
 for (const name of ['copilot-runtime','runtime.node']) {
  const relative=`node_modules/@github/copilot-sdk-darwin-${process.arch}/prebuilds/darwin-${process.arch}/${name}`;
  const embedded=path.join(bundle,'Contents/Resources/app',relative);

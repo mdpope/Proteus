@@ -16,7 +16,7 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 /** Native JSON projection of the same tenant-scoped records used by the website. */
 class LifeReadModel
 {
-    public function __construct(private TenantAccess $access, private NutritionReport $nutrition, private FuelReport $fuel) {}
+    public function __construct(private TenantAccess $access, private NutritionReport $nutrition, private FuelReport $fuel, private LifeReminders $reminders) {}
 
     public function profile(User $user): array
     {
@@ -34,8 +34,8 @@ class LifeReadModel
         }
 
         return ['accountId' => hash_hmac('sha256', 'proteus-life:'.$user->id, config('app.key')), 'workspaceId' => (string) $m->workspace_id,
-            'displayName' => $user->name, 'capabilities' => $abilities, 'readOnly' => ! $user->tokenCan('brain:write') || ! Schema::hasTable('proteus_life_mutations'),
-            'sections' => array_values(array_filter(['overview', 'nutrition', 'garage', 'fuel', 'captures', 'security', 'connections'], fn ($s) => in_array($s === 'nutrition' ? 'nutrition.read' : 'garage.read', $abilities))),
+            'displayName' => $user->name, 'capabilities' => $abilities, 'readOnly' => ! ($user->tokenCan('brain:write') || (auth('web')->check() && auth('web')->id() === $user->id)) || ! Schema::hasTable('proteus_life_mutations'),
+            'sections' => array_merge(['reminders'], array_values(array_filter(['overview', 'nutrition', 'garage', 'fuel', 'captures', 'security', 'connections'], fn ($s) => in_array($s === 'nutrition' ? 'nutrition.read' : 'garage.read', $abilities)))),
             'evidence' => ['available' => true, 'mode' => 'website'], 'canRevokeTokens' => false];
     }
 
@@ -126,6 +126,9 @@ class LifeReadModel
 
     public function data(User $user, string $section, array $query): array
     {
+        if ($section === 'reminders') {
+            return $this->profile($user) + $this->reminders->read($user, $query);
+        }
         $w = $this->access->workspace($user, $section === 'nutrition' ? 'nutrition.read' : 'garage.read');
         $profile = $this->profile($user);
         $base = ['section' => $section] + $profile;

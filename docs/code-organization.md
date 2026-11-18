@@ -1,5 +1,8 @@
 # Code organization
 
+Follow [feature and navigation conventions](feature-navigation.md) for shared UI behavior,
+container placement and reuse; do not infer tab placement from the resource type.
+
 Organize by feature and responsibility. Keep executable entry points stable, place state and
 models away from views, and route effects through the host service that owns them. Moving a
 file must not create another runner, session, authorization boundary or source of truth.

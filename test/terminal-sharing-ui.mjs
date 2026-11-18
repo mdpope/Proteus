@@ -18,6 +18,8 @@ try{
  assert.equal((await agent({action:'list'})).terminals.find(item=>item.id===session.id).shared,false);
  await assert.rejects(agent({action:'snapshot',terminalId:session.id}),/not shared/);
  await page.getByRole('button',{name:'Share terminal with agents',exact:true}).click();assert.equal(await page.locator('[data-terminal-share]').getAttribute('aria-pressed'),'true');
+ const sharingColors=()=>page.locator('[data-terminal-share]').evaluate(button=>{const probe=document.createElement('span');probe.style.cssText='background:var(--accent);color:var(--proteus-accent-ink)';button.append(probe);const actual=getComputedStyle(button),expected=getComputedStyle(probe),value={background:actual.backgroundColor,ink:actual.color,accent:expected.backgroundColor,accentInk:expected.color};probe.remove();return value;});
+ const enabledColors=await sharingColors();if(enabledColors.background!==enabledColors.accent)console.log(await page.locator('[data-terminal-share]').evaluate(button=>({button:button.outerHTML,rules:[...document.styleSheets].flatMap(sheet=>{try{return [...sheet.cssRules].filter(rule=>{try{return rule.selectorText&&button.matches(rule.selectorText);}catch{return false;}}).map(rule=>rule.cssText);}catch{return [];}})})));assert.equal(enabledColors.background,enabledColors.accent,'Shared terminal robot must visibly light up with the same accent as browser sharing');assert.equal(enabledColors.ink,enabledColors.accentInk);
  const observed=await agent({action:'snapshot',terminalId:session.id});assert.match(observed.output,/PASTE_READY/);
  const input={action:'write',terminalId:session.id,data:'AGENT_INPUT\r',observationId:observed.observationId,operationId:randomUUID()};await agent(input);await agent(input);
  await until(async()=>(await snapshot()).data.includes('INPUT_HEX:'+Buffer.from(input.data).toString('hex')));
@@ -33,6 +35,7 @@ try{
  await page.locator('.terminal-canvas').evaluate((node,text)=>{const data=new DataTransfer();data.setData('text/plain',text);node.dispatchEvent(new ClipboardEvent('paste',{clipboardData:data,bubbles:true,cancelable:true}));},copied);
  await until(async()=>(await snapshot()).data.split(hex).length-1===2);
  await page.getByRole('button',{name:'Stop sharing terminal with agents',exact:true}).click();await assert.rejects(agent({action:'snapshot',terminalId:session.id}),/not shared/);await assert.rejects(agent({...input,operationId:randomUUID()}),/not shared/);
+ assert.equal(await page.locator('[data-terminal-share]').getAttribute('aria-pressed'),'false');const disabledColors=await sharingColors();assert.notEqual(disabledColors.background,disabledColors.accent,'Revoking sharing must remove the lit state');
  assert.equal((await snapshot()).session.status,'running');await page.screenshot({path:process.cwd()+'/.runtime-tests/terminal-sharing-ui.png'});assert.deepEqual(errors,[]);
  console.log(JSON.stringify({passed:true,synthetic:true,realPTY:true,chatCopyNativePaste:true,bracketedPasteBothFocusTargets:true,normalizedNewlines:true,agentReadAndWrite:true,idempotentInput:true,humanRevocation:true}));
 }catch(error){await page?.screenshot({path:process.cwd()+'/.runtime-tests/terminal-sharing-failure.png'}).catch(()=>{});throw error;}finally{await app?.close();await fixture.cleanup();}

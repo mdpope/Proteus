@@ -4,7 +4,8 @@ import {historyDateSections} from '../public/features/browser/browser-history-pa
 const hostId='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',id='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 test('chat links retain host and run identity across application/workspace representations',()=>{
  const link=chatLink({hostId,id});assert.deepEqual(parseChatLink(link),{hostId,id});assert.equal(chatLink({hostId,id:'workspace:child',runId:id}),link);assert.equal(chatLink({hostId,id},{origin:'https://app.example'}),'https://app.example/remote?view=chats&host='+hostId+'&chat='+id);assert.throws(()=>chatLink({hostId:'local',id}),/unavailable/);
- for(const bad of ['proteus://chat?host='+hostId+'&id=bad',link+'&token=secret',link.replace('chat','other'),'https://example.com/remote'])assert.equal(parseChatLink(bad),null);
+ assert.deepEqual(parseChatLink(link.replace('chat?','chat/?')),{hostId,id});
+ for(const bad of ['proteus://chat?host='+hostId+'&id=bad',link+'&token=secret',link.replace('chat','other'),'https://example.com/remote',link+'&id='+id,link+'&host='+hostId,link+'#',link+'#part',link.replace('chat?','chat:123?'),link.replace('chat?','user@chat?'),link.replace('chat?','chat/child?'),' '+link])assert.equal(parseChatLink(bad),null,bad);
 });
 test('history day grouping uses viewer timezone across DST and preserves host order',()=>{
  const items=[{visitedAt:'2026-11-02T08:00:00Z'},{visitedAt:'2026-11-02T06:00:00Z'},{visitedAt:'2026-11-01T08:00:00Z'},{visitedAt:'2026-11-01T07:00:00Z'}];const groups=historyDateSections(items,'America/Denver');assert.equal(groups.length,2);assert.equal(groups[0].items.length,1);assert.equal(groups[1].items.length,3);assert.deepEqual(groups.flatMap(group=>group.items),items);

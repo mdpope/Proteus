@@ -327,8 +327,8 @@ relative XDG_DATA_HOME. `PROTEUS_HOME` overrides it. Existing Mac storage is unc
 profiles remain in Electron's user-data directory. Isolate both locations in tests using a
 temporary PROTEUS_HOME and `--user-data-dir`. Do not copy Mac secrets/pairings into the laptop.
 
-Closing the Linux window minimizes it so the host remains reachable without tray support.
-`PROTEUS_CLOSE_TO_TRAY=1` opts into hiding. The color tray icon uses Linux activation; the File
+Closing the last Linux window leaves the host running without an open window. The color tray
+icon uses Linux activation to open a window; the File
 menu includes explicit Quit / Ctrl+Q. macOS retains its existing hide/template-icon behavior.
 The default Linux terminal uses the user's shell or bash; Mac still defaults to zsh. Sleep,
 logout and shutdown stop the host; no daemon/startup integration is installed.
@@ -343,6 +343,12 @@ opens legacy SQL profiles automatically. No live keyring, database or Life sign-
 by synthetic resolver tests; see [administrator scope](life-database-admin.md).
 
 ## Validation and updates
+
+The Nov 15 `fbf058aa` Linux x64 package passed the live `linux-current.mjs` acceptance on
+November 16 after updating the test for tab-based New Chat and the current last-window close
+behavior. The credential-free package UI test also passed on rerun; an earlier terminal click
+timed out, so that transient failure remains worth monitoring. This acceptance tested the
+`fbf058aa` package; it does not validate later source changes or the separate event-stream fix.
 
 ```sh
 npm test

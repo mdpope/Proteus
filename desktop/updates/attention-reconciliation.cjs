@@ -17,6 +17,7 @@ const witnessFields=['schemaVersion','kind','jobId','home','installation','jobHa
 function readAttentionResolution(job,owner=job){
  const file=resolutionFile(job);ordinary(file);if(!fs.existsSync(file))return null;
  const row=json(file);
+ if(row.kind==='superseded-failed-update')return {...require('./superseded-attention.cjs').readResolution(row,job,owner),receiptFile:file,receiptHash:fileDigest(file)};
  if(row.schemaVersion!==1||row.kind!=='verified-post-install-attention'||row.jobId!==job.id||row.home!==owner.home||row.installation!==owner.installation||row.jobHash!==fileDigest(job.file)||job.phase!=='attention'||job.outcome!=='updated'||!job.health||job.error!=='Recovery data differs from its receipt.'||row.originalError!==job.error||row.candidateHash!==job.candidate.hash||row.preservationHash!==job.preservationHash||row.originalHealthAt!==job.health.at||!Number.isFinite(Date.parse(row.at))||!/^[a-f0-9]{64}$/.test(row.planDigest||'')||!Array.isArray(row.recoveries)||row.recoveries.length<2||!row.recoveries.some(r=>r.directory===job.recovery))throw Error('Attention reconciliation differs from the preserved update journal.');
  if(digest(JSON.stringify(Object.fromEntries(witnessFields.map(key=>[key,row[key]]))))!==row.planDigest)throw Error('Attention reconciliation verification evidence changed.');
  return {...row,receiptFile:file,receiptHash:fileDigest(file)};
@@ -27,6 +28,7 @@ function attentionPlan(root,options={},dependencies={}){
  const file=ordinary(path.join(root,'jobs',options.id,'job.json')),job=readJob(file);
  if(job.home!==plan.owner.home||job.installation!==plan.owner.installation||job.id!==options.id||job.revision!==options.expectedRevision)throw Error('The update changed. Refresh its status before reconciliation.');
  if(readAttentionResolution(job,plan.owner))throw Error('This attention job already has a reconciliation receipt. Inspect maintenance.');
+ if(require('./superseded-attention.cjs').failedAttempt(job))return require('./superseded-attention.cjs').plan(job,plan,dependencies,{ordinary,json,alive});
  if(job.phase!=='attention'||job.outcome!=='updated'||job.failedBeforeReplacement||!job.recovery||!Number.isFinite(Date.parse(job.ordinaryWorkResumedAt))||!Number.isFinite(Date.parse(job.health?.at))||Date.parse(job.ordinaryWorkResumedAt)<Date.parse(job.health.at)||job.health?.identity?.packaged!==true||job.health.identity.home!==plan.owner.home||job.health.identity.installation!==plan.owner.installation||job.health.identity.sourceFingerprint!==job.candidate.sourceFingerprint||job.health.identity.buildRevision!==job.candidate.buildRevision||job.error!=='Recovery data differs from its receipt.')throw Error('Only a reviewed post-install recovery-checksum attention job with verified health can be reconciled.');
  if(plan.issues.some(row=>row.kind!=='active-update'||row.id!==job.id||row.phase!=='attention')||plan.missing.length||plan.discovered.length||plan.verified.length<2||!plan.verified.some(row=>row.directory===job.recovery))throw Error('All registered recoveries and other update work must verify before reconciliation.');
  const isAlive=dependencies.alive||alive;

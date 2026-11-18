@@ -14,6 +14,7 @@ class BrowserCertificates {
    finally{callback(-3);}
   });
  }
+ forget(session){this.sessions.delete(session);session?.setCertificateVerifyProc(null);}
  get(session,url,details){
   const host=new URL(url).hostname.toLowerCase(),value=this.sessions.get(session)?.get(host),leaf=value?.chain[0];
   if(!value?.verified||!leaf||!details)return null;

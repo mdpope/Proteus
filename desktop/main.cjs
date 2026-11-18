@@ -132,10 +132,10 @@ else {
     void service.browserHistory.importAccount(service.account).catch(()=>{});
     const {LiveBrowser}=await import('../src/services/browser/live-browser.js');
     service.liveBrowser=new LiveBrowser({
-      list:chatId=>browser.list().filter(info=>{const tab=browser.get(info.id);return info.loaded&&browser.profileAvailable(tab)&&(tab.parentId===chatId||tab.owner===chatId||tab.resumeOwner===chatId||tab.automationRuns?.has(chatId));}).map(({id,title,agentControlling})=>({id,title,agentControlling})),
-      current:(id,revision)=>{const tab=browser.tabs.get(id);return !!tab?.view?.webContents&&browser.profileAvailable(tab)&&!tab.view.webContents.isDestroyed()&&revision===`${tab.view.webContents.id}:${tab.captureRevision||0}`;},
+      list:chatId=>browser.list().filter(info=>{const tab=browser.get(info.id);return !tab.incognito&&info.loaded&&browser.profileAvailable(tab)&&(tab.parentId===chatId||tab.owner===chatId||tab.resumeOwner===chatId||tab.automationRuns?.has(chatId));}).map(({id,title,agentControlling})=>({id,title,agentControlling})),
+      current:(id,revision)=>{const tab=browser.tabs.get(id);return !tab?.incognito&&!!tab?.view?.webContents&&browser.profileAvailable(tab)&&!tab.view.webContents.isDestroyed()&&revision===`${tab.view.webContents.id}:${tab.captureRevision||0}`;},
       capture:async(chatId,id)=>{
-        const tab=browser.get(id),wc=tab.view?.webContents;if(!browser.profileAvailable(tab))throw new Error('This browser profile is unavailable.');if(!wc||wc.isDestroyed())throw new Error('Browser tab is unloaded.');
+        const tab=browser.get(id),wc=tab.view?.webContents;if(tab.incognito)throw Error('Incognito tabs cannot be shared.');if(!browser.profileAvailable(tab))throw new Error('This browser profile is unavailable.');if(!wc||wc.isDestroyed())throw new Error('Browser tab is unloaded.');
         const revision=`${wc.id}:${tab.captureRevision||0}`,size=tab.view.getBounds();
         const image=await wc.capturePage(undefined,{stayHidden:true});if(image.isEmpty())throw new Error('The browser has not rendered a frame yet.');
         const resized=image.resize({width:Math.min(1440,image.getSize().width)});let bytes=resized.toJPEG(65);
@@ -152,11 +152,11 @@ else {
     const windowLayouts=new (require('./windows/window-layouts.cjs').WindowLayouts)(service.home);
     const {WindowContentRecovery}=await import('./windows/content-recovery.js');
     const windowContentRecovery=new WindowContentRecovery(service);
-    const checkpointWindow=ctx=>ctx.recovery?.restoring||ctx.window.webContents.isCrashed()?Promise.resolve():new Promise((resolve,reject)=>{const requestId=require('node:crypto').randomUUID();const timer=setTimeout(()=>{tabActions.delete(requestId);reject(Error('The window did not finish saving. Try again after it responds.'));},10000);tabActions.set(requestId,{resolve,reject,timer,windowId:ctx.id});ctx.window.webContents.send('proteus:tab-management',{action:'window-checkpoint',requestId});});
+    const checkpointWindow=(ctx,{update=false}={})=>ctx.recovery?.restoring||ctx.window.webContents.isCrashed()?(update?Promise.reject(Error('Wait for every window to finish restoring before updating.')):Promise.resolve()):new Promise((resolve,reject)=>{const requestId=require('node:crypto').randomUUID();const timer=setTimeout(()=>{tabActions.delete(requestId);reject(Error('The window did not finish saving. Try again after it responds.'));},10000);tabActions.set(requestId,{resolve,reject,timer,windowId:ctx.id});ctx.window.webContents.send('proteus:tab-management',{action:'window-checkpoint',requestId,settleContent:update});});
     const windowPositions=id=>{const prefix='window:'+id+':';return viewPositions.get().flatMap(([key,position])=>key.startsWith(prefix)?[[key.slice(prefix.length),position]]:id==='main'&&!key.startsWith('window:')?[[key,position]]:[]);};
     const captureWindow=(ctx,kind,name,expectedRevision)=>windowLayouts.capture({windowId:ctx.id,session:ctx.session.get(),positions:windowPositions(ctx.id),bounds:ctx.window.getNormalBounds(),maximized:ctx.window.isMaximized(),kind,name},expectedRevision);
-    if(windowLayouts)windows.checkpointForQuit=async()=>{for(const ctx of windows.contexts.values()){ctx.checkpointing=true;try{await checkpointWindow(ctx);captureWindow(ctx,'previous');}finally{ctx.checkpointing=false;}}};
-    service.prepareUpdateCheckpoint=()=>windows.checkpointForQuit?.();
+    if(windowLayouts)windows.checkpointForQuit=async({update=false}={})=>{for(const ctx of windows.contexts.values()){ctx.checkpointing=true;try{await checkpointWindow(ctx,{update});captureWindow(ctx,'previous');}finally{ctx.checkpointing=false;}}};
+    service.prepareUpdateCheckpoint=()=>windows.checkpointForQuit?.({update:true});
     windows.handle('proteus:window-layouts',async(event,value)=>{
       trusted(event);if(!windowLayouts)throw Error('Window sessions are available in the design preview.');
       if(value?.action==='audit-content')return windowContentRecovery.audit();
@@ -286,16 +286,17 @@ else {
     service.resources={
       list:async()=>{
         const [psOutput,tmuxState]=await Promise.all([sampleProcesses(),terminals.tmux.statusAsync()]);
-        const tabs=browser.list().map(({id,title,url,group,loaded,pid,error,persist})=>({id,title,url,group,loaded,pid,error,persist,logicalId:browser.tabs.get(id)?.thumbnailId||id,canUnload:loaded&&!persist,canClose:true,windowId:browser.tabs.get(id)?.windowId}));
+        const privatePids=new Set(browser.list().filter(info=>info.incognito).map(info=>info.pid));
+        const tabs=browser.list().filter(info=>!info.incognito).map(({id,title,url,group,loaded,pid,error,persist})=>({id,title,url,group,loaded,pid,error,persist,logicalId:browser.tabs.get(id)?.thumbnailId||id,canUnload:loaded&&!persist,canClose:true,windowId:browser.tabs.get(id)?.windowId}));
         for(const row of service.contentTabs.list({type:'browser'}))if(!tabs.some(tab=>tab.id===row.id||tab.logicalId===row.id))tabs.push({...row,loaded:false,canUnload:false,canClose:true,canonical:true});
         for(const ctx of windows.contexts.values()){
           let descriptors=[];try{const saved=ctx.session?.get();descriptors=[...(saved?.tabs||[]),...(saved?.team?.tabs||[])];}catch{}
           const rendererPid=!ctx.window.isDestroyed()&&!ctx.window.webContents.isDestroyed()?ctx.window.webContents.getOSProcessId():null;
           for(const tab of descriptors)if(tab.type!=='browser')tabs.push({id:'view:'+ctx.id+':'+tab.id,runtimeId:tab.id,windowId:ctx.id,title:tab.label,group:tab.type,loaded:!!rendererPid,pid:rendererPid,sharedProcess:true,canUnload:false,canClose:!['overview','home','engine','team','terminal','workspace'].includes(tab.type)});
         }
-        const processes=app.getAppMetrics().map(p=>({pid:p.pid,type:p.type,name:p.name||p.serviceName||p.type,cpuPercent:p.cpu.percentCPUUsage,memoryBytes:(p.memory.workingSetSize||0)*1024,tabIds:tabs.filter(t=>t.pid===p.pid).map(t=>t.id)}));
+        const processes=app.getAppMetrics().filter(p=>!privatePids.has(p.pid)).map(p=>({pid:p.pid,type:p.type,name:p.name||p.serviceName||p.type,cpuPercent:p.cpu.percentCPUUsage,memoryBytes:(p.memory.workingSetSize||0)*1024,tabIds:tabs.filter(t=>t.pid===p.pid).map(t=>t.id)}));
         const terminalPids=new Set([...terminals.sessions.values()].map(record=>record.child?.pid).filter(Number.isSafeInteger));
-        const children=trackedChildren(process.pid,new Set(processes.map(item=>item.pid)),psOutput);
+        const children=trackedChildren(process.pid,new Set([...processes.map(item=>item.pid),...privatePids]),psOutput);
         for(const child of children)if(terminalPids.has(child.pid)){child.type='terminal';child.name='Terminal process';}
         processes.push(...children);
         const knownPids=new Set(processes.map(item=>item.pid));
@@ -307,7 +308,7 @@ else {
         if(!['unload','close'].includes(value.action)||typeof value.tabId!=='string')throw new Error('Choose Close or Unload for a tab.');
         const canonical=service.contentTabs.list({type:'browser'}).find(row=>row.id===value.tabId);
         if(canonical&&(value.action==='close'||!browser.tabs.has(value.tabId))){if(value.action==='unload')throw Error('This logical tab has no loaded page.');await service.tabManagement.handle({action:'close',scope:canonical.scope,id:canonical.scopeId,tabId:canonical.id,expectedRevision:canonical.revision});}
-        else if(browser.tabs.has(value.tabId)){if(value.action==='unload')await browser.unload(value.tabId);else await browser.close(value.tabId);}
+        else if(browser.tabs.has(value.tabId)){if(browser.get(value.tabId).incognito)throw Error('Tab not found.');if(value.action==='unload')await browser.unload(value.tabId);else await browser.close(value.tabId);}
         else {const row=service.tabInventory().find(tab=>tab.id===value.tabId);if(!row)throw new Error('Tab not found.');if(!row.manageable)throw new Error('This permanent application surface stays open.');if(row.type==='terminal')throw new Error('Close terminal sessions from their terminal tab.');if(value.action==='unload')throw new Error('This tool shares the app renderer. Close its view to release its data; its execution stays on the host.');windows.contexts.get(row.windowId).window.webContents.send('proteus:close-tool',row.runtimeId);}
         return service.resources.list();
       }
@@ -321,11 +322,11 @@ else {
     windows.handle('proteus:thumbnails',async(event,value)=>{
       trusted(event);if(event.senderFrame!==event.sender.mainFrame)throw Error('Use the app window for thumbnails.');
       const cache=browser.thumbnails;if(!cache)return [];
-      if(value?.action==='get'){if(!Array.isArray(value.keys)||value.keys.length>200||value.keys.some(key=>typeof key!=='string'||!key.startsWith('chat:')||key.length>1024))throw Error('Choose bounded chat thumbnails.');return value.keys.map(key=>({key,...cache.get(key)}));}
+      if(value?.action==='get'){if(!Array.isArray(value.keys)||value.keys.length>200||value.keys.some(key=>typeof key!=='string'||!(/^(chat|resource):/.test(key))||key.length>1024))throw Error('Choose bounded tab thumbnails.');return value.keys.map(key=>({key,...cache.get(key)}));}
       for(const [token,row] of pendingThumbnails)if(row.expires<Date.now())pendingThumbnails.delete(token);
       if(value?.action==='commit'){const row=pendingThumbnails.get(value.token);if(!row||row.sender!==event.sender.id)throw Error('Thumbnail capture expired.');pendingThumbnails.delete(value.token);return cache.set(row.key,row.bytes);}
       if(value?.action==='capture'){
-        if(typeof value.key!=='string'||!value.key.startsWith('chat:')||value.key.length>1024||pendingThumbnails.size>=4)throw Error('Choose a bounded chat capture.');
+        if(typeof value.key!=='string'||!(/^(chat|resource):/.test(value.key))||value.key.length>1024||pendingThumbnails.size>=4)throw Error('Choose a bounded tab capture.');
         const rect=value.bounds,bounds=window.getContentBounds();if(!rect||!['x','y','width','height'].every(key=>Number.isFinite(rect[key])&&rect[key]>=0)||rect.width<24||rect.height<24||rect.x+rect.width>bounds.width+1||rect.y+rect.height>bounds.height+1)throw Error('The chat viewport changed.');
         const image=await event.sender.capturePage(Object.fromEntries(Object.entries(rect).map(([key,value])=>[key,Math.round(value)])));if(image.isEmpty())return null;
         const token=require('node:crypto').randomUUID();pendingThumbnails.set(token,{key:value.key,bytes:image.resize({width:360}).toJPEG(65),sender:event.sender.id,expires:Date.now()+30000});return {token};

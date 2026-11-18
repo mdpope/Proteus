@@ -1,4 +1,4 @@
-import {turnAttachmentTools} from './attachment-input.js';
+import {turnAttachmentTools,attachmentMetadata,readAttachmentPage} from './attachment-input.js';
 import {createHash} from 'node:crypto';
 import {modelToolResult} from '../../shared/tool-results.js';
 export const questionAttachmentMediaTypes=Object.freeze(['image/png','image/jpeg','image/webp','text/plain']);
@@ -14,9 +14,8 @@ export async function answerQuestionWithAttachments(engine,id,args,deviceId){
   return engine.answerQuestion(id,args.questionId,args.answer||'Please review the attached files.',args.messageId,args.action,{signature},args.inputOrigin);
  }
  if(question.status!=='pending')throw Error('This question is no longer waiting for an answer.');
- if(ids.length>4||args.providerId!==run.schedule.provider||!args.consentId||!args.messageId)throw Error('Review up to four question attachments and their exact provider before sending.');
- const files=await engine.attachmentConsents.verify({consentId:args.consentId,chatId:id,messageId:args.messageId,providerId:run.schedule.provider,deviceId,attachmentIds:ids});
- if(files.some(file=>!questionAttachmentMediaTypes.includes(file.mediaType)))throw Error('Question replies support PNG, JPEG, WebP images and plain text.');
+ if(args.providerId!==run.schedule.provider||!args.consentId||!args.messageId)throw Error('Review the question attachments and their exact provider before sending.');
+ await engine.attachmentConsents.verify({consentId:args.consentId,chatId:id,messageId:args.messageId,providerId:run.schedule.provider,deviceId,attachmentIds:ids});
  const prepared=await engine.attachmentConsents.prepareSend({consentId:args.consentId,chatId:id,messageId:args.messageId,providerId:run.schedule.provider,deviceId,attachmentIds:ids});
  try{return await engine.answerQuestion(id,args.questionId,args.answer||'Please review the attached files.',args.messageId,args.action,{proofId:prepared.proofId,attachmentIds:ids,messageId:args.messageId,signature},args.inputOrigin);}
  catch(error){if(!question.messageId)await engine.attachmentConsents.releaseProof(prepared.proofId).catch(()=>{});throw error;}
@@ -29,18 +28,25 @@ export async function replyWithAttachments(engine,id,args,deviceId){
  const prior=run.events.find(event=>event.data?.questionReply?.requestId===args.requestId&&event.data?.delivery?.id===args.messageId);
  if(prior){if(prior.data.delivery.questionReplyDigest!==signature)throw Error('This question submission ID was already used with different content.');return run;}
  if(run.pending?.type!=='question'||run.pending.id!==args.requestId)throw Error('Only the current ordinary question accepts attachments.');
- if(ids.length>4||args.providerId!==run.schedule.provider||!args.consentId||!args.messageId)throw Error('Review up to four question attachments and their exact provider before sending.');
- const files=await engine.attachmentConsents.verify({consentId:args.consentId,chatId:id,messageId:args.messageId,providerId:run.schedule.provider,deviceId,attachmentIds:ids});
- if(files.some(file=>!questionAttachmentMediaTypes.includes(file.mediaType)))throw Error('Question replies support PNG, JPEG, WebP images and plain text.');
+ if(args.providerId!==run.schedule.provider||!args.consentId||!args.messageId)throw Error('Review the question attachments and their exact provider before sending.');
+ await engine.attachmentConsents.verify({consentId:args.consentId,chatId:id,messageId:args.messageId,providerId:run.schedule.provider,deviceId,attachmentIds:ids});
  const prepared=await engine.attachmentConsents.prepareSend({consentId:args.consentId,chatId:id,messageId:args.messageId,providerId:run.schedule.provider,deviceId,attachmentIds:ids});
  try{return engine.reply(id,args.answer||'Please review the attached files.',args.requestId,{proofId:prepared.proofId,attachmentIds:ids,messageId:args.messageId,signature},args.inputOrigin);}
  catch(error){await engine.attachmentConsents.releaseProof(prepared.proofId).catch(()=>{});throw error;}
 }
 export function questionAttachmentTools(adapter,runId){
  if(!adapter.questionInputs)return turnAttachmentTools(adapter,runId);
- return [...turnAttachmentTools(adapter,runId),{name:'proteus_question_attachments',defer:'never',description:'Read the files explicitly attached by the user to an answered question in this chat. Use the requestId included in the question response. Images are returned as images; text files as text. No other chat or filesystem access is granted.',parameters:{type:'object',properties:{requestId:{type:'string'}},required:['requestId'],additionalProperties:false},handler:async({requestId})=>{
+ return [...turnAttachmentTools(adapter,runId),{name:'proteus_question_attachments',defer:'never',description:'Inspect files explicitly attached to an answered question in this chat using its requestId. Without action, returns bounded image/text previews and references. list returns metadata for all files; read returns a bounded UTF-8 or base64 byte page by index and offset (follow nextOffset). All file types are retained; native extraction is not guaranteed. No other chat or filesystem access is granted.',parameters:{type:'object',properties:{requestId:{type:'string'},action:{type:'string',enum:['list','read']},index:{type:'integer',minimum:0},offset:{type:'integer',minimum:0},encoding:{type:'string',enum:['utf8','base64']}},required:['requestId'],additionalProperties:false},handler:async({requestId,...args})=>{
    const files=await adapter.questionInputs(runId,requestId),content=[];
-   for(const file of files){content.push({type:'text',text:file.name+' · '+file.mediaType});if(file.mediaType==='text/plain')content.push({type:'text',text:file.bytes.toString('utf8')});else content.push({type:'image',mimeType:file.mediaType,data:file.bytes.toString('base64')});}
+   if(args.action==='list')return JSON.stringify({files:attachmentMetadata(files)});
+   if(args.action==='read')return JSON.stringify(readAttachmentPage(files,args));
+   if(args.action!==undefined)throw Error('Choose list or read.');
+   let budget=8*1024*1024;
+   for(const metadata of attachmentMetadata(files)){
+    const file=files[metadata.index],inline=questionAttachmentMediaTypes.includes(file.mediaType)&&metadata.size<=Math.min(budget,file.mediaType==='text/plain'?256*1024:5*1024*1024);
+    content.push({type:'text',text:file.name+' · '+file.mediaType+(inline?'':` · ${metadata.size} bytes · index ${metadata.index}. Use proteus_question_attachments read with this requestId, index and byte offset to inspect the original file.`)});
+    if(inline){budget-=metadata.size;if(file.mediaType==='text/plain')content.push({type:'text',text:file.bytes.toString('utf8')});else content.push({type:'image',mimeType:file.mediaType,data:file.bytes.toString('base64')});}
+   }
    return {...modelToolResult({content}),sessionLog:'User question attachments (image bytes omitted).'};
  }}];
 }

@@ -4,6 +4,8 @@ namespace App\Services;
 
 use App\Models\User;
 use Firebase\JWT\JWT;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 
 /** Payload-free browser wakeups and APNs alerts with bounded chat text. Secrets stay in configured files. */
@@ -36,6 +38,98 @@ class PushDelivery
         return ($notification['silent'] ?? false) || ($notification['read'] ?? false) || ! empty($notification['readAt']) || ! empty($notification['resolvedAt']) || ($notification !== [] && ($created < time() - 300 || $created > time() + 60));
     }
 
+    /** Shared by immediate Life answers and the retry worker; each recipient has one durable send intent. */
+    public function deliverPending(?User $onlyUser = null, ?string $notificationId = null, int $limit = 100): ?int
+    {
+        $query = DB::table('app_records')->where('kind', 'push-outbox')->orderBy('updated_at');
+        if ($onlyUser) {
+            $query->where('user_id', $onlyUser->id);
+        }
+        $rows = $query->limit(AppRecords::LIMITS['push-outbox'])->get();
+        if ($onlyUser && $notificationId) {
+            $subscriptions = array_column($this->records->all($onlyUser, 'push-subscriptions'), null, 'id');
+            $rows = $rows->filter(fn ($row) => $this->records->decode($row)['notificationId'] === $notificationId)
+                ->sortBy(fn ($row) => ($subscriptions[$this->records->decode($row)['subscriptionId']]['platform'] ?? '') === 'apns' ? 0 : 1);
+        }
+        $processed = 0;
+        $acceptedAt = null;
+        foreach ($rows as $row) {
+            if ($processed >= max(1, min(100, $limit))) {
+                break;
+            }
+            $lock = Cache::lock('proteus-push-item-'.$row->id, 120);
+            if (! $lock->get()) {
+                continue;
+            }
+            try {
+                $user = $onlyUser ?? User::find($row->user_id);
+                if (! $user) {
+                    continue;
+                }
+                $current = $this->records->query($user, 'push-outbox')->where('id', $row->id)->first();
+                if (! $current) {
+                    continue;
+                }
+                $item = $this->records->decode($current);
+                if ($notificationId && $item['notificationId'] !== $notificationId) {
+                    continue;
+                }
+                $subscription = $this->records->query($user, 'push-subscriptions')->where('id', $item['subscriptionId'])->first();
+                $notification = $this->records->query($user, 'notifications')->where('id', $item['notificationId'])->first();
+                if (! $notification || ! $subscription || self::obsolete($this->records->decode($notification))) {
+                    $this->records->query($user, 'push-outbox')->where('id', $row->id)->delete();
+
+                    continue;
+                }
+                // A timed-out or abandoned sending intent may already have reached APNs.
+                if (in_array($item['state'] ?? '', ['sending', 'uncertain', 'failed'])) {
+                    DB::table('app_records')->where('id', $row->id)->update(['updated_at' => now()->utc()->format('Y-m-d H:i:s')]);
+
+                    continue;
+                }
+                $processed++;
+                $intent = ['subscriptionId' => $item['subscriptionId'], 'notificationId' => $item['notificationId'], 'attempts' => $item['attempts'], 'state' => 'sending'];
+                $this->records->save($user, 'push-outbox', $intent, $row->id);
+                $target = $this->records->decode($subscription);
+                $result = $this->deliver($target, $this->records->decode($notification));
+                if ($result === 'unavailable') {
+                    $this->records->save($user, 'push-outbox', array_replace($intent, ['state' => 'pending']), $row->id);
+
+                    continue;
+                }
+                if ($result === 'accepted' && $target['platform'] === 'apns') {
+                    $acceptedAt = (int) floor(microtime(true) * 1000);
+                    DB::transaction(function () use ($user, $notification, $acceptedAt) {
+                        User::whereKey($user->id)->lockForUpdate()->firstOrFail();
+                        $fresh = $this->records->query($user, 'notifications')->where('id', $notification->id)->first();
+                        if (! $fresh) {
+                            return;
+                        }
+                        $payload = $this->records->decode($fresh);
+                        unset($payload['id'], $payload['revision'], $payload['createdAt'], $payload['updatedAt']);
+                        $payload['pushAcceptedAt'] ??= $acceptedAt;
+                        $this->records->save($user, 'notifications', $payload, $notification->id);
+                    });
+                }
+                if (in_array($result, ['accepted', 'expired', 'obsolete']) || $item['attempts'] >= 4) {
+                    $this->records->query($user, 'push-outbox')->where('id', $row->id)->delete();
+                    if ($result === 'expired') {
+                        $this->records->query($user, 'push-subscriptions')->where('id', $subscription->id)->delete();
+                    }
+                } else {
+                    $this->records->save($user, 'push-outbox', ['subscriptionId' => $item['subscriptionId'], 'notificationId' => $item['notificationId'], 'attempts' => $item['attempts'] + 1, 'state' => $result === 'failed' ? 'rejected' : $result], $row->id);
+                }
+                if (in_array($result, ['failed', 'uncertain'])) {
+                    $this->records->save($user, 'logs', ['code' => 'push_failed', 'event' => 'push_failed', 'level' => 'warning', 'source' => 'server', 'message' => $result === 'uncertain' ? 'Push delivery is uncertain; automatic redelivery is held to avoid duplicate alerts.' : 'Push provider rejected a notification.']);
+                }
+            } finally {
+                $lock->release();
+            }
+        }
+
+        return $acceptedAt;
+    }
+
     /** Provider acceptance is not device delivery; uncertain sends must not be replayed automatically. */
     public function deliver(array $subscription, array $notification = []): string
     {
@@ -66,6 +160,9 @@ class PushDelivery
                 // plain-text preview and the source computer. Transport stays HTTPS to
                 // APNs; Apple can read alert text. Older desktops send no preview fields.
                 $route = array_intersect_key($notification, array_flip(['hostId', 'chatId', 'scheduleId', 'type', 'requestId', 'requestKind']));
+                if (isset($notification['destination'])) {
+                    $route['destination'] = $notification['destination'];
+                }
                 if ($created > 0) {
                     $route['createdAt'] = gmdate('Y-m-d\TH:i:s\Z', $created);
                 }

@@ -1,3 +1,4 @@
+import {journalAdmissionLimits} from './command-journal-policy.js';
 import {gzipSync,gunzipSync} from 'node:zlib';
 import {createHash} from 'node:crypto';
 import fs from 'node:fs';
@@ -5,7 +6,7 @@ import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { StringDecoder } from 'node:string_decoder';
 
-export const commandJournalLimits = Object.freeze({ maxRecords: 10_000, maxBytes: 256 * 1024 * 1024, retentionMs: 24 * 3600_000 });
+export const commandJournalLimits = Object.freeze({ maxRecords: 10_000, maxBytes: 512 * 1024 * 1024, retentionMs: 24 * 3600_000 });
 // Ordinary tab snapshots are often below 64 KiB; compress them too without
 // changing replay, retention or admission limits. Tiny receipts remain inline.
 const compressionThreshold = 4096;
@@ -119,13 +120,14 @@ export class RemoteCommandStore {
       if (!this.lastPrune || now - this.lastPrune >= 60_000) { this.prune.run(now - this.limits.retentionMs); prunedAt = now; }
       const record = { digest, pending: true, at: now, issuedAt };
       const { payload, bytes } = this.encode(key, record); const totals = this.total.get();
-      if (totals.records >= this.limits.maxRecords || totals.bytes + bytes > this.limits.maxBytes) {
+      const admission=journalAdmissionLimits(this.limits,method);
+      if (totals.records >= admission.maxRecords || totals.bytes + bytes > admission.maxBytes) {
         const error = new Error('Remote command history is busy. Retry later; recent and uncertain actions are protected.');
         error.code = 'JOURNAL_BUSY';
         const next=this.db.prepare('SELECT MIN(at) AS at FROM receipts WHERE pending=0').get().at;
         const retryAfterMs=next===null?null:Math.max(0,next+this.limits.retentionMs-now);
-        error.details = { records: totals.records, bytes: totals.bytes, pending: totals.pending, maxRecords: this.limits.maxRecords, maxBytes: this.limits.maxBytes,
-          limitingCounter: totals.records >= this.limits.maxRecords ? 'records' : 'bytes', retryAfterMs, nextExpiryAt:next===null?null:new Date(next+this.limits.retentionMs).toISOString() };
+        error.details = { records: totals.records, bytes: totals.bytes, pending: totals.pending, maxRecords: admission.maxRecords, maxBytes: admission.maxBytes, reservedBytes:admission.reservedBytes,reservedRecords:admission.reservedRecords,
+          limitingCounter: totals.records >= admission.maxRecords ? 'records' : 'bytes', retryAfterMs, nextExpiryAt:next===null?null:new Date(next+this.limits.retentionMs).toISOString() };
         throw error;
       }
       this.insert.run(key, digest, 1, now, payload, bytes);
@@ -158,7 +160,7 @@ export class RemoteCommandStore {
     const byMethod=this.db.prepare("SELECT COALESCE(m.method,'unknown-legacy') AS method,COUNT(*) AS records,SUM(r.bytes) AS bytes,SUM(r.pending) AS pending FROM receipts r LEFT JOIN receipt_methods m ON m.key=r.key GROUP BY m.method ORDER BY bytes DESC LIMIT 100").all();
     const nextExpiryAt=nextExpiry===null?null:new Date(nextExpiry+this.limits.retentionMs).toISOString();
     const fileBytes = file => { try { return fs.statSync(file).size; } catch { return 0; } };
-    return { ...totals, ...this.metrics, ...protectedTotals, byMethod, nextExpiryAt, capacityWarning:totals.records>=this.limits.maxRecords*0.8||totals.bytes>=this.limits.maxBytes*0.8, expiredRecords: totals.records - protectedTotals.protectedRecords, workerHeapBytes: process.memoryUsage().heapUsed, maxRecords: this.limits.maxRecords, maxBytes: this.limits.maxBytes, retentionMs: this.limits.retentionMs,
+    return { ...totals, ...this.metrics, ...protectedTotals, byMethod, nextExpiryAt, ordinaryAdmission:journalAdmissionLimits(this.limits), capacityWarning:totals.records>=this.limits.maxRecords*0.8||totals.bytes>=this.limits.maxBytes*0.8, expiredRecords: totals.records - protectedTotals.protectedRecords, workerHeapBytes: process.memoryUsage().heapUsed, maxRecords: this.limits.maxRecords, maxBytes: this.limits.maxBytes, retentionMs: this.limits.retentionMs,
       overBudget: totals.records >= this.limits.maxRecords || totals.bytes >= this.limits.maxBytes,
       storageBytes: fileBytes(this.file) + fileBytes(this.file + '-wal') + fileBytes(this.file + '-shm') };
   }

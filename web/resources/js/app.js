@@ -1,13 +1,20 @@
+import {installTabHints} from '../../../public/shared/navigation/tab-interactions.js';
+installTabHints();
 import { installPageFind } from '../../../public/shared/ui/page-find.js';
 import {installLinkPreview} from '../../../public/shared/ui/link-preview.js';
 installLinkPreview();
 import '../../../public/page-find.css';
 import {mountHome} from '../../../public/shared/ui/home.js';
 import {mount as mountHomeMarkdown} from '../../../src/shared/markdown-renderer.js';
-import {appRequest} from './shared-app.js';
+import './scratchpad.js';
+import {appRequest,ownerRequest,escapeHTML} from './shared-app.js';
 import {clearChatIndex,clearChatDrafts} from './remote-cache.js';
 import './app-tools.js';
 import './shell.js';
+import './life-reminders.js';
+import './life-home.js';
+import './life-overview.js';
+import './life-result.js';
 import { Passkeys } from '@laravel/passkeys';
 const status = document.querySelector('#client-status');
 const notice = text => { if(status) { status.textContent=text; status.hidden=false; } };
@@ -57,6 +64,18 @@ logoutForm?.addEventListener('submit', async event => {
     try { const store = new PairingStore(account); await store.clear(); store.close(); } finally { logoutForm.dataset.remoteCleared = 'true'; logoutForm.requestSubmit(); }
 });
 if (document.querySelector('#remote-workspace')) import('./remote.js');
+if(document.querySelector('#life-ask'))void(async()=>{
+ const host=document.querySelector('#life-ask-history');let view,store,closed=false;
+ const stop=()=>{closed=true;view?.close();store?.close();host.replaceChildren();};
+ window.addEventListener('pagehide',stop);document.querySelector('form[action$="/logout"]')?.addEventListener('submit',stop);
+ try{
+  const [{mountLifeAsk},{BrowserDestinationStore},identity]=await Promise.all([import('./life-ask.js'),import('./remote-client.js'),appRequest('?view=bootstrap')]);
+  if(closed)return;
+  store=new BrowserDestinationStore(document.body.dataset.browserAccount);
+  view=mountLifeAsk(host,{accountID:identity.accountId,destinations:()=>store.list(),request:ownerRequest,escape:escapeHTML,open:(hostID,chatID)=>{location.assign('/remote?'+new URLSearchParams({view:'chats',host:hostID,chat:chatID}));}});
+  document.querySelector('#life-ask-refresh').onclick=()=>view.refresh();
+ }catch{if(!closed)host.textContent='Could not load Life Ask. Sign in again or refresh.';}
+})();
 
 const home=document.querySelector('#proteus-home');
 if(home){const value=JSON.parse(document.querySelector('#proteus-home-data').textContent);mountHome(home,value,{markdown:(target,source)=>mountHomeMarkdown(target,source,{allowExternalImages:false}),navigate:page=>{location.href=({chats:'/remote?view=chats',schedules:'/remote?view=schedules',team:'/team',life:'/garage'})[page];}});}

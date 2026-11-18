@@ -105,6 +105,82 @@ struct NativeHistorySiteIcon: View {
     }
 }
 
+/// N11-20: one-line address editor. Long URLs scroll horizontally inside the native field instead
+/// of wrapping into a tall view whose re-layout on every keystroke froze the screen. Return
+/// submits (accepting a displayed completion), pasted line breaks are removed, and UIKit keeps
+/// native selection, marked text and caret behavior.
+struct NativeSingleLineAddressEditor: UIViewRepresentable {
+    @Binding var text: String
+    var focused: Binding<Bool>
+    var sites: [JSON]
+    var submit: () -> Void
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+    func makeUIView(context: Context) -> UITextField {
+        let field = UITextField(); field.delegate = context.coordinator
+        field.font = .systemFont(ofSize: 14); field.textColor = .label; field.borderStyle = .none; field.backgroundColor = .clear
+        field.spellCheckingType = .no; field.smartQuotesType = .no; field.smartDashesType = .no; field.smartInsertDeleteType = .no
+        field.keyboardType = .URL; field.returnKeyType = .go; field.autocapitalizationType = .none; field.autocorrectionType = .no
+        field.clearButtonMode = .whileEditing; field.placeholder = "Search or enter URL"
+        field.setContentHuggingPriority(.defaultLow, for: .horizontal); field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        field.addTarget(context.coordinator, action: #selector(Coordinator.changed(_:)), for: .editingChanged)
+        field.accessibilityIdentifier = "browser-address-editor"
+        return field
+    }
+    func updateUIView(_ field: UITextField, context: Context) {
+        context.coordinator.parent = self
+        if field.text != text, field.markedTextRange == nil { field.text = text }
+        if focused.wrappedValue, !field.isFirstResponder { DispatchQueue.main.async { [weak field, weak coordinator = context.coordinator] in if coordinator?.parent.focused.wrappedValue == true, field?.window != nil { field?.becomeFirstResponder(); field?.selectAll(nil) } } }
+        if !focused.wrappedValue, field.isFirstResponder { DispatchQueue.main.async { [weak field, weak coordinator = context.coordinator] in if coordinator?.parent.focused.wrappedValue == false { field?.resignFirstResponder() } } }
+    }
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: UITextField, context: Context) -> CGSize? {
+        CGSize(width: proposal.width ?? 200, height: 22)
+    }
+    final class Coordinator: NSObject, UITextFieldDelegate {
+        var parent: NativeSingleLineAddressEditor
+        init(_ parent: NativeSingleLineAddressEditor) { self.parent = parent }
+        @objc func changed(_ field: UITextField) { parent.text = field.text ?? "" }
+        func textFieldDidBeginEditing(_ field: UITextField) { parent.focused.wrappedValue = true }
+        func textFieldDidEndEditing(_ field: UITextField) { parent.focused.wrappedValue = false }
+        func textFieldShouldReturn(_ field: UITextField) -> Bool {
+            guard field.markedTextRange == nil else { return false }
+            let value = field.text ?? ""
+            if let selection = field.selectedTextRange, field.offset(from: selection.start, to: selection.end) == 0, field.offset(from: selection.end, to: field.endOfDocument) == 0, let completion = NativeAddressCompletion.match(value, sites: parent.sites) { parent.text = completion.url }
+            parent.submit(); return false
+        }
+        func textField(_ field: UITextField, shouldChangeCharactersIn range: NSRange, replacementString value: String) -> Bool {
+            guard value.rangeOfCharacter(from: .newlines) != nil else { return true }
+            let cleaned = value.components(separatedBy: .newlines).joined()
+            let current = (field.text ?? "") as NSString
+            field.text = current.replacingCharacters(in: range, with: cleaned)
+            if let position = field.position(from: field.beginningOfDocument, offset: range.location + cleaned.utf16.count) { field.selectedTextRange = field.textRange(from: position, to: position) }
+            parent.text = field.text ?? ""; return false
+        }
+    }
+}
+
+/// Idle address display. A URL that fits keeps the horizontal tab-switch swipe; a longer URL
+/// scrolls horizontally so all of it is reachable. A tap starts editing.
+struct NativeScrollingAddressLabel: View {
+    let text: String
+    let edit: () -> Void
+    var swipe: ((DragGesture.Value) -> Void)? = nil
+    private var label: some View {
+        Text(text.isEmpty ? "Search or enter URL" : text).lineLimit(1).fixedSize(horizontal: true, vertical: false)
+            .foregroundStyle(text.isEmpty ? .secondary : .primary).frame(minHeight: 20, alignment: .leading)
+            .contentShape(Rectangle()).onTapGesture(perform: edit)
+    }
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            label.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+                .highPriorityGesture(DragGesture(minimumDistance: 24).onEnded { value in swipe?(value) }, including: swipe == nil ? .subviews : .all)
+            ScrollView(.horizontal, showsIndicators: false) { label }
+        }
+        .frame(height: 20)
+        .accessibilityElement(children: .ignore).accessibilityLabel("Address").accessibilityValue(text).accessibilityHint("Double-tap to edit")
+        .accessibilityAddTraits(.isButton).accessibilityAction { edit() }
+    }
+}
+
 /// Wraps URL display by character while Return submits and pasted line breaks
 /// are removed. UIKit keeps native selection, marked text and caret behavior.
 struct NativeWrappingAddressEditor: UIViewRepresentable {

@@ -38,11 +38,11 @@ let nativeFixtureRelayOrigin = ""
     private var profilePreferenceKey: String { "proteus.browser-profiles." + SHA256.hash(data: Data(account.utf8)).map { String(format: "%02x", $0) }.joined() }
     var browserProfiles: [JSON] { [.object(["id": .string("default"), "name": .string("Default")])] + (profilesEnabled && profilesVerified ? snapshot["browserProfiles"].array.filter { UUID(uuidString: $0["id"].string) != nil } : []) }
     func profileAvailable(_ id: String) -> Bool { browserProfiles.contains { $0["id"].string == id } }
-    func browserLabel(_ tab: BrowserDescriptor) -> String { (tab.customTitle ?? (tab.title.isEmpty ? "New tab" : tab.title)) + " [" + profileName(tab.profileId) + "]" }
+    func browserLabel(_ tab: BrowserDescriptor) -> String { (tab.customTitle ?? (tab.title.isEmpty ? "New tab" : tab.title)) + " [" + (tab.incognito ? "Incognito" : profileName(tab.profileId)) + "]" }
     func profileName(_ id: String) -> String { browserProfiles.first { $0["id"].string == id }?["name"].string ?? "Unavailable profile" }
     static func persistentProfileStoreID(account: String, id: String) -> UUID { let bytes = Array(SHA256.hash(data: Data((account + "\0" + id).utf8)).prefix(16)); return UUID(uuid: (bytes[0],bytes[1],bytes[2],bytes[3],bytes[4],bytes[5],bytes[6],bytes[7],bytes[8],bytes[9],bytes[10],bytes[11],bytes[12],bytes[13],bytes[14],bytes[15])) }
 
-    @Published var browserTabs: [BrowserDescriptor] = [] { didSet { saveBrowsers(); contentTabsChanged() } }
+    @Published var browserTabs: [BrowserDescriptor] = [] { didSet { if oldValue.filter({ !$0.incognito }) != browserTabs.filter({ !$0.incognito }) { saveBrowsers(); contentTabsChanged() } } }
     @Published private(set) var currentTeamOwner: String?
     @Published var selectedBrowser: String?
     @Published var selectedMainBrowser: String?
@@ -140,12 +140,12 @@ let nativeFixtureRelayOrigin = ""
         let result = domainContext?.objectForKeyedSubscript("tldts")?.invokeMethod("getDomain", withArguments: [host, ["allowPrivateDomains": true]])
         return result?.isString == true ? result?.toString() : host
     }
-    private func pageScaleKey(_ tab: BrowserDescriptor, url: URL) -> String? { Self.pageScaleDomain(url).map { account + "|" + tab.profileId + "|" + $0 } }
+    private func pageScaleKey(_ tab: BrowserDescriptor, url: URL) -> String? { Self.pageScaleDomain(url).map { (tab.incognito ? "incognito:" + tab.id : account + "|" + tab.profileId) + "|" + $0 } }
     func pageScale(_ tab: BrowserDescriptor) -> Int { guard let url = tab.url.flatMap(URL.init(string:)), let key = pageScaleKey(tab, url: url) else { return 100 }; return pageScales[key] ?? 100 }
     func applyPageScale(_ id: String, url: URL) { guard let tab = browserTabs.first(where: { $0.id == id }), let key = pageScaleKey(tab, url: url) else { return }; browserViews[id]?.pageZoom = CGFloat(pageScales[key] ?? 100) / 100 }
     func adjustPageScale(_ id: String, delta: Int) {
         guard let tab = browserTabs.first(where: { $0.id == id }), let url = tab.url.flatMap(URL.init(string:)), let key = pageScaleKey(tab, url: url) else { return }
-        pageScales[key] = delta == 0 ? 100 : min(500, max(25, pageScale(tab) + delta)); UserDefaults.standard.set(pageScales, forKey: "proteus.page-scales.v1")
+        pageScales[key] = delta == 0 ? 100 : min(500, max(25, pageScale(tab) + delta)); if !tab.incognito { UserDefaults.standard.set(pageScales.filter { !$0.key.hasPrefix("incognito:") }, forKey: "proteus.page-scales.v1") }
         for row in browserTabs where row.url.flatMap(URL.init(string:)).flatMap({ pageScaleKey(row, url: $0) }) == key { if let url = row.url.flatMap(URL.init(string:)) { applyPageScale(row.id, url: url) } }
     }
     private func videoScript() -> String {
@@ -238,7 +238,48 @@ let nativeFixtureRelayOrigin = ""
         if let rule = browserArchiveRules.removeValue(forKey: id) { browserViews[id]?.configuration.userContentController.remove(rule) }
         browserViews[id]?.configuration.defaultWebpagePreferences.allowsContentJavaScript = true
     }
+    /// Background snapshot of the visible page: no 30-second throttle or settle delay, under a
+    /// background task. The same privacy guards apply (no login/OAuth/checkout or password fields).
+    func captureBrowserPageForBackground(_ id: String) {
+        guard !isIncognito(id) else { return }
+        guard browserSavedPages[id] == nil, let tab = browserTabs.first(where: { $0.id == id }),
+              let view = browserViews[id], !view.isLoading, view.url?.absoluteString == tab.url,
+              let text = tab.url, let url = URL(string: text), ["https", "http"].contains(url.scheme), url.user == nil, url.password == nil,
+              !url.path.lowercased().contains("login"), !url.path.lowercased().contains("oauth"), !url.path.lowercased().contains("checkout"), let key = sharedCacheKey() else { return }
+        let identity = pageCacheIdentity(tab), cache = pageCache, owner = account, work = NativeBackgroundWork.begin("Save Proteus page")
+        archiveCaptureTimes[id] = Date()
+        browserArchiveTasks[id]?.cancel()
+        browserArchiveTasks[id] = Task { @MainActor [weak self, weak view] in
+            defer { NativeBackgroundWork.end(work) }
+            do {
+                guard let self, let view, self.account == owner, self.browserViews[id] === view, view.url == url else { return }
+                let sensitive = try await view.evaluateJavaScript("!!document.querySelector('input[type=password],input[autocomplete*=cc-],input[autocomplete*=password]')") as? Bool
+                guard sensitive == false else { return }
+                let data = try await view.nativeArchiveData()
+                guard self.account == owner, view.url == url else { return }
+                try await cache.save(data, identity: identity, key: key)
+            } catch { /* Disposable cache failures never interrupt browsing. */ }
+        }
+    }
+    /// Hidden, non-Persist pages beyond the most recent `keep` are unloaded (descriptor, history and
+    /// reading position retained); the visible page is never unloaded here.
+    func trimHiddenBrowsersForBackground(keep: Int) {
+        let hidden = browserViews.filter { id, view in view.window == nil && browserTabs.first(where: { $0.id == id })?.persist != true }.map(\.key)
+        let retained = Set(hidden.sorted { (browserTouched[$0] ?? .distantPast) > (browserTouched[$1] ?? .distantPast) }.prefix(max(0, keep)))
+        for id in hidden where !retained.contains(id) { unload(id) }
+    }
+    /// The page's web content process ended (typically reclaimed in the background). A visible
+    /// page reopens from its saved snapshot or reloads at its reading position; a hidden one is
+    /// unloaded and loads when selected again.
+    func browserContentTerminated(_ id: String, view: WKWebView) {
+        guard browserViews[id] === view, let tab = browserTabs.first(where: { $0.id == id }) else { return }
+        guard view.window != nil, let text = tab.url, let url = URL(string: text) else { unload(id, force: true); return }
+        if tab.readingPosition?.url == tab.url { pendingBrowserPositions[id] = Date().addingTimeInterval(8) }
+        browserSavedPages[id] = nil
+        restoreBrowserPage(tab, view: view, url: url)
+    }
     func captureBrowserPage(_ id: String) {
+        guard !isIncognito(id) else { return }
         guard browserSavedPages[id] == nil, Date().timeIntervalSince(archiveCaptureTimes[id] ?? .distantPast) > 30,
               UIApplication.shared.applicationState == .active, let tab = browserTabs.first(where: { $0.id == id }),
               let view = browserViews[id], !view.isLoading, view.window != nil, view.url?.absoluteString == tab.url,
@@ -261,6 +302,7 @@ let nativeFixtureRelayOrigin = ""
         }
     }
     private func restoreBrowserPage(_ tab: BrowserDescriptor, view: WKWebView, url: URL) {
+        if tab.incognito { view.load(URLRequest(url: url)); return }
         let identity = pageCacheIdentity(tab), owner = account, key = sharedCacheKey(), cache = pageCache
         browserArchiveTasks[tab.id] = Task { @MainActor [weak self, weak view] in
             let saved = if let key { await cache.read(identity: identity, key: key) } else { nil as NativeBrowserPageSnapshot? }
@@ -288,7 +330,13 @@ let nativeFixtureRelayOrigin = ""
         let offset = view.scrollView.contentOffset
         guard offset.x.isFinite, offset.y.isFinite else { return }
         let position = BrowserReadingPosition(url: url, x: Double(max(0, offset.x)), y: Double(max(0, offset.y)))
-        if browserTabs[index].readingPosition != position { browserTabs[index].readingPosition = position }
+        if browserTabs[index].readingPosition != position {
+            // Reading position is a device-local cache field. Saving it must not
+            // rebuild and compare every shared tab scope after each scroll.
+            let wasApplying = applyingContent; applyingContent = true
+            browserTabs[index].readingPosition = position
+            applyingContent = wasApplying
+        }
     }
     func restoreBrowserReadingPosition(_ id: String) {
         guard let deadline = pendingBrowserPositions[id] else { return }
@@ -307,9 +355,13 @@ let nativeFixtureRelayOrigin = ""
         view.scrollView.observe(\.contentOffset, options: [.new]) { [weak self, weak view] _, _ in
             Task { @MainActor [weak self, weak view] in
                 guard let self, let view, self.browserViews[id] === view else { return }
-                self.browserPositionTasks[id]?.cancel()
-                self.browserPositionTasks[id] = Task { @MainActor [weak self] in
-                    do { try await Task.sleep(for: .milliseconds(300)) } catch { return }
+                guard self.browserPositionTasks[id] == nil else { return }
+                self.browserPositionTasks[id] = Task { @MainActor [weak self, weak view] in
+                    // One task per gesture, rather than cancelling/allocating a
+                    // pair of main-actor tasks for every display frame.
+                    repeat {
+                        do { try await Task.sleep(for: .milliseconds(300)) } catch { return }
+                    } while view?.scrollView.isDragging == true || view?.scrollView.isDecelerating == true
                     self?.captureBrowserReadingPosition(id)
                     self?.browserPositionTasks[id] = nil
                 }
@@ -342,7 +394,9 @@ let nativeFixtureRelayOrigin = ""
     private let cacheWriter: NativeSharedCacheWriter
     private let sharedCacheRoot: URL
     private let sharedCacheKey: () -> String?
-    init(cacheWriter: NativeSharedCacheWriter = .shared, cacheRoot: URL? = nil, cacheKey: @escaping () -> String? = BrowserCacheKeychain.key, maintenanceArguments: [String] = ProcessInfo.processInfo.arguments) {
+    let browserClipboard: NativeBrowserClipboard
+    init(cacheWriter: NativeSharedCacheWriter = .shared, cacheRoot: URL? = nil, cacheKey: @escaping () -> String? = BrowserCacheKeychain.key, maintenanceArguments: [String] = ProcessInfo.processInfo.arguments, browserClipboard: NativeBrowserClipboard? = nil) {
+        self.browserClipboard = browserClipboard ?? .shared
         self.cacheWriter = cacheWriter
         if let cacheRoot { contentEvidenceURL = cacheRoot.appendingPathComponent("proteus-tab-sync-evidence.json") }
         chatPositionNamespace = cacheRoot?.path ?? ""
@@ -456,6 +510,7 @@ let nativeFixtureRelayOrigin = ""
     }
     func hasPendingOpen(_ id: String, in scope: String) -> Bool { contentPending[scope]?.contains { ["open", "reopen"].contains($0["action"].string) && $0["explicitReopen"].bool && $0["tab"]["id"].string == id } == true }
     private func recordContentClose(_ id: String, scope: String) {
+        guard !isIncognito(id) else { return }
         guard scope != "main", !scope.hasPrefix("main:") else { return }
         guard !applyingContent, !restoring else { return }
         let parts = scope.split(separator: ":", maxSplits: 2).map(String.init)
@@ -468,7 +523,7 @@ let nativeFixtureRelayOrigin = ""
         Task { await self.flushContentTabs(scope) }
     }
     func localContentTabs(_ scope: String) -> [JSON] {
-        let scopedBrowsers = tabs(in: scope)
+        let scopedBrowsers = tabs(in: scope).filter { !$0.incognito }
         var priorByID: [String: JSON] = [:]
         for prior in contentSnapshots[scope]?["tabs"].array ?? [] where priorByID[prior["id"].string] == nil { priorByID[prior["id"].string] = prior }
         let instant = ISO8601DateFormatter(); instant.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -501,20 +556,22 @@ let nativeFixtureRelayOrigin = ""
         for (scope, snapshot) in contentSnapshots {
             guard contentHosts[scope] != nil, !scope.hasPrefix("main:") else { continue }
             let prior = snapshot["tabs"].array
-            let current = localContentTabs(scope).filter { tab in tab["type"].string != "browser" || prior.contains { $0["id"] == tab["id"] } }
+            let priorByID = Dictionary(prior.map { ($0["id"].string, $0) }, uniquingKeysWith: { first, _ in first })
+            let current = localContentTabs(scope).filter { tab in tab["type"].string != "browser" || priorByID[tab["id"].string] != nil }
+            let currentIDs = Set(current.map { $0["id"].string })
             var operations: [JSON] = []
-            for tab in current where !prior.contains(tab) {
+            for tab in current where priorByID[tab["id"].string] != tab {
                 // Explicit user creation owns recordContentOpen. A metadata/KVO
                 // update must never reopen an orphan from an old device cache.
-                if tab["type"].string == "browser", !prior.contains(where: { $0["id"] == tab["id"] }) { continue }
+                if tab["type"].string == "browser", priorByID[tab["id"].string] == nil { continue }
                 var value = tab.object
-                if let old = prior.first(where: { $0["id"] == tab["id"] }), tab["type"].string == "browser" {
+                if let old = priorByID[tab["id"].string], tab["type"].string == "browser" {
                     value["url"] = old["url"]; value["history"] = old["history"]
                     if JSON.object(value) == old { continue }
                 }
-                operations.append(.object(["action": .string("open"), "updateOnly": .bool(prior.contains { $0["id"] == tab["id"] }), "tab": .object(value)]))
+                operations.append(.object(["action": .string("open"), "updateOnly": .bool(priorByID[tab["id"].string] != nil), "tab": .object(value)]))
             }
-            if prior.allSatisfy({ old in current.contains { $0["id"] == old["id"] } }), current.map({ $0["id"] }) != prior.map({ $0["id"] }) { operations.append(.object(["action": .string("reorder"), "ids": .array(current.map { $0["id"] })])) }
+            if prior.allSatisfy({ currentIDs.contains($0["id"].string) }), current.map({ $0["id"] }) != prior.map({ $0["id"] }) { operations.append(.object(["action": .string("reorder"), "ids": .array(current.map { $0["id"] })])) }
             guard !operations.isEmpty else { continue }
             let pending = contentPending[scope] ?? []
             contentPending[scope] = pending + operations.filter { !pending.contains($0) }; saveDocumentTabs()
@@ -530,7 +587,7 @@ let nativeFixtureRelayOrigin = ""
         if Self.isOrganizationalScope(scope), let config = contentSync[scope] {
             NativeWorkspaceNavigation.adoptOwnerChats(response["tabs"].array, navigationKey: config.kind + "-navigation:" + config.id, remote: config.remote)
         }
-        let cachedBrowsers = tabs(in: scope)
+        let cachedBrowsers = tabs(in: scope).filter { !$0.incognito }
         let cachedIDs = cachedBrowsers.map { $0.contentTabId ?? $0.id }
         let ownerIDs = response["tabs"].array.filter { $0["type"].string == "browser" && $0["setup"] == .null }.map { $0["id"].string }
         if contentSnapshots[scope] == response && localContentTabs(scope) == response["tabs"].array,
@@ -541,7 +598,7 @@ let nativeFixtureRelayOrigin = ""
         var seen = Set<String>()
         let incoming = response["tabs"].array.filter { !$0["id"].string.isEmpty && seen.insert($0["id"].string).inserted }
         let ids = Set(incoming.filter { $0["type"].string == "browser" && $0["setup"] == .null }.map { $0["id"].string })
-        let existingBrowsers = tabs(in: scope)
+        let existingBrowsers = tabs(in: scope).filter { !$0.incognito }
         let privateLocal = existingBrowsers.filter { $0.url != nil && Self.safeURL($0.url ?? "") == nil }
         for old in existingBrowsers where !ids.contains(old.contentTabId ?? old.id) { unload(old.id, force: true); unloadedBrowsers.remove(old.id) }
         for tab in incoming where tab["type"].string == "browser" && tab["setup"] == .null {
@@ -554,7 +611,8 @@ let nativeFixtureRelayOrigin = ""
             if let existing = existingBrowsers.first(where: { ($0.contentTabId ?? $0.id) == tab["id"].string }), !privateLocal.contains(existing), !explicitBrowserNavigations.contains(existing.id), browserViews[existing.id]?.url.map({ Self.safeURL($0.absoluteString) == nil }) != true, existing.url ?? "" != tab["url"].string, let url = Self.safeURL(tab["url"].string) { if profileAvailable(existing.profileId) && (tab["profileId"].string.isEmpty ? "default" : tab["profileId"].string) == existing.profileId, let view = browserViews[existing.id] { mirroredBrowserLoads.insert(existing.id); pendingBrowserLoads[existing.id] = url.absoluteString; view.load(URLRequest(url: url)) } }
         }
         let localIDs = Set(existingBrowsers.map(\.id))
-        var nextBrowsers = browserTabs.filter { !localIDs.contains($0.id) }
+        let privatePositions = browserTabs.enumerated().filter { $0.element.incognito }
+        var nextBrowsers = browserTabs.filter { !localIDs.contains($0.id) && !$0.incognito }
         for tab in incoming where tab["type"].string == "browser" && tab["setup"] == .null {
             let existing = existingBrowsers.first { ($0.contentTabId ?? $0.id) == tab["id"].string }
             // Keep a live login flow local while retaining its full URLs in browsing history.
@@ -595,6 +653,7 @@ let nativeFixtureRelayOrigin = ""
                 history = BrowserTabHistory(entries: retainedHistory.entries, index: selected, currentEntryId: retainedHistory.entries[selected].id, revision: retainedHistory.revision)
             } else { history = Self.decodeBrowserHistory(ownerHistory) ?? retainedHistory }
             var descriptor = BrowserDescriptor(id: localID, title: title, url: address, scope: scope.hasPrefix("main:") ? "main" : scope.hasPrefix("team:") ? "team" : scope, customTitle: customTitle.isEmpty ? nil : customTitle, contentTabId: tab["id"].string, history: history, profileId: profile)
+            if existing?.profileId == profile, existing?.readingPosition?.url == address { descriptor.readingPosition = existing?.readingPosition }
             descriptor.hidden = tab["hidden"].bool; descriptor.persist = tab["persist"].bool; descriptor.openedAt = existing?.openedAt ?? (tab["openedAt"].string.isEmpty ? nil : tab["openedAt"].string)
             descriptor.lastActivityAt = tab["lastActivityAt"].string.isEmpty ? existing?.lastActivityAt : tab["lastActivityAt"].string
             let incomingTouch = tab["lastTouchedAt"].string
@@ -603,6 +662,7 @@ let nativeFixtureRelayOrigin = ""
             if existing?.profileId != descriptor.profileId { unload(localID, force: true) }; nextBrowsers.append(descriptor)
             if descriptor.url != nil && !isBrowserLoaded(descriptor.id) && !preservesLocalNavigation { unloadedBrowsers.insert(descriptor.id) }
         }
+        for entry in privatePositions { nextBrowsers.insert(entry.element, at: min(entry.offset, nextBrowsers.count)) }
         // Publish one coherent list so a selected child never temporarily disappears.
         if browserTabs != nextBrowsers { browserTabs = nextBrowsers }
         for old in existingBrowsers where !nextBrowsers.contains(where: { $0.id == old.id }) {
@@ -1106,6 +1166,7 @@ let nativeFixtureRelayOrigin = ""
     var lists: [JSON] { snapshot["teamLists"].array }
     func reset(for identity: String) {
         guard account != identity else { return }
+        closeIncognitoBrowsers()
         sidebarWorkspaces = []; sidebarProjects = []; sidebarOtherComputers = false; expandedQuestionQueues = []
         saveBrowsers()
         let cacheFailure = flushCachedState()
@@ -1145,18 +1206,21 @@ let nativeFixtureRelayOrigin = ""
         guard let key = descriptorCacheKey else { return }
         // The loaded-page budget is separate from saved tab identity. Taking a
         // suffix here silently discarded older tabs (including the selected one).
-        let retained = browserTabs
-        var selections = scopedSelection.mapValues(JSON.string)
-        if let selectedBrowser { selections["team"] = .string(selectedBrowser) }
-        if let selectedMainBrowser { selections["main"] = .string(selectedMainBrowser) }
+        let retained = browserTabs.filter { !$0.incognito }
+        var selections = scopedSelection.filter { !isIncognito($0.value) }.mapValues(JSON.string)
+        if let selectedBrowser, !isIncognito(selectedBrowser) { selections["team"] = .string(selectedBrowser) }
+        if let selectedMainBrowser, !isIncognito(selectedMainBrowser) { selections["main"] = .string(selectedMainBrowser) }
         NativeDescriptorCacheWriter.shared.save(tabs: retained, selections: selections, snapshot: snapshot, key: key, account: account, url: cacheURL)
     }
 
     private var shellCacheURL: URL { FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Proteus/navigation.enc") }
     func saveShellNavigation(_ value: JSON) {
+        var clean = value.object
+        clean["tabs"] = .array(value["tabs"].array.filter { !isIncognito($0["id"].string) })
+        for field in ["selected", "phoneCurrentID"] where isIncognito(value[field].string) { clean[field] = .string("") }
         if descriptorCacheKey == nil { descriptorCacheKey = BrowserCacheKeychain.key() }
         guard let key = descriptorCacheKey else { return }
-        NativeDescriptorCacheWriter.shared.saveNavigation(value, key: key, url: shellCacheURL)
+        NativeDescriptorCacheWriter.shared.saveNavigation(.object(clean), key: key, url: shellCacheURL)
     }
     func loadShellNavigation() -> JSON {
         guard let key = BrowserCacheKeychain.key(), let data = try? Data(contentsOf: shellCacheURL) else { return .null }
@@ -1193,7 +1257,8 @@ let nativeFixtureRelayOrigin = ""
     }
     @discardableResult private func saveDocumentTabs() -> NativeCacheWriteReceipt {
         let tabs = Array(documentTabs.suffix(100)), conflicts = browserConflicts
-        let fields: [String: JSON] = ["legacyContentReview": .object(legacyContentReview), "contentSnapshots": .object(contentSnapshots), "contentPending": .object(contentPending.mapValues(JSON.array)), "contentRequests": .object(contentRequests), "contentHosts": .object(contentHosts.mapValues(JSON.string)), "selected": .object(chatSelectedChildren.mapValues(JSON.string)), "order": .object(chatChildOrder.mapValues { .array($0.map(JSON.string)) })]
+        let privateIDs = Set(browserTabs.filter(\.incognito).map(\.id))
+        let fields: [String: JSON] = ["legacyContentReview": .object(legacyContentReview), "contentSnapshots": .object(contentSnapshots), "contentPending": .object(contentPending.mapValues(JSON.array)), "contentRequests": .object(contentRequests), "contentHosts": .object(contentHosts.mapValues(JSON.string)), "selected": .object(chatSelectedChildren.filter { !privateIDs.contains($0.value) }.mapValues(JSON.string)), "order": .object(chatChildOrder.mapValues { .array($0.filter { !privateIDs.contains($0) }.map(JSON.string)) })]
         return saveSharedCache(url: documentCacheURL, aad: "proteus-mobile-document-tabs-v1") {
             var payload = fields
             payload["tabs"] = try JSONDecoder().decode(JSON.self, from: JSONEncoder().encode(tabs))
@@ -1211,6 +1276,28 @@ let nativeFixtureRelayOrigin = ""
             Task { @MainActor [weak self] in self?.error = "Local tab/history changes could not be saved: " + message }
         })
     }
+    /// N11-24: leaving the foreground must not block the main thread. iOS kills an app whose
+    /// scene update exceeds ~10 seconds (0x8BADF00D); waiting here for large encrypted tab/history
+    /// writes did exactly that. Snapshots are scheduled synchronously; the queued writes finish on
+    /// their serial queues under a background task, preserving their order.
+    func persistForBackground(releasingMemory: Bool = true) {
+        for id in browserViews.keys { captureBrowserReadingPosition(id) }
+        flushDocumentScrollPositions()
+        // N11-25: reopening should show the page the user left, immediately. Snapshot the visible
+        // page now (a cold launch shows it while the live page loads), and release hidden ordinary
+        // pages beyond the two most recently used so iOS keeps this app and that page resident.
+        if releasingMemory {
+            for (id, view) in browserViews where view.window != nil { captureBrowserPageForBackground(id) }
+            trimHiddenBrowsersForBackground(keep: 2)
+        }
+        let task = NativeBackgroundWork.begin("Save Proteus tabs")
+        NativeDescriptorCacheWriter.shared.flushAsync {
+            self.cacheWriter.flushAsync { failure in
+                if let failure { Task { @MainActor [weak self] in self?.error = "Local tab/history changes could not be saved: " + failure.localizedDescription } }
+                NativeBackgroundWork.end(task)
+            }
+        }
+    }
     @discardableResult func flushCachedState() -> String? {
         for id in browserViews.keys { captureBrowserReadingPosition(id) }
         flushDocumentScrollPositions()
@@ -1218,6 +1305,7 @@ let nativeFixtureRelayOrigin = ""
         do { try cacheWriter.flush(); return nil } catch { let message = "Local tab/history changes could not be saved: " + error.localizedDescription; self.error = message; return message }
     }
     func contentDescriptorVisible(_ id: String, in scope: String) -> Bool {
+        if isIncognito(id) { return true }
         guard let snapshot = contentSnapshots[scope] else { return true }
         return snapshot["tabs"].array.contains { $0["id"].string == id && !$0["hidden"].bool && !$0["navigationClosed"].bool }
     }
@@ -1414,6 +1502,7 @@ let nativeFixtureRelayOrigin = ""
         return url
     }
     nonisolated static func retainedDescriptor(_ tab: BrowserDescriptor) -> BrowserDescriptor? {
+        guard !tab.incognito else { return nil }
         guard let text = tab.url else { return tab }
         guard let url = historyURL(text) else { return nil }
         var retained = tab; retained.url = url.absoluteString; retained.history = safeBrowserHistory(tab.history); return retained
@@ -1469,7 +1558,7 @@ let nativeFixtureRelayOrigin = ""
     }
     func browserRecentVisits(host: String?, profile: String) -> [JSON] {
         let cached = host.map { historyCache[$0 + "|" + profile] ?? [] } ?? []
-        let local = browserTabs.filter { $0.profileId == profile && (host == nil || $0.ownerHostId == host || $0.ownerHostId == nil && profile == "default") }.flatMap { tab in
+        let local = browserTabs.filter { !$0.incognito && $0.profileId == profile && (host == nil || $0.ownerHostId == host || $0.ownerHostId == nil && profile == "default") }.flatMap { tab in
             (tab.history?.entries ?? []).reversed().compactMap { entry -> JSON? in
                 guard let url = Self.safeURL(entry.url) else { return nil }
                 return .object(["id": .string("local:" + tab.id + ":" + entry.id), "url": .string(url.absoluteString), "title": .string(entry.title), "local": .bool(true)])
@@ -1480,7 +1569,7 @@ let nativeFixtureRelayOrigin = ""
     var recentHistory: [JSON] {
         // The account snapshot remains authoritative for shared visits. Existing local
         // default-profile backstacks provide useful recent sites before refresh/sign-in.
-        let local = browserTabs.filter { $0.profileId == "default" }.flatMap { tab in
+        let local = browserTabs.filter { !$0.incognito && $0.profileId == "default" }.flatMap { tab in
             (tab.history?.entries ?? []).reversed().compactMap { entry -> JSON? in
                 guard let url = Self.historyURL(entry.url) else { return nil }
                 return .object(["id": .string("local:" + tab.id + ":" + url.absoluteString), "url": .string(url.absoluteString), "title": .string(entry.title), "deviceName": .string("This device"), "local": .bool(true)])
@@ -1504,6 +1593,7 @@ let nativeFixtureRelayOrigin = ""
         return true
     }
     func download(_ url: URL, in webView: WKWebView, saveAs: Bool = true) {
+        guard !browserTabs.contains(where: { $0.incognito && browserViews[$0.id] === webView }) else { downloadError = "Open this download in an ordinary tab to save it."; return }
         guard ["https", "http"].contains(url.scheme), url.user == nil, url.password == nil else { return }
         guard downloads.isEmpty, exportFile == nil else { downloadError = "Finish the current download or file export first."; return }
         let transfer = NativeLinkDownload(shared: self, saveAs: saveAs)
@@ -1517,7 +1607,7 @@ let nativeFixtureRelayOrigin = ""
         return browserTabs.filter { $0.scope == scope }
     }
     private func recordContentOpen(_ tab: BrowserDescriptor) {
-        guard tab.scope != "main" else { return }
+        guard !tab.incognito, tab.scope != "main" else { return }
         let scope = syncScope(tab), parts = scope.split(separator: ":", maxSplits: 2).map(String.init)
         guard !applyingContent, !restoring, parts.count >= 2, UUID(uuidString: parts[1]) != nil else { return }
         contentHosts[scope] = parts[1]
@@ -1549,9 +1639,10 @@ let nativeFixtureRelayOrigin = ""
     func transferBrowser(_ id: String, to scope: String, copy: Bool, ownerHostID: String? = nil) {
         guard let index = browserTabs.firstIndex(where: { $0.id == id }) else { return }
         let tab = browserTabs[index]
+        guard !tab.incognito else { error = "Incognito tabs stay on this device."; return }
         let owner = ownerHostID ?? contentHosts[scope] ?? tab.ownerHostId
         if copy || owner != tab.ownerHostId {
-            guard let created = open(nil, title: tab.title, scope: scope, profileId: tab.profileId) else { return }
+            guard let created = open(nil, title: tab.title, scope: scope, profileId: tab.profileId, incognito: tab.incognito) else { return }
             assignBrowserOwner(created, host: owner); if let url = tab.url.flatMap(URL.init(string:)) { _ = navigate(url, in: created) }
             if !copy { close(id) }
         } else {
@@ -1598,7 +1689,7 @@ let nativeFixtureRelayOrigin = ""
     func selectChatChild(_ id: String, in scope: String) { guard scope.hasPrefix("chat:") && (id == "chat" || tabs(in: scope).contains(where: { $0.id == id })) else { return }; scopedSelection[scope] = id; saveBrowsers() }
     func select(_ id: String, in scope: String, activateMainBrowser: Bool = true) { guard browserTabs.contains(where: { $0.id == id && $0.scope == scope }) else { return }; if scope == "main" { selectedMainBrowser = id; if activateMainBrowser { mainBrowserSelectionRequest = MainBrowserSelectionRequest(tabID: id) } } else if scope == "team" { selectedBrowser = id; if let host = currentTeamOwner { scopedSelection["team:" + host] = id } } else { scopedSelection[scope] = id }; if !unloadedBrowsers.contains(id) { touch(id) }; saveBrowsers() }
     func touch(_ id: String) { scheduleBrowserPreview(id); browserTouched[id] = Date(); if let index = browserTabs.firstIndex(where: { $0.id == id }) { browserTabs[index].lastTouchedAt = ISO8601DateFormatter().string(from: Date()) }; pruneBrowsers() }
-    func persistBrowser(_ id: String, enabled: Bool) { guard let index = browserTabs.firstIndex(where: { $0.id == id }) else { return }; browserTabs[index].persist = enabled; if enabled { reload(id); _ = webView(browserTabs[index]) }; saveBrowsers() }
+    func persistBrowser(_ id: String, enabled: Bool) { guard !isIncognito(id), let index = browserTabs.firstIndex(where: { $0.id == id }) else { return }; browserTabs[index].persist = enabled; if enabled { reload(id); _ = webView(browserTabs[index]) }; saveBrowsers() }
     func pruneBrowsers(now: Date = Date()) {
         let recent = Set(browserTouched.filter { item in browserTabs.first(where: { $0.id == item.key })?.persist != true }.sorted { $0.value > $1.value }.prefix(max(1, min(256, loadedTabLimit))).map(\.key))
         for id in Array(browserViews.keys) where browserTabs.first(where: { $0.id == id })?.persist != true && !recent.contains(id) && now.timeIntervalSince(browserTouched[id] ?? .distantPast) >= 3600 { unload(id) }
@@ -1612,14 +1703,25 @@ let nativeFixtureRelayOrigin = ""
             unload(id)
         }
         browserPreviews = [:]
-        flushCachedState()
+        // Under memory pressure the main thread must not wait for cache writes (N11-24).
+        persistForBackground()
     }
     func takeBrowserInsertionOrigin(_ id: String) -> String? { insertionOrigins.removeValue(forKey: id) }
-    @discardableResult func open(_ url: URL?, title: String = "New tab", scope: String = "team", profileId: String = "default", afterSourceID: String? = nil, background: Bool = false) -> String? {
+    func isIncognito(_ id: String) -> Bool { let key = id.hasPrefix("browser:") ? String(id.dropFirst(8)) : id; return browserTabs.first(where: { $0.id == key || $0.contentTabId == key })?.incognito == true }
+    @discardableResult func duplicateBrowser(_ id: String, incognito: Bool = false) -> String? {
+        guard let tab = browserTabs.first(where: { $0.id == id }) else { return nil }
+        return open(tab.url.flatMap(URL.init(string:)), title: tab.title, scope: tab.scope, profileId: incognito ? "default" : tab.profileId, afterSourceID: id, incognito: incognito || tab.incognito)
+    }
+    func makeBlankIncognito(_ id: String) {
+        guard let tab = browserTabs.first(where: { $0.id == id }), tab.url?.isEmpty != false else { return }
+        if open(nil, scope: tab.scope, afterSourceID: id, incognito: true) != nil { close(id) }
+    }
+    @discardableResult func open(_ url: URL?, title: String = "New tab", scope: String = "team", profileId: String = "default", afterSourceID: String? = nil, background: Bool = false, incognito: Bool = false) -> String? {
         guard ownerProjectResets[scope] == nil else { error = "Wait for this project to restore from its computer before opening a new tab."; return nil }
         guard profileAvailable(profileId) else { error = "Sign in and refresh browser profiles before opening this profile."; return nil }
         let previousSelection = selected(in: scope)
         var tab = BrowserDescriptor(id: UUID().uuidString, title: title, url: nil, scope: scope, profileId: profileId)
+        tab.incognito = incognito
         let scopeParts = scope.split(separator: ":", maxSplits: 2).map(String.init)
         if scopeParts.count == 3, UUID(uuidString: scopeParts[1]) != nil { tab.ownerHostId = scopeParts[1] }
         tab.openedAt = ISO8601DateFormatter().string(from: Date()); tab.lastTouchedAt = tab.openedAt; tab.lastActivityAt = tab.openedAt
@@ -1690,6 +1792,7 @@ let nativeFixtureRelayOrigin = ""
         recordContentOpen(browserTabs[index])
     }
     private func queueHistoryVisit(_ tab: BrowserDescriptor, operation: JSON) {
+        guard !tab.incognito else { return }
         guard let host = contentHosts[tab.scope] ?? tab.ownerHostId, let url = Self.historyURL(operation["url"].string) else { return }
         let visit: JSON = .object(["eventId": operation["operationId"], "url": .string(url.absoluteString), "title": operation["title"], "visitedAt": operation["visitedAt"], "sourceHostId": .string(host), "profileId": .string(tab.profileId), "tabId": .string(tab.contentTabId ?? tab.id), "entryId": operation["entryId"], "deviceId": .string(Self.historyDeviceID()), "ownerHostId": .string(host)])
         historyOutbox.append(visit); saveHistoryCache()
@@ -1753,11 +1856,13 @@ let nativeFixtureRelayOrigin = ""
         } catch { historyStatus[host] = "Cached history · " + error.localizedDescription; return .null }
     }
     func browserFavicon(_ id: String) -> UIImage? {
+        if isIncognito(id) { return UIImage(systemName: "eye.slash") }
         if let icon = browserFavicons[id] { return icon }
         guard let tab = browserTabs.first(where: { $0.contentTabId == id }) else { return nil }
         return browserFavicons[tab.id]
     }
     func captureBrowserFavicon(_ id: String) async {
+        guard !isIncognito(id) else { return }
         guard let view = browserViews[id], !view.isLoading, let page = view.url, Self.safeURL(page.absoluteString) != nil, Date().timeIntervalSince(faviconAttempts[id] ?? .distantPast) > 300 else { return }
         faviconAttempts[id] = Date()
         do {
@@ -1774,15 +1879,22 @@ let nativeFixtureRelayOrigin = ""
             let keep = Set(browserTouched.sorted { $0.value > $1.value }.prefix(100).map(\.key) + [id]); browserFavicons = browserFavicons.filter { keep.contains($0.key) }
         } catch { /* The local globe remains the accessible fallback. */ }
     }
-    private func thumbnailKey(_ tab: BrowserDescriptor) -> String { "browser:" + account + ":" + tab.profileId + ":" + (tab.ownerHostId ?? "local") + ":" + (tab.contentTabId ?? tab.id) }
+    // N11-29: a thumbnail belongs to the page it was taken from. Keying by tab identity alone
+    // showed an earlier page's snapshot after the tab navigated elsewhere.
+    private func thumbnailKey(_ tab: BrowserDescriptor) -> String { "browser:" + account + ":" + tab.profileId + ":" + (tab.ownerHostId ?? "local") + ":" + (tab.contentTabId ?? tab.id) + ":" + (tab.url ?? "") }
+    private var browserPreviewURLs: [String: String] = [:]
     func browserPreview(_ id: String) -> UIImage? {
-        if let cached = browserPreviews[id] { return cached }
+        guard !isIncognito(id) else { return nil }
+        if let cached = browserPreviews[id] {
+            if browserPreviewURLs[id] == browserTabs.first(where: { $0.id == id })?.url { return cached }
+        }
         guard let tab = browserTabs.first(where: { $0.id == id }), profileAvailable(tab.profileId) else { return nil }
         return NativeThumbnailCache.load(thumbnailKey(tab))
     }
     private var previewCaptureTimes: [String: Date] = [:]
     private var previewCaptureTasks: [String: Task<Void, Never>] = [:]
     func scheduleBrowserPreview(_ id: String) {
+        guard !isIncognito(id) else { return }
         guard Date().timeIntervalSince(previewCaptureTimes[id] ?? .distantPast) > 5 else { return }
         previewCaptureTasks[id]?.cancel()
         previewCaptureTasks[id] = Task { @MainActor [weak self] in
@@ -1792,6 +1904,7 @@ let nativeFixtureRelayOrigin = ""
         }
     }
     func captureBrowserPreview(_ id: String) {
+        guard !isIncognito(id) else { return }
         guard UIApplication.shared.applicationState == .active, Date().timeIntervalSince(previewCaptureTimes[id] ?? .distantPast) >= 5, let tab = browserTabs.first(where: { $0.id == id }), profileAvailable(tab.profileId), let view = browserViews[id], view.window != nil, !view.isLoading, !view.scrollView.isDragging, !view.scrollView.isDecelerating, !view.scrollView.isZooming, let url = view.url, Self.safeURL(url.absoluteString) != nil else { return }
         previewCaptureTimes[id] = Date()
         let key = thumbnailKey(tab), identity = account
@@ -1799,10 +1912,10 @@ let nativeFixtureRelayOrigin = ""
         view.takeSnapshot(with: config) { [weak self, weak view] image, _ in
             Task { @MainActor in
                 guard let self, let view, self.account == identity, self.browserViews[id] === view, view.url == url, let image else { return }
-                self.previewCaptureTimes[id] = Date(); self.browserPreviews[id] = image
+                self.previewCaptureTimes[id] = Date(); self.browserPreviews[id] = image; self.browserPreviewURLs[id] = url.absoluteString
                 NativeThumbnailCache.save(image, key: key)
                 let keep = Set(self.browserTouched.sorted { $0.value > $1.value }.prefix(32).map(\.key) + [id])
-                self.browserPreviews = self.browserPreviews.filter { keep.contains($0.key) }
+                self.browserPreviews = self.browserPreviews.filter { keep.contains($0.key) }; self.browserPreviewURLs = self.browserPreviewURLs.filter { keep.contains($0.key) }
             }
         }
     }
@@ -1859,6 +1972,7 @@ let nativeFixtureRelayOrigin = ""
     /// Keep an image of the page being left, keyed by its saved history entry, so an edge
     /// swipe back or forward shows that page under the sliding one (Safari's page image).
     private func rememberLeavingPage(_ id: String, toward url: URL) {
+        guard !isIncognito(id) else { return }
         guard NativeDesignPreview.enabled, let view = browserViews[id], view.window != nil, view.bounds.width > 20, view.url?.absoluteString != url.absoluteString,
               let history = browserTabs.first(where: { $0.id == id })?.history, history.entries.indices.contains(history.index) else { return }
         let key = "page:" + history.entries[history.index].id
@@ -1867,6 +1981,7 @@ let nativeFixtureRelayOrigin = ""
     }
     /// The remembered image of the adjacent saved page, if any.
     func adjacentPageImage(_ id: String, back: Bool) -> UIImage? {
+        guard !isIncognito(id) else { return nil }
         guard let history = browserTabs.first(where: { $0.id == id })?.history else { return nil }
         let index = history.index + (back ? -1 : 1)
         return history.entries.indices.contains(index) ? NativeScreenMemory.image("page:" + history.entries[index].id) : nil
@@ -1893,7 +2008,7 @@ let nativeFixtureRelayOrigin = ""
         if let url { completeBrowserNavigation(url, title: "", in: id) }
     }
     @discardableResult private func queueBrowserOperation(_ tab: BrowserDescriptor, action: String, entry: BrowserHistoryEntry?) -> Bool {
-        guard !applyingContent, let entry, Self.historyURL(entry.url) != nil else { return false }
+        guard !tab.incognito, !applyingContent, let entry, Self.historyURL(entry.url) != nil else { return false }
         let scope = syncScope(tab)
         let operationID = UUID().uuidString
         var fields: [String: JSON] = ["visitedAt": .string(ISO8601DateFormatter().string(from: Date())), "eventId": .string(operationID), "profileId": .string(tab.profileId), "sourceHostId": .string(contentHosts[scope] ?? tab.ownerHostId ?? ""), "action": .string(action), "tabId": .string(tab.contentTabId ?? tab.id), "operationId": .string(operationID), "baseRevision": .number(Double(tab.history?.revision ?? 0)), "entryId": .string(entry.id), "url": .string(entry.url), "title": .string(entry.title)]
@@ -2003,7 +2118,31 @@ let nativeFixtureRelayOrigin = ""
     }
     func stopBrowser(_ id: String) { if let view = browserViews[id] { failBrowserNavigation(id, currentURL: view.url); view.stopLoading() } }
     func renameBrowser(_ id: String, title: String) { guard let index = browserTabs.firstIndex(where: { $0.id == id }) else { return }; var tab = browserTabs[index]; tab.title = String(title.prefix(200)); tab.customTitle = tab.title; browserTabs[index] = tab }
-    func close(_ id: String) { if let tab = browserTabs.first(where: { $0.id == id }) { let scope = tab.scope == "team" ? "team:" + (tab.ownerHostId ?? currentTeamOwner ?? "") : tab.scope == "main" ? "main:" + (tab.ownerHostId ?? "") : tab.scope; recordContentClose(tab.contentTabId ?? tab.id, scope: scope); NativeThumbnailCache.remove(thumbnailKey(tab)) }; let scope = browserTabs.first(where: { $0.id == id })?.scope ?? "team"; unload(id, force: true); unloadedBrowsers.remove(id); browserTouched.removeValue(forKey: id); browserTabs.removeAll { $0.id == id }; browserPreviews[id] = nil; browserFavicons[id] = nil; faviconAttempts[id] = nil; if selected(in: scope) == id { if scope == "main" { selectedMainBrowser = tabs(in: scope).last?.id } else if scope == "team" { selectedBrowser = tabs(in: scope).last?.id } else { scopedSelection[scope] = tabs(in: scope).last?.id } } }
+    func closeIncognitoBrowsers() { for tab in browserTabs.filter(\.incognito) { close(tab.id) } }
+    func close(_ id: String) {
+        guard let tab = browserTabs.first(where: { $0.id == id }) else { return }
+        if !tab.incognito {
+            let scope = tab.scope == "team" ? "team:" + (tab.ownerHostId ?? currentTeamOwner ?? "") : tab.scope == "main" ? "main:" + (tab.ownerHostId ?? "") : tab.scope
+            recordContentClose(tab.contentTabId ?? id, scope: scope)
+            NativeThumbnailCache.remove(thumbnailKey(tab))
+        }
+        unload(id, force: true)
+        if tab.incognito {
+            browserClipboard.close(id)
+            let store = profileStores.removeValue(forKey: "incognito:" + id)
+            store?.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), modifiedSince: .distantPast) { }
+            pageScales = pageScales.filter { !$0.key.hasPrefix("incognito:" + id + "|") }
+        }
+        previewCaptureTasks.removeValue(forKey: id)?.cancel(); browserArchiveTasks.removeValue(forKey: id)?.cancel()
+        unloadedBrowsers.remove(id); browserTouched.removeValue(forKey: id); browserTabs.removeAll { $0.id == id }
+        browserPreviews[id] = nil; browserPreviewURLs[id] = nil; browserFavicons[id] = nil; faviconAttempts[id] = nil; browserOperations[id] = nil; originalBrowserLoads[id] = nil; explicitBrowserNavigations.remove(id); serverRedirectedBrowsers.remove(id); nativeTraversals[id] = nil; insertionOrigins[id] = nil
+        for scope in chatChildOrder.keys { chatChildOrder[scope]?.removeAll { $0 == id } }
+        if selected(in: tab.scope) == id {
+            if tab.scope == "main" { selectedMainBrowser = tabs(in: tab.scope).last?.id }
+            else if tab.scope == "team" { selectedBrowser = tabs(in: tab.scope).last?.id }
+            else { scopedSelection[tab.scope] = tabs(in: tab.scope).last?.id }
+        }
+    }
     func unload(_ id: String, force: Bool = false) {
         captureBrowserReadingPosition(id)
         beginLiveBrowserLoad(id)
@@ -2049,8 +2188,8 @@ let nativeFixtureRelayOrigin = ""
             return placeholder
         }
         guard profileAvailable(tab.profileId) else { configuration.websiteDataStore = .nonPersistent(); return WKWebView(frame: .zero, configuration: configuration) }
-        let storeKey = account + ":" + tab.profileId
-        if profileStores[storeKey] == nil { profileStores[storeKey] = tab.profileId == "default" ? .default() : WKWebsiteDataStore(forIdentifier: Self.persistentProfileStoreID(account: account, id: tab.profileId)) }
+        let storeKey = tab.incognito ? "incognito:" + tab.id : account + ":" + tab.profileId
+        if profileStores[storeKey] == nil { profileStores[storeKey] = tab.incognito ? .nonPersistent() : tab.profileId == "default" ? .default() : WKWebsiteDataStore(forIdentifier: Self.persistentProfileStoreID(account: account, id: tab.profileId)) }
         configuration.websiteDataStore = profileStores[storeKey]!
         // Safari-like media policy. Without inline playback, iPhone WebKit plays any
         // autoplaying video fullscreen, so page ads took over the screen. Sound needs a

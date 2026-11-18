@@ -1,0 +1,43 @@
+.scratchpad-page{min-width:0}.scratchpad-page>.feature-tab-bar{margin:-12px -12px 20px}.scratchpad-filters,.scratchpad-properties{display:flex;gap:12px;flex-wrap:wrap;margin:18px 0}.scratchpad-filters>*{flex:1;min-width:150px}.scratchpad-properties>label{flex:1;min-width:140px}.scratchpad-list{display:flex;flex-direction:column;border-top:1px solid var(--line)}.scratchpad-row{display:flex;flex-direction:column;align-items:start;gap:5px;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent;padding:14px 10px}.scratchpad-row strong{font-size:15px;overflow-wrap:anywhere}.scratchpad-editor{width:100%;max-width:none}.scratchpad-editor textarea{min-height:50vh;line-height:1.6;font:14px/1.6 ui-monospace,SFMono-Regular,monospace;resize:vertical}.scratchpad-editor .actions{flex-wrap:wrap}.scratchpad-editor [data-scratch-error]{white-space:pre-wrap}.scratchpad-editor input[aria-label="Scratch title"]{font-size:22px}.scratchpad-editor [role=toolbar]{gap:5px;margin:14px 0}.scratchpad-editor [role=toolbar] button{padding:6px 10px}.scratchpad-page [hidden]{display:none!important}
+
+.scratchpad-editor{display:grid;grid-template-columns:240px minmax(0,1fr);gap:0;min-height:calc(100vh - 110px)}.scratchpad-document{min-width:0;padding:20px;display:flex;flex-direction:column}.scratchpad-tree{overflow:auto;max-height:calc(100vh - 125px);border-right:1px solid var(--proteus-line);padding:8px;background:var(--proteus-bg)}.scratchpad-tree button[aria-current=page]{background:var(--proteus-panel);color:var(--proteus-accent)}.scratchpad-content:has(.scratchpad-editor){padding:0}.scratchpad-editor textarea{flex:1;width:100%;min-height:60vh}.scratchpad-document [role=toolbar]{position:sticky;top:0;background:var(--proteus-panel);border:1px solid var(--proteus-line);padding:6px;margin:0!important;border-radius:8px 8px 0 0}.scratchpad-scope-filters{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0}.scratchpad-scope-filters [aria-pressed=true]{background:var(--proteus-accent);color:var(--proteus-bg)}@media(max-width:650px){.scratchpad-editor{grid-template-columns:130px minmax(0,1fr)}.scratchpad-document{padding:12px}}
+.scratchpad-tree.file-browser-compact{padding:0;max-height:calc(100vh - 130px);height:calc(100vh - 130px);min-width:0;overflow:hidden}
+.file-browser-compact>header label:first-child,.file-browser-compact .file-tools,.file-browser-compact .file-divider,.file-browser-compact .file-browser-panes>aside,.file-browser-compact table th:not(:first-child),.file-browser-compact table td:not(:first-child){display:none!important}
+.file-browser-compact .file-browser-panes{display:block;height:calc(100% - 120px)}.file-browser-compact .file-browser-list{height:100%;overflow:auto}.file-browser-compact table{width:100%;table-layout:fixed}.file-browser-compact td:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.file-browser-compact header{padding:8px;display:flex}.file-browser-compact header input{width:100%;min-width:0}.file-browser-compact .file-filter{min-width:0;flex:1}.file-browser-compact .file-location{padding:4px 8px}.file-browser-compact [data-status]{font-size:11px;padding:0 8px}
+.file-browser-compact .file-browser-list table{min-width:0;table-layout:fixed;}
+.file-browser-compact header{gap:5px;align-items:end;}
+.file-browser-compact header .file-filter{font-size:0;margin:0;}
+.file-browser-compact header input{font-size:12px;padding:7px 8px;height:32px;color:var(--proteus-ink);}
+.file-browser-compact header input::placeholder{color:var(--proteus-muted);opacity:1;}
+.file-browser-compact header [data-refresh]{width:30px;height:32px;min-width:30px;padding:5px;border-color:transparent;background:transparent;}
+.file-browser-compact header [data-refresh] svg{width:17px;height:17px;margin:0;}
+.file-browser-compact .file-location{font-size:11px;}
+.file-browser-compact td{padding:7px 5px;font-size:12px;}
+.file-browser-compact td:first-child>span:last-of-type{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;}
+.file-browser-compact .proteus-file-icon{width:16px;height:16px;}
+.file-browser-compact [data-expand]{border:0;padding:0;background:transparent;width:18px;flex:none;}
+.file-browser-compact .file-expander-space{width:18px;}
+.scratchpad-filters,.scratchpad-properties{gap:8px;margin:10px 0;}
+.scratchpad-filters>*{min-width:120px;}
+.scratchpad-filters input,.scratchpad-filters select,.scratchpad-properties input,.scratchpad-properties select{padding:7px 9px;}
+.scratchpad-scope-filters{gap:5px;margin:10px 0;}
+.scratchpad-scope-filters{align-items:center;column-gap:12px;row-gap:8px;}
+.scratchpad-scope-group{display:flex;align-items:center;flex-wrap:wrap;gap:5px;min-width:0;}
+.scratchpad-project-filters{border-left:1px solid var(--proteus-line);padding-left:12px;}
+.scratchpad-scope-label{font-size:11px;color:var(--proteus-muted);margin-right:3px;}
+.scratchpad-computer-select{display:flex;flex-direction:column;align-items:stretch;gap:4px;font-size:11px;min-width:0;}
+.scratchpad-computer-select select{max-width:100%;min-width:0;padding:5px 7px;font-size:12px;}
+.scratchpad-scope-filters button,.scratchpad-page .heading .actions button{padding:6px 9px;font-size:12px;}
+.scratchpad-page .heading{margin-bottom:12px;}
+.scratchpad-row{padding:10px 8px;gap:3px;}
+.scratchpad-row strong{font-size:14px;}
+.scratchpad-document>label{margin-bottom:0;}.scratchpad-document>label input{font-size:20px;padding:8px 10px;}
+.scratchpad-document>.actions{gap:5px;}.scratchpad-document>.actions button{padding:6px 8px;font-size:12px;}
+.scratchpad-document>.note{margin:6px 0;font-size:11px;}
+.scratchpad-document>.actions+.note{display:block;width:100%;margin:5px 0 8px;font-size:12px;}
+
+.scratchpad-editor{height:calc(100dvh - var(--column-top,92px));min-height:0;overflow:hidden;align-items:stretch;}
+.scratchpad-editor>.scratchpad-tree.file-browser-compact{height:100%;max-height:none;display:flex;flex-direction:column;}
+.scratchpad-editor .file-browser-compact .file-browser-panes{flex:1;min-height:0;height:auto;}
+.scratchpad-editor .file-browser-compact .file-browser-list{height:100%;min-height:0;overflow:auto;}
+.scratchpad-editor>.scratchpad-document{height:100%;overflow:auto;min-height:0;}

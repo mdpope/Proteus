@@ -1,3 +1,11 @@
+## Nov 11 — file-root scope investigation
+
+Workspace Files resolves only the chosen workspace's configured primary, additional, library and
+every-chat folders. The default workspace's projected compatibility fields must not expand another
+workspace's file roots. Source-library registration and chat source selection are separate from
+file-root membership and remote viewing/editing grants. See the [folder discovery audit](releases/2026-11-15/folder-discovery-audit.md)
+for the reproduced scope defect, correction and proposed picker review; no picker redesign is yet claimed.
+
 ## Nov 5 — document origin survives window restore
 
 Document placement is separate from its original chat authorization. A stale window snapshot
@@ -333,6 +341,16 @@ existing Open workspace/Configuration actions remain available, with a keyboard 
 Preserve selection, workspace/project expansion, paging, default identity, memberships and all
 live resource/draft/approval state. Keep Other Computers groups separate. This does not change
 BF-08's current-first then alphabetical project overview order. Queue only; no implementation/build.
+
+## Shared desktop window events
+
+Desktop windows in one origin and browser partition share a single `/api/events` connection
+through a SharedWorker. Each window receives owner change, content-tab and project-follow
+events independently. Closing a window detaches its port; the final port closes the stream.
+The EventSource reconnects normally, while windows retain the existing polling fallback.
+If the worker cannot be started, clients use the previous direct EventSource behavior; the
+connection limit may still apply in that fallback. This does not share data across owners or
+profiles. A six-window test uses disposable state and verifies delivery after windows close.
 
 ## Queued next release — multiple windows and scoped new-tab pages
 

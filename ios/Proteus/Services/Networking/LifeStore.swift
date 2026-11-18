@@ -64,6 +64,12 @@ struct LifeHTTPError:Error{let status:Int;let message:String}
 /// Life belongs to the authenticated website account, never the currently selected computer.
 /// Health records and form drafts stay in memory; only OAuth credentials are persisted in Keychain.
 @MainActor final class LifeStore:NSObject,ObservableObject,ASWebAuthenticationPresentationContextProviding{
+    let reminderWorkspace = LifeReminderWorkspace()
+    @Published private(set) var reminderRecents: [JSON] = []
+    private let reminderReplica = LifeReminderReplica()
+    private var reminderSyncTask: Task<Void, Error>?
+    private var reminderLastSync: Date?
+    private var reminderSyncedAccount = ""
     @Published private(set) var profile:JSON = .null
     @Published private(set) var connected=false
     @Published private(set) var busy=false
@@ -102,9 +108,20 @@ struct LifeHTTPError:Error{let status:Int;let message:String}
     func presentationAnchor(for session:ASWebAuthenticationSession)->ASPresentationAnchor{
         UIApplication.shared.connectedScenes.compactMap{$0 as? UIWindowScene}.flatMap(\.windows).first(where: \.isKeyWindow) ?? ASPresentationAnchor()
     }
-    private func clearRecords(){profile = .null;snapshots.removeAll();connected=false;dataRevision += 1}
-    private func clearCredentials(){generation=UUID();refreshTask?.cancel();refreshTask=nil;credential=nil;LifeKeychain.clear(service:keychainService);clearRecords()}
-    func restore()async{guard credential != nil else{return};do{try await refreshProfile()}catch{self.error=display(error);connected=false}}
+    private func clearRecords(){reminderSyncTask?.cancel();reminderSyncTask=nil;reminderLastSync=nil;reminderRecents=[];reminderWorkspace.clear();profile = .null;snapshots.removeAll();connected=false;dataRevision += 1}
+    private func clearCredentials(){let oldAccount=accountIdentity;Task { try? await reminderReplica.clear(oldAccount) };reminderSyncTask?.cancel();reminderSyncTask=nil;reminderLastSync=nil;reminderSyncedAccount="";generation=UUID();refreshTask?.cancel();refreshTask=nil;credential=nil;LifeKeychain.clear(service:keychainService);clearRecords()}
+    func restore()async{
+        guard credential != nil else{return}
+        let account = accountIdentity
+        do{try await refreshProfile()}catch{
+            self.error=display(error);connected=false
+            if signedIn, account == accountIdentity, let cached = try? await reminderReplica.read(account, query: [:], offline: true) {
+                var metadata = cached.object.filter { ["accountId", "workspaceId", "displayName", "sections", "capabilities"].contains($0.key) }
+                metadata["readOnly"] = .bool(true); profile = .object(metadata)
+                reminderRecents = (try? await reminderReplica.recents(account)) ?? []
+            }
+        }
+    }
     func signIn(website:String, sharedApp:Bool=false)async{
         guard !busy else{return};busy=true;defer{busy=false};error=nil;notice=nil
         do{
@@ -192,12 +209,46 @@ struct LifeHTTPError:Error{let status:Int;let message:String}
         profile=value;connected=true
     }
     func data(section:String,query:[String:JSON]=[:])async throws->JSON{
+        if section == "reminders", query["since"] == nil {
+            let account = accountIdentity
+            guard signedIn else { throw RemoteError(message: "Sign into Life first.") }
+            var offline = false
+            do { try await syncReminders() }
+            catch {
+                guard signedIn, account == accountIdentity, (error as? URLError) != nil || ((error as? LifeHTTPError)?.status ?? 0) >= 500 else { throw error }
+                offline = true; connected = false; notice = "Showing cached reminders. Reconnect to Life before saving changes."
+            }
+            guard account == accountIdentity else { throw RemoteError(message: "Life account changed.") }
+            let value = try await reminderReplica.read(account, query: query, offline: offline)
+            reminderRecents = (try? await reminderReplica.recents(account)) ?? []
+            return value
+        }
         let result=try await authorized(path:"/api/v1/life/data",method:"POST",body:.object(["section":.string(section),"query":.object(query)]));try verifyAccount(result);connected=true
         snapshots[section]=result;return result
     }
+    private func syncReminders() async throws {
+        if let task = reminderSyncTask { return try await task.value }
+        let account = accountIdentity, expected = generation
+        if reminderSyncedAccount == account, let last = reminderLastSync, Date().timeIntervalSince(last) < 3 { return }
+        let task = Task { @MainActor in
+            var cursor = try await reminderReplica.cursor(account)
+            while true {
+                let page = try await authorized(path: "/api/v1/life/data", method: "POST", body: .object(["section": .string("reminders"), "query": .object(["since": .number(Double(cursor))])]))
+                try verifyAccount(page)
+                guard expected == generation, account == accountIdentity, !Task.isCancelled else { throw RemoteError(message: "Life account changed.") }
+                try await reminderReplica.apply(account, page: page)
+                if !page["hasMore"].bool { break }
+                guard page["cursor"].int > cursor else { throw RemoteError(message: "Reminder synchronization made no progress.") }; cursor = page["cursor"].int
+            }
+            reminderSyncedAccount = account; reminderLastSync = Date(); connected = true
+        }
+        reminderSyncTask = task
+        defer { if expected == generation { reminderSyncTask = nil } }
+        try await task.value
+    }
     func action(_ action:String,input:[String:JSON],idempotencyKey:String)async throws->JSON{
         guard connected,!readOnly else{throw RemoteError(message:"Reconnect to Life before saving changes.")}
-        let result=try await authorized(path:"/api/v1/life/action",method:"POST",body:.object(["action":.string(action),"input":.object(input),"idempotencyKey":.string(idempotencyKey),"expectedAccountId":.string(credential?.accountID ?? ""),"expectedWorkspaceId":.string(credential?.workspaceID ?? "")]));try verifyAccount(result);dataRevision += 1;return result
+        let result=try await authorized(path:"/api/v1/life/action",method:"POST",body:.object(["action":.string(action),"input":.object(input),"idempotencyKey":.string(idempotencyKey),"expectedAccountId":.string(credential?.accountID ?? ""),"expectedWorkspaceId":.string(credential?.workspaceID ?? "")]));try verifyAccount(result);if action.hasPrefix("reminders.") { reminderLastSync = nil };dataRevision += 1;return result
     }
     private func verifyAccount(_ value:JSON)throws{
         guard let current=credential,value["accountId"].string==current.accountID,value["workspaceId"].string==current.workspaceID else{clearCredentials();throw RemoteError(message:"Life account or workspace changed. Sign in again before continuing.")}

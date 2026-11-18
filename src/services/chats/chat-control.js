@@ -1,3 +1,4 @@
+import {journalMethod} from '../remote/command-journal-policy.js';
 import {validateManagedRequirements} from '../integrations/managed-requirements.js';
 import fs from 'node:fs';
 import {AsyncLocalStorage} from 'node:async_hooks';
@@ -53,9 +54,9 @@ export class ChatControl {
     }
     this.timer=pollMs?setInterval(()=>void this.refresh().catch(()=>{}),pollMs):null;this.timer?.unref();
   }
-  localId(){return this.service.remote.info().hostId;}
+  localId(){return (this.service.remote.identity?.()||this.service.remote.info()).hostId;}
   save(task){atomicJSON(path.join(this.root,'tasks',task.id+'.json'),task);this.tasks.set(task.id,task);}
-  computers(){return [{hostId:this.localId(),label:this.service.remote.info().label,status:'online',local:true},...(this.service.computerAccess?.get().managed?[]:(this.service.peers?.list()||[])).map(p=>pick(p,['hostId','label','status','paused']))];}
+  computers(){return [{hostId:this.localId(),label:(this.service.remote.identity?.()||this.service.remote.info()).label,status:'online',local:true},...(this.service.computerAccess?.get().managed?[]:(this.service.peers?.list()||[])).map(p=>pick(p,['hostId','label','status','paused']))];}
   host(id){if(typeof id!=='string'||!id)throw Error('Choose an explicit computer from computers.');if(id!==this.localId())this.service.computerAccess?.assertOutgoing();const host=this.computers().find(h=>h.hostId===id);if(!host)throw Error('This computer is not paired.');if(host.paused)throw Error('This computer connection is paused.');const recovery=this.service.peers?.recovery?.get(id);if(recovery?.suspended||recovery?.blocked)throw Error('Review or resume this computer in Connections.');return host;}
   origin(actor,args={}){
     if(actor!=='operator'){if(args.originChatId&&args.originChatId!==actor)throw Error('Cannot impersonate another originating chat.');return actor;}
@@ -266,7 +267,7 @@ export class ChatControl {
     try{
       let result;
       if(task.hostId===this.localId()){
-        const journal=this.service.remote.commandJournal,key='agent:'+task.id,{previous}=await journal.claim(key,task.digest,task.issuedAt);
+        const journal=this.service.remote.commandJournal,key='agent:'+task.id,{previous}=await journal.claim(key,task.digest,task.issuedAt,journalMethod(method,payload));
         if(previous){if(previous.pending)throw Error('Previous local command outcome is uncertain; inspect the chat before acting again.');if(previous.error)throw Error(previous.error);result=previous.result;}
         else {
           this.assertAccess(task.actor,task.hostId,scope,task.args.chatId,task.projectId);

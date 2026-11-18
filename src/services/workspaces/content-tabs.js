@@ -101,9 +101,16 @@ export class ContentTabs {
       return result;
     });this.asyncTail=work.catch(()=>{});return work;
   }
-  read(){try{if(fs.statSync(this.file).size>16_000_000)throw new Error();const data=JSON.parse(fs.readFileSync(this.file,'utf8'));if(data.schemaVersion!==1||typeof data.scopes!=='object'||!data.scopes)throw new Error();if(Object.keys(data.scopes).length>1000)throw new Error();for(const row of Object.values(data.scopes))if(row.closed&&(typeof row.closed!=='object'||Array.isArray(row.closed)||Object.keys(row.closed).length>MAX_CLOSED_TABS||Object.entries(row.closed).some(([id,revision])=>!ID.test(id)||!Number.isSafeInteger(revision)||revision<1||revision>row.revision)))throw new Error();for(const [key,row]of Object.entries(data.scopes)){const [scope,...id]=key.split(':');this.key(scope,id.join(':'));if(!/^(chat|team|workspace|project|main):/.test(key)||!row||!Number.isSafeInteger(row.revision)||row.revision<0||!Array.isArray(row.tabs)||row.tabs.length>1000||new Set(row.tabs.map(tab=>contentTab(tab).id)).size!==row.tabs.length)throw new Error();row.tabs=row.tabs.filter(tab=>!Object.hasOwn(row.closed||{},tab.id));}return data;}catch(error){if(error.code==='ENOENT')return {schemaVersion:1,scopes:{}};throw new Error('Saved content tabs could not be read. The original file was preserved.');}}
+  // Session saves, follow lookups and tab reads call read() many times per second with
+  // hundreds of tabs. Parsing and validating every scope each time blocked the Electron
+  // main thread (which also routes input and frames). Reuse the validated result while
+  // the file's identity/size/mtime stamp is unchanged; callers receive an independent copy.
+  read(){return structuredClone(this.readShared());}
+  // Read-only view of the validated cache. Callers must copy any row they return or mutate.
+  readShared(){const stamp=fileStamp([this.file]);if(this.validatedRead?.stamp===stamp)return this.validatedRead.data;const data=this.readValidated();if(fileStamp([this.file])===stamp)this.validatedRead={stamp,data};return data;}
+  readValidated(){try{if(fs.statSync(this.file).size>16_000_000)throw new Error();const data=JSON.parse(fs.readFileSync(this.file,'utf8'));if(data.schemaVersion!==1||typeof data.scopes!=='object'||!data.scopes)throw new Error();if(Object.keys(data.scopes).length>1000)throw new Error();for(const row of Object.values(data.scopes))if(row.closed&&(typeof row.closed!=='object'||Array.isArray(row.closed)||Object.keys(row.closed).length>MAX_CLOSED_TABS||Object.entries(row.closed).some(([id,revision])=>!ID.test(id)||!Number.isSafeInteger(revision)||revision<1||revision>row.revision)))throw new Error();for(const [key,row]of Object.entries(data.scopes)){const [scope,...id]=key.split(':');this.key(scope,id.join(':'));if(!/^(chat|team|workspace|project|main):/.test(key)||!row||!Number.isSafeInteger(row.revision)||row.revision<0||!Array.isArray(row.tabs)||row.tabs.length>1000||new Set(row.tabs.map(tab=>contentTab(tab).id)).size!==row.tabs.length)throw new Error();row.tabs=row.tabs.filter(tab=>!Object.hasOwn(row.closed||{},tab.id));}return data;}catch(error){if(error.code==='ENOENT')return {schemaVersion:1,scopes:{}};throw new Error('Saved content tabs could not be read. The original file was preserved.');}}
   key(scope,id){if(!['chat','team','workspace','project','main'].includes(scope)||!ID.test(id||'')||(scope==='team'&&id!=='team'&&!/^window:[a-f0-9-]{36}$/i.test(id))||(scope==='main'&&id!=='main'&&!/^window:[a-f0-9-]{36}$/i.test(id)))throw new Error('Choose an explicit chat or Team tab scope.');return scope+':'+id;}
-  get(scope,id){const key=this.key(scope,id),row=this.read().scopes[key],names=this.profiles?new Map(this.profiles().map(profile=>[profile.id,profile.name])):null;return {scope,id,revision:row?.revision||0,...(Object.keys(row?.closed||{}).length?{closed:row.closed}:{}),tabs:(row?.tabs||[]).map(value=>{const tab=contentTab(value);return names&&tab.type==='browser'?{...tab,profileName:names.get(tab.profileId||'default')||'Unavailable profile'}:tab;})};}
+  get(scope,id){const key=this.key(scope,id),row=structuredClone(this.readShared().scopes[key]),names=this.profiles?new Map(this.profiles().map(profile=>[profile.id,profile.name])):null;return {scope,id,revision:row?.revision||0,...(Object.keys(row?.closed||{}).length?{closed:row.closed}:{}),tabs:(row?.tabs||[]).map(value=>{const tab=contentTab(value);return names&&tab.type==='browser'?{...tab,profileName:names.get(tab.profileId||'default')||'Unavailable profile'}:tab;})};}
   member(scope,id,tabId){
     const key=this.key(scope,id);
     for(let attempt=0;attempt<2;attempt++){
@@ -111,7 +118,7 @@ export class ContentTabs {
       if(stamp!==this.membershipStamp){this.memberships.clear();this.membershipCount=0;this.membershipStamp=stamp;}
       let members=this.memberships.get(key);
       if(!members){
-        const row=this.read().scopes[key];
+        const row=this.readShared().scopes[key];
         if(fileStamp([this.file])!==stamp)continue;
         // Cache identity only, never URLs, histories, titles or document paths.
         members=new Map((row?.tabs||[]).map(raw=>{const tab=contentTab(raw);return [tab.id,Object.freeze({id:tab.id,type:tab.type,...(tab.chatId?{chatId:tab.chatId}:{})})];}));
@@ -201,8 +208,8 @@ export class ContentTabs {
   seedWorkspace(session){
     this.rememberSources(session);
     for(const row of workspaceContentScopes(session)){
-      const key=this.key(row.scope,row.id),data=this.read(),saved=data.scopes[key];
-      if(saved?.desktopSeedVersion===2)continue;
+      const key=this.key(row.scope,row.id);if(this.readShared().scopes[key]?.desktopSeedVersion===2)continue;
+      const data=this.read(),saved=data.scopes[key];
       // Older main/Team registries described browsers only. They cannot close
       // the saved chat, terminal and viewer surfaces newly included in sync.
       const introduced=row.scope==='main'?['chat','terminal','document']:row.scope==='team'?['terminal','document']:row.scope==='chat'?['terminal']:[];

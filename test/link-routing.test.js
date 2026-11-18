@@ -9,6 +9,18 @@ const {matches,routeRule,selectWindow,targetKey}=require('../desktop/link-routin
 const {LinkRoutingStore}=require('../desktop/link-routing/store.cjs');
 const {BrowserRegistration}=require('../desktop/link-routing/registration.cjs');
 const destination={hostId:'local',workspaceId:'studio',projectId:'chat'};
+test('feature destinations retain stable defaults and rules without impersonating a project or remote owner',t=>{
+ const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-feature-links-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
+ const store=new LinkRoutingStore(home);
+ for(const feature of ['team','reminders','scratchpad']){
+  const target={hostId:'local',feature};store.recordLast(target);assert.deepEqual(store.last(),target);
+  store.saveDefaults({mode:'fixed',autoSelectSeconds:3,destination:target},store.read().revision);
+  const rules=[{id:'feature',pattern:'example.test',enabled:true,destination:target}];
+  store.save(rules,store.read().revision);assert.equal(routeRule(rules,'https://example.test/',[target]).target,target);
+  assert.notEqual(targetKey(target),targetKey({...destination,projectId:feature}));
+ }
+ for(const target of [{feature:'unknown'},{feature:'team',hostId:'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'}])assert.throws(()=>store.saveDefaults({mode:'fixed',autoSelectSeconds:0,destination:target},store.read().revision));
+});
 test('link rules preserve host boundaries, subdomains, globs and path-prefix behavior',()=>{
   for(const pattern of ['example.com','*.example.com','https://example.com/team','example.com/te?m/*'])assert.equal(matches(pattern,'https://example.com/team/work?q=1'),true,pattern);
   assert.equal(matches('example.com','https://a.example.com/'),true);

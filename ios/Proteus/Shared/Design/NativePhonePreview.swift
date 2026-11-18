@@ -120,6 +120,7 @@ private struct NativeFeaturePage: ViewModifier {
     var embedded = false
     /// The page shows its own compact header (a chat inside a project on iPhone).
     var barHidden = false
+    var persistentHeader = false
     @Environment(\.nativePhoneAreaActive) private var active
     func body(content: Content) -> some View {
         if NativeDesignPreview.enabled && embedded {
@@ -146,7 +147,7 @@ private struct NativeFeaturePage: ViewModifier {
                         ToolbarItem(placement: .topBarTrailing) { searchField(search).frame(width: 230) }
                     }
                 }
-                .toolbar(NativePhonePreview.enabled && (chrome.controlsHidden || !active || barHidden) ? .hidden : .visible, for: .navigationBar)
+                .toolbar(NativePhonePreview.enabled && ((chrome.controlsHidden && !persistentHeader) || !active || barHidden) ? .hidden : .visible, for: .navigationBar)
                 .safeAreaInset(edge: .bottom, spacing: 0) {
                     if NativePhonePreview.enabled, let search { searchField(search).padding(.horizontal, 16).padding(.vertical, 8).background(NativeTheme.background) }
                 }
@@ -159,7 +160,7 @@ private struct NativeFeaturePage: ViewModifier {
     }
 }
 extension View {
-    func nativeFeaturePage(_ title: String, search: Binding<String>? = nil, embedded: Bool = false, barHidden: Bool = false) -> some View { modifier(NativeFeaturePage(title: title, search: search, embedded: embedded, barHidden: barHidden)) }
+    func nativeFeaturePage(_ title: String, search: Binding<String>? = nil, embedded: Bool = false, barHidden: Bool = false, persistentHeader: Bool = false) -> some View { modifier(NativeFeaturePage(title: title, search: search, embedded: embedded, barHidden: barHidden, persistentHeader: persistentHeader)) }
 }
 
 struct NativePhoneTab: Identifiable {
@@ -172,6 +173,8 @@ struct NativePhoneTab: Identifiable {
     var preview: UIImage?
     var select: () -> Void
     var close: (() -> Void)? = nil
+    /// Browser tab identity, so cards offer the same actions as the tab strip (N11-30).
+    var browserID: String? = nil
 }
 
 @MainActor final class NativePhoneChrome: ObservableObject {
@@ -190,6 +193,21 @@ struct NativePhoneTab: Identifiable {
     @Published var overviewProgress: CGFloat = 0
     @Published var currentID = ""
     @Published var visited: [NativePhoneTab] = []
+    @Published var featureTabs: [String: [NativePhoneTab]] = [:]
+    var featureOverviewItems: [NativePhoneTab] {
+        featureTabs.keys.filter { $0.hasPrefix("feature:") }.sorted().flatMap { overviewItems(in: $0) }
+    }
+    func overviewItems(in group: String) -> [NativePhoneTab] {
+        (featureTabs[group] ?? []).map { row in
+            var value = row; value.preview = row.symbol == "eye.slash" ? nil : visited.first { $0.id == row.id }?.preview ?? row.preview; return value
+        }
+    }
+    func replaceFeatureTabs(_ group: String, items: [NativePhoneTab], current: String?) {
+        let ids = Set(items.map(\.id)), privateIDs = Set(items.filter { $0.symbol == "eye.slash" }.map(\.id)), old = featureTabs[group] ?? []
+        visited.removeAll { privateIDs.contains($0.id) || $0.sectionID == group && !ids.contains($0.id) }
+        featureTabs[group] = items.map { row in var value = row; value.preview = row.symbol == "eye.slash" ? nil : row.preview ?? old.first { $0.id == row.id }?.preview; return value }
+        if let current { if let selected = items.first(where: { $0.id == current }), selected.symbol != "eye.slash" { register(selected) } else { currentID = "" } }
+    }
     @Published var recent: [NativePhoneTab] = []
     var interactedAt: [String: Date] = [:]
     var cacheNamespace = "anonymous"
@@ -205,20 +223,34 @@ struct NativePhoneTab: Identifiable {
     var showTabs: (() -> Void)?
     var activateArea: ((String) -> Void)?
     var newMainChat: ((Bool) -> Void)?
+    var newMainResource: ((String) -> Void)?
 
     func refreshThumbnails() {
         guard previewRefreshTask == nil else { return }
         previewRefreshTask = Task { @MainActor [weak self] in
             do { try await Task.sleep(for: .milliseconds(60)) } catch { return }
             guard let self else { return }; previewRefreshTask = nil
-            for index in visited.indices where visited[index].preview == nil {
-                if let image = NativeThumbnailCache.load(cacheNamespace + ":" + visited[index].id) { visited[index].preview = image }
+            var updated = visited
+            var changed = false
+            for index in updated.indices where updated[index].preview == nil {
+                if let image = NativeThumbnailCache.load(cacheNamespace + ":" + updated[index].id) { updated[index].preview = image; changed = true }
             }
-            objectWillChange.send()
+            // Publishing each array element separately invalidates the overview
+            // repeatedly. An unrelated or missing thumbnail needs no redraw.
+            if changed { visited = updated }
         }
     }
 
-    func reset() { captureTask?.cancel(); captureTask = nil; delayedCapture?.cancel(); delayedCapture = nil; delayedCaptureID = ""; lastCapture = [:]; visited = []; recent = []; interactedAt = [:]; currentID = ""; snapshot = nil; overview = false; overviewProgress = 0; controlsHidden = false; browserSurfaceScope = nil; drawer = false; browserOwnsBack = false; contentOwnsBack = false }
+    func forgetBrowsers(_ ids: Set<String>) {
+        guard !ids.isEmpty else { return }
+        let keys = ids.union(ids.map { "browser:" + $0 })
+        let retainedVisited = visited.filter { !keys.contains($0.id) }
+        let retainedRecent = recent.filter { !keys.contains($0.id) }
+        if retainedVisited.count != visited.count { visited = retainedVisited }
+        if retainedRecent.count != recent.count { recent = retainedRecent }
+        for key in keys { interactedAt.removeValue(forKey: key); lastCapture.removeValue(forKey: key) }
+    }
+    func reset() { captureTask?.cancel(); captureTask = nil; delayedCapture?.cancel(); delayedCapture = nil; delayedCaptureID = ""; lastCapture = [:]; featureTabs = [:]; visited = []; recent = []; interactedAt = [:]; currentID = ""; snapshot = nil; overview = false; overviewProgress = 0; controlsHidden = false; browserSurfaceScope = nil; drawer = false; browserOwnsBack = false; contentOwnsBack = false }
     func register(_ item: NativePhoneTab) {
         if captureTask == nil {
             captureTask = Task { @MainActor [weak self] in
@@ -239,14 +271,16 @@ struct NativePhoneTab: Identifiable {
     }
     func record(_ item: NativePhoneTab) { interactedAt[item.id] = Date(); recent.removeAll { $0.id == item.id }; recent.insert(item, at: 0); if recent.count > 50 { recent.removeLast(recent.count - 50) } }
     func captureCurrent() {
-        guard UIApplication.shared.applicationState == .active, currentID.hasPrefix("chat:") || currentID.hasPrefix("document:"), !overview, !drawer, Date().timeIntervalSince(lastCapture[currentID] ?? .distantPast) >= 5, let index = visited.firstIndex(where: { $0.id == currentID }), let image = snapshot?() else { return }
+        guard UIApplication.shared.applicationState == .active, currentID.hasPrefix("chat:") || currentID.hasPrefix("document:") || currentID.hasPrefix("resource:"), !overview, !drawer, Date().timeIntervalSince(lastCapture[currentID] ?? .distantPast) >= 5, let index = visited.firstIndex(where: { $0.id == currentID }), let image = snapshot?() else { return }
         visited[index].preview = image
-        NativeThumbnailCache.save(image, key: cacheNamespace + ":" + currentID)
+        // Owner-hosted Scratchpad contents stay transient on this device. Its
+        // ordinary overview image is available for this session only.
+        if !(currentID.hasPrefix("resource:") && visited[index].symbol == "note.text") { NativeThumbnailCache.save(image, key: cacheNamespace + ":" + currentID) }
         lastCapture[currentID] = Date()
     }
     func scheduleCapture() {
         let expected = currentID
-        guard expected.hasPrefix("chat:") || expected.hasPrefix("document:") else { return }
+        guard expected.hasPrefix("chat:") || expected.hasPrefix("document:") || expected.hasPrefix("resource:") else { return }
         guard Date().timeIntervalSince(lastCapture[expected] ?? .distantPast) > 5 else { return }
         if delayedCapture != nil && delayedCaptureID == expected { return }
         delayedCapture?.cancel(); delayedCaptureID = expected
@@ -447,11 +481,33 @@ struct NativePhoneOverview: View {
                                             else { VStack(spacing: 12) { Image(systemName: item.symbol).font(.title); Text("Preview unavailable").font(.caption) }.frame(maxWidth: .infinity, maxHeight: .infinity).background(NativeTheme.surface) }
                                         }.frame(width: tileWidth, height: 225).clipShape(RoundedRectangle(cornerRadius: 15))
                                             .overlay { RoundedRectangle(cornerRadius: 15).stroke(item.id == activeID ? NativeTheme.accent : NativeTheme.line, lineWidth: 1) }
-                                            .background(GeometryReader { tile in Color.clear.preference(key: PhoneTabRects.self, value: [item.id: tile.frame(in: .named("phone-overview"))]) })
+                                            .background {
+                                                // Only the selected tile participates in the pinch
+                                                // transition. Ordinary overview scrolling needs no
+                                                // per-card geometry preferences or dictionary merges.
+                                                if item.id == activeID && !reduceMotion && p < 0.999 {
+                                                    GeometryReader { tile in Color.clear.preference(key: PhoneTabRects.self, value: [item.id: tile.frame(in: .named("phone-overview"))]) }
+                                                }
+                                            }
                                         Label(item.title, systemImage: item.symbol).font(.caption).lineLimit(2)
                                         Text(item.detail).font(.caption2).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                                     }.frame(width: tileWidth, alignment: .leading).contentShape(Rectangle())
                                 }.buttonStyle(.plain).accessibilityIdentifier("phone-tab-" + item.id).id(item.id)
+                                // N11-30: close in the corner, plus the tab's actions on long press.
+                                .overlay(alignment: .topTrailing) {
+                                    if let close = item.close {
+                                        Button(action: close) {
+                                            Image(systemName: "xmark").font(.system(size: 12, weight: .bold)).foregroundStyle(.primary)
+                                                .frame(width: 26, height: 26).background(.regularMaterial, in: Circle())
+                                                .frame(width: 44, height: 44).contentShape(Rectangle())
+                                        }.buttonStyle(.plain).accessibilityLabel("Close " + item.title).accessibilityIdentifier("phone-tab-close-" + item.id)
+                                    }
+                                }
+                                .contextMenu {
+                                    Button("Open", systemImage: "arrow.up.forward.square") { chrome.closeOverview(select: item) }
+                                    if let browserID = item.browserID { NativeBrowserTabActions(id: browserID) }
+                                    else if let close = item.close { Button("Close tab", systemImage: "xmark", role: .destructive, action: close) }
+                                }
                             }
                         }.padding(18)
                         }
@@ -468,7 +524,8 @@ struct NativePhoneOverview: View {
                         proxy.scrollTo(activeID, anchor: .center)
                     }
                     }
-                }.background(NativeTheme.background).opacity(reduceMotion ? p : max(0, (p - 0.12) / 0.88))
+                // N11-29: cover the bottom safe area too, so the page's toolbar never shows through.
+                }.background(NativeTheme.background.ignoresSafeArea()).opacity(reduceMotion ? p : max(0, (p - 0.12) / 0.88))
             }.coordinateSpace(name: "phone-overview")
             // Consume tile geometry as an overlay preference, never as parent @State.
             // Writing each scrolling/lazy-grid rect back into layout creates a frame loop.
@@ -481,7 +538,7 @@ struct NativePhoneOverview: View {
                         .offset(x: rect.minX * p, y: rect.minY * p).allowsHitTesting(false)
                 }
             }
-        }.background(NativeTheme.background.opacity(chrome.overviewProgress)).clipped().accessibilityElement(children: .contain).accessibilityIdentifier(accessibilityID)
+        }.background(NativeTheme.background.opacity(chrome.overviewProgress).ignoresSafeArea()).clipped().accessibilityElement(children: .contain).accessibilityIdentifier(accessibilityID)
     }
 }
 private struct PhoneTabRects: PreferenceKey {
@@ -513,6 +570,19 @@ enum NativeThumbnailCache {
     private static var requested: [String: Date] = [:]
     private static var directory: URL { URL.applicationSupportDirectory.appending(path: "tab-thumbnails", directoryHint: .isDirectory) }
     private static func file(_ key: String) -> URL { directory.appending(path: SHA256.hash(data: Data(key.utf8)).map { String(format: "%02x", $0) }.joined() + ".jpg") }
+    // Publish a single presentation change for a batch of disk reads. A large
+    // overview must not rebuild both grids once for every loaded thumbnail.
+    private static var notificationPending = false
+    private static func announceReady() {
+        DispatchQueue.main.async {
+            guard !notificationPending else { return }
+            notificationPending = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                notificationPending = false
+                NotificationCenter.default.post(name: Notification.Name("ProteusThumbnailReady"), object: nil)
+            }
+        }
+    }
     static func load(_ key: String) -> UIImage? {
         if let image = images.object(forKey: key as NSString) { return image }
         lock.lock()
@@ -529,7 +599,7 @@ enum NativeThumbnailCache {
             let url = file(key)
             guard let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize, size <= 262144, let data = try? Data(contentsOf: url), let image = UIImage(data: data)?.preparingForDisplay() else { return }
             images.setObject(image, forKey: key as NSString, cost: image.cgImage.map { $0.bytesPerRow * $0.height } ?? data.count)
-            DispatchQueue.main.async { NotificationCenter.default.post(name: Notification.Name("ProteusThumbnailReady"), object: nil) }
+            announceReady()
         }
         return nil
     }
@@ -567,4 +637,39 @@ struct NativeAdjacentTabSwipe: ViewModifier {
 }
 extension View {
     func nativeAdjacentTabSwipe(enabled: Bool = true, fallback: ((Int) -> Void)? = nil) -> some View { modifier(NativeAdjacentTabSwipe(enabled: enabled, fallback: fallback)) }
+}
+
+/// N11-30: one menu of browser-tab actions for the tab strip, tab overview and navigation, matching
+/// the desktop tab menu where it applies on iOS. Copying the Proteus tab ID copies the stable
+/// logical identity, never loads an unloaded page and grants no access.
+struct NativeBrowserDuplicateActions: View {
+    @EnvironmentObject var shared: SharedAppStore
+    let id: String
+    var body: some View {
+        Button("Duplicate tab", systemImage: "plus.square.on.square") { shared.duplicateBrowser(id) }
+        Button("Duplicate as Incognito tab", systemImage: "eye.slash") { shared.duplicateBrowser(id, incognito: true) }
+    }
+}
+
+struct NativeBrowserTabActions: View {
+    @EnvironmentObject var shared: SharedAppStore
+    let id: String
+    var send: (() -> Void)? = nil
+    var body: some View {
+        if let tab = shared.browserTabs.first(where: { $0.id == id }) {
+            NativeBrowserDuplicateActions(id: id)
+            if shared.unloadedBrowsers.contains(tab.id) || !shared.isBrowserLoaded(tab.id) {
+                Button("Load tab", systemImage: "arrow.clockwise") { shared.reload(tab.id) }
+            } else {
+                Button("Reload", systemImage: "arrow.clockwise") { shared.refreshBrowser(tab.id) }
+                Button("Unload", systemImage: "pause.circle") { shared.unload(tab.id) }
+            }
+            if !tab.incognito { Button(tab.persist ? "Do not persist tab" : "Persist tab", systemImage: tab.persist ? "pin.slash" : "pin") { shared.persistBrowser(tab.id, enabled: !tab.persist) } }
+            if let url = tab.url, !url.isEmpty { Button("Copy link", systemImage: "link") { shared.copyBrowserText(url, id: id) } }
+            Button("Copy Proteus tab ID", systemImage: "number") { shared.copyBrowserText(tab.contentTabId ?? tab.id, id: id) }
+            if !tab.incognito, let send { Button("Send tab", systemImage: "arrow.right.square", action: send) }
+            Divider()
+            Button("Close tab", systemImage: "xmark", role: .destructive) { shared.close(tab.id) }
+        }
+    }
 }

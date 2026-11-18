@@ -11,6 +11,7 @@ export class SessionProvider {
     this.closing = false;
     this.acceptedMediaTypes = this.metadata.acceptedMediaTypes;
     this.acceptedSteeringMediaTypes = this.metadata.acceptedSteeringMediaTypes;
+    this.inlineSteeringMediaTypes = this.metadata.inlineSteeringMediaTypes;
     for (const method of ['status', 'quota', 'models', 'dataDirectory', 'selectedMcp', 'withMcpSelectionBatch']) {
       if (typeof this.metadata[method] === 'function') this[method] = (...args) => this.metadata[method](...args);
     }

@@ -9,6 +9,14 @@ final class NativeDescriptorCacheWriter {
     private var pending: [String: () -> Void] = [:]
     // Account changes and background transitions are durability boundaries; normal
     // navigation and scrolling never wait on this queue.
+    /// Lifecycle variant: drains the same ordered queue without blocking the caller (N11-24).
+    func flushAsync(completion: @escaping () -> Void) {
+        queue.async {
+            self.lock.lock(); let writes = Array(self.pending.values); self.pending.removeAll(); self.lock.unlock()
+            for write in writes { write() }
+            completion()
+        }
+    }
     func flush() {
         queue.sync {
             lock.lock(); let writes = Array(pending.values); pending.removeAll(); lock.unlock()
@@ -19,7 +27,10 @@ final class NativeDescriptorCacheWriter {
         let key = url.path
         lock.lock(); let scheduled = pending[key] != nil; pending[key] = write; lock.unlock()
         guard !scheduled else { return }
-        queue.asyncAfter(deadline: .now() + .milliseconds(100)) {
+        // Large histories were being sealed up to ten times a second while a
+        // page scrolled. Keep the latest snapshot with a bounded two-second
+        // write cadence; background/account-switch flushes still drain it now.
+        queue.asyncAfter(deadline: .now() + .seconds(2)) {
             self.lock.lock(); let latest = self.pending.removeValue(forKey: key); self.lock.unlock()
             latest?()
         }

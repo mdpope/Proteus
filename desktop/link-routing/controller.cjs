@@ -19,6 +19,9 @@ class LinkRouter{
       }
     };
     append((this.service.workspaceProjects||this.service.desktopPreview).get(this.service.engine),'local','This computer');
+    for(const [feature,name] of [['team','Team Tools'],['reminders','Reminders'],['scratchpad','Scratchpad']]){
+      const target={hostId:'local',hostName:'This computer',feature,workspaceName:'Features',projectName:name};target.key=targetKey(target);targets.push(target);
+    }
     const peers=this.service.peers?.list()||[];
     await Promise.all(peers.filter(peer=>peer.status==='online'&&!peer.paused).map(async peer=>{try{append(await this.service.peers.request(peer.hostId,'projects.get',{}, {timeoutMs:3000}),peer.hostId,peer.label);}catch{warnings.push(peer.label+' projects are unavailable.');}}));
     targets.sort((a,b)=>(a.workspaceName+'\0'+a.hostName+'\0'+a.workspaceId+'\0'+a.projectName).localeCompare(b.workspaceName+'\0'+b.hostName+'\0'+b.workspaceId+'\0'+b.projectName));
@@ -59,6 +62,12 @@ class LinkRouter{
     const deadline=Date.now()+20000;
     while(!ctx.externalURLReady){if(ctx.closing||ctx.window.isDestroyed()||Date.now()>deadline)throw Error('The destination window did not finish restoring. Open the link again after it is ready.');await new Promise(resolve=>setTimeout(resolve,50));}
     return this.windows.run(ctx.id,async()=>{
+      if(fresh.feature){
+        // Feature membership is renderer-owned and window-local, not a project or a new grant.
+        const info=await this.browser.create(url,null,null,{profileId:'default',explicitParent:true,...(fresh.feature==='team'?{group:'team'}:{})});
+        ctx.window.webContents.send('proteus:browser-action',{type:'select-tab',info:{...info,externalFeature:fresh.feature}});
+        if(ctx.window.isMinimized())ctx.window.restore();ctx.window.show();ctx.window.focus();return {opened:true,tabId:info.id,windowId:ctx.id,target:fresh};
+      }
       const destination={type:'project',id:fresh.projectId,workspaceId:fresh.workspaceId,...(fresh.hostId!=='local'?{hostId:fresh.hostId}:{})};
       const info=await this.browser.create(url,null,null,{profileId:'default',explicitParent:true,parentId:`project:${fresh.hostId}:${fresh.projectId}`,workspaceName:fresh.workspaceName,destination});
       ctx.window.webContents.send('proteus:browser-action',{type:'select-tab',info:{...info,externalProject:fresh}});

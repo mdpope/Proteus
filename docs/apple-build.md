@@ -696,3 +696,10 @@ terminates only the helper’s own spawned processes and escalates a stuck child
 ### Shared simulator compiler cache
 
 The build helper defaults to one reusable compiler cache under the user Library/Caches/Proteus directory, independent of each run's logs and result bundle. PROTEUS_IOS_DERIVED_DATA remains an explicit override. A process-owned lock refuses overlapping builds; a verified exited owner can be recovered, while malformed or linked locks fail for inspection. Successful runs and termination release the lock. Do not accumulate a full DerivedData tree per test run.
+## Mac session preflight
+
+Run `python3 scripts/apple-session.py` before physical signing/account checks. It reads only the
+native CoreGraphics console and lock flags and returns `unlocked`, `locked` or `unavailable`.
+An empty/unavailable reading is not evidence that the Mac is locked; inspect the probe instead
+of repeatedly asking the operator to unlock it. Mac packaging enforces this preflight before
+using the existing signing identity. Do not reset signing credentials from an inconclusive probe.

@@ -39,7 +39,7 @@ class BrowserActions {
   menu(tab, params) {
     const url = this.link(params.linkURL);
     // Capture ownership when the menu opens, before another surface can become active.
-    const source={profileId:tab.profileId,group:tab.group,parentId:tab.parentId||null,destination:tab.destination,workspaceName:tab.workspaceName,associationChatId:tab.associationChatId};
+    const source={incognito:tab.incognito===true,profileId:tab.profileId,group:tab.group,parentId:tab.parentId||null,destination:tab.destination,workspaceName:tab.workspaceName,associationChatId:tab.associationChatId};
     // Native Menu callbacks run after the originating IPC/webContents scope ends.
     // Re-enter that tab's window before any async creation or selection occurs.
     const run = action => () => { if (this.browser.shuttingDown || !this.browser.tabs.has(tab.id)) return; Promise.resolve().then(()=>this.browser.withTabWindow?this.browser.withTabWindow(tab,action):action()).catch(error => this.send({type:'error',id:tab.id,message:error.message})); };
@@ -70,6 +70,7 @@ class BrowserActions {
       // "New Tab" duplicated whichever profile the source tab used.
       ...this.profileItems().slice(0,1).map(profile=>({label:`Open Link in New ${String(profile.name||'Default').replace(/[\r\n]/g,' ').replace(/&/g,'&&')} Browser Tab`,...this.icon('NSAddTemplate'),click:run(async()=>{const info=await this.browser.create(url,null,null,{...source,profileId:profile.id});this.send({type:'select-tab',info,afterId:tab.id});})})),
       {label:'Open Link in Background Tab',...this.icon('NSAddTemplate'),click:run(async()=>{const info=await this.browser.create(url,null,null,{...source,hidden:false,unloaded:false,background:true});this.send({type:'background-tab',info,afterId:tab.id});})},
+      {label:'Open Link in Incognito Tab',...this.icon('NSUserAccountsTemplate'),click:run(async()=>{const info=await this.browser.create(url,null,null,{...source,incognito:true});this.send({type:'select-tab',info,afterId:tab.id});})},
       ...this.profileItems().slice(1).map(profile=>({label:`Open Link in New ${String(profile.name||'Default').replace(/[\r\n]/g,' ').replace(/&/g,'&&')} Browser Tab`,...this.icon('NSAddTemplate'),click:run(async()=>{const info=await this.browser.create(url,null,null,{...source,profileId:profile.id});this.send({type:'select-tab',info,afterId:tab.id});})})),
       {label:'Open Link in Unloaded Tab',...this.icon('NSAddTemplate'),click:run(async()=>{const info=await this.browser.create(url,null,null,{...source,hidden:true,unloaded:true,title:String(params.linkText||'').trim().slice(0,200)});this.send({type:'unloaded-tab',info,afterId:tab.id});})},
       {label:`Open Link in ${browserName.replace(/[\r\n]/g,' ').replace(/&/g,'&&')}`, ...this.icon('NSFollowLinkFreestandingTemplate'), click:run(() => shell.openExternal(url))},
@@ -80,9 +81,10 @@ class BrowserActions {
       {label:'Start New Chat with Link',...this.icon('NSTouchBarComposeTemplate'),click:run(() => this.send({type:'chat-link',url}))},
       ...(items.length?[{type:'separator'},...items]:[]),
       ...(inspect?[{type:'separator'},inspect]:[]),
-    ]);
+    ].filter(item=>!tab.incognito||item.type==='separator'||['Open Link in Background Tab','Open Link in Incognito Tab','Open Link in Unloaded Tab','Copy Link','Inspect Element'].includes(item.label)));
   }
   async download(url,profileId='default') {
+    if(this.browser.incognito.has(profileId))throw Error('Open this download in an ordinary tab to save it.');
     let filename = 'download';
     try { filename = path.basename(decodeURIComponent(new URL(url).pathname)).replace(/[\x00-\x1f/\\:]/g,'_').slice(0,180) || filename; } catch {}
     const result = await dialog.showSaveDialog(this.browser.window,{title:'Save link as',defaultPath:path.join(this.downloadManager?.settings().directory||app.getPath('downloads'),filename),buttonLabel:'Save'});
@@ -90,6 +92,7 @@ class BrowserActions {
     return this.startDownload(url,profileId,result.filePath);
   }
   startDownload(url,profileId,file,options={}) {
+    if(this.browser.incognito.has(profileId))throw Error('Open this download in an ordinary tab to save it.');
     if(!this.link(url)||!this.browser.profileAvailable({profileId}))throw Error('This download source or profile is unavailable.');
     // A page cannot consume this grant: only a new, never-navigated webContents may download.
     const view = new WebContentsView({webPreferences:pageWebPreferences({session:this.browser.sessionFor(profileId)})});
@@ -102,7 +105,7 @@ class BrowserActions {
     const browser = this.browser;
     browser.overviewOpen = true;
     const tabs = browser.list(true).filter(tab => !group || tab.group === group);
-    for(const info of tabs){const tab=browser.tabs.get(info.id);if(tab&&browser.profileAvailable(tab))Object.assign(info,browser.thumbnails?.get(browser.thumbnailKey(tab))||{});}
+    for(const info of tabs){const tab=browser.tabs.get(info.id);if(tab&&!tab.incognito&&browser.profileAvailable(tab))Object.assign(info,browser.thumbnails?.get(browser.thumbnailKey(tab))||{});}
     browser.show(null);return {tabs};
   }
   dispose() { this.downloadManager?.close();for (const id of this.downloads.keys()) this.disposeDownload(id); for(const partition of this.browser.sessions.values())partition.removeListener('will-download',this.downloadHandler); }

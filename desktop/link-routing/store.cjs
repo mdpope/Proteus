@@ -10,12 +10,12 @@ function validate(value){
     if(typeof rule.id!=='string'||!rule.id||ids.has(rule.id)||rule.id.length>80||typeof rule.pattern!=='string'||!rule.pattern.trim()||rule.pattern.length>2048||/[\x00-\x1f\x7f]/.test(rule.pattern)||typeof rule.enabled!=='boolean')throw Error('Each rule needs a unique ID, URL pattern, and enabled setting.');
     ids.add(rule.id);
     const target=rule.destination;
-    if(!target||['workspaceId','projectId'].some(key=>typeof target[key]!=='string'||!target[key]||target[key].length>200)||target.hostId!==undefined&&target.hostId!=='local'&&!/^[a-f0-9-]{36}$/i.test(target.hostId))throw Error('Choose an explicit workspace and project for each rule.');
+    if(!validDestination(target))throw Error('Choose an available feature or an explicit workspace and project for each rule.');
   }
   if(value.defaults!==undefined)validateDefaults(value.defaults);
   return value;
 }
-const validDestination=target=>target&&['workspaceId','projectId'].every(key=>typeof target[key]==='string'&&target[key]&&target[key].length<=200)&&(target.hostId===undefined||target.hostId==='local'||/^[a-f0-9-]{36}$/i.test(target.hostId));
+const validDestination=target=>target&&(target.feature?['team','reminders','scratchpad'].includes(target.feature)&&(!target.hostId||target.hostId==='local'):['workspaceId','projectId'].every(key=>typeof target[key]==='string'&&target[key]&&target[key].length<=200)&&(target.hostId===undefined||target.hostId==='local'||/^[a-f0-9-]{36}$/i.test(target.hostId)));
 /** Picker defaults, modelled on SafariSelector's auto-select: a fixed project or the
  * last chosen one, opened after an optional countdown or when the picker is dismissed. */
 function validateDefaults(value){
@@ -32,7 +32,7 @@ class LinkRoutingStore{
   }
   // Last choice is ordinary state, kept apart so link clicks never invalidate an open settings form.
   last(){try{const value=JSON.parse(fs.readFileSync(this.lastFile,'utf8'));return validDestination(value)?value:null;}catch{return null;}}
-  recordLast(target){if(!validDestination(target))return;const value={hostId:target.hostId||'local',workspaceId:target.workspaceId,projectId:target.projectId};try{fs.mkdirSync(path.dirname(this.lastFile),{recursive:true,mode:0o700});const temporary=this.lastFile+'.'+randomUUID()+'.tmp';fs.writeFileSync(temporary,JSON.stringify(value)+'\n',{mode:0o600});atomicRename(temporary,this.lastFile);}catch{}}
+  recordLast(target){if(!validDestination(target))return;const value={hostId:target.hostId||'local',...(target.feature?{feature:target.feature}:{workspaceId:target.workspaceId,projectId:target.projectId})};try{fs.mkdirSync(path.dirname(this.lastFile),{recursive:true,mode:0o700});const temporary=this.lastFile+'.'+randomUUID()+'.tmp';fs.writeFileSync(temporary,JSON.stringify(value)+'\n',{mode:0o600});atomicRename(temporary,this.lastFile);}catch{}}
   read(){
     let value;try{if(fs.statSync(this.file).size>1024*1024)throw Error('Link-routing preferences are too large.');value=JSON.parse(fs.readFileSync(this.file,'utf8'));}catch(error){if(error.code!=='ENOENT')throw Error('Link-routing preferences could not be read. The original file was preserved.');value={schemaVersion:1,rules:[]};}
     validate(value);return {...value,revision:revision(value)};

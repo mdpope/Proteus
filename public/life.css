@@ -1,9 +1,9 @@
+@import './shared/navigation/feature-tabs.css';
 /* Native Life pages share Proteus typography and theme tokens. */
 #life-page { max-width: 1440px; margin: 0 auto; }
-.life-tabs,.life-subtabs,.life-choice { display:flex; flex-wrap:wrap; gap:6px; margin:18px 0; }
-.life-tabs { padding-bottom:14px; border-bottom:1px solid var(--line,#dce4e1); }
-.life-tabs button,.life-subtabs button { background:transparent; border:1px solid transparent; color:inherit; }
-.life-tabs .active,.life-subtabs .active,.life-choice .active { background:var(--accent,#c9e8d7); color:var(--text,#173d2c); border-color:var(--line,#b7d0c4); }
+.life-subtabs,.life-choice { display:flex; flex-wrap:wrap; gap:6px; margin:18px 0; }
+.life-subtabs button { background:transparent; border:1px solid transparent; color:inherit; }
+.life-subtabs .active,.life-choice .active { background:var(--accent,#c9e8d7); color:var(--text,#173d2c); border-color:var(--line,#b7d0c4); }
 #life-content>.card,#life-content>.life-columns,#life-content>.life-metrics { margin:16px 0; }
 .life-columns { display:grid; grid-template-columns:minmax(0,1.35fr) minmax(300px,1fr); gap:18px; align-items:start; }
 .life-columns>.card,.life-columns>aside>.card { margin-bottom:16px; min-width:0; }
@@ -87,3 +87,6 @@
 .life-account-badge { display:inline-flex; justify-self:start; max-width:100%; white-space:normal; }
 .life-account-actions { display:flex; gap:10px; flex-wrap:wrap; margin:0; }
 .life-account-actions button { max-width:100%; white-space:normal; }
+.life-bars{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}.life-bars li{display:grid;grid-template-columns:110px minmax(0,1fr) 96px;gap:10px;align-items:center}
+.life-bar{display:block;height:8px;border-radius:4px;background:var(--proteus-control,#242e29);overflow:hidden}.life-bar i{display:block;height:100%;background:var(--proteus-accent,#c2e8a0)}
+.life-scorecard{cursor:default;text-align:left}.life-scorecard .life-metrics{grid-template-columns:repeat(2,minmax(0,1fr));margin:10px 0}

@@ -38,8 +38,8 @@ import Security
     private var delivered: [String: Double]
     private static let deliveredKey = "proteus.notification-receipts.v2"
     private func claim(_ host: String, _ event: String, now: Date = Date(), persist: Bool = true) -> Bool {
-        guard let hostID = UUID(uuidString: host), let eventID = UUID(uuidString: event) else { return false }
-        let key = hostID.uuidString.lowercased() + ":" + eventID.uuidString.lowercased()
+        guard let eventID = UUID(uuidString: event), UUID(uuidString: host) != nil || (host.count == 64 && host.allSatisfy({ $0.isHexDigit })) else { return false }
+        let key = host.lowercased() + ":" + eventID.uuidString.lowercased()
         guard delivered[key] == nil else { return false }
         delivered[key] = now.timeIntervalSince1970
         if delivered.count > 2000 { delivered = Dictionary(uniqueKeysWithValues: delivered.sorted { $0.value > $1.value }.prefix(1500).map { ($0.key, $0.value) }) }
@@ -56,6 +56,9 @@ import Security
         let type: String
         var notificationID: String = ""
         var questionID: String = ""
+        var destinationKind: String = ""
+        var accountID: String = ""
+        var resourceID: String = ""
         static func from(_ payload: [AnyHashable: Any]) -> Self {
             func field(_ key: String) -> String {
                 guard let value = payload[key] as? String, value.count <= 128,
@@ -64,6 +67,25 @@ import Security
             }
             let host = field("hostId")
             let notification = field("notificationId")
+            if let target = payload["destination"] as? [String: String] {
+                let kind = target["kind"] ?? "", account = target["accountId"] ?? ""
+                let resource = target[kind == "reminder" ? "reminderId" : "documentId"] ?? ""
+                let owner = target["hostId"] ?? host
+                if ["reminder", "document"].contains(kind), account.count == 64, account.allSatisfy({ $0.isHexDigit }), UUID(uuidString: resource) != nil, kind == "reminder" || UUID(uuidString: owner) != nil {
+                    return Self(hostID: owner, chatID: "", scheduleID: "", type: field("type"), notificationID: notification, destinationKind: kind, accountID: account, resourceID: resource)
+                }
+                if kind == "chat", account.count == 64, account.allSatisfy({ $0.isHexDigit }), UUID(uuidString: owner) != nil, let chat = target["chatId"], UUID(uuidString: chat) != nil {
+                    return Self(hostID: owner, chatID: chat, scheduleID: "", type: field("type"), notificationID: notification, destinationKind: kind, accountID: account)
+                }
+                return Self(hostID: "", chatID: "", scheduleID: "", type: field("type"))
+            }
+            if field("type") == "life.answer" {
+                let chat = field("chatId"), request = field("requestId")
+                guard UUID(uuidString: host) != nil, UUID(uuidString: chat) != nil, UUID(uuidString: request) != nil else {
+                    return Self(hostID: "", chatID: "", scheduleID: "", type: "life.answer")
+                }
+                return Self(hostID: host, chatID: chat, scheduleID: "", type: "life.answer", notificationID: UUID(uuidString: notification) == nil ? "" : notification)
+            }
             return Self(hostID: UUID(uuidString: host) == nil ? "" : host,
                         chatID: field("chatId"), scheduleID: field("scheduleId"), type: field("type"),
                         notificationID: UUID(uuidString: notification) == nil ? "" : notification, questionID: field("questionId").isEmpty ? field("requestId") : field("questionId"))
@@ -77,8 +99,8 @@ import Security
         delivered = [:]
         for (key, time) in defaults.dictionary(forKey: Self.deliveredKey) as? [String: Double] ?? [:] {
             let parts = key.split(separator: ":")
-            guard parts.count == 2, let host = UUID(uuidString: String(parts[0])), let event = UUID(uuidString: String(parts[1])) else { continue }
-            let canonical = host.uuidString.lowercased() + ":" + event.uuidString.lowercased()
+            guard parts.count == 2, UUID(uuidString: String(parts[0])) != nil || (parts[0].count == 64 && parts[0].allSatisfy({ $0.isHexDigit })), let event = UUID(uuidString: String(parts[1])) else { continue }
+            let canonical = parts[0].lowercased() + ":" + event.uuidString.lowercased()
             delivered[canonical] = max(delivered[canonical] ?? 0, time)
         }
         super.init(); UNUserNotificationCenter.current().delegate = self
@@ -117,11 +139,16 @@ import Security
         var changed = false
         defer { if changed { defaults.set(delivered, forKey: Self.deliveredKey) } }
         for item in items {
-            let id = hostID + ":" + item["id"].string
-            guard Self.shouldAlert(item, now: now), claim(hostID, item["id"].string, now: now, persist: false) else { continue }
+            let account = item["destination"]["accountId"].string
+            guard account.isEmpty || account == life?.credential?.accountID else { continue }
+            let owner = account.isEmpty ? hostID : account
+            let id = owner + ":" + item["id"].string
+            guard Self.shouldAlert(item, now: now), claim(owner, item["id"].string, now: now, persist: false) else { continue }
             changed = true
             guard !first else { continue }
-            let destination = NotificationRoute.from(["hostId": hostID, "chatId": item["chatId"].string, "scheduleId": item["scheduleId"].string, "type": item["type"].string, "notificationId": item["id"].string, "questionId": item["questionId"].string, "requestId": item["requestId"].string])
+            var payload: [AnyHashable: Any] = ["hostId": hostID, "chatId": item["chatId"].string, "scheduleId": item["scheduleId"].string, "type": item["type"].string, "notificationId": item["id"].string, "questionId": item["questionId"].string, "requestId": item["requestId"].string]
+            if !item["destination"].object.isEmpty { payload["destination"] = item["destination"].object.mapValues { $0.string } }
+            let destination = NotificationRoute.from(payload)
             if UIApplication.shared.applicationState == .active { presentBanner(Self.notificationBody(item), destination: destination); continue }
             // A configured account subscription owns background delivery. The
             // live owner feed must not schedule a second local alert for it.
@@ -129,7 +156,8 @@ import Security
             // Same text the computer published: chat title, preview and source computer.
             let content = UNMutableNotificationContent(); content.title = item["title"].string.isEmpty ? "Proteus" : String(item["title"].string.prefix(160)); content.subtitle = String(item["hostName"].string.prefix(80)); content.body = Self.notificationBody(item, includeTitle: false); content.sound = Self.shouldPlaySound(item) ? .default : nil; content.threadIdentifier = item["chatId"].string
             content.userInfo = ["hostId": hostID, "chatId": item["chatId"].string,
-                                "scheduleId": item["scheduleId"].string, "type": item["type"].string, "notificationId": destination.notificationID, "questionId": destination.questionID]
+                                "scheduleId": item["scheduleId"].string, "type": item["type"].string, "notificationId": destination.notificationID, "questionId": destination.questionID, "requestId": item["requestId"].string]
+            if let target = payload["destination"] { content.userInfo["destination"] = target }
             UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: id, content: content, trigger: nil))
         }
     }
@@ -153,7 +181,7 @@ import Security
         return preview.isEmpty ? safeBody(item["type"].string) : String(preview.prefix(500))
     }
     static func safeBody(_ type: String) -> String {
-        switch type { case "chat.completed": "A chat finished."; case "review.required", "approval.required": "A chat needs your review."; case "schedule.completed": "A schedule finished."; case "device.added": "A device was added."; case "device.reconnected": "A computer reconnected."; case "website.notification": "A website sent a notification."; default: "New activity is available." }
+        switch type { case "life.answer": "Your Life answer is ready."; case "chat.completed": "A chat finished."; case "review.required", "approval.required": "A chat needs your review."; case "schedule.completed": "A schedule finished."; case "device.added": "A device was added."; case "device.reconnected": "A computer reconnected."; case "website.notification": "A website sent a notification."; default: "New activity is available." }
     }
     func receivedTap(_ payload: [AnyHashable: Any]) {
         route = NotificationRoute.from(payload)
@@ -191,12 +219,14 @@ import Security
             // the same event. Whichever arrives first owns its foreground alert.
             // Legacy pushes without event time remain available in history/tap routing.
             // A transport arrival date is not the original event's creation time.
-            guard Self.shouldAlert(observed), self.claim(host, eventID) else { completionHandler([]); return }
+            let account = (payload["destination"] as? [String: String])?["accountId"]
+            guard account == nil || account == self.life?.credential?.accountID else { completionHandler([]); return }
+            guard Self.shouldAlert(observed), self.claim(account ?? host, eventID) else { completionHandler([]); return }
             #if DEBUG
             self.fixtureStatus = "Foreground delivered"
             #endif
             // Use the pushed alert's own text; fall back to the generic label for older servers.
-            self.presentBanner(text.isEmpty ? Self.safeBody(type) : String(text.prefix(500)), destination: NotificationRoute.from(["hostId": host, "chatId": chat, "scheduleId": schedule, "type": type, "notificationId": eventID, "questionId": payload["questionId"] as? String ?? payload["requestId"] as? String ?? ""])); completionHandler(playSound ? [.sound] : []) }
+            self.presentBanner(text.isEmpty ? Self.safeBody(type) : String(text.prefix(500)), destination: NotificationRoute.from(payload)); completionHandler(playSound ? [.sound] : []) }
     }
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
         let payload = response.notification.request.content.userInfo

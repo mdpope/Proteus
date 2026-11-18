@@ -16,6 +16,9 @@ try{
  await native(async(main,id)=>{const wc=main.getBrowser().get(id).view.webContents;await wc.executeJavaScript('window.audio=new AudioContext();window.oscillator=audio.createOscillator();window.gain=audio.createGain();gain.gain.value=0.01;oscillator.connect(gain).connect(audio.destination);oscillator.start();audio.resume();true',true);},id);
  await until(()=>native((main,id)=>main.getBrowser().state(main.getBrowser().get(id)).audioPlaying,id),'Chromium detects WebAudio');
  await node.locator('[aria-label="Audio playing"]').waitFor();assert.equal(await node.locator('.tab-audio').evaluate(el=>el.nextElementSibling?.classList.contains('tabclose')),true);
+ await native(async(main,id)=>{await main.getBrowser().get(id).view.webContents.executeJavaScript('document.title="A deliberately long audio-playing page title that must leave the close button inside the measured tab"');},id);
+ await until(()=>node.innerText().then(text=>text.includes('deliberately long')),'long live page title');
+ assert.equal(await node.evaluate(el=>{const tab=el.getBoundingClientRect(),close=el.querySelector('.tabclose').getBoundingClientRect();return close.right<=tab.right+1&&close.width>=24;}),true,'audio and close fit inside the scroll-reveal width');
  // Exercise the actual renderer's right-click menu and selected command.
  const menuChoice=async label=>{await node.click({button:'right'});const menu=await until(()=>app.windows().find(window=>window.url().endsWith('/browser-page-menu.html')),'tab context menu');await menu.getByRole('menuitem',{name:label,exact:true}).click();};
  await menuChoice('Mute tab');await until(()=>native((main,id)=>main.getBrowser().get(id).view.webContents.isAudioMuted(),id),'context menu mutes native page');

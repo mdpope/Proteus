@@ -1,5 +1,6 @@
 // Icons are bounded raster data received from the embedded browser session.
 export function browserTabIcon(info={},escape=value=>String(value)) {
+  if(info.incognito)return '<svg class="browser-tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-label="Incognito"><path d="M3 10h18M6 10l2-7h8l2 7M10 16h4"/><circle cx="6" cy="17" r="4"/><circle cx="18" cy="17" r="4"/></svg>';
   if(info.agentControlling)return '<svg class="browser-tab-icon agent-cursor" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3v17l5-5 4 7 3-2-4-7h7z" fill="currentColor"/></svg><span class="sr-only">Agent controlling this tab. </span>';
   const icon=typeof info.favicon==='string'&&info.favicon.length<=98304&&/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(info.favicon)?info.favicon:'';
   return icon?`<img class="browser-tab-icon" src="${escape(icon)}" alt="">`:'<span class="browser-tab-icon browser-tab-fallback" aria-hidden="true">◎</span>';

@@ -1,5 +1,7 @@
 // Small, fixed vector marks; labels and extension names remain plain text.
 const paths={
+ mute:'<path d="M3 9h4l5-4v14l-5-4H3zM16 9l5 6m0-6-5 6"/>',
+ incognito:'<path d="M3 10h18M6 10l2-7h8l2 7M10 16h4"/><circle cx="6" cy="17" r="4"/><circle cx="18" cy="17" r="4"/>',
  copy:'<rect x="8" y="8" width="12" height="13" rx="2"/><path d="M15 8V3H3v13h5"/>',
  plus:'<path d="M12 4v16M4 12h16"/>',
  move:'<path d="M3 12h17m-6-6 6 6-6 6M4 4H2v16h2"/>',
@@ -23,7 +25,7 @@ const paths={
  paste:'<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V2h6v2M9 10h6M9 14h6"/>',
  selectAll:'<path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M9 12h6"/>'
 };
-function key(id){if(id==='undo'||id==='redo'||id==='cut'||id==='paste')return id;if(id==='select-all')return 'selectAll';if(id==='duplicate'||id.startsWith('copy'))return 'copy';if(id.startsWith('add')||id==='install')return 'plus';if(id.startsWith('move')||id.startsWith('send'))return 'move';if(id.startsWith('rename'))return 'edit';if(id.startsWith('close'))return 'close';if(id==='unload'||id==='hide'||id==='persist')return id==='persist'?'pin':id;if(id==='autoplay')return 'video';if(id==='clear-site')return 'trash';if(id==='certificate')return 'shield';if(id==='mode:mobile')return 'mobile';if(id.startsWith('mode:'))return 'desktop';if(id==='devtools')return 'code';if(id==='manage')return 'extension';if(id==='site-data')return 'settings';return /^[a-p]{32}$/.test(id)?'extension':null;}
+function key(id){if(id==='mute')return 'mute';if(id.includes('incognito'))return 'incognito';if(id==='undo'||id==='redo'||id==='cut'||id==='paste')return id;if(id==='select-all')return 'selectAll';if(id==='duplicate'||id.startsWith('copy'))return 'copy';if(id.startsWith('add')||id==='install')return 'plus';if(id.startsWith('move')||id.startsWith('send'))return 'move';if(id.startsWith('rename'))return 'edit';if(id.startsWith('close'))return 'close';if(id==='unload'||id==='hide'||id==='persist')return id==='persist'?'pin':id;if(id==='autoplay')return 'video';if(id==='clear-site')return 'trash';if(id==='certificate')return 'shield';if(id==='mode:mobile')return 'mobile';if(id.startsWith('mode:'))return 'desktop';if(id==='devtools')return 'code';if(id==='manage')return 'extension';if(id==='site-data')return 'settings';return /^[a-p]{32}$/.test(id)?'extension':null;}
 export function appendMenuLabel(button,item){
  const name=key(item.id);let icon;
  if(typeof item.icon==='string'&&item.icon.length<=32768&&/^data:image\/png;base64,[a-zA-Z0-9+/=]+$/.test(item.icon)){icon=document.createElement('img');icon.src=item.icon;icon.alt='';}

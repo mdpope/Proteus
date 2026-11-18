@@ -7,7 +7,15 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A511C0FFEE11111111111111 /* LifeReminderReplica.swift in Sources */ = {isa = PBXBuildFile; fileRef = A511C0FFEE22222222222222 /* LifeReminderReplica.swift */; };
+		A11FEA480000000000000001 = {isa = PBXBuildFile; fileRef = A11FEA480000000000000002; };
+		A11FEA470000000000000001 /* ScratchpadWorkspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11FEA470000000000000002; };
+		A11FEA470000000000000003 /* ScratchpadView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11FEA470000000000000004; };
+		A11FEA450000000000000001 /* LifeHomeWorkspaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11FEA450000000000000002; };
+		A11FEA440000000000000001 /* LifeReminderWorkspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11FEA440000000000000002; };
+		B9F24100112233445566000D /* NativeBrowserClipboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9F24100112233445566000E; };
 		B9F24100112233445566000B = {isa = PBXBuildFile; fileRef = B9F24100112233445566000C; };
+		B9F24100112233445566000F = {isa = PBXBuildFile; fileRef = B9F241001122334455660010; };
 		B9F241001122334455660005 /* NativeCertificateInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9F241001122334455660006 /* NativeCertificateInfo.swift */; };
 		B9F241001122334455660007 /* NativeBrowserPageCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9F241001122334455660008 /* NativeBrowserPageCache.swift */; };
 		B4F241001122334455660004 = {isa = PBXBuildFile; fileRef = B4F241001122334455660003; };
@@ -61,6 +69,9 @@
 		D5382767A692259B940198E9 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C3669D14C35D62493F9512B7 /* Assets.xcassets */; };
 		E3CCE5A289BFA2C55DB7BBA0 /* QRScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAE0DEDA1094847BDFC976EB /* QRScanner.swift */; };
 		EFB5B876A5E8C0845798EFDB /* LifeViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92BF81FE2FB7FD30E6747EA6 /* LifeViews.swift */; };
+		A11FEA580000000000000001 /* LifeAskView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11FEA580000000000000002 /* LifeAskView.swift */; };
+		A11FEA420000000000000001 /* LifeRemindersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11FEA420000000000000002 /* LifeRemindersView.swift */; };
+		A11FEA430000000000000001 /* LifeHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11FEA430000000000000002 /* LifeHomeView.swift */; };
 		5547E966924E34D2887095B3 /* NativeProjects.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85CC555919516B6821F4F60E /* NativeProjects.swift */; };
 		5FD40E7880BD5ACA87A6D6E1 /* NativeProjectViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = E83CBD54FEBAE9D70ED1B282 /* NativeProjectViews.swift */; };
 		48D84288A895FCA50DB71BA5 /* NativePhonePreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC31B97208F8815C3BFB6B96 /* NativePhonePreview.swift */; };
@@ -94,7 +105,15 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		A511C0FFEE22222222222222 /* LifeReminderReplica.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeReminderReplica.swift; sourceTree = "<group>"; };
+		A11FEA480000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeFeatureWorkspace.swift; sourceTree = "<group>"; };
+		A11FEA470000000000000002 /* ScratchpadWorkspace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScratchpadWorkspace.swift; sourceTree = "<group>"; };
+		A11FEA470000000000000004 /* ScratchpadView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScratchpadView.swift; sourceTree = "<group>"; };
+		A11FEA450000000000000002 /* LifeHomeWorkspaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeHomeWorkspaceView.swift; sourceTree = "<group>"; };
+		A11FEA440000000000000002 /* LifeReminderWorkspace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeReminderWorkspace.swift; sourceTree = "<group>"; };
+		B9F24100112233445566000E /* NativeBrowserClipboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeBrowserClipboard.swift; sourceTree = "<group>"; };
 		B9F24100112233445566000C = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Proteus/Features/Workspaces/Views/NativeFileBrowser.swift; sourceTree = SOURCE_ROOT; };
+		B9F241001122334455660010 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Proteus/Features/Workspaces/Views/NativeTextDocument.swift; sourceTree = SOURCE_ROOT; };
 		B9F241001122334455660006 /* NativeCertificateInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Proteus/Services/Browser/NativeCertificateInfo.swift; sourceTree = SOURCE_ROOT; };
 		B9F241001122334455660008 /* NativeBrowserPageCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Proteus/Services/Browser/NativeBrowserPageCache.swift; sourceTree = SOURCE_ROOT; };
 		B4F241001122334455660003 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NativeBrowserNavigationTests.swift; path = ProteusTests/NativeBrowserNavigationTests.swift; sourceTree = SOURCE_ROOT; };
@@ -135,6 +154,9 @@
 		8EE5D84DB0FFFCF87E643DDA /* JSON.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSON.swift; sourceTree = "<group>"; };
 		9023FEA1077763EA7555C94D /* RemoteStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteStore.swift; sourceTree = "<group>"; };
 		92BF81FE2FB7FD30E6747EA6 /* LifeViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeViews.swift; sourceTree = "<group>"; };
+		A11FEA580000000000000002 /* LifeAskView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeAskView.swift; sourceTree = "<group>"; };
+		A11FEA420000000000000002 /* LifeRemindersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeRemindersView.swift; sourceTree = "<group>"; };
+		A11FEA430000000000000002 /* LifeHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeHomeView.swift; sourceTree = "<group>"; };
 		99814D317E2043305330CB8E /* ScheduleViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleViews.swift; sourceTree = "<group>"; };
 		9A814582040CD2B969E3FED0 /* ChatViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatViews.swift; sourceTree = "<group>"; };
 		D041375426F54E73AAE56902 /* NativeUserQuestion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeUserQuestion.swift; sourceTree = "<group>"; };
@@ -168,6 +190,8 @@
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
+		A11FEA470000000000000005 /* Scratchpad */ = {isa = PBXGroup; children = (A11FEA470000000000000006 /* Views */,); path = Scratchpad; sourceTree = "<group>"; };
+		A11FEA470000000000000006 /* Views */ = {isa = PBXGroup; children = (A11FEA470000000000000004 /* ScratchpadView.swift */,); path = Views; sourceTree = "<group>"; };
 		1E9395FBB4AAB39B4DC82C89 /* ProteusUITests */ = {
 			isa = PBXGroup;
 			children = (
@@ -244,6 +268,7 @@
 				2E34D0118F7DF305762E885E /* Chats */,
 				09E8D9DF2CD0E4B799642F25 /* EngineRoom */,
 				E6BC4CD9A1C7ED8F5942D310 /* Life */,
+				A11FEA470000000000000005 /* Scratchpad */,
 				672ADC7E38CBDD552A305AA9 /* Schedules */,
 				1DC312B4AA4C99ADAD887AD8 /* Workspaces */,
 			);
@@ -322,6 +347,10 @@
 			children = (
 				ABF0057B2DB7BDE6C2A5BEA1 /* LifeForms.swift */,
 				92BF81FE2FB7FD30E6747EA6 /* LifeViews.swift */,
+				A11FEA580000000000000002 /* LifeAskView.swift */,
+				A11FEA420000000000000002 /* LifeRemindersView.swift */,
+				A11FEA430000000000000002 /* LifeHomeView.swift */,
+				A11FEA450000000000000002 /* LifeHomeWorkspaceView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -418,6 +447,7 @@
 				7A9B8CF994FE93C63B66ED43 /* BrowserCacheKeychain.swift */,
 				B397B11ABD4B7498DF5F7163 /* NativeDescriptorCache.swift */,
 				D0A6A874D71541FD86BC5E32 /* NativeSharedCache.swift */,
+				A511C0FFEE22222222222222 /* LifeReminderReplica.swift */,
 			);
 			path = Persistence;
 			sourceTree = "<group>";
@@ -426,6 +456,9 @@
 			isa = PBXGroup;
 			children = (
 				754660009D54CA67C3B12C53 /* SharedAppStore.swift */,
+				A11FEA440000000000000002 /* LifeReminderWorkspace.swift */,
+				A11FEA470000000000000002 /* ScratchpadWorkspace.swift */,
+				B9F24100112233445566000E /* NativeBrowserClipboard.swift */,
 				B3F241001122334455660004 /* NativeRemoteStateField.swift */,
 				B4F241001122334455660001 /* NativeBrowserNavigationAcknowledgement.swift */,
 				B3F241001122334455660006,
@@ -455,6 +488,7 @@
 		443C5DE13938DB10170A259E /* Navigation */ = {
 			isa = PBXGroup;
 			children = (
+				A11FEA480000000000000002 /* NativeFeatureWorkspace.swift */,
 				2627C7D5A4DE8F9F996B47F8 /* NativeShell.swift */,
 				CD3C496FEA9D3B251477A77E /* NativeMoveMenu.swift */,
 			);
@@ -631,6 +665,7 @@
 				B9F241001122334455660007 /* NativeBrowserPageCache.swift in Sources */,
 				B9F241001122334455660009 /* NativeAttachmentPaste.swift in Sources */,
 				B9F24100112233445566000B,
+				B9F24100112233445566000F,
 				0251FE479F24F5A96EA70F96 /* RemoteStore.swift in Sources */,
 				AF0F1C0D85782B82FE42F56A /* TeamToolsView.swift in Sources */,
 				42B1CE228634AE5F8B512A86 /* EngineRoomView.swift in Sources */,
@@ -641,10 +676,19 @@
 				48D84288A895FCA50DB71BA5 /* NativePhonePreview.swift in Sources */,
 				5023E16EAE07DA09B8342690 /* NativeNotifications.swift in Sources */,
 				D26BCA5F8CC14636821B06A3 /* SharedAppStore.swift in Sources */,
+				B9F24100112233445566000D /* NativeBrowserClipboard.swift in Sources */,
 				1162CF50A47019EEE0F0B91C /* ScheduleViews.swift in Sources */,
 				30B1A0694148D8AA25AD8B3C /* UsageViews.swift in Sources */,
 				7022D275A902DE896A1918FC /* LifeStore.swift in Sources */,
 				EFB5B876A5E8C0845798EFDB /* LifeViews.swift in Sources */,
+				A11FEA580000000000000001 /* LifeAskView.swift in Sources */,
+				A11FEA420000000000000001 /* LifeRemindersView.swift in Sources */,
+				A11FEA480000000000000001 /* NativeFeatureWorkspace.swift in Sources */,
+				A11FEA440000000000000001 /* LifeReminderWorkspace.swift in Sources */,
+				A11FEA470000000000000001 /* ScratchpadWorkspace.swift in Sources */,
+				A11FEA470000000000000003 /* ScratchpadView.swift in Sources */,
+				A11FEA430000000000000001 /* LifeHomeView.swift in Sources */,
+				A11FEA450000000000000001 /* LifeHomeWorkspaceView.swift in Sources */,
 				4FB84798FFDA898F674E687B /* LifeForms.swift in Sources */,
 				891380DFDF602E8C8B8B7A29 /* LifeFixtures.swift in Sources */,
 				B3F241001122334455660016 /* NativeContentTabProjection.swift in Sources */,
@@ -659,6 +703,7 @@
 				E430010E9EE52E44B1F9CA66 /* BrowserCacheKeychain.swift in Sources */,
 				35F51F9D47A18DF741E5E436 /* NativeDescriptorCache.swift in Sources */,
 				D0A6A874D71541FD86BC5E31 /* NativeSharedCache.swift in Sources */,
+				A511C0FFEE11111111111111 /* LifeReminderReplica.swift in Sources */,
 				D1240567439FF2681FD55806 /* NativeChatScrollMeasurements.swift in Sources */,
 				B3F24100112233445566000E,
 				B3F241001122334455660010,
@@ -774,8 +819,8 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 0.2.44;
-				PROTEUS_RELEASE_DATE = "2026-11-08";
+				MARKETING_VERSION = 0.2.45;
+				PROTEUS_RELEASE_DATE = "2026-11-15";
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -874,8 +919,8 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 0.2.44;
-				PROTEUS_RELEASE_DATE = "2026-11-08";
+				MARKETING_VERSION = 0.2.45;
+				PROTEUS_RELEASE_DATE = "2026-11-15";
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";

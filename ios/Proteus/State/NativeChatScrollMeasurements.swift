@@ -27,7 +27,7 @@ struct NativeChatReadingRecord: Codable {
     let touchedAt: TimeInterval
 }
 
-struct NativeChatEventFrame {
+struct NativeChatEventFrame: Equatable {
     let start: Int
     let frame: CGRect
     var contentTop: CGFloat { frame.minY }

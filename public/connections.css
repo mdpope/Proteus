@@ -35,3 +35,8 @@
 #remote-screen #remote-invite .pairing-qr{max-width:100%;height:auto}
 #remote-desktop-destinations:empty,#remote-screen #remote-invite:empty,#remote-screen [role=status]:empty{display:none}
 @media(max-width:700px){#remote-screen .card{padding:18px}#remote-screen .desktop-peer-actions{flex-basis:100%}}
+.device-workspace-files{display:flex;flex-direction:column;gap:4px}
+.device-workspace-list{margin:2px 0 6px;border:1px solid var(--proteus-line,#303b36);border-radius:6px;padding:4px 10px}
+.device-workspace-list>summary{cursor:pointer;padding:6px 0;font-weight:600;font-size:13px}
+.device-workspace-list table{width:100%;border-collapse:collapse;font-size:13px}.device-workspace-list th,.device-workspace-list td{padding:5px 6px;border-top:1px solid var(--proteus-line,#303b36);text-align:left}
+.device-workspace-list thead th{font-size:11px;color:var(--proteus-muted,#8e9e95);border-top:0}.device-workspace-list td{width:64px;text-align:center}.device-workspace-list tbody th{font-weight:500}

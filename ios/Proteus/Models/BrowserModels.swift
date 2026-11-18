@@ -62,6 +62,8 @@ struct BrowserReadingPosition: Codable, Equatable {
     let y: Double
 }
 struct BrowserDescriptor: Identifiable, Codable, Equatable {
+    // Runtime-only: private tabs are excluded from every persisted descriptor list.
+    var incognito = false
     var id: String; var title: String; var url: String?; var scope: String; var customTitle: String?; var contentTabId: String?; var history: BrowserTabHistory?; var profileId: String; var ownerHostId: String? = nil
     var readingPosition: BrowserReadingPosition?
     var hidden = false; var persist = false; var openedAt: String?; var lastTouchedAt: String?; var lastActivityAt: String?

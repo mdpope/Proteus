@@ -1,8 +1,10 @@
 import MarkdownIt from 'markdown-it';
 import {installObsidianMarkdown} from './obsidian-markdown.js';
+import {parseChatLink} from '../../public/shared/navigation/chat-links.js';
 
 export function linkKind(value) {
   if (typeof value !== 'string' || /[\u0000-\u0020\u007f]/.test(value)) return null;
+  if (parseChatLink(value)) return 'proteus';
   if (/^https?:\/\//i.test(value)) { try { const url = new URL(value); return url.username || url.password ? null : 'web'; } catch { return null; } }
   if (/^mailto:[^?]+$/i.test(value)) return 'mail';
   if (/^file:\/\/\//i.test(value)) return 'file';
@@ -12,6 +14,12 @@ export function linkKind(value) {
 export function parser() {
   const md = new MarkdownIt({ html: false, linkify: true, breaks: true });
   md.validateLink = value => !!linkKind(value);
+  md.linkify.add('proteus:', {validate(text, position) {
+    const match = text.slice(position).match(/^\/\/[^\s<>()[\]{}]+/);
+    if (!match) return false;
+    const tail = match[0].replace(/[.,!;:]+$/, '');
+    return parseChatLink('proteus:' + tail) ? tail.length : false;
+  }});
   installObsidianMarkdown(md);
   return md;
 }

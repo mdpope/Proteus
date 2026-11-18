@@ -39,13 +39,15 @@ try {
     checks.push('Linux package excludes development state and includes desktop entry');
   }
   await page.locator('#tab-add-menu summary').click();
-  await page.locator('#new-chat').click();
-  await page.locator('#chat-provider').selectOption('codex');
-  await page.waitForFunction(id => [...document.querySelector('#chat-model').options].some(o => o.value === id), model.id);
-  await page.locator('#chat-model').selectOption(model.id);
-  if (model.controls.reasoningEfforts.includes('low')) await page.locator('#chat-model-effort').selectOption('low');
-  await page.locator('#chat-prompt').fill('Synthetic Linux acceptance test in this disposable workspace. Use a shell command to write exactly LINUX_TOOL_OK to linux-tool.txt, read it back, then reply LINUX_FILE_OK. Do not use network access or inspect files outside this workspace.');
-  await page.locator('#dialog-submit').click();
+  await page.locator('#browser-area .new-tab-actions').getByRole('button',{name:'New chat',exact:true}).click();
+  const setup=page.locator('#main .new-chat-tab-panel');
+  await setup.getByLabel('Provider',{exact:true}).selectOption('codex');
+  const modelSelect=setup.locator('select[id$="-model"]');
+  await page.waitForFunction(id => [...document.querySelectorAll('#main .new-chat-tab-panel select[id$="-model"] option')].some(o => o.value === id), model.id);
+  await modelSelect.selectOption(model.id);
+  if (model.controls.reasoningEfforts.includes('low')) await setup.locator('select[id$="-model-effort"]').selectOption('low');
+  await setup.locator('textarea[id$="-prompt"]').fill('Synthetic Linux acceptance test in this disposable workspace. Use a shell command to write exactly LINUX_TOOL_OK to linux-tool.txt, read it back, then reply LINUX_FILE_OK. Do not use network access or inspect files outside this workspace.');
+  await setup.locator('[data-chat-setup-submit]').click();
   let approvals = 0;
   await until(async () => {
     const [run] = await state(); if (!run) return false;
@@ -88,9 +90,8 @@ try {
   client = await new RemoteClient(RemoteClient.capsule(invite.code)).connect();
   checks.push('built-in Linux relay and encrypted synthetic mobile pairing');
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].close());
-  await until(() => app.evaluate(({ BrowserWindow }) => {
-    const w = BrowserWindow.getAllWindows()[0]; return process.env.PROTEUS_CLOSE_TO_TRAY === '1' ? !w.isVisible() : w.isMinimized();
-  }), 'close retains host');
+  await until(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length === 0), 'last window closes while host remains available');
+  await client.request('sync');
   await client.request('chat.send', { id: first.id, prompt: 'No tools. Reply LINUX_REMOTE_CONTINUATION_OK only.', mode: 'queue' });
   await until(async () => {
     const run = (await state()).find(r => r.id === first.id);
@@ -113,11 +114,13 @@ try {
   assert.equal((await state())[0].session, first.session); checks.push('native cancellation and same-session continuation');
   const device = client.device; client.close();
   client = await new RemoteClient(RemoteClient.capsule(invite.code), device).connect();
-  await client.request('sync'); checks.push('remote continuation while minimized and authenticated reconnect');
+  await client.request('sync'); checks.push('remote continuation without an open window and authenticated reconnect');
   await app.evaluate(({ app }) => {
-    process.mainModule.require(app.getAppPath() + '/desktop/main.cjs').getTray()?.emit('click');
+    const tray=process.mainModule.require(app.getAppPath() + '/desktop/main.cjs').getTray();
+    if(!tray)throw Error('Linux tray is unavailable; tray activation was not verified.');
+    tray.emit('click');
   });
-  await until(() => app.evaluate(({ BrowserWindow }) => !BrowserWindow.getAllWindows()[0].isMinimized()), 'tray activation restores window');
+  await until(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().some(w=>w.isVisible()&&!w.isMinimized())), 'tray activation opens window');
   await app.evaluate(({ app }, deviceId) => process.mainModule.require(app.getAppPath() + '/desktop/main.cjs').getService().remote.revoke(deviceId), device.id);
   await until(() => client.failure === 'revoked', 'device revocation'); checks.push('Linux tray activation and device revocation');
   assert.deepEqual(errors, []);

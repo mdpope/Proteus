@@ -3,7 +3,7 @@ body.palette-active #tabs{background:var(--palette-title)}
   body.palette-active :is(#chat-subtabs,#team-subtabs,#window-content-tabs){background:var(--palette-tab)}
   body.palette-active #tabs .tabitem.selected,body.palette-active :is(#chat-subtabs,#team-subtabs) .selected{background:var(--palette-selectedTab)}
   body.palette-active :is(.palette-actions,.palette-controls) button:not(.primary):not(.subtle){background-color:var(--proteus-control)}
-  body.palette-active button:hover:not(.primary):not(.send-action){background-color:var(--proteus-control-hover)}
+  body.palette-active button:hover:not(.primary):not(.send-action):not(.browser-agent-toggle){background-color:var(--proteus-control-hover)}
   body.palette-active :is(input,textarea,select){background:var(--proteus-input);border-color:var(--line)}
   body.palette-active .chat-pane{background:var(--palette-chat)}
   body.palette-active .message.user{background:var(--palette-user);border-color:transparent;border-left:3px solid var(--palette-userEdge)}
