@@ -32,7 +32,7 @@ struct NativeUserQuestionCard: View {
             Divider().overlay(NativeTheme.line)
             if question.blocking && question.status == "pending" { Label("Your input is needed", systemImage: "person.crop.circle.badge.questionmark").font(.headline) }
             if question.queueCleared && question.status == "pending" { Text("Cleared from queue · You can still answer here.").font(.caption).foregroundStyle(.secondary) }
-            if showHeading { Text(question.text).font(.subheadline.weight(.semibold)) }
+            if showHeading { Text(NativeChatLink.attributed(question.text)).font(.subheadline.weight(.semibold)) }
             if question.status == "pending" {
                 ForEach(question.choices, id: \.self) { choice in Button { send(choice) } label: { VStack(alignment: .leading, spacing: 3) { Text(choice); if let description = question.choiceDescriptions[choice] { Text(description).font(.caption).foregroundStyle(.secondary) } } }.buttonStyle(.bordered).disabled(busy) }
                 VStack(alignment: .leading, spacing: 4) {
@@ -67,7 +67,7 @@ struct NativeUserQuestionCard: View {
                     }
                 }.font(.subheadline)
                 if busy { ProgressView().controlSize(.small) }
-            } else { Text(question.status == "uncertain" ? "Answer delivery unconfirmed. Inspect this session before sending another answer." : question.answer.isEmpty ? question.status.capitalized : "Answered: " + question.answer + (question.deliveryState == "queued" ? " · queued for the next turn" : "")).font(.caption).foregroundStyle(.secondary) }
+            } else { Text(NativeChatLink.attributed(question.status == "uncertain" ? "Answer delivery unconfirmed. Inspect this session before sending another answer." : question.answer.isEmpty ? question.status.capitalized : "Answered: " + question.answer + (question.deliveryState == "queued" ? " · queued for the next turn" : ""))).font(.caption).foregroundStyle(.secondary) }
             if let error { Text(error).font(.caption).foregroundStyle(.orange) }
         }.frame(maxWidth: .infinity, alignment: .leading).padding(.top, 12)
             .accessibilityElement(children: .contain).accessibilityIdentifier("question-card-" + question.id)
@@ -135,8 +135,6 @@ struct NativeUserQuestionCard: View {
             .accessibilityIdentifier("question-send-" + question.id)
     }
     private func add(_ bytes: Data, name: String, mediaType: String, createdAt: String? = nil, modifiedAt: String? = nil) throws {
-        guard files.count < 4 else { throw RemoteError(message: "Question answers accept up to four files.") }
-        guard types.contains(mediaType) else { throw RemoteError(message: "This question does not accept that file type.") }
         if let reason = NativeAttachmentBudget.rejection(existingCount: files.count, existingBytes: files.reduce(0) { $0 + $1.bytes.count }, incomingBytes: bytes.count) { throw RemoteError(message: reason) }
         let item = NativeDraftAttachment(id: UUID().uuidString, name: name, mediaType: mediaType, bytes: bytes, createdAt: createdAt, modifiedAt: modifiedAt)
         shared.draftAttachments[key, default: []].append(item)
@@ -145,8 +143,7 @@ struct NativeUserQuestionCard: View {
     private func importFile(_ url: URL) throws {
         let scoped = url.startAccessingSecurityScopedResource(); defer { if scoped { url.stopAccessingSecurityScopedResource() } }
         let values = try url.resourceValues(forKeys: [.fileSizeKey, .contentTypeKey, .creationDateKey, .contentModificationDateKey])
-        guard let size = values.fileSize, size > 0, size <= NativeAttachmentBudget.maxFileBytes else { throw RemoteError(message: "Choose a file between 1 byte and 8 MB.") }
-        try add(Data(contentsOf: url), name: url.lastPathComponent, mediaType: values.contentType?.preferredMIMEType ?? "application/octet-stream", createdAt: values.creationDate.map { ISO8601DateFormatter().string(from: $0) }, modifiedAt: values.contentModificationDate.map { ISO8601DateFormatter().string(from: $0) })
+        try add(NativeAttachmentBudget.mappedCopy(of: url), name: url.lastPathComponent, mediaType: values.contentType?.preferredMIMEType ?? "application/octet-stream", createdAt: values.creationDate.map { ISO8601DateFormatter().string(from: $0) }, modifiedAt: values.contentModificationDate.map { ISO8601DateFormatter().string(from: $0) })
     }
     private func paste() {
         do { if let urls = UIPasteboard.general.urls, !urls.isEmpty { for url in urls { try importFile(url) } }
@@ -200,7 +197,13 @@ struct NativeUserQuestionQueue: View {
                 if expanded {
                     // Release the list's inset before revealing the answer card,
                     // keeping its controls visible when the keyboard is open.
-                    ScrollView { VStack(alignment: .leading, spacing: 10) { ForEach(waiting) { question in Button(question.text) { expanded = false; select(question) }.multilineTextAlignment(.leading) } }.frame(maxWidth: .infinity, alignment: .leading) }.frame(maxHeight: 160)
+                    ScrollView { VStack(alignment: .leading, spacing: 10) { ForEach(waiting) { question in
+                        let prompt = NativeChatLink.attributed(question.text)
+                        if prompt.runs.contains(where: { $0.link != nil }) {
+                            Text(prompt)
+                            Button("Go to question") { expanded = false; select(question) }
+                        } else { Button(question.text) { expanded = false; select(question) }.multilineTextAlignment(.leading) }
+                    } }.frame(maxWidth: .infinity, alignment: .leading) }.frame(maxHeight: 160)
                 }
             }.padding(12).background(NativeTheme.surface).accessibilityElement(children: .contain).accessibilityIdentifier("chat-question-queue")
         }

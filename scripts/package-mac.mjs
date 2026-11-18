@@ -1,3 +1,4 @@
+import {beginDesktopPackage} from './desktop-package-output.mjs';
 import bundleInfo from '../desktop/link-routing/bundle-info.cjs';
 // Local development bundle. Optional existing Apple signing identity keeps OS grants stable.
 // Distribution notarization is separate.
@@ -21,22 +22,29 @@ const appBundleId=desktopPreview?'org.proteusapp.proteus.design-preview':appleRe
 const appName=desktopPreview?'Proteus Design Preview':'Proteus';
 const signingIdentity = process.env.PROTEUS_MAC_SIGN_IDENTITY || '-';
 if (process.platform !== 'darwin') throw new Error('Build the Mac application on macOS.');
+if (!unsigned) {
+  const {state} = JSON.parse(execFileSync('python3', [path.join(root, 'scripts/apple-session.py')], {encoding: 'utf8'}));
+  if (state === 'locked') throw Error('Unlock this Mac before checking its existing signing identity.');
+  if (state !== 'unlocked') throw Error('The console session could not be verified. Inspect the session check before diagnosing signing; an unavailable check does not mean the Mac is locked.');
+}
 // These helpers access provider-owned Keychain items. Keep GitHub's designated
 // requirements intact: ad-hoc re-signing breaks their existing Keychain trust.
 const vendorFiles = ['copilot-runtime', 'runtime.node'].map(name =>
   `node_modules/@github/copilot-sdk-darwin-${process.arch}/prebuilds/darwin-${process.arch}/${name}`);
 const vendorRequirement = '=anchor apple generic and certificate leaf[subject.OU] = "VEKTX9H2N7"';
 if(!unsigned)for (const relative of vendorFiles) execFileSync('codesign', ['--verify', '--strict', '-R', vendorRequirement, path.join(root, relative)], { stdio: 'pipe' });
+const output = beginDesktopPackage({flavor: desktopPreview ? 'preview' : appleReview ? 'apple-review' : 'standard'});
+try {
 const source = path.join(root, 'ios/Proteus/Assets.xcassets/AppIcon.appiconset/AppIcon.png');
-const iconset = path.join(root, 'dist/Proteus.iconset'); fs.mkdirSync(iconset, { recursive: true });
+const iconset = path.join(output.directory, 'Proteus.iconset'); fs.mkdirSync(iconset, { recursive: true });
 fs.copyFileSync(source, path.join(root, 'desktop/icon.png'));
 for (const size of [16, 32, 128, 256, 512]) for (const scale of [1, 2]) {
   execFileSync('sips', ['-z', String(size * scale), String(size * scale), source, '--out', path.join(iconset, `icon_${size}x${size}${scale === 2 ? '@2x' : ''}.png`)], { stdio: 'ignore' });
 }
-const icon = path.join(root, 'dist/Proteus.icns');
+const icon = path.join(output.directory, 'Proteus.icns');
 execFileSync('iconutil', ['-c', 'icns', iconset, '-o', icon]);
 await import('./build-terminal.mjs');
-const buildInputPaths=['package.json','package-lock.json','scripts/package-mac.mjs','scripts/desktop-build.mjs','scripts/build-terminal.mjs','scripts/prepare-pty.mjs','scripts/prepare-extensions.mjs','ios/Proteus/Assets.xcassets/AppIcon.appiconset/AppIcon.png'];
+const buildInputPaths=['package.json','package-lock.json','scripts/package-mac.mjs','scripts/apple-session.py','scripts/desktop-build.mjs','scripts/desktop-package-output.mjs','scripts/build-cache-lock.mjs','scripts/build-terminal.mjs','scripts/prepare-pty.mjs','scripts/prepare-extensions.mjs','ios/Proteus/Assets.xcassets/AppIcon.appiconset/AppIcon.png'];
 const {runtimeFiles,buildInputs,verifySource,verifyCopied}=createDesktopSnapshot(root,buildInputPaths);
 const dirty=Boolean(execFileSync('git',['status','--porcelain','--',...Object.keys(runtimeFiles),...buildInputPaths],{cwd:root,encoding:'utf8'}).trim());
 const sourceIdentity=createProvenance({runtimeFiles,buildInputs,gitHead,dirty,appBundleId});
@@ -44,7 +52,7 @@ const {sourceFingerprint}=sourceIdentity;
 const buildRevision=`${gitHead}+${dirty?'dirty.':'src.'}${sourceFingerprint.slice(0,12)}`;
 const provenance={...sourceIdentity,buildRevision};
 verifySource();
-const bundles = await packager({ dir: root, out: process.env.PROTEUS_PACKAGE_OUTPUT || path.join(root, 'dist',...(desktopPreview?['design-preview']:[])), overwrite: true,
+const bundles = await packager({ dir: root, out: output.directory, overwrite: true,
   name: appName, executableName: appName, appBundleId,
   platform: 'darwin', arch: process.arch, icon, asar: false,
   extendInfo: bundleInfo.browserBundleInfo({preview:!!desktopPreview}),
@@ -68,6 +76,9 @@ const bundles = await packager({ dir: root, out: process.env.PROTEUS_PACKAGE_OUT
 });
 for (const directory of bundles) {
   const bundle = path.join(directory, appName+'.app');
+  // Packager can warn and continue after a signing failure. Never publish a
+  // successful receipt or rotate a verified cache generation for that output.
+  if(!unsigned)execFileSync('codesign', ['--verify', '--deep', '--strict', bundle], {stdio:'pipe'});
   verifySource();verifyCopied(path.join(bundle,'Contents/Resources/app'));
   const sourceMetadata=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
   verifyDesktopMetadata(path.join(bundle,'Contents/Resources/app'),{...sourceMetadata,...(desktopPreview?{desktopPreview:true}:{})},provenance);
@@ -82,3 +93,5 @@ for (const directory of bundles) {
   }
   console.log(JSON.stringify({signingStatus:unsigned?'unsigned staging; vendor bytes preserved, signatures unchecked':'signed',bundle,buildRevision,sourceFingerprint,dirty,runtimeFiles:Object.keys(runtimeFiles).length}));
 }
+output.complete({sourceFingerprint, buildRevision});
+} finally { output.release(); }

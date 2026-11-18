@@ -7,6 +7,14 @@ extension EnvironmentValues {
         set { self[NativeSelectResourceKey.self] = newValue }
     }
 }
+/// A feature page (Scratchpad) opens one of its records as a tab, possibly from any computer.
+private struct NativeOpenFeatureResourceKey: EnvironmentKey { static let defaultValue: ((JSON) -> Void)? = nil }
+/// A workspace or project page opens a scratch as one of its own tabs instead of a nested strip.
+private struct NativeOpenScratchTabKey: EnvironmentKey { static let defaultValue: ((JSON) -> Void)? = nil }
+extension EnvironmentValues {
+    var nativeOpenFeatureResource: ((JSON) -> Void)? { get { self[NativeOpenFeatureResourceKey.self] } set { self[NativeOpenFeatureResourceKey.self] = newValue } }
+    var nativeOpenScratchTab: ((JSON) -> Void)? { get { self[NativeOpenScratchTabKey.self] } set { self[NativeOpenScratchTabKey.self] = newValue } }
+}
 private struct NativeOpenChatSetupKey: EnvironmentKey {
     static let defaultValue: ((NativeChatSetup) -> Void)? = nil
 }
@@ -43,6 +51,10 @@ enum NativeTabSymbol {
         case "workspace": return "square.grid.2x2"
         case "schedule": return "calendar"
         case "browser": return "globe"
+        case "scratch": return "note.text"
+        case "reminder": return "checklist"
+        case "files": return "folder"
+        case "standup": return "person.3"
         case "terminal": return "terminal"
         case "document", "workspace-file": return mediaType == "text/html" ? "doc.richtext" : "doc.text"
         case "live": return "rectangle.on.rectangle"
@@ -59,7 +71,7 @@ struct NativeContentTabLabel: View {
             if let icon { Image(uiImage: icon).resizable().scaledToFit().frame(width: 18, height: 18).accessibilityIdentifier("native-tab-favicon") }
             else { Image(systemName: symbol).accessibilityHidden(false).accessibilityIdentifier("native-tab-icon-" + symbol) }
             Text(title).lineLimit(1)
-        }.accessibilityLabel(title)
+        }.accessibilityLabel(title).help(title)
     }
 }
 struct NativeTabReorderSheet: View {
@@ -371,20 +383,10 @@ enum NativeNavigationCounts {
 }
 
 private enum NativeArea: String, CaseIterable, Identifiable {
-    case home = "Home", workspaces = "Workspaces", schedules = "Schedules", chats = "Chats", internet = "Internet Searches", attention = "Needs Attention", life = "Life", team = "Team", engine = "Engine Room"
+    case home = "Home", workspaces = "Workspaces", schedules = "Schedules", chats = "Chats", internet = "Internet Searches", attention = "Needs Attention", reminders = "Reminders", scratchpad = "Scratchpad", life = "Life", team = "Team", engine = "Engine Room"
     var id: String { rawValue }
     var sidebarTitle: String { NativeDesignPreview.enabled && self == .team ? "Team Tools" : rawValue }
-    var icon: String { switch self { case .home: "house"; case .workspaces: "square.grid.2x2"; case .schedules: "calendar"; case .chats: "bubble.left.and.bubble.right"; case .internet: "magnifyingglass"; case .attention: "exclamationmark"; case .life: "heart"; case .team: "list.bullet.rectangle"; case .engine: "gearshape" } }
-}
-private struct NativeContentTab: Identifiable, Codable, Equatable {
-    let id: String
-    let title: String
-    let kind: String
-    let hostID: String?
-    var setup: NativeChatSetup? = nil
-    var resourceScope: String? = nil
-    var sourceChatID: String? = nil
-    var documentID: String? = nil
+    var icon: String { switch self { case .home: "house"; case .workspaces: "square.grid.2x2"; case .schedules: "calendar"; case .chats: "bubble.left.and.bubble.right"; case .internet: "magnifyingglass"; case .attention: "exclamationmark"; case .reminders: "checklist"; case .scratchpad: "note.text"; case .life: "heart"; case .team: "list.bullet.rectangle"; case .engine: "gearshape" } }
 }
 struct NotificationChatRequest: Equatable {
     let token = UUID()
@@ -427,6 +429,13 @@ struct NativeShell: View {
     @AppStorage("lifeEnabled") private var lifeEnabled = false
     @State private var attentionPreferredTab = "chats"
     @ObservedObject private var notifications = NativeNotifications.shared
+    private var remindersVisible: Bool {
+        (lifeEnabled || ProcessInfo.processInfo.arguments.contains("--synthetic-life")) && life.signedIn &&
+        // Hidden only when a loaded profile explicitly omits Reminders. A profile that is still
+        // loading, refreshing or briefly unavailable must not make the item flicker away.
+        (life.profile["sections"].array.isEmpty || life.profile["sections"].array.contains(.string("reminders")) || ProcessInfo.processInfo.arguments.contains("--synthetic-life"))
+    }
+    private var visibleAreas: [NativeArea] { NativeArea.allCases.filter { $0 != .reminders || remindersVisible } }
     private var tablet: Bool { sizeClass == .regular && !NativePhonePreview.enabled }
     private var tabAccent: Color { NativeTheme.accent }
     private func count(for item: NativeArea) -> Int? {
@@ -480,7 +489,7 @@ struct NativeShell: View {
         }.sorted { (NativeProjectActivity.date($0.run) ?? .distantPast) > (NativeProjectActivity.date($1.run) ?? .distantPast) }.filter { nativeChatType($0.run) == (activeArea == .internet ? "internet" : activeArea == .schedules ? "scheduled" : "user") }.prefix(7))
     }
     private func title(for tab: NativeContentTab) -> String {
-        if tab.kind == "browser" { return shared.browserTabs.first(where: { $0.id == tab.id })?.title ?? tab.title }
+        if tab.kind == "browser" { return shared.browserTabs.first(where: { $0.id == tab.id }).map { shared.browserLabel($0) } ?? tab.title }
         if tab.kind == "workspace", let hostID = tab.hostID, let remote = destinations.remote(for: hostID) {
             let id = String(tab.id.dropFirst("workspace:\(hostID):".count))
             return remote.stateValue("context")["workspaces"].array.first { $0["id"].string == id }?["name"].string ?? tab.title
@@ -601,7 +610,11 @@ struct NativeShell: View {
             if opened.contains(where: { $0.id == request.tabID && $0.kind == "browser" }) { selectedTab = request.tabID }
         }
         .sheet(isPresented: $reorderMainTabs) { NativeTabReorderSheet(items: opened.map { (id: $0.id, title: title(for: $0)) }) { ids in let current = opened; opened = ids.compactMap { id in current.first { $0.id == id } } + current.filter { !ids.contains($0.id) } } }
-        .onChange(of: shared.browserTabs) { _, tabs in reconcileMainBrowserTabs(tabs) }
+        .onChange(of: shared.browserTabs.map(NativeBrowserMembership.init)) { previous, tabs in
+            let currentIDs = Set(tabs.map(\.id))
+            let removed = Set(previous.lazy.filter { !currentIDs.contains($0.id) }.map(\.id))
+            reconcileMainBrowserTabs(shared.browserTabs, removedIDs: removed)
+        }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ProteusPhoneSelectChat"))) { notification in
             guard NativeDesignPreview.enabled, let host = notification.userInfo?["hostID"] as? String, let chat = notification.userInfo?["chatID"] as? String else { return }
             if let remote = destinations.remote(for: host) { openChat(AggregateChat(hostID: host, hostName: remote.displayName, run: remote.chats[chat] ?? remote.stateValue("runs").array.first { $0["id"].string == chat } ?? .object(["id": .string(chat)]))) }
@@ -646,7 +659,7 @@ struct NativeShell: View {
             selectedTab = nil; enginePage = "Connections"; area = .engine
             phoneChrome.drawer = false
         }
-        .onChange(of: life.accountIdentity) { _, identity in MessageSpeech.shared.stop(); shared.reset(for: identity); if NativeDesignPreview.enabled { phoneChrome.reset(); phoneChrome.cacheNamespace = identity } }
+        .onChange(of: life.accountIdentity) { _, identity in MessageSpeech.shared.stop(); saveNavigation(); shared.reset(for: identity); if NativeDesignPreview.enabled { phoneChrome.reset(); phoneChrome.cacheNamespace = identity }; restoreNavigation() }
         .onChange(of: destinations.selectedID) { _, _ in MessageSpeech.shared.stop() }
         .task(id: destinations.selectedID) {
             while !Task.isCancelled {
@@ -664,6 +677,7 @@ struct NativeShell: View {
         .task { await shared.performPendingOwnerProjectResets(using: destinations) }
         .task {
             phoneChrome.newMainChat = { internet in openChatSetup(NativeChatSetup(hostID: destinations.selectedID ?? "", internet: internet)) }
+            phoneChrome.newMainResource = { kind in Task { await openStandaloneResource(kind) } }
             phoneChrome.showTabs = { openPhoneOverview() }
             phoneChrome.activateArea = { name in if let item = NativeArea(rawValue: name) { phoneVisited.insert(item); selectedTab = nil; area = item } }
             notifications.attach(life)
@@ -688,33 +702,35 @@ struct NativeShell: View {
         }
     }
     private func shellTab(_ tab: NativeContentTab) -> some View {
-                                    HStack { Button { selectContent(tab) } label: { NativeContentTabLabel(title: title(for: tab), symbol: NativeTabSymbol.name(kind: tab.kind, chatType: chatEntry(for: tab)?.run["chatType"].string ?? ""), icon: tab.kind == "browser" ? shared.browserFavicon(tab.id) : nil) }.lineLimit(1).accessibilityIdentifier("shell-tab-" + tab.id).accessibilityLabel(title(for: tab)).accessibilityValue(selectedTab == tab.id ? "Active" : "Inactive"); Button { closeContent(tab) } label: { Image(systemName: "xmark").font(.caption2) }.accessibilityLabel("Close " + title(for: tab)) }
+                                    HStack { Button { selectContent(tab) } label: { NativeContentTabLabel(title: title(for: tab), symbol: shared.isIncognito(tab.id) ? "eye.slash" : NativeTabSymbol.name(kind: tab.kind, chatType: chatEntry(for: tab)?.run["chatType"].string ?? ""), icon: tab.kind == "browser" ? shared.browserFavicon(tab.id) : nil) }.lineLimit(1).accessibilityIdentifier("shell-tab-" + tab.id).accessibilityLabel(title(for: tab)).accessibilityValue(selectedTab == tab.id ? "Active" : "Inactive"); Button { closeContent(tab) } label: { Image(systemName: "xmark").font(.caption2) }.accessibilityLabel("Close " + title(for: tab)) }
                                         .padding(12).background(selectedTab == tab.id ? NativePalette.shared.color("selectedTab") : Color.clear)
                                         .overlay(alignment: .bottom) { Rectangle().fill(selectedTab == tab.id ? tabAccent : .clear).frame(height: 2) }.id(tab.id)
                                         .draggable(tab.id).dropDestination(for: String.self) { ids, _ in guard let source = ids.first else { return false }; return moveContent(source, before: tab.id) }
-                                        .contextMenu {
-                                            if let entry = chatEntry(for: tab), !NativeWorkspaceIdentity.workspaceID(entry.run).isEmpty { Button("Send tab to workspace", systemImage: "square") { sendToWorkspace(entry) } }
-                                            if tab.kind == "browser", let browser = shared.browserTabs.first(where: { $0.id == tab.id }) { Button("Send tab", systemImage: "arrow.right.square") { shellTransfer = browser } }
-                                            Button("Copy tab name", systemImage: "doc.on.doc") { UIPasteboard.general.string = title(for: tab) }
-                                            if let entry = chatEntry(for: tab) { Button("Copy chat link", systemImage: "link") { UIPasteboard.general.url = NativeChatLink.url(host: entry.hostID, id: entry.run["id"].string) } }
-                                            if let entry = chatEntry(for: tab), destinations.remote(for: entry.hostID)?.stateValue("capabilities").array.contains(.string("chat.rename.v1")) == true { Button("Rename", systemImage: "pencil") { shellRename = entry } }
-                                            if let entry = chatEntry(for: tab), destinations.remote(for: entry.hostID)?.stateValue("capabilities").array.contains(.string("chat.lifecycle.v1")) == true {
-                                                Button(entry.run["archived"].bool ? "Unarchive chat" : "Archive chat", systemImage: "archivebox") { Task { do { try await destinations.remote(for: entry.hostID)?.archiveChat(entry.run["id"].string, archived: !entry.run["archived"].bool) } catch { destinations.error = error.localizedDescription } } }.disabled(chatHasPendingWork(entry.run))
-                                                Button("Delete chat", systemImage: "trash", role: .destructive) { shellDelete = entry }.disabled(chatHasPendingWork(entry.run))
-                                            }
-                                            Button("Move left", systemImage: "arrow.left") { shiftContent(tab.id, by: -1) }.disabled(opened.first?.id == tab.id)
-                                            Button("Move right", systemImage: "arrow.right") { shiftContent(tab.id, by: 1) }.disabled(opened.last?.id == tab.id)
-                                            Button("Close tab", systemImage: "xmark") { closeContent(tab) }
-                                            Button("Close other tabs") { for other in opened.filter({ $0.id != tab.id }) { closeContent(other) }; selectContent(tab) }.disabled(opened.count < 2)
-                                            Button("Close tabs to the right") { if let index = opened.firstIndex(where: { $0.id == tab.id }) { for other in Array(opened.dropFirst(index + 1)) { closeContent(other) } } }.disabled(opened.last?.id == tab.id)
-                                        }
+                                        .contextMenu { contentTabActions(tab) }
     }
+    @ViewBuilder private func contentTabActions(_ tab: NativeContentTab) -> some View {
+        if let entry = chatEntry(for: tab), !NativeWorkspaceIdentity.workspaceID(entry.run).isEmpty { Button("Move to…", systemImage: "square") { sendToWorkspace(entry) } }
+        if tab.kind == "browser", let browser = shared.browserTabs.first(where: { $0.id == tab.id }) { NativeBrowserTabActions(id: browser.id, send: { shellTransfer = browser }) }
+        Button("Copy tab name", systemImage: "doc.on.doc") { if tab.kind == "browser" { shared.copyBrowserText(title(for: tab), id: tab.id) } else { UIPasteboard.general.string = title(for: tab) } }
+        if let entry = chatEntry(for: tab) { Button("Copy chat link", systemImage: "link") { UIPasteboard.general.url = NativeChatLink.url(host: entry.hostID, id: entry.run["id"].string) } }
+        if let entry = chatEntry(for: tab), destinations.remote(for: entry.hostID)?.stateValue("capabilities").array.contains(.string("chat.rename.v1")) == true { Button("Rename", systemImage: "pencil") { shellRename = entry } }
+        if let entry = chatEntry(for: tab), destinations.remote(for: entry.hostID)?.stateValue("capabilities").array.contains(.string("chat.lifecycle.v1")) == true {
+            Button(entry.run["archived"].bool ? "Unarchive chat" : "Archive chat", systemImage: "archivebox") { Task { do { try await destinations.remote(for: entry.hostID)?.archiveChat(entry.run["id"].string, archived: !entry.run["archived"].bool) } catch { destinations.error = error.localizedDescription } } }.disabled(chatHasPendingWork(entry.run))
+            Button("Delete chat", systemImage: "trash", role: .destructive) { shellDelete = entry }.disabled(chatHasPendingWork(entry.run))
+        }
+        Button("Move left", systemImage: "arrow.left") { shiftContent(tab.id, by: -1) }.disabled(opened.first?.id == tab.id)
+        Button("Move right", systemImage: "arrow.right") { shiftContent(tab.id, by: 1) }.disabled(opened.last?.id == tab.id)
+        Button("Close tab", systemImage: "xmark") { closeContent(tab) }
+        Button("Close other tabs") { for other in opened.filter({ $0.id != tab.id }) { closeContent(other) }; selectContent(tab) }.disabled(opened.count < 2)
+        Button("Close tabs to the right") { if let index = opened.firstIndex(where: { $0.id == tab.id }) { for other in Array(opened.dropFirst(index + 1)) { closeContent(other) } } }.disabled(opened.last?.id == tab.id)
+    }
+
     private var homeTabs: [NativePhoneTab] {
-        opened.map { tab in NativePhoneTab(id: tab.id, title: title(for: tab), symbol: NativeTabSymbol.name(kind: tab.kind), detail: tab.hostID.flatMap { id in destinations.destinations.first { $0.id == id }?.label } ?? "Main tab", preview: nil, select: { selectContent(tab); phoneChrome.drawer = false; phoneChrome.controlsHidden = false }, close: { closeContent(tab) }) }
+        opened.map { tab in NativePhoneTab(id: tab.id, title: title(for: tab), symbol: shared.isIncognito(tab.id) ? "eye.slash" : NativeTabSymbol.name(kind: tab.kind), detail: tab.hostID.flatMap { id in destinations.destinations.first { $0.id == id }?.label } ?? "Main tab", preview: tab.kind == "browser" ? shared.browserPreview(tab.id) : phoneChrome.visited.first { $0.id == (tab.kind == "chat" ? "chat:" + tab.id : tab.kind == "document" ? tab.id : "resource:" + tab.id) }?.preview, select: { selectContent(tab); phoneChrome.drawer = false; phoneChrome.controlsHidden = false }, close: { closeContent(tab) }, browserID: tab.kind == "browser" ? tab.id : nil) } + phoneChrome.featureOverviewItems
     }
     private var homeRecents: [NativePhoneTab] {
         let browsers = shared.browserTabs.filter { !$0.hidden && $0.lastTouchedAt != nil }.map { tab in
-            NativePhoneTab(id: "browser:" + tab.id, title: tab.title.isEmpty ? "New tab" : tab.title, symbol: "globe", detail: tab.url ?? "Browsing home", preview: shared.browserPreview(tab.id), select: { choosePhoneBrowser(tab) })
+            NativePhoneTab(id: "browser:" + tab.id, title: tab.title.isEmpty ? "New tab" : tab.title, symbol: tab.incognito ? "eye.slash" : "globe", detail: tab.url ?? "Browsing home", preview: shared.browserPreview(tab.id), select: { choosePhoneBrowser(tab) })
         }
         var dates = phoneChrome.interactedAt
         for tab in shared.browserTabs { dates["browser:" + tab.id] = tab.lastTouchedAt.flatMap(ProviderAllowance.date) }
@@ -729,7 +745,7 @@ struct NativeShell: View {
                         .accessibilityLabel("Close tab " + tab.title)
                 }
             }.padding(.leading, 12).padding(.trailing, 6).background(selectedTab == tab.id ? NativeSidebarStyle.selected : .clear, in: RoundedRectangle(cornerRadius: 8)).buttonStyle(.plain)
-                .contextMenu { Button("Move left") { shiftContent(tab.id, by: -1) }; Button("Move right") { shiftContent(tab.id, by: 1) }; if let close = tab.close { Button("Close tab", action: close) } }
+                .contextMenu { if let content = opened.first(where: { $0.id == tab.id }) { contentTabActions(content) } }
         }
     }
     private var mainTabActions: some View {
@@ -741,7 +757,7 @@ struct NativeShell: View {
         GeometryReader { geometry in
         ZStack(alignment: .leading) {
             VStack(spacing: 0) {
-                if !phoneChrome.controlsHidden, let tab = opened.first(where: { $0.id == selectedTab }), ["browser", "chat", "chat-setup", "document"].contains(tab.kind) {
+                if selectedTab == nil && area == .home || !phoneChrome.controlsHidden && opened.contains(where: { $0.id == selectedTab && ["browser", "chat", "chat-setup", "document", "scratch", "reminder", "files"].contains($0.kind) }) {
                     HStack(spacing: 8) {
                         Button { phoneChrome.captureCurrent(); withAnimation(.easeInOut(duration: 0.22)) { phoneChrome.drawer = true } } label: { Image(systemName: "sidebar.left").frame(width: 44, height: 44) }.accessibilityLabel("App navigation").accessibilityIdentifier("phone-app-navigation")
                         Text(opened.first(where: { $0.id == selectedTab }).map { title(for: $0) } ?? area.rawValue).font(.subheadline.weight(.medium)).lineLimit(1)
@@ -751,7 +767,7 @@ struct NativeShell: View {
                     Divider()
                 }
                 ZStack {
-                    ForEach(NativeArea.allCases.filter { phoneVisited.contains($0) }) { item in
+                    ForEach(visibleAreas.filter { phoneVisited.contains($0) }) { item in
                         Group { if item == .workspaces { NativeWorkspacesView(onOpen: openWorkspace) } else { content(item) } }
                             .environment(\.nativePhoneAreaActive, area == item && selectedTab == nil)
                             .opacity(area == item && selectedTab == nil ? 1 : 0)
@@ -782,7 +798,7 @@ struct NativeShell: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 HStack { Text("⤨").foregroundStyle(NativeTheme.accent); Text("Proteus").font(.title2.bold()); Spacer(); Button { withAnimation { phoneChrome.drawer = false } } label: { Image(systemName: "xmark").frame(width: 44, height: 44) }.accessibilityLabel("Close navigation") }.padding(.horizontal, 10)
-                ForEach(NativeArea.allCases.filter { $0 != .workspaces && $0 != .engine }) { item in phoneDrawerRow(item) }
+                ForEach(visibleAreas.filter { $0 != .workspaces && $0 != .engine }) { item in phoneDrawerRow(item) }
                 NativeWorkspaceTree(activeWorkspace: area == .workspaces ? phoneWorkspace?.id : nil, onOpen: openWorkspace, onBrowse: { choosePhoneArea(.workspaces) })
                 Divider().padding(.vertical, 8)
                 phoneDrawerRow(.engine)
@@ -859,10 +875,10 @@ struct NativeShell: View {
         return nil
     }
     private func overviewBrowser(_ tab: BrowserDescriptor, section: String = "", sectionID: String = "") -> NativePhoneTab {
-        NativePhoneTab(id: "browser:" + tab.id, title: tab.title.isEmpty ? "New tab" : tab.title, symbol: "globe", detail: tab.url ?? "New tab", section: section, sectionID: sectionID, preview: shared.browserPreview(tab.id), select: { choosePhoneBrowser(tab) }, close: { shared.close(tab.id) })
+        NativePhoneTab(id: "browser:" + tab.id, title: tab.title.isEmpty ? "New tab" : tab.title, symbol: tab.incognito ? "eye.slash" : "globe", detail: tab.url ?? "New tab", section: section, sectionID: sectionID, preview: shared.browserPreview(tab.id), select: { choosePhoneBrowser(tab) }, close: { shared.close(tab.id) }, browserID: tab.id)
     }
     private var phoneOverviewSelectedID: String {
-        guard let owner = overviewWorkspace, let remote = destinations.remote(for: owner.host) else { return phoneChrome.currentID }
+        guard let owner = overviewWorkspace, let remote = destinations.remote(for: owner.host) else { return selectedTab ?? phoneChrome.currentID }
         let kind = owner.project.isEmpty ? "workspace" : "project", id = owner.project.isEmpty ? owner.workspace : owner.project
         let scope = kind + ":" + owner.host + ":" + id
         let selected = remote.draft(kind + "-navigation:" + id)["selected"].string
@@ -900,7 +916,11 @@ struct NativeShell: View {
                     else {
                         let key = child["type"].string == "chat" ? "chat:" + owner.host + ":" + child["chatId"].string : scope + ":" + id
                         let preview = phoneChrome.visited.first { $0.id == key }?.preview ?? NativeThumbnailCache.load(phoneChrome.cacheNamespace + ":" + key)
-                        result.append(NativePhoneTab(id: key, title: child["title"].string, symbol: NativeTabSymbol.name(kind: child["type"].string), detail: remote.displayName, section: group.title, sectionID: scope, preview: preview, select: { select(id) }))
+                        // Closing removes the tab from this project's navigation only; a chat is not archived.
+                        let close: () -> Void = child["type"].string == "chat"
+                            ? { NativeWorkspaceNavigation.closeChat(child["chatId"].string, navigationKey: navigationKey, remote: remote); NativeWorkspaceNavigation.mutate([.object(["action": .string("close"), "id": .string("chat:" + child["chatId"].string)])], kind: group.kind, id: group.id, scope: scope, remote: remote, shared: shared) }
+                            : { NativeWorkspaceNavigation.mutate([.object(["action": .string("close"), "id": child["sortId"]])], kind: group.kind, id: group.id, scope: scope, remote: remote, shared: shared) }
+                        result.append(NativePhoneTab(id: key, title: child["title"].string, symbol: NativeTabSymbol.name(kind: child["type"].string), detail: remote.displayName, section: group.title, sectionID: scope, preview: preview, select: { select(id) }, close: child["type"].string == "chat-setup" ? nil : close))
                     }
                 }
             }
@@ -911,7 +931,8 @@ struct NativeShell: View {
         if scope == "main" {
             let openChatIDs = Set(opened.filter { $0.kind == "chat" }.map { "chat:" + $0.id })
             let chats = phoneChrome.visited.filter { openChatIDs.contains($0.id) || $0.id == phoneChrome.currentID && $0.id.hasPrefix("chat:") }
-            result = chats + result
+            let resources = Set(opened.filter { !["browser","chat"].contains($0.kind) }.map(\.id))
+            result = chats + homeTabs.filter { resources.contains($0.id) || !$0.sectionID.isEmpty } + result
         }
         var seen = Set<String>(); return result.filter { seen.insert($0.id).inserted }
     }
@@ -956,7 +977,7 @@ struct NativeShell: View {
         VStack(spacing: 0) {
             NativeList {
                 HStack(spacing: 7) { Text("⤨").foregroundStyle(tabAccent); Text("Proteus") }.font(.title2.bold())
-                ForEach(NativeArea.allCases.filter { !NativePadPreview.enabled || $0 != .workspaces }) { item in
+                ForEach(visibleAreas.filter { !NativePadPreview.enabled || $0 != .workspaces }) { item in
                     if item == .engine {
                         NativeWorkspaceTree(activeWorkspace: opened.first { $0.id == selectedTab && $0.kind == "workspace" }?.id, onOpen: openWorkspace, onBrowse: { area = .workspaces; selectedTab = nil }).padding(.vertical, 8).overlay(alignment: .bottom) { Rectangle().fill(NativeSidebarStyle.border).frame(height: 1) }.listRowInsets(EdgeInsets(top: 4, leading: 4, bottom: 4, trailing: 4)).listRowBackground(Color.clear).listRowSeparator(.hidden)
                     }
@@ -972,6 +993,9 @@ struct NativeShell: View {
                     .accessibilityIdentifier("sidebar-" + item.id)
                     .accessibilityValue(activeArea == item ? "Active" : "Inactive")
                     .accessibilityAddTraits(activeArea == item ? .isSelected : [])
+                    if activeArea == item && item == .scratchpad { ScratchpadOwnerPicker(menu: true).font(.caption).padding(.leading).listRowBackground(Color.clear) }
+                    if activeArea == item && item == .scratchpad, let remote = destinations.remote(for: destinations.scratchpadOwnerID ?? destinations.selectedID ?? "") { ScratchpadSidebarRecents(workspace: remote.scratchpad) { selectedTab = nil; area = .scratchpad; hover = false } }
+                    if activeArea == item && item == .reminders { LifeReminderSidebarRecents { selectedTab = nil; area = .reminders; hover = false } }
                     if NativeDesignPreview.enabled && item == .engine && activeArea == .engine { engineOptions(phone: false).listRowSeparator(.hidden).listRowBackground(Color.clear) }
                     if !NativePadPreview.enabled && activeArea == item && (item == .chats || item == .internet || item == .schedules) {
                         ForEach(recentChats) { entry in
@@ -988,7 +1012,7 @@ struct NativeShell: View {
                         ForEach(["Overview", "Standup"], id: \.self) { title in Button(title) { teamSection = title }.font(.caption).padding(.leading).accessibilityIdentifier("team-sidebar-" + title.lowercased()).listRowBackground(activeArea == .team && teamSection == title ? NativeTheme.accent.opacity(0.10) : Color.clear) }
                         ForEach(shared.tabs(in: "team")) { tab in Button { shared.select(tab.id, in: "team"); teamSection = tab.id } label: { Label(tab.title, systemImage: "globe").font(.caption).lineLimit(1) }.padding(.leading) }
                     }
-                    if area == item && item == .life { ForEach(["overview", "nutrition", "garage", "fuel", "captures"], id: \.self) { title in Button(title.capitalized) { lifeSection = title }.font(.caption).padding(.leading).listRowBackground(activeArea == .life && lifeSection == title ? NativeTheme.accent.opacity(0.10) : Color.clear) } }
+                    if area == item && item == .life { ForEach(["overview", "ask", "nutrition", "garage", "fuel", "captures"], id: \.self) { title in Button(title.capitalized) { lifeSection = title }.font(.caption).padding(.leading).listRowBackground(activeArea == .life && lifeSection == title ? NativeTheme.accent.opacity(0.10) : Color.clear) } }
                     if area == item && item == .engine { ForEach(EngineRoomView.pages, id: \.self) { title in Button(title) { enginePage = title }.font(.caption).padding(.leading).listRowBackground(activeArea == .engine && enginePage == title ? NativeTheme.accent.opacity(0.10) : Color.clear) } }
                 }
             }.listStyle(.sidebar).scrollContentBackground(.hidden).background(NativeTheme.rail)
@@ -998,7 +1022,7 @@ struct NativeShell: View {
     private var collapsedRail: some View {
         VStack(spacing: 10) {
             Text("⤨").font(.title2.bold()).foregroundStyle(tabAccent).accessibilityLabel("Proteus")
-            ForEach(NativeArea.allCases) { item in
+            ForEach(visibleAreas) { item in
                 Button { area = item; selectedTab = nil } label: { Image(systemName: item.icon).font(.system(size: 19, weight: .medium)).frame(width: 40, height: 40).background(activeArea == item ? tabAccent.opacity(0.18) : .clear, in: RoundedRectangle(cornerRadius: 8)).overlay(alignment: .topTrailing) { if let value = count(for: item), value > 0 { Text(String(value)).font(.system(size: 9, weight: .bold)).padding(3).background(NativeTheme.accent, in: Capsule()).foregroundStyle(.black) } } }
                     .accessibilityValue(activeArea == item ? "Active" : "Inactive")
                     .accessibilityLabel(item.rawValue + (count(for: item).map { ", \($0)" } ?? "")).help(item.rawValue)
@@ -1015,6 +1039,12 @@ struct NativeShell: View {
         if ProcessInfo.processInfo.arguments.contains("--synthetic-notification-controls") { notifications.fixtureStatus = "Routing " + route.type }
         #endif
         if route.type == "connection" { selectedTab = nil; enginePage = "Connections"; area = .engine; return }
+        if !route.destinationKind.isEmpty {
+            guard life.credential?.accountID == route.accountID else { notificationFallback("Sign in to the Life account that received this confirmation."); return }
+            if route.destinationKind == "reminder" {
+                selectedTab = nil; lifeSection = "reminders"; UserDefaults.standard.set(route.resourceID, forKey: "lifeReminderTarget"); area = .reminders; return
+            }
+        }
         guard !route.hostID.isEmpty else { notificationFallback(); return }
         guard destinations.destinations.contains(where: { $0.id == route.hostID }) else {
             notificationFallback("This notification refers to a computer that is not paired on this device."); return
@@ -1033,6 +1063,22 @@ struct NativeShell: View {
             if !cachedChat && !cachedSchedule { notificationFallback("Connection to \(sourceName) is not ready. Try opening this notification again."); return }
         }
         guard !Task.isCancelled, destinations.selectedID == route.hostID else { return }
+        guard route.accountID.isEmpty || life.credential?.accountID == route.accountID else { notificationFallback("The Life account changed while opening this confirmation."); return }
+        if route.destinationKind == "document" {
+            do {
+                let reference = try await remote.request("life.ask.document", ["documentId": .string(route.resourceID), "accountId": .string(route.accountID)])
+                guard !Task.isCancelled, life.credential?.accountID == route.accountID else { return }
+                let workspace = reference["workspaceId"].string
+                guard let entry = NativeWorkspaceIdentity.all(destinations).first(where: { $0.hostID == route.hostID && $0.workspaceID == workspace }) else { throw RemoteError(message: "The saved memory workspace is unavailable.") }
+                let result = try await remote.request("files.open", ["workspaceId": .string(workspace), "rootId": reference["rootId"], "file": reference["file"], "scope": .string("workspace"), "scopeId": .string(workspace)])
+                guard !Task.isCancelled, life.credential?.accountID == route.accountID else { return }
+                await shared.refreshContentTabs(scope: "workspace:" + route.hostID + ":" + workspace, remote: remote, kind: "workspace", id: workspace)
+                guard !Task.isCancelled, life.credential?.accountID == route.accountID else { return }
+                NativeWorkspaceNavigation.select("remote:" + result["tabId"].string, navigationKey: "workspace-navigation:" + workspace, remote: remote)
+                openWorkspace(entry)
+            } catch { notificationFallback("Memory saved; document unavailable. " + error.localizedDescription) }
+            return
+        }
         if route.type == "website.notification" {
             guard !route.notificationID.isEmpty else { notificationFallback("This website notification has no activation reference."); return }
             guard remote.connected else { notificationFallback("Reconnect \(sourceName) to open the website notification on that computer."); return }
@@ -1126,7 +1172,7 @@ struct NativeShell: View {
         if NativePhonePreview.enabled { phoneChrome.drawer = false; phoneChrome.controlsHidden = false }
         selectedTab = id; destinations.remote(for: entry.hostID)?.activity(true) }
     private func saveNavigation() {
-        guard !restoringTabs, let tabs = try? JSONDecoder().decode(JSON.self, from: JSONEncoder().encode(opened)) else { return }
+        guard !restoringTabs, let tabs = try? JSONDecoder().decode(JSON.self, from: JSONEncoder().encode(opened.filter { !shared.isIncognito($0.id) })) else { return }
         shared.saveShellNavigation(.object(["tabs": tabs, "selected": .string(selectedTab ?? restoredSelection ?? ""), "area": .string(area.rawValue), "phoneWorkspaceHost": .string(phoneWorkspace?.hostID ?? ""), "phoneWorkspaceID": .string(phoneWorkspace?.workspaceID ?? ""), "phoneCurrentID": .string(phoneChrome.currentID)]))
     }
     private func restoreNavigation() {
@@ -1140,7 +1186,7 @@ struct NativeShell: View {
         #endif
         let saved = shared.loadShellNavigation()
         if let data = try? JSONEncoder().encode(saved["tabs"]), let tabs = try? JSONDecoder().decode([NativeContentTab].self, from: data) {
-            opened = tabs.filter { tab in tab.kind == "browser" ? shared.tabs(in: "main").contains(where: { $0.id == tab.id }) : ["chat", "schedule", "workspace", "chat-setup", "document"].contains(tab.kind) && tab.hostID.map { destinations.remote(for: $0) != nil } == true }
+            opened = NativeContentTabProjection.restored(tabs, browserIDs: Set(shared.tabs(in: "main").map(\.id)), hosts: Set(destinations.destinations.map(\.id)), account: life.accountIdentity)
         }
         area = NativeArea(rawValue: saved["area"].string) ?? .home
         phoneVisited.insert(area)
@@ -1157,14 +1203,12 @@ struct NativeShell: View {
         }
         restoringTabs = false
     }
-    private func reconcileMainBrowserTabs(_ tabs: [BrowserDescriptor]) {
-        for tab in tabs where tab.scope == "main" && !opened.contains(where: { $0.id == tab.id }) {
-            let item = NativeContentTab(id: tab.id, title: tab.title, kind: "browser", hostID: nil)
-            if let source = shared.takeBrowserInsertionOrigin(tab.id), let index = opened.firstIndex(where: { $0.id == source && $0.kind == "browser" }) { opened.insert(item, at: index + 1) }
-            else { opened.append(item) }
-        }
-        opened.removeAll { item in item.kind == "browser" && !tabs.contains(where: { $0.id == item.id && $0.scope == "main" }) }
-        if let selectedTab, !opened.contains(where: { $0.id == selectedTab }) { self.selectedTab = nil }
+    private func reconcileMainBrowserTabs(_ tabs: [BrowserDescriptor], removedIDs: Set<String> = []) {
+        let updated = NativeContentTabProjection.mainBrowsers(tabs, opened: opened, insertionOrigin: shared.takeBrowserInsertionOrigin)
+        let currentIDs = Set(updated.map(\.id))
+        phoneChrome.forgetBrowsers(removedIDs.union(opened.lazy.filter { $0.kind == "browser" && !currentIDs.contains($0.id) }.map(\.id)))
+        if opened != updated { opened = updated }
+        if let selectedTab, !currentIDs.contains(selectedTab) { self.selectedTab = nil }
     }
     private func selectContent(_ tab: NativeContentTab) { if tab.kind == "chat", let entry = chatEntry(for: tab), openAssociatedChat(entry) { return }; selectedTab = tab.id; if tab.kind == "browser" { shared.select(tab.id, in: "main") } }
     private func openWorkspace(_ entry: NativeWorkspaceIdentity) {
@@ -1212,8 +1256,38 @@ struct NativeShell: View {
         let tab = NativeContentTab(id: "draft:" + setup.id, title: setup.title, kind: "chat-setup", hostID: setup.hostID, setup: setup)
         opened.append(tab); selectedTab = tab.id; phoneChrome.controlsHidden = false
     }
+    private func updateStandaloneResource(_ tab: NativeContentTab, reference: JSON) {
+        guard let index = opened.firstIndex(where: { $0.id == tab.id }), opened[index].resource != reference else { return }
+        opened[index] = NativeContentTab(id: tab.id, title: reference["title"].string.isEmpty ? tab.title : reference["title"].string, kind: tab.kind, hostID: tab.hostID, resource: reference)
+    }
+    private func openStandaloneResource(_ kind: String) async {
+        do {
+            let operation = UUID().uuidString
+            var reference: [String: JSON] = ["tabID": .string(operation)]
+            var host: String?
+            if kind == "reminder" {
+                guard life.credential?.appAuthorized == true || ProcessInfo.processInfo.arguments.contains("--synthetic-life") else { throw RemoteError(message: "Sign in to Life to open Reminders.") }
+                reference["accountID"] = .string(life.accountIdentity)
+            } else {
+                guard let id = destinations.selectedID, let remote = destinations.selected, remote.connected else { throw RemoteError(message: "Connect the computer that owns these files first.") }
+                host = id; reference["hostID"] = .string(id)
+                if kind == "scratch" {
+                    let status = try await remote.request("scratchpad.command", ["action": .string("status")])
+                    guard status["configured"].bool, !status["rootId"].string.isEmpty else { throw RemoteError(message: "Configure Scratchpad on the owning computer first.") }
+                    reference["rootID"] = status["rootId"]; reference["operationID"] = .string(operation)
+                } else {
+                    let workspace = remote.stateValue("context")["defaultWorkspaceId"].string
+                    guard !workspace.isEmpty else { throw RemoteError(message: "Choose an available workspace on this computer.") }
+                    reference["workspaceId"] = .string(workspace)
+                }
+            }
+            let tab = NativeContentTab(id: operation, title: kind == "reminder" ? "Reminders" : kind == "scratch" ? "Scratch" : "Workspace files", kind: kind, hostID: host, resource: .object(reference))
+            opened.append(tab); selectedTab = tab.id; phoneChrome.controlsHidden = false
+        } catch { destinations.error = error.localizedDescription }
+    }
     @ViewBuilder private func contentTab(_ tab: NativeContentTab) -> some View {
         if tab.kind == "browser" { TeamBrowserView(scope: "main", showTabs: false, tabID: tab.id, onBackToList: { selectedTab = nil; area = .chats }) }
+        else if ["scratch","reminder","files"].contains(tab.kind) { NativeStandaloneResourceTab(tab: tab, changed: { reference in updateStandaloneResource(tab, reference: reference) }, select: { selectContent(tab) }).id(tab.id) }
         else if let hostID = tab.hostID, let remote = destinations.remote(for: hostID) {
             if let setup = tab.setup {
                 NewChatView(internet: setup.internet, lockedWorkspaceID: setup.workspaceID, lockedProjectID: setup.projectID, draftKey: setup.draftKey, onCancel: { closeContent(tab) }) { id in
@@ -1233,7 +1307,7 @@ struct NativeShell: View {
         } else { ContentUnavailableView("Computer unavailable", systemImage: "network.slash", description: Text("Reconnect this chat’s computer in Connections, then reopen the chat.")).frame(maxWidth: .infinity, maxHeight: .infinity) }
     }
     @ViewBuilder private func content(_ item: NativeArea) -> some View {
-        switch item { case .workspaces: NativeWorkspacesView(onOpen: openWorkspace); case .home: NativeHome(openTabs: homeTabs, recent: homeRecents, onAddTab: { openChatSetup(NativeChatSetup(hostID: destinations.selectedID ?? "")) }, onManageTabs: { reorderMainTabs = true }, onBrowser: { profile in shared.open(nil, scope: "main", profileId: profile) }, showAllowance: false, onSchedule: { schedule in if let hostID = destinations.selectedID { openSchedule(schedule, hostID: hostID) } }); case .schedules: if let remote = destinations.selected { SchedulesView(onSelect: { schedule in if let hostID = destinations.selectedID { openSchedule(schedule, hostID: hostID) } }).environment(remote) } else { NativeHome() }; case .chats: AggregateChatsView(onSelect: openChat, onSendToWorkspace: sendToWorkspace, routeAssociated: openAssociatedChat, notificationRequest: notificationChatRequest, onNotificationConsumed: { notificationChatRequest = nil }); case .internet: AggregateChatsView(onSelect: openChat, onSendToWorkspace: sendToWorkspace, routeAssociated: openAssociatedChat, initialChatType: "internet"); case .attention: AggregateChatsView(onSelect: openChat, routeAssociated: openAssociatedChat, attentionOnly: true, initialAttentionTab: attentionPreferredTab); case .life: if lifeEnabled || ProcessInfo.processInfo.arguments.contains("--synthetic-life") { LifeRootView() } else { NavigationStack { NativeSetupView().nativeFeaturePage("Life") } }; case .team: TeamToolsView(); case .engine: EngineRoomView(page: $enginePage) }
+        switch item { case .workspaces: NativeWorkspacesView(onOpen: openWorkspace); case .home: NativeHome(openTabs: homeTabs, recent: homeRecents, onAddTab: { openChatSetup(NativeChatSetup(hostID: destinations.selectedID ?? "")) }, onManageTabs: { reorderMainTabs = true }, onBrowser: { profile in shared.open(nil, scope: "main", profileId: profile) }, showAllowance: false, onSchedule: { schedule in if let hostID = destinations.selectedID { openSchedule(schedule, hostID: hostID) } }); case .schedules: if let remote = destinations.selected { SchedulesView(onSelect: { schedule in if let hostID = destinations.selectedID { openSchedule(schedule, hostID: hostID) } }).environment(remote) } else { NativeHome() }; case .chats: AggregateChatsView(onSelect: openChat, onSendToWorkspace: sendToWorkspace, routeAssociated: openAssociatedChat, notificationRequest: notificationChatRequest, onNotificationConsumed: { notificationChatRequest = nil }); case .internet: AggregateChatsView(onSelect: openChat, onSendToWorkspace: sendToWorkspace, routeAssociated: openAssociatedChat, initialChatType: "internet"); case .attention: AggregateChatsView(onSelect: openChat, routeAssociated: openAssociatedChat, attentionOnly: true, initialAttentionTab: attentionPreferredTab); case .scratchpad: NavigationStack { ScratchpadView().nativeFeaturePage("Scratchpad", persistentHeader: true) }; case .reminders: NavigationStack { if remindersVisible { LifeRemindersView().nativeFeaturePage("Reminders", persistentHeader: true) } else { LifeAccountView().nativeFeaturePage("Reminders", persistentHeader: true) } }; case .life: if lifeEnabled || ProcessInfo.processInfo.arguments.contains("--synthetic-life") { LifeRootView() } else { NavigationStack { NativeSetupView().nativeFeaturePage("Life") } }; case .team: TeamToolsView(); case .engine: EngineRoomView(page: $enginePage) }
     }
 }
 struct NativeHome: View {
@@ -1344,7 +1418,7 @@ struct NativeHome: View {
                             Text("Home").font(.largeTitle.bold()).frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(.horizontal, 20).padding(.vertical, 16).accessibilityIdentifier("home-page-heading")
                         }
-                    }.nativeFeaturePage("Home")
+                    }.nativeFeaturePage("Home", barHidden: NativePhonePreview.enabled, persistentHeader: true)
             } else { VStack(spacing: 0) { HStack(spacing: 10) { Text("⤨").font(.system(size: 34, weight: .bold)).foregroundStyle(NativeTheme.accent); VStack(alignment: .leading) { Text("Proteus").font(.largeTitle.bold()); Text("\(version) (\(build))").font(.caption).foregroundStyle(.secondary) }; Spacer(); Button("Future updates and changelog") { updates = true }.font(.caption) }.padding(); guideLink.padding(.horizontal).padding(.bottom, 12); PairView() }.toolbar { Button("App setup") { setup = true }.accessibilityIdentifier("app-setup") } }
         }
         .sheet(isPresented: $projectGuide) { NativeProjectGuide() }
@@ -1419,10 +1493,14 @@ struct AggregateChat: Identifiable { let hostID: String; let hostName: String; l
 @MainActor private func chatRowTimestamp(_ run: JSON, timeZone: TimeZone) -> String {
     NativeChatTimestamp.text(run, timeZone: timeZone)
 }
+/// N11-13: authoritative origin first (chatType, then trigger). An interactive chat's internal
+/// schedule record never makes it a Scheduled Task; scheduleName decides only legacy rows.
 func nativeChatType(_ run: JSON) -> String {
-    if run["chatType"].string == "internet" { return "internet" }
+    let recorded = run["chatType"].string
+    if ["internet", "user", "scheduled"].contains(recorded) { return recorded }
     let trigger = run["trigger"].string
-    return (!trigger.isEmpty && trigger != "chat") || !run["scheduleName"].string.isEmpty ? "scheduled" : "user"
+    if !trigger.isEmpty { return trigger == "chat" ? "user" : "scheduled" }
+    return run["scheduleName"].string.isEmpty ? "user" : "scheduled"
 }
 struct AggregateChatsView: View {
     @Environment(\.nativeOpenChatSetup) private var openSetup
@@ -1579,7 +1657,7 @@ struct AggregateChatsView: View {
         }.contextMenu {
             Button("Open", systemImage: "arrow.up.right.square") { choose(item) }
             if lockedWorkspaceID == nil, !NativeWorkspaceIdentity.workspaceID(item.run).isEmpty {
-                Button("Send tab to workspace", systemImage: "square") {
+                Button("Move to…", systemImage: "square") {
                     if let onSendToWorkspace { onSendToWorkspace(item) }
                     else if let workspace = NativeWorkspaceIdentity.all(destinations).first(where: { $0.hostID == item.hostID && $0.workspaceID == NativeWorkspaceIdentity.workspaceID(item.run) }), let remote = destinations.remote(for: item.hostID) { NativeWorkspaceNavigation.openChat(item.run["id"].string, workspaceID: workspace.workspaceID, remote: remote, shared: shared); selectedWorkspace = workspace }
                 }

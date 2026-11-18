@@ -24,7 +24,9 @@ export function beginNewTabInput({replace=false}={}) {
   pending=capture;document.body.append(input);document.addEventListener('pointerdown',leave,true);window.addEventListener('pagehide',leave);input.focus({preventScroll:true});return capture;
 }
 export function focusNewTabAddress(target,id) {
-  if(!pending){target.focus({preventScroll:true});return;}
+  // Only a fresh creation gesture may take focus; a delayed redraw or return
+  // to an existing blank page must preserve the user's current input.
+  if(!pending)return;
   if(!pending.id||pending.id!==id)return;
   pending.target=target;pending.complete();
 }

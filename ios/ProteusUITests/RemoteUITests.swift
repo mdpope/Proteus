@@ -84,13 +84,15 @@ private let nativeFixtureRelayOrigin = ProcessInfo.processInfo.environment["PROT
         _ = app.buttons["Connections"].firstMatch.waitForExistence(timeout: 5)
         app.buttons.matching(NSPredicate(format: "label == %@", "Connections")).allElementsBoundByIndex.first(where: { $0.isHittable })?.tap()
     }
+    if visible() == nil, app.buttons["Add computer"].firstMatch.isHittable { app.buttons["Add computer"].firstMatch.tap() }
     for _ in 0..<4 where visible() == nil { app.swipeUp() }
     guard let field = visible() else { XCTFail("The Connections pairing form is visible"); return }
     field.tap(); field.typeText(code)
     if app.buttons["Hide keyboard"].exists { app.buttons["Hide keyboard"].tap() }
-    let pair = app.buttons["pair-mac"]
-    for _ in 0..<4 where !pair.exists || !pair.isHittable { app.swipeUp() }
-    XCTAssertTrue(pair.waitForExistence(timeout: 5)); pair.tap()
+    func visiblePair() -> XCUIElement? { app.buttons.matching(identifier: "pair-mac").allElementsBoundByIndex.first { $0.isHittable && $0.isEnabled } }
+    for _ in 0..<4 where visiblePair() == nil { app.swipeUp() }
+    guard let pair = visiblePair() else { XCTFail("The current pairing form has an enabled Pair computer button"); return }
+    pair.tap()
 }
 
 /// Live acceptance may target an already-installed normal/preview app while the
@@ -124,6 +126,61 @@ final class RemoteUITests: XCTestCase {
         XCTAssertEqual(editor.value as? String, "Draft survives removing unavailable file")
     }
 
+    @MainActor func testScratchpadSavesOnOwnerAndReopensAfterColdLaunch() async throws {
+        let (data, _) = try await URLSession.shared.data(from: URL(string: nativeFixtureHTTPOrigin + "/pair?projects=1")!)
+        let fixture = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let app = nativeFixtureApplication(); app.launchArguments = ["--reset-pairing", "--synthetic-clean-navigation"]; app.launch()
+        submitPairing(app, code: try XCTUnwrap(fixture["code"] as? String))
+        XCTAssertTrue(app.staticTexts["pairing-success"].waitForExistence(timeout: 15))
+        _ = try await URLSession.shared.data(from: URL(string: nativeFixtureHTTPOrigin + "/scratchpad-grant")!)
+        func openScratchpad() {
+            if UIDevice.current.userInterfaceIdiom == .phone {
+                let navigation = app.buttons["phone-app-navigation"]; XCTAssertTrue(navigation.waitForExistence(timeout: 10)); navigation.tap()
+                let scratch = app.buttons["phone-nav-Scratchpad"]
+                for _ in 0..<6 { if scratch.isHittable { break }; app.scrollViews["phone-navigation-drawer"].swipeUp() }
+                XCTAssertTrue(scratch.waitForExistence(timeout: 10)); scratch.tap()
+            } else { let scratch = app.buttons["sidebar-Scratchpad"]; XCTAssertTrue(scratch.waitForExistence(timeout: 10)); scratch.tap() }
+        }
+        openScratchpad()
+        XCTAssertTrue(app.descendants(matching: .any)["scratchpad-computer"].waitForExistence(timeout: 10), "Owner selection stays outside the availability-dependent page")
+        let create = app.buttons["New scratch"]; XCTAssertTrue(create.waitForExistence(timeout: 15)); create.tap()
+        let title = app.textFields["Scratch title"]; XCTAssertTrue(title.waitForExistence(timeout: 15)); title.tap(); title.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 8) + "Synthetic iOS scratch")
+        let body = app.webViews.textViews["Scratch Markdown editor"]
+        for _ in 0..<5 { if body.isHittable { break }; app.swipeUp() }
+        XCTAssertTrue(body.waitForExistence(timeout: 10)); body.tap(); body.typeText("Native scratch survives reload.")
+        var saved = false
+        for _ in 0..<60 {
+            var request = URLRequest(url: URL(string: nativeFixtureHTTPOrigin + "/scratchpad-fixture")!); request.httpMethod = "POST"; request.httpBody = Data("{\"action\":\"list\"}".utf8)
+            let (data, _) = try await URLSession.shared.data(for: request)
+            let result = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+            if let row = (result["items"] as? [[String: Any]])?.first(where: { $0["title"] as? String == "Synthetic iOS scratch" }), let id = row["id"] as? String {
+                request.httpBody = try JSONSerialization.data(withJSONObject: ["action": "read", "id": id]); let (read, _) = try await URLSession.shared.data(for: request)
+                if (try JSONSerialization.jsonObject(with: read) as? [String: Any])?["body"] as? String == "Native scratch survives reload." { saved = true; break }
+            }
+            try await Task.sleep(for: .milliseconds(200))
+        }
+        XCTAssertTrue(saved, "The owner must confirm the file before relaunch")
+        XCTAssertTrue(app.buttons["phone-app-navigation"].exists || app.buttons["sidebar-Scratchpad"].exists)
+        app.terminate(); app.launchArguments = []; app.launch(); openScratchpad()
+        let note = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Synthetic iOS scratch")).firstMatch
+        let visible = note.waitForExistence(timeout: 20)
+        if !visible { let hierarchy = XCTAttachment(string: app.debugDescription); hierarchy.name = "Scratchpad cold-launch hierarchy"; hierarchy.lifetime = .keepAlways; add(hierarchy); let shot = XCTAttachment(screenshot: app.screenshot()); shot.lifetime = .keepAlways; add(shot) }
+        XCTAssertTrue(visible); note.tap()
+        let editorVisible = body.waitForExistence(timeout: 15)
+        if !editorVisible { let hierarchy = XCTAttachment(string: app.debugDescription); hierarchy.name = "Scratchpad selected tab hierarchy"; hierarchy.lifetime = .keepAlways; add(hierarchy); let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Scratchpad selection after cold launch"; shot.lifetime = .keepAlways; add(shot) }
+        XCTAssertTrue(editorVisible); guard editorVisible else { return }; XCTAssertEqual(body.value as? String, "Native scratch survives reload.")
+        let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "Scratchpad native editor after cold launch"; screenshot.lifetime = .keepAlways; add(screenshot)
+        var transport = URLRequest(url: URL(string: nativeFixtureHTTPOrigin + "/tab-reconnect-fixture")!)
+        transport.httpMethod = "POST"; transport.httpBody = Data("{\"action\":\"disconnect\"}".utf8)
+        _ = try await URLSession.shared.data(for: transport)
+        XCTAssertTrue(app.staticTexts["Reconnect the owning computer"].waitForExistence(timeout: 15))
+        let picker = app.descendants(matching: .any)["scratchpad-computer"].firstMatch
+        XCTAssertTrue(picker.waitForExistence(timeout: 10)); XCTAssertTrue(picker.isHittable, "Disconnected Scratchpad must retain its computer selector")
+        picker.tap()
+        let offlineShot = XCTAttachment(screenshot: app.screenshot()); offlineShot.name = "Computer selection remains reachable offline"; offlineShot.lifetime = .keepAlways; add(offlineShot)
+        transport.httpBody = Data("{\"action\":\"connect\"}".utf8)
+        _ = try await URLSession.shared.data(for: transport)
+    }
     @MainActor func testWorkspaceFilesRequireGrantAndStreamDocument() async throws {
         let (data, _) = try await URLSession.shared.data(from: URL(string: nativeFixtureHTTPOrigin + "/pair?projects=1")!)
         let fixture = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
@@ -517,7 +574,7 @@ final class RemoteUITests: XCTestCase {
                 let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "Missing project chat tab"; screenshot.lifetime = .keepAlways; add(screenshot)
             }
             XCTAssertTrue(exists, step + ": the chat is a named project tab")
-            let selected = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "Selected"), object: tab)
+            let selected = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "1"), object: tab)
             XCTAssertEqual(XCTWaiter.wait(for: [selected], timeout: 8), .completed, step + ": project tab strip selects the chat")
             // No chat header: the conversation itself is labelled with the displayed chat.
             let header = app.scrollViews["chat-conversation-scroll"]
@@ -1251,7 +1308,7 @@ final class RemoteUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Synthetic document"].firstMatch.exists)
         app.buttons["workspace-managed-title-chat:long-chat"].tap()
         let selectedChat = app.buttons["workspace-child-tab-chat:long-chat"]
-        let selectedExpectation = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "Selected"), object: selectedChat)
+        let selectedExpectation = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "1"), object: selectedChat)
         let selectionResult = XCTWaiter.wait(for: [selectedExpectation], timeout: 5)
         if selectionResult != .completed { print("Managed chat title state: " + app.debugDescription) }
         XCTAssertEqual(selectionResult, .completed, "The existing workspace chat must be selected")
@@ -1337,18 +1394,23 @@ final class RemoteUITests: XCTestCase {
         }
     }
     @MainActor func testTeamBrowsersUseOnePrimaryRowAndStandupActionStaysLocal() {
-        let app = nativeFixtureApplication(); app.launchArguments = ["--synthetic-destinations", "--synthetic-browser-workspace"]; app.launch()
-        app.buttons["Team"].firstMatch.tap()
+        let app = nativeFixtureApplication(); app.launchArguments = ["--reset-pairing", "--synthetic-clean-navigation", "--native-design-preview", "--phone-preview-fixture", "--synthetic-browser-workspace", "--native-app-fixture"]; app.launch()
+        if app.buttons["phone-app-navigation"].waitForExistence(timeout: 8) {
+            app.buttons["phone-app-navigation"].tap()
+            let team = app.buttons["phone-nav-Team"]
+            for _ in 0..<6 { if team.isHittable { break }; app.scrollViews["phone-navigation-drawer"].swipeUp() }
+            XCTAssertTrue(team.waitForExistence(timeout: 8)); team.tap()
+        } else { let team = app.buttons["sidebar-Team"].firstMatch; XCTAssertTrue(team.waitForExistence(timeout: 8)); team.tap() }
         XCTAssertTrue(app.buttons["team-section-overview"].waitForExistence(timeout: 10)); app.buttons["team-section-overview"].tap()
         XCTAssertFalse(app.buttons["Open standup"].exists)
         let primaryTabs = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "browser-tab-select-"))
         let startingCount = primaryTabs.count
-        app.buttons["team-new-browser-tab"].tap(); app.buttons["Browser - Default"].firstMatch.tap()
-        XCTAssertTrue(app.textFields["browser-address"].waitForExistence(timeout: 10))
+        app.buttons["team-new-browser-tab"].tap()
+        XCTAssertTrue(app.textFields["new-tab-address"].waitForExistence(timeout: 10))
         XCTAssertEqual(primaryTabs.count, startingCount + 1)
         XCTAssertFalse(app.buttons["browser-new-tab"].exists, "Team browsers must not add a nested tab strip")
         XCTAssertFalse(app.buttons["Open standup"].exists)
-        app.buttons["team-section-standup"].tap(); XCTAssertTrue(app.buttons["Open standup"].waitForExistence(timeout: 8))
+        app.buttons["team-section-standup"].tap(); XCTAssertTrue(app.descendants(matching: .any)["standup-page"].firstMatch.waitForExistence(timeout: 8))
         let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Flat Team primary tabs"; shot.lifetime = .keepAlways; add(shot)
     }
     @MainActor func testNavigationCountsKeepPhoneTabsAndMatchTabletScopes() {
@@ -1442,6 +1504,32 @@ final class RemoteUITests: XCTestCase {
     @MainActor func testHistoryPrependKeepsHeaderGapAnchorAndDoesNotCascade() async throws {
         let app = nativeFixtureApplication()
         app.launchArguments = ["--reset-pairing", "--synthetic-clean-navigation", "--synthetic-destinations", "--synthetic-heavy-chat", "--synthetic-varied-chat", "--history-diagnostics", "--show-scroll-fixture-controls"]
+        app.launch(); showChats(app)
+        let row = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Heavy fixture")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 12)); row.tap()
+        let window = app.staticTexts["history-window"]
+        XCTAssertTrue(window.waitForExistence(timeout: 20))
+        app.buttons["history-top-fixture"].tap()
+        try await Task.sleep(for: .seconds(1))
+        let first = try XCTUnwrap(Int(window.label.split(separator: ":").first ?? ""))
+        try await Task.sleep(for: .seconds(2))
+        XCTAssertEqual(Int(window.label.split(separator: ":").first ?? ""), first, "An idle top viewport must not reveal history on its own")
+        let anchor = app.descendants(matching: .any)["chat-event-\(first)"].firstMatch
+        XCTAssertTrue(anchor.exists); let y = anchor.frame.minY
+        app.buttons["history-page-fixture"].tap()
+        try await Task.sleep(for: .seconds(3))
+        let tree = XCTAttachment(string: app.debugDescription); tree.name = "History prepend position"; tree.lifetime = .keepAlways; add(tree)
+        XCTAssertLessThan(Int(window.label.split(separator: ":").first ?? "") ?? first, first)
+        XCTAssertTrue(anchor.exists)
+        XCTAssertEqual(anchor.frame.minY, y, accuracy: 12, "Prepending must keep the same message at the same screen offset")
+        let after = window.label
+        try await Task.sleep(for: .seconds(2))
+        XCTAssertEqual(window.label, after, "A restored top viewport must not cascade into another page")
+        XCTAssertEqual(anchor.frame.minY, y, accuracy: 12)
+    }
+    @MainActor func testHistoryPrependPreservesActivityBoundaryAnchor() async throws {
+        let app = nativeFixtureApplication()
+        app.launchArguments = ["--reset-pairing", "--synthetic-clean-navigation", "--synthetic-destinations", "--synthetic-heavy-chat", "--synthetic-history-activity-boundary", "--synthetic-reset-history-position", "--history-diagnostics", "--show-scroll-fixture-controls"]
         app.launch(); showChats(app)
         let row = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Heavy fixture")).firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 12)); row.tap()
@@ -1747,6 +1835,25 @@ final class RemoteUITests: XCTestCase {
         expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: app.images["Attachment image preview"])
         waitForExpectations(timeout: 10)
     }
+    @MainActor func testTeamOverviewEditsSelectedList() {
+        let app = nativeFixtureApplication()
+        app.launchArguments = ["--reset-pairing", "--native-design-preview", "--phone-preview-fixture", "--synthetic-browser-workspace", "--native-app-fixture"]
+        app.launch(); showTeam(app)
+        let overview = app.buttons["team-section-overview"]
+        XCTAssertTrue(overview.waitForExistence(timeout: 10)); overview.tap()
+        let edit = app.buttons["team-edit-list"]
+        XCTAssertTrue(edit.waitForExistence(timeout: 15)); edit.tap()
+        let name = app.textFields["List name"]
+        XCTAssertTrue(name.waitForExistence(timeout: 10))
+        let original = name.value as? String ?? ""
+        XCTAssertFalse(original.isEmpty)
+        name.tap(); name.typeText(" revised")
+        app.buttons["Save"].tap()
+        XCTAssertTrue(edit.waitForExistence(timeout: 10)); edit.tap()
+        XCTAssertTrue(name.waitForExistence(timeout: 10))
+        XCTAssertEqual(name.value as? String, original + " revised")
+        app.buttons["Cancel"].tap()
+    }
     @MainActor func testTeamListEditorUsesTappedConfiguration() {
         let app = nativeFixtureApplication(); app.launchArguments = ["--synthetic-team-lists"]; app.launch()
         let team = app.tabBars.buttons["Team"].exists ? app.tabBars.buttons["Team"] : app.buttons["Team"].firstMatch
@@ -1784,7 +1891,7 @@ final class RemoteUITests: XCTestCase {
         XCTAssertTrue(mainTabs.firstMatch.waitForExistence(timeout: 10))
         let mainID = mainTabs.element(boundBy: mainTabs.count - 1).identifier
         app.buttons["Team"].firstMatch.tap()
-        app.buttons["team-new-browser-tab"].tap(); app.buttons["Browser - Default"].firstMatch.tap()
+        app.buttons["team-new-browser-tab"].tap()
         XCTAssertTrue(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "browser-tab-select-")).firstMatch.waitForExistence(timeout: 10))
         XCTAssertTrue(app.buttons[mainID].exists)
         app.terminate(); app.launch()
@@ -2095,8 +2202,8 @@ final class RemoteUITests: XCTestCase {
         let ready = app.buttons["sidebar-Team"].exists ? app.buttons["sidebar-Team"] : app.buttons["destination-picker"]
         XCTAssertTrue(ready.waitForExistence(timeout: 20))
         if app.tabBars.buttons["Team"].exists { app.tabBars.buttons["Team"].tap() } else if app.buttons["sidebar-Team"].exists { app.buttons["sidebar-Team"].tap() } else { app.buttons["Team"].firstMatch.tap() }
-        if !app.textFields["browser-address"].waitForExistence(timeout: 2) { app.buttons["team-new-browser-tab"].tap(); app.buttons["Browser - Default"].firstMatch.tap() }
-        app.buttons["team-new-browser-tab"].tap(); app.buttons["Browser - Default"].firstMatch.tap()
+        if !app.textFields["browser-address"].waitForExistence(timeout: 2) { app.buttons["team-new-browser-tab"].tap() }
+        app.buttons["team-new-browser-tab"].tap()
         let address = app.textFields["browser-address"]
         XCTAssertTrue(address.waitForExistence(timeout: 15))
         address.tap()
@@ -2537,6 +2644,155 @@ extension RemoteUITests {
 }
 
 extension RemoteUITests {
+    @MainActor func testSmartHomePersistentTabsAndNewTabClose() {
+        let app = nativeFixtureApplication()
+        app.launchArguments = ["--synthetic-life", "--reset-pairing", "-nativeLifeSection", "home"]
+        app.launch()
+        if app.buttons["phone-app-navigation"].waitForExistence(timeout: 10) {
+            app.buttons["phone-app-navigation"].tap()
+            let life = app.buttons["phone-nav-Life"]
+            for _ in 0..<6 { if life.isHittable { break }; app.scrollViews["phone-navigation-drawer"].swipeUp() }
+            XCTAssertTrue(life.waitForExistence(timeout: 10)); life.tap()
+        } else {
+            let life = app.buttons["sidebar-Life"].firstMatch
+            XCTAssertTrue(life.waitForExistence(timeout: 10)); life.tap()
+        }
+        let add = app.buttons["Add Smart Home tab"]
+        XCTAssertTrue(add.waitForExistence(timeout: 10))
+        let hierarchy = XCTAttachment(string: app.debugDescription); hierarchy.name = "Smart Home navigation hierarchy"; hierarchy.lifetime = .keepAlways; self.add(hierarchy)
+        let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "Smart Home navigation"; screenshot.lifetime = .keepAlways; self.add(screenshot)
+        XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "life-home-tab-assistant").firstMatch.exists)
+        add.tap()
+        XCTAssertTrue(app.staticTexts["New Tab"].firstMatch.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["new-tab-action-New chat"].exists)
+        let close = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Close New tab")).firstMatch
+        XCTAssertTrue(close.waitForExistence(timeout: 10)); close.tap()
+        XCTAssertTrue(app.buttons["Refresh devices"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "life-home-tab-assistant").firstMatch.exists)
+        XCTAssertTrue(app.buttons["phone-app-navigation"].exists || app.buttons["sidebar-Life"].firstMatch.exists)
+    }
+    @MainActor func testNativeLifeAskHistoryWithoutPairedComputer() {
+        let app = nativeFixtureApplication(); app.launchArguments = ["--synthetic-life", "--reset-pairing"]; app.launch()
+        if app.buttons["phone-app-navigation"].waitForExistence(timeout: 10) {
+            app.buttons["phone-app-navigation"].tap()
+            let life = app.buttons["phone-nav-Life"]
+            for _ in 0..<6 { if life.isHittable { break }; app.scrollViews["phone-navigation-drawer"].swipeUp() }
+            XCTAssertTrue(life.waitForExistence(timeout: 10)); life.tap()
+        } else {
+            let life = app.buttons["sidebar-Life"].firstMatch
+            XCTAssertTrue(life.waitForExistence(timeout: 10)); life.tap()
+        }
+        let ask = app.buttons["Ask"].firstMatch
+        if !ask.exists { app.navigationBars.buttons.firstMatch.tap() }
+        XCTAssertTrue(ask.waitForExistence(timeout: 10)); ask.tap()
+        XCTAssertTrue(app.staticTexts["Pair your home computer in Connections to see Life Ask."].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["Refresh"].exists)
+        let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Life Ask on iPhone without a paired executor"; shot.lifetime = .keepAlways; add(shot)
+    }
+    @MainActor func testOpeningReminderDoesNotCompleteIt() {
+        let app = nativeFixtureApplication()
+        app.launchArguments = ["--synthetic-life", "--reset-pairing", "-nativeLifeSection", "reminders"]
+        app.launch()
+        if app.buttons["phone-app-navigation"].waitForExistence(timeout: 10) {
+            app.buttons["phone-app-navigation"].tap()
+            let life = app.buttons["phone-nav-Life"]
+            for _ in 0..<6 { if life.isHittable { break }; app.scrollViews["phone-navigation-drawer"].swipeUp() }
+            XCTAssertTrue(life.waitForExistence(timeout: 10)); life.tap()
+        } else {
+            let life = app.buttons["sidebar-Life"].firstMatch
+            XCTAssertTrue(life.waitForExistence(timeout: 10)); life.tap()
+        }
+        let title = app.buttons["Synthetic reminder persistence"].firstMatch
+        if !title.exists {
+            let reminders = app.buttons["Reminders"].firstMatch
+            if reminders.waitForExistence(timeout: 3) { reminders.tap() }
+        }
+        XCTAssertTrue(title.waitForExistence(timeout: 10)); title.tap()
+        let close = app.buttons["Close"].firstMatch
+        XCTAssertTrue(close.waitForExistence(timeout: 10)); close.tap()
+        XCTAssertTrue(title.waitForExistence(timeout: 10), "Opening a reminder must not invoke Complete or hide it from Open reminders")
+    }
+    @MainActor func testReminderWorkspaceTabsAndLists() { qualifyReminderWorkspace() }
+    @MainActor func testRootReminderTabKeepsRootPlacementAcrossColdLaunch() {
+        let app = nativeFixtureApplication()
+        app.launchArguments = ["--synthetic-life", "--reset-pairing", "--synthetic-clean-navigation"]
+        app.launch(); openNotificationFixtureHome(app)
+        let add = app.buttons.matching(identifier: "phone-new-tab").allElementsBoundByIndex.first { $0.isHittable } ?? app.buttons["new-main-browser-tab"]
+        XCTAssertTrue(add.waitForExistence(timeout: 8)); add.tap()
+        let reminder = app.buttons["new-tab-action-Reminders"]
+        XCTAssertTrue(reminder.waitForExistence(timeout: 10)); reminder.tap()
+        XCTAssertTrue(app.staticTexts["All Items"].firstMatch.waitForExistence(timeout: 10))
+        XCTAssertFalse(app.descendants(matching: .any)["reminders-navigation-tabs"].exists, "A root reminder does not move into the Reminders feature strip")
+        app.terminate(); app.launchArguments.removeAll { $0 == "--synthetic-clean-navigation" || $0 == "--reset-pairing" }; app.launch()
+        XCTAssertTrue(app.staticTexts["All Items"].firstMatch.waitForExistence(timeout: 15))
+        XCTAssertFalse(app.descendants(matching: .any)["reminders-navigation-tabs"].exists)
+    }
+    @MainActor func testIPadReminderWorkspaceTabsAndLists() { qualifyReminderWorkspace() }
+    @MainActor private func qualifyReminderWorkspace() {
+        let app = nativeFixtureApplication()
+        defer { let hierarchy = XCTAttachment(string: app.debugDescription); hierarchy.name = "Reminders workbench hierarchy"; hierarchy.lifetime = .keepAlways; add(hierarchy); let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "Reminders workbench screen"; screenshot.lifetime = .keepAlways; add(screenshot) }
+        app.launchArguments = ["--synthetic-life", "--reset-pairing", "-nativeLifeSection", "reminders"]
+        app.launch()
+        if app.buttons["phone-app-navigation"].waitForExistence(timeout: 10) {
+            let navigation = app.buttons["phone-app-navigation"]; navigation.tap()
+            let reminders = app.buttons["phone-nav-Reminders"]
+            for _ in 0..<6 { if reminders.isHittable { break }; app.scrollViews["phone-navigation-drawer"].swipeUp() }
+            XCTAssertTrue(reminders.waitForExistence(timeout: 10)); reminders.tap()
+        } else { let reminders = app.buttons["sidebar-Reminders"].firstMatch; XCTAssertTrue(reminders.waitForExistence(timeout: 10)); reminders.tap() }
+        let item = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Synthetic reminder persistence")).firstMatch
+        XCTAssertTrue(item.waitForExistence(timeout: 10))
+        let header = app.buttons["phone-app-navigation"].exists ? app.buttons["phone-app-navigation"] : app.buttons["sidebar-Reminders"].firstMatch
+        XCTAssertTrue(header.exists, "The global navigation stays reachable")
+        if UIDevice.current.userInterfaceIdiom == .pad { XCTAssertTrue(app.buttons["All Items"].exists); XCTAssertTrue(app.buttons["Inbox"].exists) }
+        item.tap(); XCTAssertTrue(app.buttons["Close Synthetic reminder persistence"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Edit reminder"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Saved"].exists)
+        XCTAssertTrue(app.buttons["Save"].exists)
+        XCTAssertFalse(app.textFields["Timezone"].exists)
+        if UIDevice.current.userInterfaceIdiom == .pad {
+            let itemTitle = app.buttons["reminder-item-20000000-0000-4000-8000-000000000002"]
+            XCTAssertTrue(itemTitle.waitForExistence(timeout: 10)); XCTAssertGreaterThan(itemTitle.frame.width, 130, "Tablet item titles must remain readable beside details")
+        }
+        if UIDevice.current.userInterfaceIdiom == .phone {
+            let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.02, dy: 0.45))
+            start.press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.45)))
+            XCTAssertTrue(app.buttons["Reminder options"].firstMatch.waitForExistence(timeout: 5), "Edge swipe returns to Items without closing the tab")
+            app.buttons["reminder-item-20000000-0000-4000-8000-000000000002"].firstMatch.tap()
+            XCTAssertTrue(app.staticTexts["Edit reminder"].waitForExistence(timeout: 5))
+        }
+        let detailShot = XCTAttachment(screenshot: app.screenshot()); detailShot.name = "Selected reminder workbench columns"; detailShot.lifetime = .keepAlways; add(detailShot)
+        if UIDevice.current.userInterfaceIdiom == .pad {
+            XCUIDevice.shared.orientation = .landscapeLeft
+            defer { XCUIDevice.shared.orientation = .portrait }
+            let rotated = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in app.frame.width > app.frame.height }, object: nil)
+            let result = XCTWaiter.wait(for: [rotated], timeout: 3)
+            // iPad windowing can retain a portrait-sized application window after
+            // device rotation. Enforce the rail only when the app actually widened.
+            if result == .completed && app.frame.width >= 1100 { XCTAssertTrue(app.staticTexts["Lists"].waitForExistence(timeout: 10)) }
+            let geometry = XCTAttachment(string: "Orientation request result: " + String(describing: result) + "; application frame: " + String(describing: app.frame)); geometry.name = "iPad responsive window geometry"; geometry.lifetime = .keepAlways; add(geometry)
+            let landscape = XCTAttachment(screenshot: app.screenshot()); landscape.name = "iPad workbench after orientation request"; landscape.lifetime = .keepAlways; add(landscape)
+        }
+        app.buttons["Close Synthetic reminder persistence"].tap(); XCTAssertTrue(item.waitForExistence(timeout: 10))
+        app.buttons["Add Reminders tab"].tap()
+        XCTAssertTrue(app.textFields["new-tab-address"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["new-tab-action-New chat"].exists)
+        let reminderType = app.buttons["new-tab-action-Reminders"]
+        XCTAssertTrue(reminderType.exists); reminderType.tap()
+        XCTAssertTrue(app.staticTexts["All Items"].waitForExistence(timeout: 10))
+        let completedFilter = app.descendants(matching: .any).matching(identifier: "reminder-status-completed").allElementsBoundByIndex.first { $0.isHittable } ?? app.descendants(matching: .any)["reminder-status-completed"].firstMatch
+        XCTAssertTrue(completedFilter.waitForExistence(timeout: 10)); completedFilter.tap()
+        XCTAssertTrue(completedFilter.waitForExistence(timeout: 5)); XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "1"), object: completedFilter)], timeout: 5), .completed)
+        XCTAssertEqual(app.descendants(matching: .any)["reminder-status-open"].firstMatch.value as? String, "1", "Status filters can be combined")
+        completedFilter.tap()
+        XCTAssertTrue(app.buttons["Reminder options"].firstMatch.isHittable, "Options remain inside a narrow Items column")
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "New reminder")).firstMatch.waitForExistence(timeout: 10))
+        app.buttons["Reminders tab overview"].tap()
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", "feature-overview-")).firstMatch.waitForExistence(timeout: 10))
+        let master = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@", "phone-tab-resource:", "Reminders")).allElementsBoundByIndex.first { $0.isHittable }
+        XCTAssertNotNil(master); master?.tap()
+        XCTAssertTrue(item.waitForExistence(timeout: 10))
+        let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = UIDevice.current.userInterfaceIdiom == .pad ? "iPad Reminders lists and shared tab strip" : "iPhone Reminders cards and shared tab strip"; shot.lifetime = .keepAlways; add(shot)
+    }
     @MainActor func testNativeLifeNutritionCardsAndFormsWithoutMacConnection() throws {
         let app=nativeFixtureApplication();app.launchArguments=["--synthetic-life","--reset-pairing"];app.launch()
         let life=app.buttons["Life"].firstMatch;XCTAssertTrue(life.waitForExistence(timeout:20));life.tap()
@@ -2702,6 +2958,25 @@ final class PhoneDesignPreviewUITests: XCTestCase {
         XCTAssertEqual(XCTWaiter.wait(for: [settled], timeout: 5), .completed)
         XCTAssertGreaterThanOrEqual(app.buttons["phone-nav-Home"].frame.minX, app.frame.minX - 1)
     }
+    @MainActor func testPhoneDrawerOffersIncognitoDuplicateAndFullBrowserMenu() {
+        let app = preview()
+        app.buttons["phone-new-tab"].tap()
+        let tile = app.buttons["new-tab-action-Incognito"]
+        XCTAssertTrue(tile.waitForExistence(timeout: 10)); tile.tap()
+        openNavigation(app)
+        let privateRows = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@", "shell-tab-", "Incognito"))
+        let row = privateRows.firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 10)); row.press(forDuration: 1)
+        XCTAssertTrue(app.buttons["Copy Proteus tab ID"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Copy tab name"].exists)
+        XCTAssertFalse(app.buttons["Persist tab"].exists)
+        let duplicate = app.buttons["Duplicate as Incognito tab"]
+        XCTAssertTrue(duplicate.exists); duplicate.tap()
+        if !app.scrollViews["phone-navigation-drawer"].isHittable { openNavigation(app) }
+        let two = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in privateRows.count == 2 }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [two], timeout: 10), .completed)
+    }
+
     @MainActor func testPhoneDrawerFullURLBottomControlsAndDoubleTap() {
         let app = preview()
         openNavigation(app)
@@ -3162,7 +3437,7 @@ final class NativeReleaseParityUITests: XCTestCase {
         XCTAssertTrue(app.buttons["browser-tab-overview"].waitForExistence(timeout: 12))
         let navigation = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "workspace-child-tab-"))
         let navigationCount = navigation.count
-        let selectedID = navigation.matching(NSPredicate(format: "value == %@", "Selected")).firstMatch.identifier.replacingOccurrences(of: "workspace-child-tab-", with: "")
+        let selectedID = navigation.matching(NSPredicate(format: "value == %@", "1")).firstMatch.identifier.replacingOccurrences(of: "workspace-child-tab-", with: "")
         XCTAssertEqual(navigationCount, 4)
         app.buttons["browser-tab-overview"].tap()
         let overview = app.otherElements["phone-tab-overview"]

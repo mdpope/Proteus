@@ -18,5 +18,6 @@ export function destinationSections(tabs,{excludeId,runs=[],catalog,workspaces=[
   return {label:workspace.name||'Workspace',workspaceId:workspace.id,hostId:host,tabs:(children.length?children:sorted('workspace').filter(tab=>tab.workspaceId===workspace.id&&(tab.hostId||'local')===host)).filter(tab=>tab.id!==excludeId)};
  });
  if(!groups.length&&sorted('project').length)groups.push(...Object.values(Object.groupBy(sorted('project'),tab=>(tab.hostId||'local')+':'+tab.workspaceId)).map(rows=>({label:rows[0].workspaceName||'Workspace',tabs:rows})));
- return [...groups,{label:'Chats',tabs:sorted('chat')}];
+ // Chats are not destinations: a tab moves to a workspace, project, Application tabs or Team Tools.
+ return groups;
 }

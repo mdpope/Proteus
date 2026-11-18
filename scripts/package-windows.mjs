@@ -1,3 +1,4 @@
+import {beginDesktopPackage} from './desktop-package-output.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -9,18 +10,20 @@ import {prepareWindowsTerminal} from './prepare-windows-terminal.mjs';
 
 if(process.platform!=='win32'||process.arch!=='x64')throw new Error('Build this Windows x64 release on Windows x64.');
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
+const output = beginDesktopPackage();
+try {
 await import('./build-terminal.mjs');
 const {buildWindowsTerminalGuardian}=await import('./build-windows-terminal-guardian.mjs');
 // Compile before freezing: the helper bytes are runtime, while its source and
 // build recipe are provenance inputs. No compiler runs on the installed host.
 const terminalBuild=prepareWindowsTerminal(root,{build:buildWindowsTerminalGuardian});
 const metadata=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
-const snapshot=createDesktopSnapshot(root,['package.json','package-lock.json','scripts/package-windows.mjs','scripts/windows-installer.nsh','scripts/desktop-build.mjs','scripts/build-terminal.mjs','scripts/prepare-extensions.mjs','scripts/build-windows-terminal-guardian.mjs','scripts/prepare-windows-terminal.mjs','native/windows-terminal/guardian.cs']);
+const snapshot=createDesktopSnapshot(root,['package.json','package-lock.json','scripts/package-windows.mjs','scripts/windows-installer.nsh','scripts/desktop-build.mjs','scripts/desktop-package-output.mjs','scripts/build-cache-lock.mjs','scripts/build-terminal.mjs','scripts/prepare-extensions.mjs','scripts/build-windows-terminal-guardian.mjs','scripts/prepare-windows-terminal.mjs','native/windows-terminal/guardian.cs']);
 const {runtimeFiles,buildInputs,sourceFingerprint}=snapshot,buildRevision='windows.'+sourceFingerprint.slice(0,12);
 const sourceCommit=process.env.PROTEUS_RELEASE_SOURCE_COMMIT;
 if(sourceCommit&&!/^[a-f0-9]{40,64}$/.test(sourceCommit))throw Error('Invalid release source commit.');
 const provenance={schemaVersion:1,version:metadata.version,buildRevision,sourceFingerprint,platform:'win32',arch:'x64',runtimeFiles,buildInputs,...(sourceCommit?{sourceCommit}:{})};
-const out=path.resolve(process.env.PROTEUS_PACKAGE_OUTPUT||path.join(root,'dist','windows'));
+const out=output.directory;
 fs.mkdirSync(out,{recursive:true});
 fs.writeFileSync(path.join(out,'windows-terminal-build.json'),JSON.stringify(terminalBuild,null,2)+'\n');
 // This first release is intentionally unsigned; do not discover or use another
@@ -58,3 +61,5 @@ for(const file of artifacts.filter(file=>file.endsWith('.exe'))){
   await createTar({file:archive,cwd:path.join(out,'win-unpacked'),gzip:true,portable:true},['.']);
   console.log(JSON.stringify({installer:file,archive,archiveSha256:fileDigest(archive),executable:path.join(out,'win-unpacked','Proteus.exe'),version:metadata.version,buildRevision,sourceFingerprint,platform:'win32',arch:'x64',sha256:hash,signing:'unsigned',runtimeFiles:Object.keys(runtimeFiles).length}));
 }
+output.complete({sourceFingerprint, buildRevision});
+} finally { output.release(); }

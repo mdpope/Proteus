@@ -14,6 +14,15 @@ final class NativeReplyTextView: UITextView {
     var submit: () -> Void = {}
     var windowHeightChanged: (CGFloat) -> Void = { _ in }
     private var lastWindowHeight: CGFloat = 0
+    private var lastBoundsHeight: CGFloat = 0
+    private var lastContentHeight: CGFloat = 0
+    func revealCaret() {
+        guard let range = selectedTextRange else { return }
+        if contentSize.height <= bounds.height + 0.5 { if contentOffset.y != 0 { setContentOffset(.zero, animated: false) }; return }
+        let caret = caretRect(for: range.end)
+        guard caret.origin.y.isFinite, caret.height.isFinite else { return }
+        scrollRectToVisible(caret.insetBy(dx: 0, dy: -textContainerInset.bottom), animated: false)
+    }
     private(set) var insertingLiteralText = false
     let placeholder = UILabel()
     private lazy var returnCommands: [UIKeyCommand] = {
@@ -76,6 +85,13 @@ final class NativeReplyTextView: UITextView {
         super.layoutSubviews()
         placeholder.frame = CGRect(x: textContainerInset.left, y: textContainerInset.top,
             width: max(0, bounds.width - textContainerInset.left - textContainerInset.right), height: font?.lineHeight ?? 22)
+        // N11-27: SwiftUI resizes this view after each edit. When the height changes (growing,
+        // reaching its cap, keyboard/safe-area changes), keep the caret's line fully visible
+        // instead of leaving the typed line below the visible edge.
+        if bounds.height != lastBoundsHeight || contentSize.height != lastContentHeight {
+            lastBoundsHeight = bounds.height; lastContentHeight = contentSize.height
+            if isFirstResponder { revealCaret() }
+        }
         if let height = window?.bounds.height, height != lastWindowHeight {
             lastWindowHeight = height
             DispatchQueue.main.async { [weak self] in self?.windowHeightChanged(height) }
@@ -153,6 +169,7 @@ struct NativeGrowingReplyEditor: UIViewRepresentable {
         init(_ parent: NativeGrowingReplyEditor) { self.parent = parent }
         func textViewDidChange(_ view: UITextView) {
             view.invalidateIntrinsicContentSize()
+            DispatchQueue.main.async { [weak view] in (view as? NativeReplyTextView)?.revealCaret() }
             if parent.text != view.text { parent.text = view.text }
             (view as? NativeReplyTextView)?.placeholder.isHidden = !view.text.isEmpty
         }

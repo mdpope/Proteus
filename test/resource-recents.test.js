@@ -1,0 +1,22 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {createResourceRecents} from '../public/models/resource-recents.js';
+test('resource recents retain closed items, deduplicate, bind and bound metadata',()=>{
+ let saved,at=10;const history=createResourceRecents({load:()=>null,save:value=>saved=structuredClone(value),now:()=>at++,limit:10});
+ for(let i=0;i<12;i++)history.remember('scratchpad','root-a',{id:String(i),title:'Note '+i,body:'Never cache body'});
+ assert.equal(history.rows('scratchpad','root-a').length,10);
+ assert.equal(history.rows('scratchpad','root-b').length,0);
+ history.remember('scratchpad','root-a',{id:'5',title:'Renamed'});
+ assert.equal(history.rows('scratchpad','root-a')[0].title,'Renamed');
+ assert.equal(history.rows('scratchpad','root-a').filter(row=>row.id==='5').length,1);
+ const touched=history.rows('scratchpad','root-a')[0].at;
+ history.remember('scratchpad','root-a',{id:'5',title:'Saved edit'},{visit:false});
+ assert.equal(history.rows('scratchpad','root-a')[0].at,touched);
+ assert.equal(JSON.stringify(saved).includes('body'),false);
+ const restored=createResourceRecents({load:()=>saved,save:()=>{}});
+ assert.equal(restored.rows('scratchpad','root-a')[0].title,'Saved edit');
+ history.remember('reminders','account-a',{id:'5',title:'Reminder'});
+ assert.equal(history.rows('reminders','account-b').length,0);
+ history.remove('reminders','account-a','5');assert.equal(history.rows('reminders','account-a').length,0);
+ assert.equal(history.rows('scratchpad','root-a')[0].id,'5');
+});

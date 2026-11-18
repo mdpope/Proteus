@@ -37,11 +37,13 @@ test('stages bounded bytes under private paths and binds a finished image to its
   assert.equal(fs.existsSync(resolved.path), false);
 }));
 
-test('rejects out-of-order, oversized, mismatched and disguised uploads', async () => fixture(async store => {
+test('rejects out-of-order, invalid, beyond-disk, mismatched and disguised uploads', async () => fixture(async store => {
   await assert.rejects(store.begin({ ...owner, providerId: 'rehearsal', name: 'image.png', mediaType: 'image/png', size: png.length, sha256: digest(png) }), /provider/);
   await assert.rejects(store.begin({ ...owner, name: '../secret', mediaType: 'image/png', size: png.length, sha256: digest(png) }), /filename/);
   await assert.rejects(store.begin({ ...owner, name: 'malformed.bin', mediaType: 'not a media type', size: png.length, sha256: digest(png) }), /not supported/);
-  await assert.rejects(store.begin({ ...owner, name: 'huge.png', mediaType: 'image/png', size: chatAttachmentLimits.maxFileBytes + 1, sha256: digest(png) }), /8 MB/);
+  assert.equal(chatAttachmentLimits.maxFileBytes, null, 'N11-18: no per-file size cap');
+  await assert.rejects(store.begin({ ...owner, name: 'negative.png', mediaType: 'image/png', size: -1, sha256: digest(png) }), /valid size/);
+  await assert.rejects(store.begin({ ...owner, name: 'beyond-disk.bin', mediaType: 'application/octet-stream', size: Number.MAX_SAFE_INTEGER, sha256: digest(png) }), /free disk space/);
   const pending = await store.begin({ ...owner, name: 'image.png', mediaType: 'image/png', size: png.length, sha256: digest(png) });
   await assert.rejects(store.chunk({ uploadId: pending.uploadId, deviceId: owner.deviceId, index: 1, dataBase64: png.toString('base64') }), /in order/);
   await assert.rejects(store.chunk({ uploadId: pending.uploadId, deviceId: owner.deviceId, index: 0, dataBase64: Buffer.alloc(png.length + 1).toString('base64') }), /declared size/);
@@ -133,25 +135,26 @@ test('deleting one chat revokes staged and accepted bytes without touching anoth
   assert.equal(store.records.has(other.uploadId), true);
 }));
 
-test('one message accepts 256 tiny files but rejects a 257th and a 32 MiB aggregate overflow', async () => fixture(async store => {
+test('one message accepts 256 tiny files, rejects a 257th and has no aggregate byte cap', async () => fixture(async store => {
   assert.equal(chatAttachmentLimits.maxBatchFiles, 256);
-  assert.equal(chatAttachmentLimits.maxBatchBytes, 32 * 1024 * 1024);
+  assert.equal(chatAttachmentLimits.maxBatchBytes, null);
   for (let index = 0; index < chatAttachmentLimits.maxBatchFiles; index++) {
     const started = await store.begin({ ...owner, name: `tiny-${index}.png`, mediaType: 'image/png', size: png.length, sha256: digest(png) });
     await store.chunk({ uploadId: started.uploadId, deviceId: owner.deviceId, index: 0, dataBase64: png.toString('base64') });
     await store.finish({ uploadId: started.uploadId, deviceId: owner.deviceId });
   }
-  await assert.rejects(store.begin({ ...owner, name: 'too-many.png', mediaType: 'image/png', size: png.length, sha256: digest(png) }), /batch limit/);
+  await assert.rejects(store.begin({ ...owner, name: 'too-many.png', mediaType: 'image/png', size: png.length, sha256: digest(png) }), /maximum number/);
   await store.revokeChat(owner.chatId);
-  const large = Buffer.alloc(8 * 1024 * 1024, 65), largeHash = digest(large);
-  for (let index = 0; index < 4; index++) {
-    const started = await store.begin({ ...owner, name: `large-${index}.txt`, mediaType: 'text/plain', size: large.length, sha256: largeHash });
+  // Five 9 MiB files in one message exceed every former per-file and aggregate cap.
+  const large = Buffer.alloc(9 * 1024 * 1024, 65), largeHash = digest(large);
+  for (let index = 0; index < 5; index++) {
+    const started = await store.begin({ ...owner, messageId: 'large-message', name: `large-${index}.txt`, mediaType: 'text/plain', size: large.length, sha256: largeHash });
     for (let offset = 0, chunkIndex = 0; offset < large.length; offset += chatAttachmentLimits.chunkBytes, chunkIndex++) await store.chunk({ uploadId: started.uploadId, deviceId: owner.deviceId, index: chunkIndex, dataBase64: large.subarray(offset, offset + chatAttachmentLimits.chunkBytes).toString('base64') });
-    await store.finish({ uploadId: started.uploadId, deviceId: owner.deviceId });
+    const finished = await store.finish({ uploadId: started.uploadId, deviceId: owner.deviceId });
+    assert.equal(finished.size, large.length);
   }
-  await assert.rejects(store.begin({ ...owner, name: 'over-budget.txt', mediaType: 'text/plain', size: 1, sha256: 'a'.repeat(64) }), /batch limit/);
-  await store.begin({ ...owner, messageId: 'separate-message', name: 'different-message.png', mediaType: 'image/png', size: png.length, sha256: digest(png) });
 }));
+
 
 test('active sequential upload refreshes earlier files but an idle batch expires', async () => {
   const home = privateTemporaryDirectory(path.join(os.tmpdir(), 'proteus-attachments-sliding-'));
@@ -171,19 +174,21 @@ test('active sequential upload refreshes earlier files but an idle batch expires
   } finally { await store.close(); fs.rmSync(home, { recursive: true, force: true }); }
 });
 
-test('staging byte caps permit one full batch per destination without unbounded global reservations', async () => fixture(async store => {
-  const large = Buffer.alloc(8 * 1024 * 1024, 65), largeHash = digest(large);
-  for (let device = 0; device < 4; device++) {
-    for (let index = 0; index < 4; index++) {
-      const deviceId = `device-${device}`;
-      const started = await store.begin({ ...owner, deviceId, messageId: `message-${device}`, name: `large-${device}-${index}.txt`, mediaType: 'text/plain', size: large.length, sha256: largeHash });
-      for (let offset = 0, chunkIndex = 0; offset < large.length; offset += chatAttachmentLimits.chunkBytes, chunkIndex++) await store.chunk({ uploadId: started.uploadId, deviceId, index: chunkIndex, dataBase64: large.subarray(offset, offset + chatAttachmentLimits.chunkBytes).toString('base64') });
-      await store.finish({ uploadId: started.uploadId, deviceId });
-    }
-  }
-  await assert.rejects(store.begin({ ...owner, deviceId: 'device-5', messageId: 'message-5', name: 'over-global.txt', mediaType: 'text/plain', size: 1, sha256: 'a'.repeat(64) }), /Too many attachments/);
-  assert.equal(chatAttachmentLimits.maxPendingBytes, 128 * 1024 * 1024);
+test('large files are verified and delivered from disk without a byte cap', async () => fixture(async store => {
+  assert.equal(chatAttachmentLimits.maxPendingBytes, undefined);
+  const large = Buffer.alloc(21 * 1024 * 1024, 0x42); large.write('%PDF-1.7', 0); const largeHash = digest(large);
+  const started = await store.begin({ ...owner, name: 'manual.pdf', mediaType: 'application/pdf', size: large.length, sha256: largeHash });
+  for (let offset = 0, chunkIndex = 0; offset < large.length; offset += chatAttachmentLimits.chunkBytes, chunkIndex++) await store.chunk({ uploadId: started.uploadId, deviceId: owner.deviceId, index: chunkIndex, dataBase64: large.subarray(offset, offset + chatAttachmentLimits.chunkBytes).toString('base64') });
+  const finished = await store.finish({ uploadId: started.uploadId, deviceId: owner.deviceId });
+  const file = await store.read({ attachmentId: finished.attachmentId, ...owner });
+  assert.equal(file.size, large.length);
+  assert.deepEqual(file.readRange(large.length - 4, 4), large.subarray(-4), 'pages read from disk');
+  const {providerAttachmentInputs} = await import('../src/services/chats/attachment-input.js');
+  const [input] = providerAttachmentInputs([file], ['application/pdf', 'image/png', 'text/plain']);
+  assert.equal(input.mediaType, 'text/plain', 'files above the inline budget become a paged reference');
+  assert.match(input.bytes.toString(), new RegExp('size: ' + large.length + ' bytes; SHA-256: ' + largeHash));
 }));
+
 
 
 test('incomplete uploads retain the low open-file-descriptor concurrency caps', async () => fixture(async store => {
@@ -198,4 +203,18 @@ test('incomplete uploads retain the low open-file-descriptor concurrency caps', 
   }
   assert.equal(chatAttachmentLimits.maxIncomplete, 16);
   await assert.rejects(store.begin({ ...owner, deviceId: 'device-4', name: 'seventeenth-open.png', mediaType: 'image/png', size: png.length, sha256: digest(png) }), /Too many attachments/);
+}));
+
+// N11-34: a delivered file is viewable with its chat before the turn ends, and a still-held
+// accepted record serves the same chat/digest while history copying has not happened yet.
+test('message files are viewable with their chat before the turn finishes', async () => fixture(async store => {
+  const started = await store.begin({ ...owner, name: 'photo.png', mediaType: 'image/png', size: png.length, sha256: digest(png) });
+  await store.chunk({ uploadId: started.uploadId, deviceId: owner.deviceId, index: 0, dataBase64: png.toString('base64') });
+  const finished = await store.finish({ uploadId: started.uploadId, deviceId: owner.deviceId });
+  await store.accept({ attachmentId: finished.attachmentId, ...owner });
+  const held = store.historyFile(owner.chatId, digest(png));
+  assert.deepEqual(held.readRange(0, png.length), png, 'served from the accepted record');
+  assert.throws(() => store.historyFile('another-chat', digest(png)), /not kept/);
+  await store.preserve({ attachmentId: finished.attachmentId }, owner.chatId);
+  assert.ok(fs.existsSync(path.join(store.historyDirectory(owner.chatId), digest(png))));
 }));

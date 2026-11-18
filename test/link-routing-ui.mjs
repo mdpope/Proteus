@@ -4,7 +4,7 @@ import {sidebarFixture} from './preview-sidebar-fixture.mjs';
 const fixture=await sidebarFixture();let app;
 const wait=async fn=>{for(let index=0;index<200;index++){const result=await fn();if(result)return result;await new Promise(resolve=>setTimeout(resolve,50));}throw Error('Isolated link-routing condition timed out.');};
 try{
- app=await electron.launch({...(process.env.PROTEUS_TEST_EXECUTABLE?{executablePath:process.env.PROTEUS_TEST_EXECUTABLE}:{}),args:process.env.PROTEUS_TEST_EXECUTABLE?[]:['.'],env:{...process.env,PROTEUS_DESKTOP_PREVIEW:'1',PROTEUS_PREVIEW_HOME:fixture.locations.root,CODEX_HOME:fixture.auth,PORT:'0'}});
+ app=await electron.launch({...(process.env.PROTEUS_TEST_EXECUTABLE?{executablePath:process.env.PROTEUS_TEST_EXECUTABLE}:{}),args:process.env.PROTEUS_TEST_EXECUTABLE?[]:['.'],env:{...process.env,PROTEUS_DESKTOP_PREVIEW:'1',PROTEUS_DESIGN_DEMO:'1',PROTEUS_PREVIEW_HOME:fixture.locations.root,CODEX_HOME:fixture.auth,PORT:'0'}});
  const shell=await app.firstWindow();await shell.locator('body.window-design-preview').waitFor();await wait(()=>app.evaluate(({app})=>[...process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getWindows().contexts.values()].every(ctx=>ctx.externalURLReady)));
  const errors=[];shell.on('pageerror',error=>errors.push(error.message));
  const inventory=()=>app.evaluate(({app})=>process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser().list(true));
@@ -29,6 +29,14 @@ try{
  await picker.keyboard.type('Design review');await wait(async()=>await picker.getByRole('option').count()===(process.platform==='darwin'?2:1));if(process.platform==='darwin'){assert.equal(await picker.getByRole('option').first().locator('.name').innerText(),'Open in SafariSelector');assert.equal(await picker.getByRole('option').first().locator('.digit').innerText(),'1');await picker.keyboard.press('ArrowDown');}await picker.keyboard.press('Enter').catch(error=>{if(!picker.isClosed())throw error;});
  const tab=await wait(async()=>(await inventory()).find(tab=>tab.url===url&&tab.loaded));assert.equal(tab.parentId,fixture.parentId);assert.equal(tab.owner,null);assert.equal(tab.agentPaused,true);await shell.locator('[data-chat-subtab="'+tab.id+'"]').waitFor();await wait(async()=>(await shell.evaluate(()=>window.desktop.workspaceSession({action:'get'}))).active===tab.id);
  const configuration=await shell.evaluate(()=>window.desktop.linkRouting({action:'get'}));assert.equal(configuration.registration.available,false);
+ assert.deepEqual(configuration.targets.filter(target=>target.feature).map(target=>target.feature).sort(),['reminders','scratchpad','team']);
+ for(const [feature,title] of [['team','Team Tools'],['reminders','Reminders'],['scratchpad','Scratchpad']]){
+  const featureURL=fixture.origin+'/feature-'+feature;await open(featureURL);const choice=await popup();await choice.getByRole('searchbox').waitFor();
+  await choice.locator('.project').filter({has:choice.locator('.name',{hasText:new RegExp('^'+title+'$')})}).click().catch(error=>{if(!choice.isClosed())throw error;});
+  const created=await wait(async()=>(await inventory()).find(tab=>tab.url===featureURL&&tab.loaded));assert.equal(created.parentId,null);
+  if(feature==='team'){assert.equal(created.group,'team');await shell.locator('#team-browser-url').waitFor();}
+  else {await shell.locator('#feature-content-navigation').waitFor();const session=await wait(async()=>{const value=await shell.evaluate(()=>window.desktop.workspaceSession({action:'get'}));return value.page===feature&&value.active===created.id?value:null;});assert.equal(session.page,feature);assert.equal(session.active,created.id);}
+ }
  const target=configuration.targets.find(target=>target.projectId===fixture.project.id),rules=[{id:'synthetic',enabled:true,pattern:'127.0.0.1/link-rule',destination:{hostId:'local',workspaceId:target.workspaceId,projectId:target.projectId}}];
  await shell.evaluate(({rules,expectedRevision})=>window.desktop.linkRouting({action:'save',rules,expectedRevision}),{rules,expectedRevision:configuration.configuration.revision});
  const automatic=fixture.origin+'/link-rule/next';await open(automatic);const routed=await wait(async()=>(await inventory()).find(tab=>tab.url===automatic&&tab.loaded));assert.equal(routed.parentId,fixture.parentId);assert.equal(app.windows().some(page=>page.url().endsWith('/picker.html')),false);

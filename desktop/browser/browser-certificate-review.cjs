@@ -21,6 +21,7 @@ class BrowserCertificateReview {
   });
   wc.on('ipc-message',(event,channel,token)=>{if(channel==='proteus:certificate-accept'&&event.senderFrame===wc.mainFrame)void this.accept(tab,token).catch(error=>this.browser.actions?.send({type:'error',id:tab.id,message:error.message}));});
  }
+ forget(tab,session){this.states.delete(tab);this.profiles.delete(session);}
  token(tab,url){const failure=this.states.get(tab)?.failure;return failure&&failure.url===url?failure.token:null;}
  information(tab,url){const failure=this.states.get(tab)?.failure;if(!failure||failure.url!==url)return null;return Object.fromEntries(['subject','issuer','validFrom','validTo','fingerprint','subjectAltName','serialNumber'].map(key=>[key,failure[key]]));}
  async accept(tab,token){

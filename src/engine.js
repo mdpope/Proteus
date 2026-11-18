@@ -9,6 +9,7 @@ import {providerAttachmentInputs} from './services/chats/attachment-input.js';
 import {DelegationService} from './services/chats/delegation.js';
 import {captureUserQuestions,answerUserQuestion,recoverUserQuestions,askBackgroundQuestion} from './services/chats/user-questions.js';
 import {AllowanceContinuation,allowanceFailure} from './services/chats/allowance-continuation.js';
+import {settleFolderAccessContinuation} from './services/chats/folder-access.js';
 import {displayText} from './shared/tool-activity.js';
 import { RunHistoryCache } from './services/chats/run-history-cache.js';
 import { RunWriter } from './services/chats/run-writer.js';
@@ -258,20 +259,21 @@ export class Engine extends EventEmitter {
     this.runWriter.writeNow(run);this.emit('change',run);
     return {id:run.id,failureEventAt:run.failureEventAt,failureReviewedAt:run.failureReviewedAt,attentionRequired:false};
   }
-  createRun(schedule, trigger = 'manual', slot = null, {deferStart=false,attachmentOnly=false,inputOrigin=null,setupId=null,prepared=false,scheduleTest=null} = {}) {
+  createRun(schedule, trigger = 'manual', slot = null, {deferStart=false,attachmentOnly=false,inputOrigin=null,setupId=null,prepared=false,scheduleTest=null,runId=null} = {}) {
     if(trigger!=='scheduled')this.updateGuard?.();
     const submittedPrompt=schedule.prompt;
     if(attachmentOnly&&deferStart)schedule={...schedule,prompt:attachmentPrompt};
     schedule = !prepared&&this.prepareSchedule ? this.prepareSchedule(schedule, trigger) : schedule;
     validateSchedule(schedule);
     if (this.stopping) throw new Error('Runner is stopping.');
+    if(runId!==null&&(!/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(runId)||this.runs.has(runId)||this.tombstones[runId]||fs.existsSync(path.join(this.runsDir,runId+'.json'))))throw new Error('The claimed chat identity already exists or is unavailable.');
     if ([...this.runs.values()].some(run => run.schedule.id === schedule.id && active.has(run.status))) throw new Error('This schedule already has an active run.');
     for (const dir of [schedule.workspace.cwd, ...schedule.workspace.additionalDirectories]) if (!fs.statSync(dir).isDirectory()) throw new Error(`Workspace directory unavailable: ${dir}`);
     const run = {
-      id: randomUUID(),...(scheduleTest?{scheduleTest:structuredClone(scheduleTest)}:{}), ...(setupId?{setupId}:{}), schedule: structuredClone(schedule), scheduleRevision: revision(schedule),
+      id: runId||randomUUID(),...(scheduleTest?{scheduleTest:structuredClone(scheduleTest)}:{}), ...(setupId?{setupId}:{}), schedule: structuredClone(schedule), scheduleRevision: revision(schedule),
       title: trigger === 'chat' ? (schedule.chatTitleManual ? schedule.name.trim() : suggestedChatTitle(schedule.prompt)) : schedule.name,
       ...(trigger === 'chat' ? { titleKind: schedule.chatTitleManual ? 'manual' : 'generated', titleRevision: randomUUID() } : {}),
-      chatType:trigger==='chat'&&schedule.chatType==='internet'?'internet':trigger==='chat'?'user':'scheduled',
+      chatType:trigger==='chat'&&['internet','life-ask'].includes(schedule.chatType)?schedule.chatType:trigger==='chat'?'user':'scheduled',
       trigger, slot, status: 'queued', createdAt: this.now(), updatedAt: this.now(),
       events: [{ role: 'user', text: attachmentOnly&&deferStart?submittedPrompt:schedule.prompt, at: this.now(),...(inputOrigin?{data:{inputOrigin}}:{}) }, ...(schedule.context?.warnings || []).map(warning => ({ role: 'system', text: warning.message, at: this.now(), data: { contextWarning: warning } }))], pending: null,
       ...(inputOrigin?{turnOrigin:inputOrigin}:{}),providerSessionId: null, usage: { inputTokens: 0, outputTokens: 0, observed: false },
@@ -341,7 +343,7 @@ export class Engine extends EventEmitter {
       const files=dispatch?await this.attachmentConsents.readForProvider({...dispatch,chatId:run.id,providerId:run.schedule.provider}):[];
       if(this.stopping||run.status!=='running'||this.running.get(id)!==slot||slot.controller.signal.aborted)throw Error('This turn ended before steering delivery. Inspect the chat before sending again.');
       const originals=this.turnAttachments.get(id),offset=originals?.length||0;if(originals)originals.push(...files);
-      await provider.steer(run,providerPrompt(prompt,files),providerAttachmentInputs(files,provider.acceptedSteeringMediaTypes,offset)); delivery.state = 'steered';
+      await provider.steer(run,providerPrompt(prompt,files),providerAttachmentInputs(files,provider.inlineSteeringMediaTypes??provider.acceptedSteeringMediaTypes,offset)); delivery.state = 'steered';
     }
     catch (error) { delivery.state = 'failed'; delivery.error = error.message; throw error; }
     finally { if(dispatch)await this.attachmentConsents.releaseProof(dispatch.proofId).catch(()=>{});this.persist(run); }
@@ -370,7 +372,7 @@ export class Engine extends EventEmitter {
       const files=dispatch?await this.attachmentConsents.readForProvider({...dispatch,chatId:id,providerId:run.schedule.provider}):[];
       if(this.stopping||run.status!=='running'||this.running.get(id)!==slot||slot.controller.signal.aborted)throw Error('This turn ended before steering delivery. Inspect the chat before sending again.');
       const originals=this.turnAttachments.get(id),offset=originals?.length||0;if(originals)originals.push(...files);
-      attempted=true;if(message.inputOrigin)run.turnOrigin=message.inputOrigin;await provider.steer(run,providerPrompt(message.prompt,files),providerAttachmentInputs(files,provider.acceptedSteeringMediaTypes,offset));run.queuedMessages=run.queuedMessages.filter(item=>item.id!==messageId);if(delivery){delivery.state='steered';delete delivery.error;}
+      attempted=true;if(message.inputOrigin)run.turnOrigin=message.inputOrigin;await provider.steer(run,providerPrompt(message.prompt,files),providerAttachmentInputs(files,provider.inlineSteeringMediaTypes??provider.acceptedSteeringMediaTypes,offset));run.queuedMessages=run.queuedMessages.filter(item=>item.id!==messageId);if(delivery){delivery.state='steered';delete delivery.error;}
     }catch(error){if(delivery)delivery.error=error.message;if(dispatch){
       // A consumed proof cannot be queued or replayed after ambiguous provider
       // transport. Preserve the event/receipt, rather than silently sending twice.
@@ -437,7 +439,7 @@ export class Engine extends EventEmitter {
     }
     if(inputOrigin)run.turnOrigin=inputOrigin;this.pending.delete(id); run.pending = null; run.status = 'running';resumeTurn(run,this.now());providerProgress(run,this.now(),{observable:true});
     if (!isPermission) this.event(run, 'user', answer, {questionReply:{requestId},...(attachmentDispatch?{attachments:questionFiles,delivery:{id:attachmentDispatch.messageId,questionReplyDigest:attachmentDispatch.signature}}:{})}); else this.persist(run);
-    const providerAnswer=attachmentDispatch?answer+`\nThe user attached ${questionFiles.length} file(s). Call proteus_question_attachments with requestId ${requestId} to view the images/text before continuing.`:answer;
+    const providerAnswer=attachmentDispatch?answer+`\nThe user attached ${questionFiles.length} file(s). Call proteus_question_attachments with requestId ${requestId} to inspect the files before continuing; use list/read for bounded access to original bytes.`:answer;
     pending.resolve(isPermission&&['allow-schedule','allow-schedule-scoped'].includes(answer)&&isScopedCommand?'approve-schedule':isPermission && !['approve','deny'].includes(answer) ? 'approve' : providerAnswer);
     if (isPermission) this.recheckPermissions();
     return run;
@@ -576,6 +578,7 @@ export class Engine extends EventEmitter {
       }
       delete run.questionAttachmentReplies;
       await this.queuedSteers.get(run.id)?.catch(()=>{});
+      settleFolderAccessContinuation(this,run);
       if (run.status === 'completed' && run.queuedMessages?.length && !this.stopping) {
         const next = run.queuedMessages.shift(); if (next.modelOptions) this.applyModelOptions(run, next.modelOptions); run.nextPrompt = next.prompt;run.nextAttachmentDispatch=next.attachmentDispatch;if(next.inputOrigin)run.turnOrigin=next.inputOrigin; run.status = 'queued';
         const event=run.events.find(e=>e.data?.delivery?.id===next.id);if(event)event.data.delivery.state='delivered';

@@ -9,9 +9,16 @@ async function verify(page,label){
  await page.locator('#chat-index-rows button').first().waitFor();assert.equal(await page.locator('#chat-index-more').count(),0);
  const area=page.locator('#chat-index-rows');assert.equal(await area.locator('button').count(),100);
  assert.match(await area.locator('button').first().textContent(),/gpt-6.1-sol/);assert.match(await area.locator('button').first().textContent(),/high · priority/);
+ if(label==='electron'){
+  // N11-09 desktop contract: #main is the single scrolling surface; the list is not a nested scroller.
+  const layout=await area.evaluate(el=>({nested:el.scrollHeight>el.clientHeight+1,overflow:getComputedStyle(el).overflowY,main:document.querySelector('#main').scrollHeight>document.querySelector('#main').clientHeight}));
+  assert.deepEqual(layout,{nested:false,overflow:'visible',main:true},label+' page-level scrolling');
+  await page.evaluate(()=>{const main=document.querySelector('#main');main.scrollTop=main.scrollHeight;});await page.waitForTimeout(200);assert.equal(await area.locator('button').count(),200,label+' progressive rows');
+ }else{
  const before=await area.evaluate(el=>({height:el.clientHeight,bottom:el.getBoundingClientRect().bottom,viewport:innerHeight}));assert.ok(before.height>100,label+' usable list');assert.ok(before.bottom<=before.viewport+1,label+' list fits');
  await page.locator('.chat-index-filter-panel summary').click();assert.ok(await area.evaluate(el=>el.clientHeight)>before.height,label+' hiding filters adds height');
  await area.evaluate(el=>el.scrollTop=el.scrollHeight);await page.waitForTimeout(200);assert.equal(await area.locator('button').count(),200,label+' progressive rows');
+ }
  await page.screenshot({path:'/Users/developer/Source/ProteusWorkspace/nov8-chats-'+label+'.png'});
 }
 try{for(const [name,driver]of [['chromium',chromium],['webkit',webkit]]){const browser=await driver.launch();try{const page=await browser.newPage({viewport:{width:1440,height:900}});await page.goto(origin);await page.evaluate(async rows=>{const {renderChatIndex}=await import('/web/resources/js/chats-index.js');renderChatIndex(document.querySelector('#remote-content'),{rows,hosts:[],escape:v=>String(v??''),time:v=>v,open(){},refresh(){},loadMore(){}});},rows);await verify(page,name);await page.setViewportSize({width:390,height:844});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);}finally{await browser.close();}}

@@ -1,3 +1,5 @@
+Question headings and fallback prompts keep their original plain text while validated owner-bound chat URLs become links. Pairing/authentication URLs remain inert; links use the existing owner router and never submit an answer. Native questions use attributed text without adding WebKit renderers.
+
 ## Nov 2 — one inline answer and ordered attachments
 
 Question cards own their answers; the general composer queues a separate message. A redundant
@@ -37,6 +39,18 @@ these controls bound inactive content rather than promise an exact process-memor
 The disposable native residency fixture verifies eviction of both data and DOM, reloading older
 pages of a 2,507-event history to the same event/offset, draft preservation and UI settings writes.
 Installed profile behavior is verified during the separate rollout.
+
+## November 12 — question files and chat links
+
+Question replies use the ordinary attachment picker and exact-file/provider consent. They no
+longer have a four-file or image/plain-text-only restriction. The question attachment tool retains
+bounded previews and offers metadata plus paged original bytes for every supported stored file.
+Large binary files are never read wholesale merely to display a tool result.
+
+Markdown and bare `proteus://chat?host=UUID&id=UUID` links use the existing owner navigation
+path. Desktop preserves the associated project and draft; web reads current membership from the
+paired owner; native uses its existing deep-link handler. Duplicate query identities, credentials,
+fragments and unrelated application commands are rejected. Schedule/file links remain open work.
 
 ## November 2 — quick question answers
 

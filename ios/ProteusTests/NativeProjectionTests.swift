@@ -1,9 +1,89 @@
 import XCTest
 import Observation
 import Combine
+import UIKit
 @testable import Proteus
 
 final class NativeProjectionTests: XCTestCase {
+    func testRootResourceRestorationRetainsPlacementAndSeparatesOwnersAndAccounts() throws {
+        let reminder = NativeContentTab(id: "reminder", title: "Reminder", kind: "reminder", hostID: nil, resource: .object(["accountID": .string("account-a")]))
+        let scratch = NativeContentTab(id: "scratch", title: "Scratch", kind: "scratch", hostID: "owner", resource: .object(["hostID": .string("owner"), "scratchID": .string("note")]))
+        let files = NativeContentTab(id: "files", title: "Files", kind: "files", hostID: "missing", resource: .object(["hostID": .string("missing")]))
+        let rows = try JSONDecoder().decode([NativeContentTab].self, from: JSONEncoder().encode([reminder,scratch,files]))
+        XCTAssertEqual(rows,[reminder,scratch,files])
+        XCTAssertEqual(NativeContentTabProjection.restored(rows, browserIDs: [], hosts: ["owner"], account: "account-a"), [reminder,scratch])
+        XCTAssertEqual(NativeContentTabProjection.restored(rows, browserIDs: [], hosts: ["owner"], account: "account-b"), [scratch])
+    }
+    @MainActor func testFeatureOverviewKeepsGroupsAndNeverReusesPrivatePreviews() {
+        let chrome = NativePhoneChrome(); chrome.cacheNamespace = "synthetic-feature-test:" + UUID().uuidString
+        defer { chrome.reset() }
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 16, height: 16)).image { _ in UIColor.green.setFill(); UIBezierPath(rect: CGRect(x: 0, y: 0, width: 16, height: 16)).fill() }
+        let scratch = NativePhoneTab(id: "resource:scratch", title: "Scratch", symbol: "note.text", detail: "", section: "Scratchpad", sectionID: "feature:scratchpad", preview: image, select: {})
+        let reminder = NativePhoneTab(id: "resource:reminder", title: "Reminder", symbol: "checklist", detail: "", section: "Reminders", sectionID: "feature:reminders", preview: image, select: {})
+        chrome.replaceFeatureTabs("feature:scratchpad", items: [scratch], current: scratch.id)
+        chrome.replaceFeatureTabs("feature:reminders", items: [reminder], current: reminder.id)
+        XCTAssertEqual(Set(chrome.featureOverviewItems.map(\.sectionID)), ["feature:scratchpad", "feature:reminders"])
+        XCTAssertTrue(chrome.featureOverviewItems.allSatisfy { $0.preview != nil })
+        var privateTab = scratch; privateTab.symbol = "eye.slash"
+        chrome.replaceFeatureTabs("feature:scratchpad", items: [privateTab], current: privateTab.id)
+        XCTAssertNil(chrome.featureOverviewItems.first { $0.id == privateTab.id }?.preview)
+        XCTAssertFalse(chrome.visited.contains { $0.id == privateTab.id })
+        XCTAssertEqual(chrome.currentID, "")
+        chrome.replaceFeatureTabs("feature:scratchpad", items: [], current: nil)
+        XCTAssertEqual(chrome.featureOverviewItems.map(\.id), [reminder.id])
+    }
+    func testBrowserMetadataDoesNotChangeShellMembership() {
+        var tab = BrowserDescriptor(id: "page", title: "Before", url: "https://example.test/a", scope: "main")
+        let membership = NativeBrowserMembership(tab)
+        tab.title = "After"; tab.url = "https://example.test/b"; tab.hidden = true; tab.incognito = true
+        tab.readingPosition = BrowserReadingPosition(url: tab.url!, x: 0, y: 450)
+        tab.history = BrowserTabHistory(entries: [.init(url: tab.url!, title: tab.title)], index: 0)
+        XCTAssertEqual(NativeBrowserMembership(tab), membership)
+        tab.scope = "project"
+        XCTAssertNotEqual(NativeBrowserMembership(tab), membership)
+    }
+    func testMainBrowserReconciliationPreservesSlotsOriginsAndOtherResources() {
+        let chat = NativeContentTab(id: "chat", title: "Draft", kind: "chat", hostID: "owner")
+        let document = NativeContentTab(id: "document", title: "Notes", kind: "document", hostID: "owner", sourceChatID: "original", documentID: "file")
+        let opened = [chat, NativeContentTab(id: "a", title: "A", kind: "browser", hostID: nil), document, NativeContentTab(id: "moved", title: "Moved", kind: "browser", hostID: nil)]
+        let tabs = ["a", "b", "c", "child", "orphan"].map { BrowserDescriptor(id: $0, title: $0, url: nil, scope: "main") } + [BrowserDescriptor(id: "moved", title: "Moved", url: nil, scope: "project")]
+        var origins = ["b": "a", "c": "a", "child": "b", "orphan": "moved"]
+        let result = NativeContentTabProjection.mainBrowsers(tabs, opened: opened) { origins.removeValue(forKey: $0) }
+        XCTAssertEqual(result.map(\.id), ["chat", "a", "c", "b", "child", "document", "orphan"])
+        XCTAssertEqual(result.first, chat); XCTAssertEqual(result[5], document)
+        XCTAssertTrue(origins.isEmpty)
+        XCTAssertEqual(NativeContentTabProjection.mainBrowsers(tabs, opened: result) { _ in XCTFail("Existing tabs must not consume new insertion intent"); return nil }, result)
+    }
+    @MainActor func testBulkBrowserRemovalPublishesOnlyChangedOverviewLists() {
+        let chrome = NativePhoneChrome(), publications = NSMutableArray()
+        let token = chrome.objectWillChange.sink { publications.add(1) }
+        chrome.forgetBrowsers([]); chrome.forgetBrowsers(["absent"])
+        XCTAssertEqual(publications.count, 0)
+        let kept = NativePhoneTab(id: "chat:kept", title: "Chat", symbol: "bubble", detail: "", select: {})
+        chrome.visited = [kept] + (0..<200).map { NativePhoneTab(id: "browser:tab-\($0)", title: "Page", symbol: "globe", detail: "", select: {}) }
+        chrome.recent = chrome.visited
+        chrome.interactedAt = ["browser:tab-1": Date(), "chat:kept": Date()]
+        publications.removeAllObjects()
+        chrome.forgetBrowsers(Set((0..<200).map { "tab-\($0)" }))
+        XCTAssertEqual(publications.count, 2)
+        XCTAssertEqual(chrome.visited.map(\.id), [kept.id]); XCTAssertEqual(chrome.recent.map(\.id), [kept.id])
+        XCTAssertEqual(Set(chrome.interactedAt.keys), [kept.id])
+        withExtendedLifetime(token) {}
+    }
+    func testLargeMainBrowserReconciliationMatchesPreviousBehavior() {
+        let tabs = (0..<1000).map { BrowserDescriptor(id: "tab-\($0)", title: "Synthetic", url: nil, scope: $0.isMultiple(of: 7) ? "project" : "main") }
+        let opened = (0..<900).map { NativeContentTab(id: "tab-\($0)", title: "Synthetic", kind: "browser", hostID: nil) }
+        let start = ProcessInfo.processInfo.systemUptime
+        var reference = opened
+        for tab in tabs where tab.scope == "main" && !reference.contains(where: { $0.id == tab.id }) { reference.append(NativeContentTab(id: tab.id, title: tab.title, kind: "browser", hostID: nil)) }
+        reference.removeAll { item in item.kind == "browser" && !tabs.contains(where: { $0.id == item.id && $0.scope == "main" }) }
+        let referenceMS = (ProcessInfo.processInfo.systemUptime - start) * 1000
+        let optimizedStart = ProcessInfo.processInfo.systemUptime
+        let result = NativeContentTabProjection.mainBrowsers(tabs, opened: opened) { _ in nil }
+        let optimizedMS = (ProcessInfo.processInfo.systemUptime - optimizedStart) * 1000
+        XCTAssertEqual(result, reference)
+        print("NOV11_MAIN_TAB_RECONCILIATION tabs=1000 reference_ms=\(referenceMS) indexed_ms=\(optimizedMS)")
+    }
     @MainActor func testSidebarIgnoresProgressAndTextButKeepsLiveActivityAndMembership() {
         let remote = RemoteStore(connection: nil, legacyCredentials: false)
         var run: [String: JSON] = ["id": .string("a"), "title": .string("Chat"), "lastActivityAt": .string("2026-11-03T01:00:00Z"), "projectId": .string("one")]

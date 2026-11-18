@@ -1,9 +1,78 @@
+import SwiftUI
+import UIKit
 import WebKit
 import Network
 import XCTest
 @testable import Proteus
 
 final class NativeBrowserNavigationTests: XCTestCase {
+    @MainActor func testPrivateClipboardClosesOnlyItsOwnCopyAndClearsInterruptedCopies() throws {
+        let name = UIPasteboard.Name("proteus-test-" + UUID().uuidString)
+        let board = try XCTUnwrap(UIPasteboard(name: name, create: true))
+        defer { UIPasteboard.remove(withName: name) }
+        let clipboard = NativeBrowserClipboard(pasteboard: board)
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let shared = SharedAppStore(cacheRoot: root, browserClipboard: clipboard)
+        defer { shared.closeIncognitoBrowsers(); try? FileManager.default.removeItem(at: root) }
+        let first = try XCTUnwrap(shared.open(nil, incognito: true))
+        let second = try XCTUnwrap(shared.open(nil, incognito: true))
+        shared.copyBrowserText("private-one", id: first)
+        XCTAssertEqual(board.string, "private-one")
+        shared.copyBrowserText("private-two", id: second)
+        shared.close(first)
+        XCTAssertEqual(board.string, "private-two")
+        shared.close(second)
+        XCTAssertFalse(board.hasStrings)
+
+        clipboard.copy("private", tabID: "interrupted", incognito: true)
+        _ = NativeBrowserClipboard(pasteboard: board)
+        XCTAssertFalse(board.hasStrings)
+        clipboard.copy("private", tabID: "replaced", incognito: true)
+        board.string = "user's later copy"
+        clipboard.close("replaced")
+        _ = NativeBrowserClipboard(pasteboard: board)
+        XCTAssertEqual(board.string, "user's later copy")
+        shared.copyBrowserText("stale menu must not recopy", id: first)
+        XCTAssertEqual(board.string, "user's later copy")
+    }
+
+    @MainActor func testIncognitoSessionsStayLocalAndCloseWithoutRestorableState() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString), key = RemoteCrypto.random()
+        let shared = SharedAppStore(cacheWriter: NativeSharedCacheWriter(), cacheRoot: root, cacheKey: { key })
+        defer { for tab in shared.browserTabs { shared.close(tab.id) }; shared.flushCachedState(); try? FileManager.default.removeItem(at: root) }
+        let scope = "workspace:11111111-1111-4111-8111-111111111111:private-fixture"
+        let first = try XCTUnwrap(shared.open(nil, scope: scope, incognito: true))
+        let second = try XCTUnwrap(shared.open(nil, scope: scope, afterSourceID: first, incognito: true))
+        let one = shared.webView(try XCTUnwrap(shared.browserTabs.first { $0.id == first }))
+        let two = shared.webView(try XCTUnwrap(shared.browserTabs.first { $0.id == second }))
+        let store = one.configuration.websiteDataStore
+        XCTAssertFalse(store.isPersistent); XCTAssertFalse(two.configuration.websiteDataStore.isPersistent)
+        XCTAssertFalse(store === two.configuration.websiteDataStore)
+        let cookie = try XCTUnwrap(HTTPCookie(properties: [.domain: "private-marker.invalid", .path: "/", .name: "private", .value: "one", .secure: "TRUE"]))
+        await store.httpCookieStore.setCookie(cookie)
+        let initialCookies = await store.httpCookieStore.allCookies(); XCTAssertEqual(initialCookies.count, 1)
+        let otherCookies = await two.configuration.websiteDataStore.httpCookieStore.allCookies(); XCTAssertTrue(otherCookies.isEmpty)
+        let url = URL(string: "https://private-marker.invalid/secret")!
+        shared.completeBrowserNavigation(url, title: "PRIVATE TITLE", in: first)
+        XCTAssertTrue(shared.localContentTabs(scope).isEmpty)
+        XCTAssertTrue(shared.historyOutbox.isEmpty); XCTAssertTrue(shared.contentPending[scope]?.isEmpty != false)
+        XCTAssertNil(shared.browserPreview(first)); XCTAssertNil(shared.adjacentPageImage(first, back: true))
+        shared.applyContentTabs(.object(["revision": .number(1), "tabs": .array([])]), scope: scope)
+        XCTAssertEqual(shared.browserTabs.map(\.id), [first, second])
+        shared.persistBrowser(first, enabled: true)
+        XCTAssertFalse(try XCTUnwrap(shared.browserTabs.first { $0.id == first }).persist)
+        shared.close(first)
+        XCTAssertFalse(shared.browserTabs.contains { $0.id == first }); XCTAssertFalse(shared.isBrowserLoaded(first))
+        for _ in 0..<50 { if await store.httpCookieStore.allCookies().isEmpty { break }; try await Task.sleep(for: .milliseconds(20)) }
+        let remainingCookies = await store.httpCookieStore.allCookies(); XCTAssertTrue(remainingCookies.isEmpty)
+        shared.persistForBackground(); XCTAssertNil(shared.flushCachedState())
+        if let data = try? Data(contentsOf: root.appendingPathComponent("document-tabs.enc")) {
+            let saved = try RemoteCrypto.open(String(decoding: data, as: UTF8.self), key: key, aad: "proteus-mobile-document-tabs-v1")
+            let text = String(decoding: try JSONEncoder().encode(saved), as: UTF8.self)
+            XCTAssertFalse(text.contains("private-marker")); XCTAssertFalse(text.contains(first)); XCTAssertFalse(text.contains(second))
+        }
+    }
+
     @MainActor func testMirroredRedirectAndTitleStayLocalUntilTouchThenDelayedPushStateQueuesOnce() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString), key = RemoteCrypto.random()
         let shared = SharedAppStore(cacheWriter: NativeSharedCacheWriter(), cacheRoot: root, cacheKey: { key })
@@ -171,4 +240,82 @@ private final class NativeNavigationHTTPFixture: @unchecked Sendable {
         }
     }
     func stop() { listener.cancel() }
+}
+
+/// Nov 11 iPhone corrections: single-line address editing, human times and coalesced cache writes.
+final class NativeNov11Tests: XCTestCase {
+    @MainActor func testMetadataRefreshPreservesLocalReadingPositionWithoutPublishingIt() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString), key = RemoteCrypto.random()
+        let shared = SharedAppStore(cacheWriter: NativeSharedCacheWriter(), cacheRoot: root, cacheKey: { key })
+        defer { shared.flushCachedState(); try? FileManager.default.removeItem(at: root) }
+        let scope = "workspace:10000000-0000-4000-8000-000000000001:general", address = "https://example.test/article"
+        func snapshot(_ revision: Int, url: String = address, title: String = "Article") -> JSON {
+            .object(["revision": .number(Double(revision)), "tabs": .array([.object(["id": .string("browser"), "type": .string("browser"), "url": .string(url), "title": .string(title)])])])
+        }
+        shared.applyContentTabs(snapshot(1), scope: scope)
+        let position = BrowserReadingPosition(url: address, x: 0, y: 420)
+        shared.browserTabs[0].readingPosition = position
+        shared.applyContentTabs(snapshot(2, title: "Updated title"), scope: scope)
+        XCTAssertEqual(shared.browserTabs[0].readingPosition, position)
+        XCTAssertEqual(shared.localContentTabs(scope).first?["readingPosition"], .null)
+        shared.applyContentTabs(snapshot(3, url: "https://example.test/other"), scope: scope)
+        XCTAssertNil(shared.browserTabs[0].readingPosition, "A new document must not inherit the old page offset")
+    }
+    @MainActor func testSingleLineAddressEditorStripsLineBreaksKeepsFixedHeightAndSubmits() {
+        var text = "", focused = false, submitted = 0
+        let longURL = "https://www.google.com/search?q=" + String(repeating: "abcdefghij", count: 400)
+        let editor = NativeSingleLineAddressEditor(text: Binding(get: { text }, set: { text = $0 }), focused: Binding(get: { focused }, set: { focused = $0 }), sites: [], submit: { submitted += 1 })
+        let coordinator = editor.makeCoordinator(), field = UITextField()
+        field.text = longURL
+        // A pasted value with line breaks becomes one line rather than a tall wrapped view.
+        XCTAssertFalse(coordinator.textField(field, shouldChangeCharactersIn: NSRange(location: field.text!.utf16.count, length: 0), replacementString: "&x=1\nmore"))
+        XCTAssertEqual(text, longURL + "&x=1more")
+        XCTAssertFalse(coordinator.textFieldShouldReturn(field)); XCTAssertEqual(submitted, 1)
+    }
+    func testUploadProgressLabelsAndFraction() {
+        var progress = NativeUploadProgress(total: 400, files: 2); progress.sent = 100
+        XCTAssertEqual(progress.label, "Uploading 1 of 2 files · 25%")
+        progress.file = 2; progress.sent = 400; XCTAssertEqual(progress.fraction, 1)
+        progress.stage = "Sending message…"; XCTAssertEqual(progress.label, "Sending message…")
+    }
+    @MainActor func testConnectionHoldDefersBackgroundDisconnectUntilReleased() {
+        let store = RemoteStore(connection: nil, cacheRoot: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString), legacyCredentials: false)
+        let release = store.holdConnection()
+        store.activity(false)
+        release(); release() // Releasing twice is harmless.
+    }
+    func testHumanTimeFormatsInstantsAndKeepsInvalidText() {
+        XCTAssertFalse(NativeHumanTime.text("2026-11-11T19:10:05.583Z").contains("T19:10"))
+        XCTAssertFalse(NativeHumanTime.text("2026-11-11T19:10:00Z").contains("Z"))
+        XCTAssertEqual(NativeHumanTime.text("Not recorded"), "Not recorded")
+    }
+    @MainActor func testLeavingForegroundDoesNotWaitForSlowCacheWrites() throws {
+        // N11-24: iPhone watchdog kills (0x8BADF00D) came from waiting here for large writes.
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString), key = RemoteCrypto.random()
+        let writer = NativeSharedCacheWriter(writeFile: { data, url in Thread.sleep(forTimeInterval: 1.5); try NativeSharedCacheWriter.writeFile(data, url) })
+        let shared = SharedAppStore(cacheWriter: writer, cacheRoot: root, cacheKey: { key })
+        defer { try? FileManager.default.removeItem(at: root) }
+        shared.selectChatChild("retained-child", for: "synthetic-chat")
+        let started = Date(); shared.persistForBackground()
+        XCTAssertLessThan(Date().timeIntervalSince(started), 0.5, "The main thread must not wait for cache writes")
+        XCTAssertNil(shared.flushCachedState())
+        let documents = try RemoteCrypto.open(String(contentsOf: root.appendingPathComponent("document-tabs.enc"), encoding: .utf8), key: key, aad: "proteus-mobile-document-tabs-v1")
+        XCTAssertEqual(documents["selected"]["synthetic-chat"].string, "retained-child", "The queued write still completes")
+    }
+    func testSharedCacheWritesCoalesceWhileAWriteIsInProgress() async throws {
+        let started = expectation(description: "first write started"), release = DispatchSemaphore(value: 0)
+        let counter = NSLock(); var writes: [Data] = []
+        let writer = NativeSharedCacheWriter(writeFile: { data, _ in
+            counter.lock(); writes.append(data); let first = writes.count == 1; counter.unlock()
+            if first { started.fulfill(); release.wait() }
+        })
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let first = writer.save(url: url, snapshot: { Data("1".utf8) }, onFailure: { _ in })
+        await fulfillment(of: [started], timeout: 5)
+        let receipts = (2...20).map { value in writer.save(url: url, snapshot: { Data(String(value).utf8) }, onFailure: { _ in }) }
+        release.signal()
+        try await first.value(); for receipt in receipts { try await receipt.value() }
+        counter.lock(); let recorded = writes; counter.unlock()
+        XCTAssertEqual(recorded.map { String(decoding: $0, as: UTF8.self) }, ["1", "20"], "Waiting writes collapse into the newest snapshot")
+    }
 }

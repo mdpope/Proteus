@@ -59,11 +59,13 @@ const app = await startServer({ home, port: 0, timers: false, providers: { copil
     return rehearsal.run(args);
   }
 }, codex:{status:async()=>({available:false,models:[]}),quota:syntheticQuota(41)},claude:{status:async()=>({available:false,models:[]}),quota:syntheticQuota(88)} } });
+let failScratchAcknowledgement = false;
 const delayedHistoryScopes=new Set(),failedHistoryScopes=new Set(),executeForHistoryFixture=app.remote.execute.bind(app.remote);
 app.remote.execute=async(peer,method,args)=>{
  if(delayedHistoryScopes.has(args.id)&&method==='tabs.history'){await new Promise(resolve=>setTimeout(resolve,30000));throw Error('Synthetic delayed history unavailable');}
  if(failedHistoryScopes.has(args.id)&&method==='tabs.history')throw Error('Synthetic page-history transport failure');
  const result=await executeForHistoryFixture(peer,method,failedHistoryScopes.has(args.id)&&method==='tabs.get'?{...args,historyLimit:16}:args);
+ if(failScratchAcknowledgement&&method==='scratchpad.command'&&args.action==='update') {failScratchAcknowledgement=false;throw Error('Synthetic acknowledgement lost after Scratchpad commit');}
  if(delayedHistoryScopes.has(args.id)&&method==='tabs.get'){
   const browser=result.tabs?.find(tab=>tab.type==='browser');if(browser?.history)browser.history={...browser.history,total:browser.history.entries.length+1};
  }
@@ -126,6 +128,30 @@ async function seedProjectFixture() {
 // Website-service rehearsal shared by both simulator previews; never reads a live account.
 let previewTeamLists = [{id:'preview-team', revision:'1', name:'Platform Services Team', timezone:'America/Denver', instructions:'Review yesterday, today and any blockers.', members:[{id:'p1',name:'Alex',mode:'random'},{id:'p2',name:'Morgan',mode:'fixed'},{id:'p3',name:'Sam',mode:'random'}], links:[{id:'l1',title:'On Call — Operations',url:fixtureHTTPOrigin+'/browser/phone-preview?section=on-call'},{id:'l2',title:'Operational Health',url:fixtureHTTPOrigin+'/browser/one'},{id:'l3',title:'Team Queue',url:fixtureHTTPOrigin+'/browser/two'}]}, {id:'preview-review', revision:'1', name:'Design review', timezone:'UTC', instructions:'Review the current design.', members:[{id:'r1',name:'Taylor',mode:'fixed'}], links:[{id:'r-link',title:'Design notes',url:fixtureHTTPOrigin+'/browser/phone-preview?section=design-notes'}]}];
 const fixture = http.createServer(async (req, res) => {
+  // XCTest runs these cases serially. Retire only this disposable fixture's
+  // prior case pairings, instead of exhausting the production 20-device limit.
+  if(req.url==='/test-case/reset-pairings'&&req.method==='POST'){
+    for(const owner of [app,second])for(const device of [...owner.remote.config.devices])owner.remote.revoke(device.id);
+    res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify({reset:true}));return;
+  }
+  if(req.url==='/scratchpad-fixture'&&req.method==='POST'){
+    let raw='';for await(const chunk of req){raw+=chunk;if(raw.length>262144)throw Error('Synthetic scratch is too large.');}
+    res.setHeader('Content-Type','application/json');
+    try {
+      const args=JSON.parse(raw);
+      if(args.action==='setup') {
+        if(!app.scratchpad.settings().configured)await app.scratchpad.configure({folder:workspace,expectedRevision:app.scratchpad.settings().revision});
+        app.remote.setScratchpadAccess(args.deviceId,true);res.end(JSON.stringify({ready:true}));
+      } else if(args.action==='lose-ack') {failScratchAcknowledgement=true;res.end('{}');}
+      else if(args.action==='revoke'){app.remote.setScratchpadAccess(args.deviceId,false);res.end('{}');}
+      else res.end(JSON.stringify(await app.scratchpad.handle(args)));
+    }catch(error){res.statusCode=400;res.end(JSON.stringify({error:error.message}));}return;
+  }
+  if(req.url==='/scratchpad-grant'){
+    if(!app.scratchpad.settings().configured)await app.scratchpad.configure({folder:workspace,expectedRevision:app.scratchpad.settings().revision});
+    for(const device of app.remote.config.devices.filter(row=>!row.scope))app.remote.setScratchpadAccess(device.id,true);
+    res.setHeader('Content-Type','application/json');res.end(JSON.stringify({granted:true}));return;
+  }
   // Review pairing must never reset another preview's active work. Invitations
   // are issued immediately before use; creating a later one supersedes an unused one.
   if(req.url==='/review-pair'){const invite=await app.remote.pairing();res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify({code:invite.code}));return;}

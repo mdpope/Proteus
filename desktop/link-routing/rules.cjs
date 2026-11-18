@@ -27,7 +27,7 @@ function matches(pattern,address){
   if(p.startsWith('*.'))return host===p.slice(2)||host.endsWith('.'+p.slice(2));
   return /[*?]/.test(p)?glob(p,host):host===p||host.endsWith('.'+p);
 }
-const targetKey=target=>JSON.stringify([target.hostId||'local',target.workspaceId,target.projectId]);
+const targetKey=target=>target.feature?JSON.stringify([target.hostId||'local','feature',target.feature]):JSON.stringify([target.hostId||'local',target.workspaceId,target.projectId]);
 function routeRule(rules,url,targets){
   const rule=rules.find(rule=>rule.enabled!==false&&matches(rule.pattern,url));
   if(!rule)return {};
@@ -38,6 +38,7 @@ function routeRule(rules,url,targets){
 function selectWindow(contexts,target){
   const live=[...contexts].filter(ctx=>!ctx.closing&&!ctx.window.isDestroyed());
   const ordered=live.toSorted((a,b)=>Number(b.window.isFocused?.()===true)-Number(a.window.isFocused?.()===true));
+  if(target.feature)return ordered.find(ctx=>ctx.session?.get()?.page===target.feature)||ordered.find(ctx=>ctx.window.isFocused?.())||live.find(ctx=>ctx.id==='main')||live[0];
   const host=target.hostId||'local',sameHost=tab=>(tab.hostId||'local')===host;
   const owns=(tab,project)=>tab?.type==='workspace'&&!tab.hidden&&!tab.navigationClosed&&sameHost(tab)&&tab.workspaceId===target.workspaceId&&(project?tab.projectId===target.projectId:!tab.projectId);
   const showing=(ctx,project)=>ctx.session?.get()?.tabs?.some(tab=>owns(tab,project));

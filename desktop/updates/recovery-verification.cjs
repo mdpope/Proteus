@@ -16,7 +16,9 @@ function failureReason(error){
  const reason=error?.recoveryFailure;
  return typeof reason==='string'&&/^(owner-connection-(missing|invalid)|owner-process-unavailable|owner-request-timeout|owner-transport-failed|owner-response-invalid|owner-http-([45][0-9]{2}|error))$/.test(reason)?reason:'owner-request-failed';
 }
-async function verifyRecovery(job,expected,{request,timeout=60000,interval=250,report=()=>{}}={}){
+// This includes cold owner startup, signed-package inspection and full history
+// preservation. Large real profiles can finish correctly after the old minute.
+async function verifyRecovery(job,expected,{request,timeout=180000,interval=250,report=()=>{}}={}){
  const started=Date.now(),end=started+timeout;let last='owner-request-failed',first=true,attempt=0;
  const progress=stage=>report({stage,attempt,startedAt:new Date(started).toISOString(),deadlineAt:new Date(end).toISOString(),lastProgressAt:new Date().toISOString(),...(attempt>1||stage==='failed'?{lastFailure:last}:{})});
  while(first||Date.now()<end){

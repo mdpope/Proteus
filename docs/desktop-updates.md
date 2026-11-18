@@ -1,3 +1,37 @@
+## Nov 15 — exact job identity on handoff and cancellation
+
+Handoff and cancellation require both `id` and `expectedRevision` from fresh owner status.
+The prepared job ID is separate from the release ID. Include the checkpoint on handoff and
+reuse that prepared job; staging a published release already performs preparation internally.
+An omitted job ID fails the initial identity/revision check before any handoff effect. Older
+dynamic tool routes may conceal this validation error, so inspect the fresh tool catalog and
+actual owner state before concluding that a restart was accepted or blocked by another issue.
+Other uncertain failures still require reconciliation before retrying.
+
+Maintenance correctly protects an active prepared job. Do not cancel/restage it merely to make
+that protection disappear from a maintenance plan. Distinguish real unregistered recovery trees
+from old journal references to empty, already-retired staging; count actual full generations
+when applying the operator's retention policy.
+
+## Nov 13 — cold restart verification budget
+
+The bounded health-verification window is three minutes, including owner startup, signed package inspection and full history preservation. Large profiles may complete preservation after the old one-minute total window. Responses after the deadline still fail, and no identity, barrier, navigation or history predicate is relaxed. Progress retains elapsed time and the deadline. This does not make a timed-out attempt successful.
+
+## Nov 11 superseded-attempt reconciliation
+
+A failed update is never relabelled successful. The original update chat can preview and apply
+a separate supersession receipt after a later completed update proves the current installed
+identity and two registered full recoveries verify. Maintenance can then retire the failed
+attempt's staging and obsolete recovery tree while retaining the journal, original failure,
+preservation records and a digest-bound retirement receipt. Unresolved helpers, changed payloads,
+wrong installation/data homes and insufficient verified recovery protection refuse cleanup.
+
+Automatic post-update retention keeps the newest two intact generations including the new
+capture. A historical recovery whose data checksum fails is not counted as one of those two;
+once two others verify it may retire with its original receipt and actual tree digest recorded.
+Receipt, application and path failures remain inspection blockers. No direct app-data deletion
+is part of the workflow.
+
 ## Nov 6 — pre-install recovery failure correction
 
 Nov 8 Windows follow-up establishes the first full hash scan before starting the settlement
@@ -533,6 +567,11 @@ actual-owner logical evidence; their ciphertext alone does not establish content
 Distinguish evidence captured at a stated time from current opaque cache inspection.
 
 ## Two generation backup retention
+
+Development packaging has a separate single-output reproducible cache described in
+[the release process](release-process.md#build-once-for-each-native-target). It must not keep
+another chain of older applications beside the two full updater recoveries. Explicit frozen
+release candidates remain protected until their existing acceptance/retirement conditions hold.
 
 For an installed, health-verified update whose repaired recovery still leaves an `attention`
 maintenance hold, use [post-install reconciliation](2026-11-01-attention-reconciliation.md).

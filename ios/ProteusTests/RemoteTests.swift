@@ -41,6 +41,89 @@ private final class TabCacheWriteGate: @unchecked Sendable {
 }
 
 final class RemoteTests: XCTestCase {
+    func testReminderSQLiteReplicaPersistsAndIsolatesAccounts() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let cache = LifeReminderReplica(root: root)
+        func page(_ cursor: Int, _ revision: Int, completed: Bool = false, deleted: Bool = false) -> JSON {
+            .object(["cursor": .number(Double(cursor)), "timeZone": .string("America/Denver"), "inboxId": .string("inbox"), "hasMore": .bool(false), "changes": .array([
+                .object(["kind": .string("list"), "record": .object(["id": .string("inbox"), "revision": .number(1), "name": .string("Inbox")])]),
+                .object(["kind": .string("reminder"), "record": .object(["id": .string("r"), "revision": .number(Double(revision)), "title": .string("Call dentist"), "listId": .string("inbox"), "dueKind": .string("date"), "dueDate": .string("2026-11-14"), "completedAt": completed ? .string("now") : .null, "deletedAt": deleted ? .string("now") : .null])])])])
+        }
+        try await cache.apply("a", page: page(1, 1))
+        let first = try await cache.read("a", query: [:], offline: false); XCTAssertEqual(first["items"].array.count, 1)
+        try await cache.apply("a", page: page(2, 2, completed: true))
+        let reopened = LifeReminderReplica(root: root)
+        let complete = try await reopened.read("a", query: ["completed": .string("completed")], offline: true); XCTAssertEqual(complete["items"].array.count, 1); XCTAssertTrue(complete["readOnly"].bool)
+        try await cache.apply("a", page: page(3, 1))
+        let version = try await cache.read("a", query: ["id": .string("r")], offline: false); XCTAssertEqual(version["record"]["revision"].int, 2)
+        do { _ = try await cache.read("b", query: [:], offline: true); XCTFail("Another account must not read this cache") } catch {}
+        try await cache.apply("a", page: page(4, 3, deleted: true))
+        let hidden = try await cache.read("a", query: [:], offline: false); XCTAssertTrue(hidden["items"].array.isEmpty)
+        try await cache.clear("a"); let cursor = try await cache.cursor("a"); XCTAssertEqual(cursor, 0)
+    }
+    @MainActor func testScratchpadCommittedSaveRetriesAfterColdDraftRestoreAndRevocationHidesCache() async throws {
+        let (data, _) = try await URLSession.shared.data(from: URL(string: "\(nativeFixtureHTTPOrigin)/pair")!)
+        let remote = RemoteStore(); remote.forget(); try remote.pair(try JSONDecoder().decode(JSON.self, from: data)["code"].string)
+        defer { remote.forget() }
+        try await wait { remote.connected }
+        func fixture(_ args: [String: JSON]) async throws -> JSON {
+            var request = URLRequest(url: URL(string: "\(nativeFixtureHTTPOrigin)/scratchpad-fixture")!)
+            request.httpMethod = "POST"; request.setValue("application/json", forHTTPHeaderField: "Content-Type"); request.httpBody = try JSONEncoder().encode(JSON.object(args))
+            let (data, response) = try await URLSession.shared.data(for: request)
+            let result = try JSONDecoder().decode(JSON.self, from: data)
+            guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw RemoteError(message: result["error"].string) }
+            return result
+        }
+        let device = try XCTUnwrap(remote.connection?.deviceId)
+        _ = try await fixture(["action": .string("setup"), "deviceId": .string(device)])
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString), key = RemoteCrypto.random()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let notes = ScratchpadWorkspace(cacheRoot: root, cacheKey: { key })
+        await notes.connect(remote); XCTAssertTrue(notes.ready, notes.error)
+        await notes.create(projectID: nil)
+        let id = notes.selected, draft = try XCTUnwrap(notes.drafts[id])
+        draft.title = "Synthetic native scratch"; draft.body = "Save acknowledged after reconnect"
+        _ = try await fixture(["action": .string("lose-ack")])
+        await notes.save(draft)
+        XCTAssertTrue(draft.error.contains("acknowledgement lost"), draft.error)
+        let pending = try XCTUnwrap(draft.pending)
+        let committed = try await fixture(["action": .string("read"), "id": .string(id)])
+        XCTAssertEqual(committed["body"].string, draft.body)
+        let restored = ScratchpadWorkspace(cacheRoot: root, cacheKey: { key })
+        await restored.connect(remote); await restored.open(id)
+        let recovered = try XCTUnwrap(restored.drafts[id])
+        XCTAssertEqual(recovered.pending, pending, "Cold restoration keeps the original retry identity and submitted bytes")
+        await restored.save(recovered, retry: true)
+        XCTAssertTrue(recovered.error.isEmpty, recovered.error); XCTAssertFalse(recovered.dirty)
+        let afterRetry = try await fixture(["action": .string("read"), "id": .string(id)])
+        XCTAssertEqual(afterRetry["revision"], committed["revision"], "Retry must return the original committed revision, not save twice")
+        await restored.open(id); XCTAssertEqual(restored.tabs, [id], "Reopening focuses the existing tab")
+        await restored.close(id)
+        let afterClose = try await fixture(["action": .string("read"), "id": .string(id)])
+        XCTAssertEqual(afterClose["body"], committed["body"], "Closing a tab cannot delete its file")
+        await restored.open(id)
+        _ = try await fixture(["action": .string("revoke"), "deviceId": .string(device)])
+        await restored.connect(remote)
+        XCTAssertFalse(restored.ready, "Cached content must not remain visible after the sharing check fails")
+        do { _ = try await restored.request(["action": .string("read"), "id": .string(id)]); XCTFail("Revoked sharing allowed a read") } catch {}
+    }
+    @MainActor func testScratchpadOlderDraftCannotOverwriteNewerFile() async throws {
+        let row: JSON = .object(["id": .string("synthetic"), "revision": .string("new"), "title": .string("Newer title"), "body": .string("Newer body"), "category": .string(""), "format": .string("markdown")])
+        let saved: JSON = .object(["revision": .string("old"), "value": .object(["title": .string("Draft"), "body": .string("Unsaved older text"), "category": .string(""), "format": .string("markdown")])])
+        let draft = ScratchpadDraft(row, saved: saved), notes = ScratchpadWorkspace()
+        XCTAssertTrue(draft.conflict); XCTAssertEqual(draft.body, "Unsaved older text")
+        await notes.save(draft, retry: true)
+        XCTAssertNil(draft.pending, "Even Retry cannot silently overwrite a newer file revision")
+        XCTAssertEqual(draft.record, row)
+    }
+    override func setUp() async throws {
+        try await super.setUp()
+        var request = URLRequest(url: URL(string: "\(nativeFixtureHTTPOrigin)/test-case/reset-pairings")!)
+        request.httpMethod = "POST"
+        let (_, response) = try await URLSession.shared.data(for: request)
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw RemoteError(message: "Disposable fixture pairing reset failed.") }
+    }
     @MainActor func testOfflineTabActionsReplayAfterCacheRestartAndConcurrentOwnerClose() async throws {
         let (data, _) = try await URLSession.shared.data(from: URL(string: "\(nativeFixtureHTTPOrigin)/pair")!)
         let remote = RemoteStore(); remote.forget(); try remote.pair(try JSONDecoder().decode(JSON.self, from: data)["code"].string)
@@ -239,7 +322,11 @@ final class RemoteTests: XCTestCase {
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
         let palette = NativePalette(defaults: defaults)
+        XCTAssertEqual(palette.colorScheme, .dark)
+        palette.value.colors["background"] = "#ffffff"
+        XCTAssertEqual(palette.colorScheme, .light, "System pickers follow a light user palette")
         palette.value.name = "Synthetic green"; palette.value.colors["background"] = "#284c35"; palette.value.brightness = 5
+        XCTAssertEqual(palette.colorScheme, .dark)
         let highlight = palette.color("accent")
         try palette.save(defaults: defaults)
         let restored = NativePalette(defaults: defaults)
@@ -891,10 +978,26 @@ final class RemoteTests: XCTestCase {
     @MainActor func testChatLinkRejectsAmbiguousAndCredentialFields() throws {
         let host = UUID().uuidString, id = UUID().uuidString
         let link = try XCTUnwrap(NativeChatLink.url(host: host, id: id))
+        let prose = "Open (" + link.absoluteString + "), then proteus://pair?key=secret."
+        let attributed = NativeChatLink.attributed(prose)
+        XCTAssertEqual(String(attributed.characters), prose)
+        XCTAssertEqual(attributed.runs.compactMap { $0.link }, [link])
         XCTAssertEqual(NativeChatLink.parse(link)?.host, host); XCTAssertEqual(NativeChatLink.parse(link)?.id, id)
         XCTAssertNil(NativeChatLink.parse(URL(string: link.absoluteString + "&host=" + host)!))
         XCTAssertNil(NativeChatLink.parse(URL(string: link.absoluteString + "&token=secret")!))
         XCTAssertNil(NativeChatLink.parse(URL(string: "https://example.test/chat?host=" + host + "&id=" + id)!))
+    }
+    @MainActor func testQuestionChatMarkdownLabelIsTheTappableText() throws {
+        let url = try XCTUnwrap(NativeChatLink.url(host: UUID().uuidString, id: UUID().uuidString))
+        let prompt = "Please approve in the [Build Mac update coordinator](" + url.absoluteString + ")."
+        let rendered = NativeChatLink.attributed(prompt)
+        XCTAssertEqual(String(rendered.characters), "Please approve in the Build Mac update coordinator.")
+        let linked = try XCTUnwrap(rendered.runs.first { $0.link != nil })
+        XCTAssertEqual(linked.link, url)
+        XCTAssertEqual(String(rendered[linked.range].characters), "Build Mac update coordinator")
+        let invalid = "[Do not pair](proteus://pair?key=secret)"
+        XCTAssertEqual(String(NativeChatLink.attributed(invalid).characters), invalid)
+        XCTAssertFalse(NativeChatLink.attributed(invalid).runs.contains { $0.link != nil })
     }
     @MainActor func testRunFilesFieldsUseOwnerPathsInOrder() {
         let run: JSON = .object(["storage": .object(["run": .string("/owner/run.json"), "nativeSession": .string("/owner/session")]), "schedule": .object(["workspace": .object(["cwd": .string("/owner/start"), "additionalDirectories": .array([.string("/owner/extra")])])])])
@@ -1359,11 +1462,11 @@ final class RemoteTests: XCTestCase {
         XCTAssertEqual(store.orderedChatChildren(in: scope, documentIDs: []), [browser], "Closing a child must not resurrect it from saved order")
         store.close(browser)
     }
-    func testAttachmentBudgetAcceptsManySmallFilesButBoundsTotalBytes() {
-        XCTAssertNil(NativeAttachmentBudget.rejection(existingCount: 255, existingBytes: NativeAttachmentBudget.maxTotalBytes - 1, incomingBytes: 1))
+    func testAttachmentBudgetHasNoByteCapAndBoundsFileCount() {
+        // N11-18: no file or total byte cap; only the file count is bounded.
+        XCTAssertNil(NativeAttachmentBudget.rejection(existingCount: 255, existingBytes: 4 * 1024 * 1024 * 1024, incomingBytes: 2 * 1024 * 1024 * 1024))
         XCTAssertNotNil(NativeAttachmentBudget.rejection(existingCount: 256, existingBytes: 0, incomingBytes: 1))
-        XCTAssertNotNil(NativeAttachmentBudget.rejection(existingCount: 1, existingBytes: NativeAttachmentBudget.maxTotalBytes, incomingBytes: 1))
-        XCTAssertNotNil(NativeAttachmentBudget.rejection(existingCount: 0, existingBytes: 0, incomingBytes: NativeAttachmentBudget.maxFileBytes + 1))
+        XCTAssertNil(NativeAttachmentBudget.rejection(existingCount: 0, existingBytes: 0, incomingBytes: 0))
         XCTAssertNil(NativeAttachmentBudget.rejection(existingCount: 100, existingBytes: 100, incomingBytes: 1))
     }
     @MainActor func testLifecycleReplayUpdatesArchiveAndEvictsDeletedChatWithoutLosingOtherPages() {
@@ -1887,6 +1990,54 @@ final class DestinationTests: XCTestCase {
         XCTAssertEqual(restored.destinations.map(\.label), ["Linux workstation", "Existing Mac"])
         XCTAssertNil(DeviceKeychain.load(service: service))
     }
+    @MainActor func testRestorationAndUnchangedSelectionDoNotRewriteDestinationIndex() throws {
+        let (root, service) = try fixture(); let original = DestinationStore(root: root, keychainService: service)
+        defer { original.resetForTesting(); try? FileManager.default.removeItem(at: root) }
+        let first = credential(UUID().uuidString), second = credential(UUID().uuidString)
+        try original.register(first, label: "First"); try original.register(second, label: "Second")
+        let index = root.appendingPathComponent("destinations.json"), before = try Data(contentsOf: index)
+        let marker = Date(timeIntervalSince1970: 1_600_000_000)
+        try FileManager.default.setAttributes([.modificationDate: marker], ofItemAtPath: index.path)
+        let restored = DestinationStore(root: root, keychainService: service)
+        XCTAssertNil(restored.error); XCTAssertEqual(restored.selectedID, second.hostId)
+        try restored.select(second.hostId, connect: false)
+        XCTAssertEqual(try Data(contentsOf: index), before)
+        XCTAssertEqual(try FileManager.default.attributesOfItem(atPath: index.path)[.modificationDate] as? Date, marker)
+        try restored.select(first.hostId, connect: false)
+        XCTAssertNotEqual(try Data(contentsOf: index), before)
+        let reopened = DestinationStore(root: root, keychainService: service)
+        XCTAssertEqual(reopened.selectedID, first.hostId)
+    }
+    @MainActor func testBackgroundTransitionDoesNotLoadDormantOwnerCache() throws {
+        let (root, service) = try fixture(); let original = DestinationStore(root: root, keychainService: service)
+        defer { original.resetForTesting(); try? FileManager.default.removeItem(at: root) }
+        let dormant = credential(UUID().uuidString), selected = credential(UUID().uuidString)
+        try original.register(dormant, label: "Dormant"); try original.register(selected, label: "Selected")
+        let dormantCache = root.appendingPathComponent("hosts/" + dormant.hostId + "/cache.enc")
+        let before = try Data(contentsOf: dormantCache)
+        let restored = DestinationStore(root: root, keychainService: service)
+        XCTAssertEqual(restored.status(dormant.hostId), "Saved · not connected")
+        restored.activity(false)
+        XCTAssertEqual(restored.status(dormant.hostId), "Saved · not connected")
+        XCTAssertEqual(try Data(contentsOf: dormantCache), before)
+        XCTAssertEqual(restored.selectedID, selected.hostId)
+        XCTAssertNotNil(restored.remote(for: dormant.hostId), "Explicit access must still load the saved owner")
+        XCTAssertNotEqual(restored.status(dormant.hostId), "Saved · not connected")
+    }
+    @MainActor func testFailedSelectionWriteKeepsPreviousOwnerAndCanRetry() throws {
+        let (root, service) = try fixture(); let destinations = DestinationStore(root: root, keychainService: service)
+        defer { destinations.resetForTesting(); try? FileManager.default.removeItem(at: root) }
+        let first = credential(UUID().uuidString), second = credential(UUID().uuidString)
+        try destinations.register(first, label: "First"); try destinations.register(second, label: "Second")
+        let selected = destinations.selected, index = destinations.indexURL, before = try Data(contentsOf: index)
+        try FileManager.default.removeItem(at: index)
+        try FileManager.default.createDirectory(at: index, withIntermediateDirectories: false)
+        XCTAssertThrowsError(try destinations.select(first.hostId, connect: false))
+        XCTAssertEqual(destinations.selectedID, second.hostId); XCTAssertTrue(destinations.selected === selected)
+        try FileManager.default.removeItem(at: index); try before.write(to: index)
+        try destinations.select(first.hostId, connect: false)
+        XCTAssertEqual(DestinationStore(root: root, keychainService: service).selectedID, first.hostId)
+    }
     @MainActor func testHostKeysCachesDraftsAndForgetRemainIndependentOnSharedRelay() async throws {
         let (root, service) = try fixture(); let destinations = DestinationStore(root: root, keychainService: service)
         defer { destinations.resetForTesting(); try? FileManager.default.removeItem(at: root) }
@@ -2137,6 +2288,36 @@ final class LifeTestProtocol:URLProtocol,@unchecked Sendable {
     }
 }
 final class LifeNativeTests:XCTestCase {
+    @MainActor func testTypedReminderAndDocumentNotificationRoutesAndOldChatCompatibility() {
+        let account = String(repeating: "a", count: 64), id = UUID().uuidString, host = UUID().uuidString
+        let reminder = NativeNotifications.NotificationRoute.from(["type": "life.reminder", "destination": ["kind": "reminder", "accountId": account, "reminderId": id]])
+        XCTAssertEqual(reminder.destinationKind, "reminder"); XCTAssertEqual(reminder.resourceID, id); XCTAssertEqual(reminder.accountID, account); XCTAssertEqual(reminder.chatID, "")
+        let document = NativeNotifications.NotificationRoute.from(["type": "life.answer", "destination": ["kind": "document", "accountId": account, "documentId": id, "hostId": host]])
+        XCTAssertEqual(document.destinationKind, "document"); XCTAssertEqual(document.hostID, host); XCTAssertEqual(document.resourceID, id)
+        let invalid = NativeNotifications.NotificationRoute.from(["type": "life.answer", "chatId": "fallback-must-not-open", "destination": ["kind": "document", "accountId": account, "documentId": "/private/file", "hostId": host]])
+        XCTAssertEqual(invalid.hostID, ""); XCTAssertEqual(invalid.chatID, "")
+        let old = NativeNotifications.NotificationRoute.from(["type": "chat.completed", "chatId": "old-chat", "hostId": host])
+        XCTAssertEqual(old.chatID, "old-chat"); XCTAssertEqual(old.destinationKind, "")
+    }
+    @MainActor func testAskHistoryRequiresMatchingLifeAccountAndOwner() {
+        let value: JSON = .object(["accountID": .string("account-a"), "hostID": .string("host-a")])
+        XCTAssertTrue(LifeAskView.accepts(value, accountID: "account-a", hostID: "host-a"))
+        XCTAssertFalse(LifeAskView.accepts(value, accountID: "account-b", hostID: "host-a"))
+        XCTAssertFalse(LifeAskView.accepts(value, accountID: "account-a", hostID: "host-b"))
+        XCTAssertFalse(LifeAskView.accepts(.null, accountID: "", hostID: ""))
+    }
+    @MainActor func testLifeAnswerNotificationOpensExactChatWithoutTreatingRequestAsQuestion() {
+        let host = UUID().uuidString, chat = UUID().uuidString, request = UUID().uuidString, event = UUID().uuidString
+        let payload = ["hostId": host, "chatId": chat, "requestId": request, "notificationId": event, "type": "life.answer"]
+        let route = NativeNotifications.NotificationRoute.from(payload)
+        XCTAssertEqual(route.hostID, host); XCTAssertEqual(route.chatID, chat)
+        XCTAssertEqual(route.notificationID, event); XCTAssertEqual(route.questionID, "")
+        for field in ["hostId", "chatId", "requestId"] {
+            var invalid = payload; invalid[field] = "invalid"
+            let rejected = NativeNotifications.NotificationRoute.from(invalid)
+            XCTAssertEqual(rejected.hostID, ""); XCTAssertEqual(rejected.chatID, "")
+        }
+    }
     private let identity:JSON = .object(["accountId":.string("account-a"),"workspaceId":.string("workspace-a"),"displayName":.string("Synthetic"),"readOnly":.bool(false),"capabilities":.array([.string("nutrition.add")])])
     @MainActor private func fixture(expired:Bool=false)throws->(LifeStore,String){
         let service="org.proteusapp.proteus.life.test."+UUID().uuidString
@@ -3695,5 +3876,21 @@ extension DestinationTests {
         XCTAssertEqual(restored.url?.absoluteString, "https://saved.example.test/path")
         let executions = try await restored.evaluateJavaScript("document.querySelectorAll(\"#executions\").length") as? Int
         XCTAssertEqual(executions, 1)
+    }
+}
+
+
+extension RemoteTests {
+    @MainActor func testReminderTabsReuseIdentityAndKeepDraftUntilAccountClear() {
+        let tabs = LifeReminderWorkspace()
+        let row: JSON = .object(["id": .string("20000000-0000-4000-8000-000000000002"), "title": .string("Test"), "revision": .number(1)])
+        let id = row["id"].string
+        tabs.open(row); tabs.drafts[id]?.notes = "Unsaved edit"
+        tabs.open(row)
+        XCTAssertEqual(tabs.tabs.count, 1); XCTAssertEqual(tabs.selected, id)
+        tabs.close(id); XCTAssertTrue(tabs.tabs.isEmpty)
+        tabs.open(row); XCTAssertEqual(tabs.drafts[id]?.notes, "Unsaved edit")
+        tabs.clear(); XCTAssertTrue(tabs.tabs.isEmpty); XCTAssertTrue(tabs.drafts.isEmpty)
+        XCTAssertEqual(tabs.selected, "master")
     }
 }

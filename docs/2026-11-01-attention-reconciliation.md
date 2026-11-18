@@ -58,6 +58,26 @@ continue showing historical `attention`; use the reviewed bootstrap receipt and 
 results honestly until a later accepted package exposes the new UI/API. Do not relabel an existing
 binary, patch its signed files or call an unavailable action.
 
+## Explicit owner revalidation after a normal restart
+
+For superseded failed attempts only, the source-owned bootstrap accepts `--revalidate-owner`
+on both preview and apply. This opt-in obtains authenticated read-only update status, checks the
+live Home API build, then rereads status to bind a stable owner session and completed healthy job.
+It never accepts a supplied identity file or exports connection credentials. The exact package
+hash/signing identity, later successful journal, two verified recoveries, live connection/runner
+PID and inactive-helper checks still apply. The new receipt binds the observed owner session and
+completed-job revision; changed observations invalidate its plan digest. Ordinary reconciliation
+retains the original same-process requirement. This is API liveness evidence, not new UI,
+migration or historical-preservation acceptance.
+Fresh owner evidence is hashed into the existing maintenance-digest field, preserving the
+legacy receipt witness used by installed and frozen candidate readers. New readers additionally
+verify the recorded evidence against that digest. No installed files need patching to read it.
+
+Added build material inside an installed package is still a hash mismatch. Inspect all baseline
+entries and active references first; preserve verified additions intact outside the installation
+with a durable relocation intent/result and verify the original package again. Never exclude
+unknown entries, modify runtime files or change an old journal to make reconciliation pass.
+
 ## Acceptance
 
 Disposable tests cover exact receipt binding, refusal of stale health/revisions, changed packages

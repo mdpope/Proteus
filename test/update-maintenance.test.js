@@ -9,6 +9,7 @@ import maintenance from '../desktop/updates/update-maintenance.cjs';
 import helper from '../desktop/updates/update-helper.cjs';
 import attention from '../desktop/updates/attention-reconciliation.cjs';
 import {Updates} from '../src/services/updates/updates.js';
+import {revalidateOwner} from '../scripts/update-maintenance.mjs';
 const {atomic,digest,tree,fileDigest}=packages;
 function fixture(t){
  const temp=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'proteus-maintenance-')));t.after(()=>fs.rmSync(temp,{recursive:true,force:true}));
@@ -38,6 +39,129 @@ function attentionFixture(t){
  const options={...f.options,id:latest.id,expectedRevision:packages.readJob(latest.file).revision};
  return {...f,old,middle,latest,options,preservation,pid};
 }
+function supersededFixture(t){
+ const f=attentionFixture(t);
+ packages.writeJob(f.latest.file,{phase:'complete',error:null});
+ packages.writeJob(f.old.file,{phase:'attention',outcome:'rollback',error:'Synthetic failed startup'});
+ f.policy.generations=f.policy.generations.filter(row=>row.id!==f.old.id);atomic(f.policyFile,f.policy);
+ f.options={...f.options,id:f.old.id,expectedRevision:packages.readJob(f.old.file).revision};
+ return f;
+}
+test('superseded rollback keeps two verified generations and compact evidence while retiring obsolete payloads',t=>{
+ const f=supersededFixture(t),before=fs.readFileSync(f.old.file);
+ const staging=path.join(path.dirname(f.old.file),'candidate');fs.mkdirSync(staging);fs.writeFileSync(path.join(staging,'runtime'),'unused');
+ const plan=attention.attentionPlan(f.root,f.options,f.dependencies);
+ assert.equal(plan.kind,'superseded-failed-update');assert.equal(plan.successId,f.latest.id);
+ attention.reconcileAttention(f.root,{...f.options,planDigest:plan.planDigest},f.dependencies);
+ assert.deepEqual(fs.readFileSync(f.old.file),before);
+ const pending=maintenance.maintenancePlan(f.root,f.options,f.dependencies);
+ assert.equal(pending.canApply,true,JSON.stringify(pending.issues));assert.equal(pending.obsolete.length,1);
+ const receipt=maintenance.applyMaintenance(f.root,{...f.options,planDigest:pending.planDigest},f.dependencies);
+ assert.deepEqual(receipt.obsolete,[f.old.id]);assert.equal(receipt.retained.length,2);
+ assert.equal(fs.existsSync(f.old.directory),false);assert.equal(fs.existsSync(staging),false);
+ assert.deepEqual(fs.readFileSync(f.old.file),before);
+ assert.ok(fs.existsSync(path.join(path.dirname(f.old.file),'obsolete-recovery-retirement.json')));
+ assert.equal(maintenance.maintenancePlan(f.root,f.options,f.dependencies).canApply,true);
+ assert.equal(attention.reconcileAttention(f.root,{...f.options,planDigest:plan.planDigest},f.dependencies).alreadyApplied,true);
+});
+test('superseded attempts fail closed without matching live health and two intact backups',t=>{
+ const cases=[
+  f=>packages.writeJob(f.latest.file,{phase:'attention'}),
+  f=>packages.writeJob(f.latest.file,{health:null}),
+  f=>packages.writeJob(f.latest.file,{createdAt:'2026-10-01T00:00:00Z'}),
+  f=>{const job=packages.readJob(f.latest.file);packages.writeJob(f.latest.file,{health:{...job.health,identity:{...job.health.identity,home:'/another-home'}}});},
+  f=>fs.writeFileSync(path.join(f.options.installation,'changed'),'different installed app'),
+  f=>fs.writeFileSync(path.join(f.middle.directory,'data-0','private'),'corrupted backup'),
+  f=>fs.writeFileSync(path.join(f.options.home,'runner.lock'),'123'),
+  f=>fs.writeFileSync(f.old.file+'.helper-lock','123'),
+ ];
+ for(const change of cases){const f=supersededFixture(t);change(f);assert.throws(()=>attention.attentionPlan(f.root,f.options,f.dependencies));assert.ok(fs.existsSync(f.old.directory));}
+});
+test('partial pre-install attempts can be reconciled but changed payloads cannot be deleted',t=>{
+ const f=supersededFixture(t);
+ packages.writeJob(f.old.file,{failedBeforeReplacement:true,incompleteRecovery:f.old.directory,recovery:null});
+ fs.unlinkSync(path.join(f.old.directory,'recovery.json'));
+ f.options.expectedRevision=packages.readJob(f.old.file).revision;
+ const plan=attention.attentionPlan(f.root,f.options,f.dependencies);
+ attention.reconcileAttention(f.root,{...f.options,planDigest:plan.planDigest},f.dependencies);
+ fs.writeFileSync(path.join(f.old.directory,'new-evidence'),'preserve');
+ assert.equal(maintenance.maintenancePlan(f.root,f.options,f.dependencies).canApply,false);
+ assert.ok(fs.existsSync(f.old.directory));
+});
+test('legacy pre-replacement failures without outcome fields have the same supersession gates',t=>{
+ const f=supersededFixture(t);packages.writeJob(f.old.file,{outcome:null,health:null,replacement:null});
+ f.options.expectedRevision=packages.readJob(f.old.file).revision;
+ assert.equal(attention.attentionPlan(f.root,f.options,f.dependencies).kind,'superseded-failed-update');
+});
+test('explicit fresh owner reconciliation accepts a normal restart without waiving package or recovery checks',t=>{
+ const f=supersededFixture(t),before=fs.readFileSync(f.old.file),success=packages.readJob(f.latest.file);
+ const inspect=f.dependencies.inspect;f.dependencies.inspect=bundle=>({...inspect(bundle),buildRevision:success.candidate.buildRevision});
+ const pid=f.pid+1;f.dependencies.alive=value=>value===pid;
+ atomic(path.join(f.options.home,'connection.json'),{pid});fs.writeFileSync(path.join(f.options.home,'runner.lock'),String(pid));
+ assert.throws(()=>attention.attentionPlan(f.root,f.options,f.dependencies),/owner changed/);
+ f.dependencies.revalidatedOwner={identity:{pid,sessionId:'fresh-owner-session',packaged:true,home:f.options.home,installation:f.options.installation,sourceFingerprint:success.candidate.sourceFingerprint,buildRevision:success.candidate.buildRevision},jobId:success.id,jobRevision:success.revision};
+ const plan=attention.attentionPlan(f.root,f.options,f.dependencies);
+ assert.equal(plan.ownerRevalidation.identity.pid,pid);
+ // Existing installed/candidate readers use this fixed witness. They must
+ // accept the new receipt before their own binaries have been upgraded.
+ const legacyFields=['schemaVersion','kind','jobId','home','installation','jobHash','originalError','successId','successHash','candidateHash','ownerPid','maintenanceDigest','recoveries','obsoleteRecovery'];
+ assert.equal(plan.planDigest,digest(JSON.stringify(Object.fromEntries(legacyFields.map(key=>[key,plan[key]])))));
+ assert.equal(plan.maintenanceDigest,digest(JSON.stringify(plan.ownerRevalidation)));
+ f.dependencies.revalidatedOwner.identity.sessionId='different-session';
+ assert.throws(()=>attention.reconcileAttention(f.root,{...f.options,planDigest:plan.planDigest},f.dependencies),/state changed/);
+ assert.deepEqual(fs.readFileSync(f.old.file),before);
+ f.dependencies.revalidatedOwner.identity.sessionId='fresh-owner-session';
+ attention.reconcileAttention(f.root,{...f.options,planDigest:plan.planDigest},f.dependencies);
+ assert.deepEqual(fs.readFileSync(f.old.file),before);
+ assert.equal(attention.readAttentionResolution(packages.readJob(f.old.file),f.options).ownerRevalidation.identity.pid,pid);
+ const receipt=path.join(path.dirname(f.old.file),'attention-resolution.json'),changed=JSON.parse(fs.readFileSync(receipt));
+ changed.ownerRevalidation.identity.sessionId='tampered';atomic(receipt,changed);
+ assert.throws(()=>attention.readAttentionResolution(packages.readJob(f.old.file),f.options),/evidence changed/);
+});
+test('fresh owner observations cannot substitute another process, installation, completed job or package',t=>{
+ for(const field of ['pid','home','installation','sourceFingerprint','buildRevision','jobId','jobRevision','package','recovery']){
+  const f=supersededFixture(t),success=packages.readJob(f.latest.file),inspect=f.dependencies.inspect;
+  f.dependencies.inspect=bundle=>({...inspect(bundle),buildRevision:success.candidate.buildRevision});
+  const fresh={identity:{pid:f.pid,sessionId:'fresh',packaged:true,home:f.options.home,installation:f.options.installation,sourceFingerprint:success.candidate.sourceFingerprint,buildRevision:success.candidate.buildRevision},jobId:success.id,jobRevision:success.revision};
+  if(field==='package')fs.writeFileSync(path.join(f.options.installation,'modified'),'changed');
+  else if(field==='recovery')fs.writeFileSync(path.join(f.middle.directory,'data-0','private'),'changed');
+  else if(field.startsWith('job'))fresh[field]='wrong';
+  else fresh.identity[field]='wrong';
+  f.dependencies.revalidatedOwner=fresh;
+  assert.throws(()=>attention.attentionPlan(f.root,f.options,f.dependencies));
+ }
+});
+test('authenticated owner revalidation rejects busy, pending, failed or unhealthy owners and bounds returned fields',async()=>{
+ const status={identity:{pid:42,sessionId:'session',packaged:true,home:'/home',installation:'/app',sourceFingerprint:'a',buildRevision:'b',token:'never export'},job:{id:'job',revision:3,phase:'complete',outcome:'updated',health:{verified:true}},operation:{busy:false}};
+ const routes=[];
+ const result=await revalidateOwner('/home',async(job,route)=>{assert.deepEqual(job,{home:'/home'});routes.push(route);return route==='/api/home'?{buildRevision:'b'}:status;});
+ assert.deepEqual(routes,['/api/updates','/api/home','/api/updates']);
+ assert.equal(result.identity.token,undefined);assert.equal(result.jobRevision,3);
+ for(const change of [s=>s.operation.busy=true,s=>s.identity.barrier=true,s=>s.identity.identityPending=true,s=>s.identity.packaged=false,s=>s.job.phase='attention',s=>s.job.health.verified=false,s=>s.error='failure',s=>s.download={}]){
+  const changed=structuredClone(status);change(changed);
+  await assert.rejects(revalidateOwner('/home',async()=>changed));
+ }
+ await assert.rejects(revalidateOwner('/home',async(job,route)=>route==='/api/home'?{buildRevision:'wrong'}:status),/owner changed/);
+ let reads=0;
+ await assert.rejects(revalidateOwner('/home',async(job,route)=>route==='/api/home'?{buildRevision:'b'}:++reads===1?status:{...status,identity:{...status.identity,sessionId:'restarted'}}),/owner changed/);
+});
+test('the first successful update keeps its only verified recovery without requiring a second',t=>{
+ const f=fixture(t),latest=f.generation(23);
+ packages.writeJob(latest.file,{health:{at:'2026-10-23T00:00:00Z'}});
+ const result=helper.retire(f.policyFile,{...packages.readJob(latest.file),browserHome:f.options.browserHome},f.dependencies);
+ assert.deepEqual(result.generations.map(row=>row.id),[latest.id]);
+ assert.ok(fs.existsSync(latest.directory));
+});
+test('update rotation retains two intact copies instead of a damaged historical data copy',t=>{
+ const f=attentionFixture(t);
+ packages.writeJob(f.latest.file,{phase:'complete'});
+ fs.writeFileSync(path.join(f.middle.directory,'data-0','private'),'damaged historical data');
+ const result=helper.retire(f.policyFile,{...packages.readJob(f.latest.file),browserHome:f.options.browserHome},f.dependencies);
+ assert.deepEqual(result.generations.map(row=>row.id),[f.old.id,f.latest.id]);
+ assert.equal(fs.existsSync(f.middle.directory),false);
+ const intent=JSON.parse(fs.readFileSync(path.join(path.dirname(f.latest.file),'recovery-retirement-intent.json')));
+ assert.equal(intent.damaged[0].id,f.middle.id);assert.match(intent.damaged[0].actualTree.hash,/^[a-f0-9]{64}$/);
+});
 test('post-install reconciliation preserves the original journal, policy and recoveries, then permits verified two-generation maintenance',t=>{
  const f=attentionFixture(t),jobBefore=fs.readFileSync(f.latest.file),policyBefore=fs.readFileSync(f.policyFile),dataBefore=tree(f.options.home);
  const staging=path.join(path.dirname(f.latest.file),'candidate');fs.mkdirSync(staging);fs.writeFileSync(path.join(staging,'synthetic-unused-candidate'),'SYNTHETIC ONLY');

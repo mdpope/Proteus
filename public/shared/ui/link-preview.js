@@ -10,9 +10,10 @@ export function installLinkPreview({document:doc=globalThis.document,base=()=>({
  let anchor,host;
  const clear=()=>{anchor=null;host?.remove();host=null;};
  const show=event=>{
-  const link=event.target?.closest?.('a[href],[data-link]');if(!link)return clear();
+  // Any link-like control can declare its destination with data-link-preview (chat rows, record titles).
+  const link=event.target?.closest?.('a[href],[data-link],[data-link-preview]');if(!link)return clear();
   const ownerFile=link.closest('[data-link-file]'),ownerCwd=link.closest('[data-link-cwd]');
-  const raw=link.dataset.link||link.getAttribute('href'),text=linkDestination(raw,ownerFile?{file:ownerFile.dataset.linkFile}:ownerCwd?{cwd:ownerCwd.dataset.linkCwd}:base(link));if(!text)return clear();
+  const raw=link.dataset.linkPreview||link.dataset.link||link.getAttribute('href'),text=linkDestination(raw,ownerFile?{file:ownerFile.dataset.linkFile}:ownerCwd?{cwd:ownerCwd.dataset.linkCwd}:base(link));if(!text)return clear();
   anchor=link;if(!host){host=doc.createElement('div');host.className='link-destination-preview';host.setAttribute('role','status');host.setAttribute('aria-live','polite');doc.body.append(host);}host.textContent=text;
  };
  const leave=event=>{if(anchor&&!anchor.contains(event.relatedTarget))clear();};

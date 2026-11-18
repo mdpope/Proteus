@@ -3,6 +3,7 @@ export function fileDates(stat){
  const iso=value=>Number.isFinite(value)&&value>0?new Date(value).toISOString():null;
  return {fileCreatedAt:iso(stat.birthtimeMs),fileModifiedAt:iso(stat.mtimeMs)};
 }
+export const fileIdentity=stat=>[stat.dev,stat.ino,stat.size,stat.mtimeMs].join(':');
 export function assertSameFileSnapshot(before,after){
  if(before.dev!==after.dev||before.ino!==after.ino||before.size!==after.size||before.mtimeMs!==after.mtimeMs||before.ctimeMs!==after.ctimeMs)throw Error('Document changed while reading. Refresh to read the current version.');
 }
@@ -16,6 +17,6 @@ export function readMarkdownFile(file){
   assertSameFileSnapshot(before,fs.fstatSync(fd));
   if(fs.realpathSync(file)!==canonical)throw Error('Document path changed. Refresh to read again.');
   assertSameFileSnapshot(before,fs.statSync(canonical));
-  return {file,content:buffer.subarray(0,size).toString('utf8'),...fileDates(before)};
+  return {file,content:buffer.subarray(0,size).toString('utf8'),size,identity:fileIdentity(before),...fileDates(before)};
  }finally{fs.closeSync(fd);}
 }

@@ -81,9 +81,9 @@ export function ensurePreviewProject(project,{reveal=false,workspaceRecord}={}){
  let tab=ui.state.tabs.find(t=>t.id===projectViewId(project.id));if(!tab){tab={id:projectViewId(project.id),type:'workspace',workspaceId:profile.id,workspaceName:profile.name,projectId:project.id,label:project.name,workspacePage:'chats',hidden:false};ui.state.tabs.push(tab);}return tab;
 }
 export function previewResourceParent(row){const project=previewProjectForChat(row);return project?ensurePreviewProject(project):null;}
-export function openPreviewProject(project,page='chats'){
- const tab=ensurePreviewProject(project,{reveal:true});if(!tab)return;Object.assign(tab,{workspacePage:page,label:project.name,hidden:false,navigationClosed:false});
- ui.openTab(tab);ui.state.tab=tab.id;ui.render();return ui.state.tabs.find(t=>t.id===tab.id);
+export function openPreviewProject(project,page){
+ const tab=ensurePreviewProject(project,{reveal:true});if(!tab)return;Object.assign(tab,{...(page?{workspacePage:page}:{}),label:project.name,hidden:false,navigationClosed:false});
+ ui.openTab(tab);ui.render();return ui.state.tabs.find(t=>t.id===tab.id);
 }
 export function openPreviewChat(row){
  const project=previewProjectForChat(row);if(!project)return false;
@@ -220,7 +220,7 @@ export function renderPreviewCollection(){const area=$('#main');area.innerHTML=`
 export function renderPreviewWorkspace(tab){
  if(tab.workspacePage==='configuration'&&!tab.projectId)return false;
  const main=$('#main'),profile=workspace(tab.workspaceId),project=previewProjects().find(p=>p.id===tab.projectId),page=tab.workspacePage||(project?'chats':'projects');
- main.innerHTML=`<div class="heading"><div>${project?`<button class="subtle preview-breadcrumb" data-preview-parent>${workspaceIcon}${esc(profile?.name)} ›</button>`:'<div class="eyebrow">Workspace</div>'}<h1>${esc(project?.name||profile?.name||tab.label)}</h1><p class="muted">${project?'Chats and tabs · working setup from '+esc(profile?.name):'Projects, conversations and your working setup'}</p></div><div class="actions">${project?'<button data-preview-move>Move project…</button><button data-preview-rename>Rename</button>':'<button data-preview-new-project>＋ New project</button>'}<button data-preview-new-chat class="primary">＋ New chat</button></div></div>${project?`<div class="actions preview-project-pages">${['chats','tabs'].map(p=>`<button data-preview-project-page="${p}" class="${page===p?'primary':''}">${p==='chats'?'Chats':'Tabs'}</button>`).join('')}<button data-preview-config>Workspace configuration ↗</button></div>`:''}<section id="workspace-page"></section>`;
+ main.innerHTML=`<div class="heading"><div>${project?`<button class="subtle preview-breadcrumb" data-preview-parent>${workspaceIcon}${esc(profile?.name)} ›</button>`:'<div class="eyebrow">Workspace</div>'}<h1>${esc(project?.name||profile?.name||tab.label)}</h1><p class="muted">${project?'Chats and tabs · working setup from '+esc(profile?.name):'Projects, conversations and your working setup'}</p></div><div class="actions">${project?'<button data-preview-move>Move project…</button><button data-preview-rename>Rename</button>':'<button data-preview-new-project>＋ New project</button>'}<button data-preview-new-chat class="primary">＋ New chat</button></div></div>${project?`<div class="actions preview-project-pages">${['chats','tabs','scratches','reminders'].map(p=>`<button data-preview-project-page="${p}" class="${page===p?'primary':''}">${{chats:'Chats',tabs:'Tabs',scratches:'Scratches',reminders:'Reminders'}[p]}</button>`).join('')}<button data-preview-config>Workspace configuration ↗</button></div>`:''}<section id="workspace-page"></section>`;
  main.querySelector('[data-preview-new-chat]').onclick=()=>ui.newChat(tab);
  main.querySelector('[data-preview-new-project]')?.addEventListener('click',()=>projectDialog(tab.workspaceId));
  main.querySelector('[data-preview-move]')?.addEventListener('click',()=>moveProjectDialog(project));
@@ -234,7 +234,9 @@ export function renderPreviewWorkspace(tab){
  area.querySelectorAll('[data-preview-open-project]').forEach(b=>b.onclick=()=>openPreviewProject(projects.find(p=>p.id===b.dataset.previewOpenProject)));area.querySelectorAll('[data-preview-project-chat]').forEach(b=>b.onclick=()=>ui.newChat(openPreviewProject(projects.find(p=>p.id===b.dataset.previewProjectChat))));area.querySelectorAll('[data-preview-default]').forEach(b=>b.onclick=()=>void mutatePreview({action:'default',workspaceId:tab.workspaceId,projectId:b.dataset.previewDefault}).then(()=>ui.render()).catch(e=>ui.toast(e.message)));
  area.querySelectorAll('[data-preview-delete-project]').forEach(button=>button.onclick=()=>deleteProjectDialog(tab.workspaceId,projects.find(project=>project.id===button.dataset.previewDeleteProject)));
  bindProjectReorder(area,tab,projects);
- }else if(page==='tabs')renderPreviewTabs(area,tab);
+ }else if(page==='scratches')ui.renderScratchpad(area,{projectId:project?.id,workspaceId:tab.workspaceId,parentId:tab.id});
+ else if(page==='reminders')ui.renderScopedReminders(area,{workspaceId:tab.workspaceId,projectId:project?.id});
+ else if(page==='tabs')renderPreviewTabs(area,tab);
  else ui.renderChats(false,true,{container:area,workspaceId:tab.workspaceId,workspaceName:profile?.name||tab.label,hostId:'local',projectId:project?.id,projectName:project?.name,onOpen:openPreviewChat});
  return true;
 }

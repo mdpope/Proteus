@@ -10,12 +10,14 @@ export function selectChatType(type){mainSaved.type=type;saved=mainSaved;activeV
 const $ = selector => document.querySelector(selector);
 const mainSaved = { type:'user', query:'', host:'', provider:'', status:'', workspace:'', project:'', schedule:'', after:'', before:'', showArchived:false,filtersOpen:true,scroll:0,limit:100 };
 let saved=mainSaved,activeView={};const workspaceViews=new Map();
-let refreshTimer,indexLoaded=false,indexGeneration=0;
+let refreshTimer,detachIndexScroll=null,indexLoaded=false,indexGeneration=0;
 const reviewedRows=new Map();
 const rowKey=row=>String(row.hostId||'local')+':'+(row.chatId||row.id);
 export function reconcileIndexedChat(row){indexGeneration++;reviewedRows.set(rowKey(row),{...row});snapshot.items=snapshot.items.map(item=>rowKey(item)===rowKey(row)?{...item,...row}:item);context?.onIndexChanged?.();}
 export function attentionChats(localRuns=[]){return recentChats(localRuns).filter(row=>!row.cached&&(row.attentionRequired===true||(row.attentionRequired===undefined&&(row.status==='awaiting_input'||(['failed','interrupted'].includes(row.status)&&!row.failureReviewedAt)))));}
 let snapshot = { items:[], hosts:[], partial:false }, loading = false;
+// Polls re-render only for visible changes; an online host's sync time advances on every read.
+const indexSignature=()=>JSON.stringify({...snapshot,hosts:snapshot.hosts.map(host=>host.online===false?host:{...host,lastSyncAt:undefined})});
 
 export function initChatsIndex(options) { context = options; }
 export async function changeIndexedChat(row, action) {
@@ -38,13 +40,13 @@ function lifecycleMenu(row,anchor){
 }
 export function recentChats(localRuns = [],includeArchived = false) {
   const rows = indexLoaded ? snapshot.items : localRuns.filter(run=>includeArchived||!run.archivedAt).map(run => ({
-    ...chatMembership(run),projectId:run.projectId,projectName:run.projectName,scheduleName:run.schedule?.name,provider:run.schedule?.provider,model:run.schedule?.model,reasoningEffort:run.schedule?.reasoningEffort,serviceTier:run.schedule?.serviceTier,trigger:run.trigger,chatType:run.chatType,hostId:'local', chatId:run.id, title:run.title, titleRevision:run.titleRevision, status:run.status,
+    ...chatMembership(run),projectId:run.projectId,projectName:run.projectName,scheduleName:run.trigger==='chat'?'':run.schedule?.name,provider:run.schedule?.provider,model:run.schedule?.model,reasoningEffort:run.schedule?.reasoningEffort,serviceTier:run.schedule?.serviceTier,trigger:run.trigger,chatType:run.chatType,hostId:'local', chatId:run.id, title:run.title, titleRevision:run.titleRevision, status:run.status,
     updatedAt:run.updatedAt || run.createdAt,lastActivityAt:run.lastActivityAt,archivedAt:run.archivedAt||null,archived:!!run.archivedAt,destinationName:computerName(context?.state?.data?.hostName), local:true,attentionRequired:run.attentionRequired??needsAttention(run)
   }));
   const localById=new Map(localRuns.map(run=>[run.id,run]));
   const current=rows.map(row=>{
     const live=(row.local||row.hostId==='local')&&localById.get(row.chatId||row.id);
-    if(live)row={...row,scheduleName:live.schedule?.name,provider:live.schedule?.provider,model:live.schedule?.model,reasoningEffort:live.schedule?.reasoningEffort,serviceTier:live.schedule?.serviceTier,...chatMembership(live),projectId:live.projectId,projectName:live.projectName,title:live.title,titleRevision:live.titleRevision,trigger:live.trigger,chatType:live.chatType,status:live.status,updatedAt:live.updatedAt,lastActivityAt:live.lastActivityAt===undefined?row.lastActivityAt:live.lastActivityAt,archivedAt:live.archivedAt||null,failureEventAt:live.failureEventAt||null,failureReviewedAt:live.failureReviewedAt||null,attentionRequired:live.attentionRequired??needsAttention(live)};
+    if(live)row={...row,scheduleName:live.trigger==='chat'?'':live.schedule?.name,provider:live.schedule?.provider,model:live.schedule?.model,reasoningEffort:live.schedule?.reasoningEffort,serviceTier:live.schedule?.serviceTier,...chatMembership(live),projectId:live.projectId,projectName:live.projectName,title:live.title,titleRevision:live.titleRevision,trigger:live.trigger,chatType:live.chatType,status:live.status,updatedAt:live.updatedAt,lastActivityAt:live.lastActivityAt===undefined?row.lastActivityAt:live.lastActivityAt,archivedAt:live.archivedAt||null,failureEventAt:live.failureEventAt||null,failureReviewedAt:live.failureReviewedAt||null,attentionRequired:live.attentionRequired??needsAttention(live)};
     const reviewed=reviewedRows.get(rowKey(row));
     if(reviewed){if(row.failureEventAt&&reviewed.failureEventAt&&row.failureEventAt!==reviewed.failureEventAt&&Date.parse(row.failureEventAt)>Date.parse(reviewed.failureEventAt))reviewedRows.delete(rowKey(row));else if(['failed','interrupted'].includes(row.status)&&(Date.parse(row.updatedAt||0)<=Date.parse(reviewed.updatedAt||0)||(row.failureEventAt&&row.failureEventAt===reviewed.failureEventAt)))row={...row,attentionRequired:reviewed.attentionRequired,failureReviewedAt:reviewed.failureReviewedAt};}
     const host=snapshot.hosts.find(host=>(host.id||host.hostId)===row.hostId);
@@ -79,7 +81,10 @@ export function renderChatsIndex(attention = false, fetchNow = true, view = {}) 
   activeView=view;const viewKey=view.scopeKey||(view.workspaceId?view.hostId+':'+view.workspaceId+':'+(view.projectId||''):null);
   if(viewKey&&!workspaceViews.has(viewKey))workspaceViews.set(viewKey,{...mainSaved,type:'all',query:'',host:'',workspace:'',project:'',scroll:0});saved=viewKey?workspaceViews.get(viewKey):mainSaved;
   const currentSaved=saved;const main = view.container||$('#main');
-  const before = $('#chat-index-rows'); if (before) saved.scroll = before.scrollTop;
+  // One page-level scroll surface: the enclosing #main scroller (or the container itself).
+  const scroller=(view.container||$('#main'))?.closest('#main')||view.container||$('#main');
+  detachIndexScroll?.();detachIndexScroll=null;
+  if ($('#chat-index-rows')&&scroller) saved.scroll = scroller.scrollTop;
   const allRows=attention?attentionChats(context.state.data.runs):recentChats(context.state.data.runs,saved.showArchived);
   const rows = view.workspaceId?allRows.filter(r=>r.workspaceId===view.workspaceId&&(r.local?'local':r.hostId)===view.hostId&&(!view.projectId||r.projectId===view.projectId)):view.workspaceOnly?allRows.filter(r=>r.workspaceId):allRows;
   const hosts = [...new Map(rows.map(row => [row.hostId, row.destinationName || row.hostId])).entries()];
@@ -94,6 +99,7 @@ export function renderChatsIndex(attention = false, fetchNow = true, view = {}) 
     const visible = rows.filter(r => (attention||saved.type==='all'||chatType(r)===saved.type) && (!saved.after || dateKey(r.updatedAt)>=saved.after) && (!saved.before || dateKey(r.updatedAt)<=saved.before) && (!query || [r.title,r.provider,r.destinationName,r.workspaceName,r.scheduleName].some(v=>String(v||'').toLocaleLowerCase().includes(query))) && (!saved.host || r.hostId===saved.host) && (!saved.provider || r.provider===saved.provider) && (!saved.status || r.status===saved.status) && (!saved.workspace || (r.local?'local':r.hostId)+':'+r.workspaceId===saved.workspace) && (!saved.project || r.projectId===saved.project) && (!saved.schedule || r.scheduleName===saved.schedule));
     const area = $('#chat-index-rows'); area.innerHTML = visible.slice(0,saved.limit).map((row,index) => `<button class="chat-index-row" data-chat-index="${index}" title="${context.escape(row.title||'Chat')}"><strong>${row.status==='running'?'<span class="spinner" role="status" aria-label="Running"></span>':''}${context.escape(row.title||'Chat')}</strong><span class="chat-run-options"><span>${context.escape(chatRunOptions(row).provider)} · ${context.escape(chatRunOptions(row).model)}</span><small>${context.escape(chatRunOptions(row).detail)}</small></span><span class="chat-computer"><span class="pill">${context.escape(row.destinationName||row.hostId||'This computer')}</span><small>${context.escape((row.status||'').replaceAll('_',' '))}</small></span>${previewEnabled(context.state)&&row.projectId?`<span class="chat-index-project-label">${context.escape(row.workspaceName||'')} / ${context.escape(row.projectName||row.projectId)}</span>`:''}${row.archivedAt?'<span class="pill">Archived</span>':''}<time>${context.escape(context.time(row.updatedAt))}</time>${row.cached?'<small>Cached · last synced '+context.escape(context.time(row.lastSyncAt))+'</small>':''}</button>`).join('') || '<p class="empty">No chats match these filters.</p>';
     area.dataset.more=String(visible.length>saved.limit);
+    area.insertAdjacentHTML('beforeend',visible.length?`<p class="chat-index-status note" role="status">${visible.length>saved.limit?`Showing ${Math.min(saved.limit,visible.length)} of ${visible.length} · scroll for more`:`${visible.length} ${visible.length===1?'chat':'chats'} · end of list`}</p>`:'<p class="chat-index-status note" role="status">No chats match these filters.</p>');
     area.querySelectorAll('[data-chat-index]').forEach(button => {const row=visible[Number(button.dataset.chatIndex)];button.onclick=()=>(view.onOpen||openIndexedChat)(row);button.oncontextmenu=event=>{event.preventDefault();lifecycleMenu(row,button);};button.onkeydown=event=>{if(event.key==='ContextMenu'||event.key==='F10'&&event.shiftKey){event.preventDefault();lifecycleMenu(row,button);}};});
   };
   for(const [id,key] of [['query','query'],['host','host'],['provider','provider'],['status','status'],['workspace','workspace'],['schedule','schedule'],['after','after'],['before','before']]) $('#chat-index-'+id).addEventListener(id==='query'?'input':'change',event=>{saved[key]=event.target.value;paint();});
@@ -102,8 +108,11 @@ export function renderChatsIndex(attention = false, fetchNow = true, view = {}) 
   $('#chat-index-refresh').onclick = async () => { try { await loadChatsIndex(); renderChatsIndex(attention, false,view); } catch(error) { context.toast(error.message); } };
   main.querySelectorAll('[data-chat-type]').forEach(button=>button.onclick=()=>{saved.type=button.dataset.chatType;saved.scroll=0;renderChatsIndex(attention,false,view);});
   main.querySelector('.chat-index-filter-panel').ontoggle=event=>{saved.filtersOpen=event.target.open;};
-  $('#chat-index-rows').onscroll=event=>{const area=event.currentTarget;saved.scroll=area.scrollTop;if(area.dataset.more==='true'&&area.scrollHeight-area.scrollTop-area.clientHeight<240){saved.limit+=100;paint();area.scrollTop=saved.scroll;}};
-  paint(); $('#chat-index-rows').scrollTop = saved.scroll;
-  clearTimeout(refreshTimer);const poll=()=>{if(!main.isConnected||activeView!==view||!$('#chat-index-rows'))return;if(document.activeElement?.matches('#main input,#main select')){refreshTimer=setTimeout(poll,5000);return;}void loadChatsIndex().then(()=>{if(main.isConnected&&activeView===view&&$('#chat-index-rows'))renderChatsIndex(attention,false,view);}).catch(()=>{refreshTimer=setTimeout(poll,5000);});};refreshTimer=setTimeout(poll,5000);
+  // Append the next page when the page scroller nears the end. Appending keeps the current
+  // offset; one listener per rendered view, released on the next render or navigation.
+  const onScroll=()=>{const area=$('#chat-index-rows');if(!area?.isConnected||activeView!==view||saved!==currentSaved){detachIndexScroll?.();detachIndexScroll=null;return;}saved.scroll=scroller.scrollTop;if(area.dataset.more==='true'&&area.getBoundingClientRect().bottom-scroller.getBoundingClientRect().bottom<240){const top=scroller.scrollTop;saved.limit+=100;paint();scroller.scrollTop=top;}};
+  scroller.addEventListener('scroll',onScroll,{passive:true});detachIndexScroll=()=>scroller.removeEventListener('scroll',onScroll);
+  paint(); scroller.scrollTop = saved.scroll;
+  clearTimeout(refreshTimer);const poll=()=>{if(!main.isConnected||activeView!==view||!$('#chat-index-rows'))return;if(document.activeElement?.matches('#main input,#main select')){refreshTimer=setTimeout(poll,5000);return;}const prior=indexSignature();void loadChatsIndex().then(()=>{if(!main.isConnected||activeView!==view||!$('#chat-index-rows'))return;if(indexSignature()===prior){refreshTimer=setTimeout(poll,5000);return;}renderChatsIndex(attention,false,view);}).catch(()=>{refreshTimer=setTimeout(poll,5000);});};refreshTimer=setTimeout(poll,5000);
   if (fetchNow) void loadChatsIndex().then(() => { if (main.isConnected&&activeView===view&&$('#chat-index-rows')) renderChatsIndex(attention, false,view); }).catch(error => { if ($('#chat-index-rows')) $('#chat-index-rows').insertAdjacentHTML('afterbegin',`<p class="banner">${context.escape(error.message)}</p>`); });
 }

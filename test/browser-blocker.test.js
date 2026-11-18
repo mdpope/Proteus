@@ -1,6 +1,22 @@
 import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import {createRequire} from 'node:module';
 const require=createRequire(import.meta.url);const {BrowserBlocker}=require('../desktop/browser/browser-blocker.cjs');const {ElectronBlocker}=require('@ghostery/adblocker-electron');
+test('bundled Fox Admiral override blocks its loader with an existing filter cache and stays publisher scoped',()=>{
+ const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-fox-filter-'));
+ try{
+  const cached=ElectronBlocker.parse('||ads.example^');fs.writeFileSync(path.join(home,'browser-filter-cache.bin'),Buffer.from(cached.serialize()));const blocker=new BrowserBlocker(home);
+  const request=(url,referrer='https://www.foxnews.com/',resourceType='script')=>{let result;blocker.before({url,referrer,resourceType},value=>{assert.equal(result,undefined);result=value;});return result;};
+  assert.deepEqual(request('https://woodstockcustom.com/assets/js/synthetic/ems.js'),{cancel:true});
+  assert.deepEqual(request('https://woodstockcustom.com/j/synthetic/engage.js','https://www.foxnews.com/politics/synthetic'),{cancel:true});
+  for(const referrer of ['https://example.com/','https://foxnews.com.evil.test/',''])assert.deepEqual(request('https://woodstockcustom.com/assets/js/synthetic/ems.js',referrer),{});
+  assert.deepEqual(request('https://woodstockcustom.com/article','https://www.foxnews.com/','mainFrame'),{});
+  assert.deepEqual(request('https://static.foxnews.com/core.js'),{});
+  assert.deepEqual(request('https://woodstockcustom.com.evil.test/ems.js'),{});
+  assert.deepEqual(request('https://succeedscene.com/openads/img/admr.js'),{},'the detection bait must not be blocked by this rule');
+  assert.deepEqual(request('https://ads.example/ad.js'),{cancel:true},'normal filtering stays active');
+  blocker.engine=null;assert.deepEqual(request('https://woodstockcustom.com/assets/js/synthetic/ems.js'),{});
+ }finally{fs.rmSync(home,{recursive:true,force:true});}
+});
 test('filter refresh coalesces, activates only after atomic cache replacement, retains prior filters on failure',async()=>{
  const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-filter-update-')),original=ElectronBlocker.fromPrebuiltAdsAndTracking;let release,calls=0;
  const engine={serialize:()=>new Uint8Array([1,2,3]),onBeforeRequest(_details,callback){callback({cancel:true});}};

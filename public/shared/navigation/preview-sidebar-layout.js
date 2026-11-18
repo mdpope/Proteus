@@ -70,7 +70,7 @@ export function createPreviewSidebarLayout({enabled,appearance,collapsed,save,ov
    sidebar.addEventListener('click',event=>{
     if(!open)return;
     const button=event.target.closest('button,a');
-    if(button&&!button.matches('#sidebar-toggle,[data-preview-engine-menu],[data-preview-workspace-expand],[data-preview-expand],[data-preview-more],[data-preview-more-chats],[data-preview-feature-more],#preview-sidebar-resizer'))close();
+    if(button&&!button.matches('#sidebar-toggle,[data-preview-engine-menu],[data-preview-workspace-expand],[data-preview-expand],[data-preview-more],[data-preview-more-chats],[data-preview-feature-more],[data-resource-more],#preview-sidebar-resizer'))close();
    },true);
   }
   const grip=document.createElement('div');grip.id='preview-sidebar-resizer';grip.tabIndex=0;grip.setAttribute('role','separator');grip.setAttribute('aria-label','Sidebar width');grip.setAttribute('aria-orientation','vertical');grip.title='Drag to resize sidebar · Left/Right arrow keys';

@@ -353,6 +353,26 @@ export function createTabSynchronizer({scopes,readLocal,apply,acknowledge=async(
     }).finally(async()=>{record.busy=null;if(record.again&&records.get(id)===record){record.again=false;await sync(scope);}});
     return record.busy;
   }
+  // A preservation checkpoint needs proof of convergence, unlike background sync
+  // which deliberately absorbs failures and respects retry/backoff. Do not clear
+  // those guards or the outbox just to obtain a successful checkpoint.
+  async function settle(){
+    const localScopes=()=>scopes().filter(scope=>!scope.hostId);
+    const signature=rows=>JSON.stringify(rows.map(key).sort());
+    for(let pass=0;pass<5;pass++){
+      const required=localScopes();let stable=true;
+      for(const scope of required){
+        await sync(scope);
+        const id=key(scope),record=records.get(id);
+        if(!record||record.baseline===null||record.conflict||record.pending||record.request||record.retry||(backoff.get(hostKey(scope))?.until||0)>now())throw Error('Local tab synchronization has not completed. Keep this window open and resolve its synchronization error before updating.');
+        const baseline=record.baseline;
+        const local=(await snapshot(scope)).filter(tab=>!record.localAliases?.has(tab.id));
+        if(records.get(id)!==record||record.busy||record.again||record.baseline!==baseline||viewChanges(baseline,local,tabChanges(baseline,local,{navigation})).length)stable=false;
+      }
+      if(stable&&signature(required)===signature(localScopes()))return {settled:true,scopes:required.length};
+    }
+    throw Error('Local tabs are still changing. Keep this window open and retry the update checkpoint after synchronization finishes.');
+  }
   async function resolve(scope,{preserve}={}){
     const id=key(scope),record=records.get(id);if(!record?.conflict)return;
     if(record.busy)await record.busy;
@@ -395,5 +415,5 @@ export function createTabSynchronizer({scopes,readLocal,apply,acknowledge=async(
     await sync(scope);return true;
   }
   function forgetKey(id){records.delete(id);for(const cacheKey of navigationCache.keys())if(cacheKey.startsWith(id+':'))navigationCache.delete(cacheKey);}
-  return {sync,checkpoint,resolve,close,reopen,hasConflict:scope=>records.get(key(scope))?.conflict===true,forget(scope){forgetKey(key(scope));},forgetHost(hostId){backoff.delete(hostId);for(const id of records.keys())if(JSON.parse(id)[0]===hostId)forgetKey(id);},async all(){const groups=new Map();for(const scope of scopes()){const owner=hostKey(scope);if(!groups.has(owner))groups.set(owner,[]);groups.get(owner).push(scope);}await Promise.all([...groups.values()].map(async group=>{for(const scope of group)await sync(scope);}));}};
+  return {sync,checkpoint,settle,resolve,close,reopen,hasConflict:scope=>records.get(key(scope))?.conflict===true,forget(scope){forgetKey(key(scope));},forgetHost(hostId){backoff.delete(hostId);for(const id of records.keys())if(JSON.parse(id)[0]===hostId)forgetKey(id);},async all(){const groups=new Map();for(const scope of scopes()){const owner=hostKey(scope);if(!groups.has(owner))groups.set(owner,[]);groups.get(owner).push(scope);}await Promise.all([...groups.values()].map(async group=>{for(const scope of group)await sync(scope);}));}};
 }

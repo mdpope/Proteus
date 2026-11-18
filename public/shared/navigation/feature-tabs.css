@@ -1,0 +1,76 @@
+/* Feature navigation uses the same palette, separators and density as project tabs. */
+.feature-tab-bar{display:flex;align-items:stretch;flex-wrap:nowrap;gap:0;min-width:0;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:thin;border-bottom:1px solid var(--proteus-line);background:var(--proteus-bg);margin:0 0 20px;padding:0;}
+.feature-tab-bar>a,.feature-tab-bar>button{display:flex;align-items:center;flex:none;white-space:nowrap;min-height:42px;margin:0;padding:9px 16px;border:0;border-right:1px solid var(--proteus-line);border-radius:0;background:transparent;color:var(--proteus-muted);font:inherit;text-decoration:none;}
+.feature-tab-bar>[aria-current=page],.feature-tab-bar>.active{background:var(--proteus-panel);color:var(--proteus-ink);box-shadow:inset 0 -2px var(--proteus-accent);}
+.feature-tab-bar>a:hover,.feature-tab-bar>button:hover{background:var(--proteus-control-hover);color:var(--proteus-ink);text-decoration:none;}
+.feature-tab-bar>:focus-visible{outline:2px solid var(--proteus-focus);outline-offset:-3px;}
+.feature-content-tab{display:flex;align-items:stretch;flex:none;border-right:1px solid var(--proteus-line);}
+.feature-content-tab>button{border:0;border-radius:0;background:transparent;color:var(--proteus-muted);min-height:42px;white-space:nowrap;}
+.feature-content-tab>button:first-child{max-width:220px;overflow:hidden;text-overflow:ellipsis;padding:9px 12px;}
+.feature-content-tab>button[aria-current=page]{color:var(--proteus-ink);box-shadow:inset 0 -2px var(--proteus-accent);}
+.feature-content-tab>button:last-child{flex:none;width:36px;padding:0;}
+#life-section-navigation,#life-home-navigation{flex-shrink:0;margin:0;}
+.feature-content-tab>span{align-self:center;flex:none;padding:0 4px;}
+.feature-workspace-tabs{height:40px;overflow:visible;flex:none;margin:0;padding:0;background:var(--proteus-tab,var(--proteus-bg));}
+.feature-tab-list{display:flex;flex:1;min-width:0;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:none;}
+.feature-tab-list::-webkit-scrollbar{display:none;}
+.feature-workspace-tabs .feature-content-tab{margin:0;gap:0;min-height:40px;border-radius:0;}
+.feature-workspace-tabs .feature-content-tab>button{min-height:40px;font:inherit;}
+.feature-workspace-tabs .feature-content-tab>button:first-child{padding:0 12px;max-width:240px;width:auto;}
+.feature-workspace-tabs .feature-content-tab.selected{background:var(--proteus-panel);box-shadow:inset 0 -2px var(--proteus-accent);}
+.feature-workspace-tabs .feature-content-tab.selected>button[aria-current=page]{box-shadow:none;}
+.feature-workspace-tabs .tabclose{display:flex;align-items:center;justify-content:center;width:28px!important;min-width:28px;padding:0!important;opacity:.7;}
+.feature-workspace-tabs .tabclose:hover{opacity:1;background:var(--proteus-control-hover);}
+.feature-workspace-tabs .tab-actions{display:flex;flex:none;align-items:stretch;gap:0;border-left:1px solid var(--proteus-line);}
+.feature-workspace-tabs .tab-actions>button,.feature-workspace-tabs summary{display:flex;align-items:center;justify-content:center;width:40px;height:40px;min-height:0;border:0;border-radius:0;margin:0;padding:0;background:transparent;color:var(--proteus-muted);}
+.feature-workspace-tabs .tab-add-menu{position:relative;}
+.feature-workspace-tabs .tab-add-options{position:absolute;top:100%;right:0;z-index:100;min-width:220px;background:var(--proteus-panel);border:1px solid var(--proteus-line);box-shadow:0 8px 24px #0003;padding:6px;border-radius:8px;}
+.feature-workspace-tabs .tab-add-options button{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:9px;border:0;background:transparent;color:var(--proteus-ink);}
+.feature-workspace-tabs .tab-add-options svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.7;}
+.feature-tab-overview{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;}
+.feature-tab-overview button{min-height:90px;overflow-wrap:anywhere;}
+.feature-tabs-dialog{width:min(800px,90vw);max-height:80vh;overflow:auto;background:var(--proteus-bg);color:var(--proteus-ink);border:1px solid var(--proteus-line);border-radius:12px;padding:20px;}
+#feature-content-navigation{margin:0;}
+.reminders-workspace>.feature-workspace-tabs,.scratchpad-page>.feature-workspace-tabs{margin:0;}
+.reminders-workspace>section:not(.feature-tab-bar),.scratchpad-content{padding:24px;}
+#main:has(>.reminders-workspace),#main:has(>.scratchpad-page){padding:0;}
+@media(pointer:coarse){.feature-workspace-tabs,.feature-workspace-tabs .feature-content-tab>button,.feature-workspace-tabs .tab-actions>button,.feature-workspace-tabs summary{height:44px;min-height:44px;}}
+/* All secondary strips use the project chrome metrics. Content padding belongs
+   below the strip; the overview/add controls never take space from a close X. */
+body .feature-workspace-tabs{background:var(--preview-sidebar-bg,var(--proteus-bg));height:40px;min-height:40px;}
+body .feature-workspace-tabs .feature-content-tab{height:40px;min-height:40px;}
+body .feature-workspace-tabs .feature-content-tab>button:first-child{display:flex;align-items:center;gap:7px;font-size:12px;padding:0 12px;min-width:0;}
+.feature-content-tab>button:first-child>span:last-child{overflow:hidden;text-overflow:ellipsis;}
+.feature-workspace-tabs .preview-tab-icon{display:inline-flex;flex:none;width:16px;height:16px;color:var(--proteus-accent);}
+.feature-workspace-tabs .preview-tab-icon svg{width:16px;height:16px;}
+body .feature-workspace-tabs .tab-actions{background:transparent;border:0;gap:0;align-items:center;padding:0 6px 0 0;}
+body .feature-workspace-tabs .tab-actions>button{width:28px;min-width:28px;height:34px;min-height:34px;padding:0;align-self:center;color:var(--preview-sidebar-ink,var(--proteus-muted));}
+body .feature-workspace-tabs .tab-actions svg{width:16px;height:16px;}
+body .feature-workspace-tabs .tabclose{font-size:18px;width:24px!important;min-width:24px;min-height:0;}
+.proteus-tab-hint{position:fixed;z-index:20000;pointer-events:none;max-width:min(360px,90vw);display:grid;gap:5px;padding:10px 12px;border:1px solid var(--proteus-line);border-radius:8px;background:var(--proteus-panel);color:var(--proteus-ink);box-shadow:0 8px 24px #0004;font-size:12px;line-height:1.5;overflow-wrap:anywhere;}
+.proteus-tab-hint span{font-size:11px;color:var(--proteus-muted);}
+/* Selection and closing have distinct, independently highlighted hit regions. */
+:is(#tabs,#chat-subtabs,#team-subtabs) :is([data-tab],[data-chat-subtab],[data-team-tab],[data-preview-page]):hover,
+.feature-content-tab>button:first-child:hover{background:var(--proteus-control-hover)!important;color:var(--proteus-ink)!important;}
+:is(#tabs,#chat-subtabs,#team-subtabs,.feature-tab-bar) :is(.tabclose,[data-chat-child-close],[data-team-close]):hover{background:color-mix(in srgb,var(--proteus-ink) 18%,var(--proteus-bg))!important;color:var(--proteus-ink)!important;}
+
+/* The same vector glyphs are used by root, project, chat and feature controls. */
+/* Fill existing hit regions; preserve strip heights and separator pseudo-elements. */
+body #tabs .tabitem{align-items:stretch;}
+body #tabs .tabitem>button{align-self:stretch;height:auto;min-height:0;}
+body #tabs .tabitem>.tabclose{display:flex;align-items:center;justify-content:center;}
+:is(#tabs,#chat-subtabs,#team-subtabs) [class*=tabclose] svg,
+:is(#chat-subtabs,#team-subtabs) :is([data-chat-child-close],[data-team-close]) svg{width:12px;height:12px;vertical-align:middle;}
+:is(#tab-add-menu,.chat-tab-add)>summary svg{width:16px;height:16px;fill:none;stroke:currentColor;vertical-align:middle;}
+
+/* The root, project and feature title regions share the same inset. */
+:root{--navigation-tab-title-inset:6px}
+body .feature-workspace-tabs .feature-content-tab>button:first-child,
+#chat-subtabs .chat-subtab>button:first-child{padding-inline:var(--navigation-tab-title-inset)}
+.feature-workspace-tabs .preview-tab-icon .browser-tab-icon{margin:0;width:16px;height:16px}
+.feature-overview-select{display:flex;flex-direction:column;gap:8px;min-width:0;padding:0 0 12px;overflow:hidden;text-align:left;}
+.feature-overview-select>strong{padding:0 12px;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
+.feature-overview-select[aria-current=page]{outline:2px solid var(--proteus-accent);outline-offset:2px;}
+.feature-overview-preview{display:grid;place-items:center;width:100%;height:150px;overflow:hidden;background:var(--proteus-panel);color:var(--proteus-accent);}
+.feature-overview-preview>img{width:100%;height:100%;object-fit:cover;object-position:top;}
+.feature-overview-preview>svg{width:48px;height:48px;}

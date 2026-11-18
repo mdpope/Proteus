@@ -1,11 +1,12 @@
 import path from 'node:path';
+import {lifeAskFirstTurn} from '../life/life-ask-policy.js';
 import {websiteNotification,portableWebsiteNotification} from './website-notification.js';
 import { EventEmitter } from 'node:events';
 import { randomUUID } from 'node:crypto';
 import { atomicJSON, readJSON } from '../../shared/files.js';
 import { RemoteCommandJournal } from '../remote/remote-command-journal.js';
 
-const types = new Set(['chat.completed', 'review.required', 'schedule.completed', 'device.added', 'device.reconnected', 'browser.issue','website.notification','schedule.error']);
+const types = new Set(['chat.completed', 'review.required', 'schedule.completed', 'device.added', 'device.reconnected', 'browser.issue','website.notification','schedule.error','life.answer']);
 const sharedLogTypes=new Set(['chat.queued','chat.running','chat.awaiting_input','chat.completed','chat.failed','chat.cancelled','chat.interrupted','chat.deleted','transport.online','transport.offline','transport.device_added','browser.open','browser.unload','app.started','app.stopping','api.failed']);
 const limits = { notifications: 1000, outbox: 500 };
 export function safeLog(value, limit = 1000) {
@@ -38,7 +39,9 @@ function lastReply(run) { const events = Array.isArray(run?.events) ? run.events
 function pendingPreview(pending) {
   if (pending?.type === 'question') return 'Question: ' + (pending.question || pending.text || '');
   const details = pending?.details || {};
-  const action = { shell: 'Run command', write: 'Edit file', read: 'Read files', mcp: 'Use connected tool', url: 'Open website' }[details.kind] || 'Allow app action';
+  const connection = [details.serverLabel && details.serverLabel !== details.serverName ? details.serverLabel : null, details.serverName].filter(Boolean).join(' · ');
+  const action = { shell: 'Run command', write: 'Edit file', read: 'Read files', mcp: 'Use connected tool', url: 'Open website', 'mcp-connect': `Connect ${connection || 'server'}` }[details.kind] || 'Allow app action';
+  if (details.kind === 'mcp-connect') return action + ' for this turn';
   return action + ': ' + (details.fullCommandText || details.fileName || details.path || details.url || [details.serverName, details.toolName].filter(Boolean).join(' · ') || 'review the request');
 }
 function reviewRequests(run){
@@ -148,6 +151,35 @@ export class ActivityStore extends EventEmitter {
     while(this.data.outbox.filter(row=>row.item.type==='website.notification').length>100)this.data.outbox.splice(this.data.outbox.findIndex(row=>row.item.type==='website.notification'),1);
     this.data.outbox=this.data.outbox.slice(-limits.outbox);this.save();void this.flush();
   }
+  async lifeAnswer(detail) {
+    const identity=this.identity();
+    if(!identity||identity.accountId!==detail.accountID)throw Error('Life Ask notification account changed.');
+    for(const key of ['eventId','requestId','chatId','hostId'])if(!/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(detail[key]||''))throw Error('Life Ask notification identity is incomplete.');
+    let item=this.data.notifications.find(row=>row.id===detail.eventId);
+    if(item&&(item.type!=='life.answer'||item.chatId!==detail.chatId||item.hostId!==detail.hostId||item.requestId!==detail.requestId||item.accountID!==detail.accountID))throw Error('Life Ask notification identity changed.');
+    if(!item){
+      item={id:detail.eventId,eventId:detail.eventId,type:'life.answer',...(detail.destination?{destination:detail.destination}:{}),requestId:detail.requestId,hostId:detail.hostId,chatId:detail.chatId,accountID:detail.accountID,title:notificationText('Answer: '+detail.title,160),body:notificationText(detail.answer,500),createdAt:this.clock().toISOString(),sound:this.data.preferences.quietMode===false,silent:this.data.preferences.inAppEnabled===false||this.data.preferences['life.answer']===false};
+      this.data.notifications.push(item);this.data.notifications=this.data.notifications.slice(-limits.notifications);
+    }
+    if(!item.publishedAt&&!this.data.outbox.some(row=>row.item.id===item.id)){
+      if(this.data.outbox.length>=limits.outbox)throw Error('Notification delivery is full. The Life Ask journal retains this answer for retry.');
+      // Persist event and account-bound outbox together before emitting or publishing.
+      this.data.outbox.push({kind:'notifications',item:{...item},accountId:identity.accountId,workspaceId:identity.workspaceId,origin:identity.origin});
+      this.save();this.emit('notification',item);
+    }
+    await this.flush();
+    return item.publishedAt?{at:Date.parse(item.publishedAt),...(item.pushAcceptedAt?{pushAcceptedAt:item.pushAcceptedAt}:{})}:{queued:true};
+  }
+  localLifeConfirmation(receipt,result){
+    const id=result.confirmation?.eventId;if(!id)return result.confirmation;
+    if(this.identity()?.accountId!==receipt.accountID)throw Error('Life confirmation account changed.');
+    if(!this.data.notifications.some(item=>item.id===id)){
+      const item={id,eventId:id,type:'life.answer',accountID:receipt.accountID,requestId:receipt.requestId,hostId:receipt.hostID,chatId:receipt.chatId,destination:result.destination,title:notificationText('Saved reminder: '+result.reminder.title,160),body:notificationText(result.answer,500),createdAt:new Date(result.confirmation.at).toISOString(),sound:this.data.preferences.quietMode===false,silent:this.data.preferences.inAppEnabled===false};
+      this.data.notifications.push(item);this.data.notifications=this.data.notifications.slice(-limits.notifications);this.save();this.emit('notification',item);
+    }
+    // The server committed and queued this event. Never publish a second confirmation.
+    return result.confirmation;
+  }
   attach(engine, hostId, hostName = () => '') {
     this.hostId=hostId;
     const describe = run => ({ hostId: hostId(), hostName: hostName(), chatId: run.id, chatTitle: run.title || run.schedule?.name || '' });
@@ -166,7 +198,8 @@ export class ActivityStore extends EventEmitter {
       for(const request of reviewRequests(run))if(before?.pending!==request.id&&!before?.questions?.includes(request.id))this.add('review.required',{...describe(run),requestId:request.id,requestKind:request.kind,preview:request.preview});
       if (run.status === 'completed' && before?.status !== 'completed') {
         const scheduled = run.trigger !== 'chat';
-        if (!scheduled || run.schedule.notifications?.onCompletion === true) this.add(scheduled ? 'schedule.completed' : 'chat.completed', { ...describe(run), turnId:run.turns?.at(-1)?.id||run.finishedAt||run.updatedAt, preview: lastReply(run), ...(scheduled ? { scheduleId: run.schedule.id } : {}) });
+        const actionTurn=run.schedule?.lifeAsk?.actionRequestId&&run.events.findLast(event=>event.role==='user')?.data?.inputOrigin?.kind==='life-ask-approved-action';
+        if (!actionTurn&&!lifeAskFirstTurn(run)&&(!scheduled || run.schedule.notifications?.onCompletion === true)) this.add(scheduled ? 'schedule.completed' : 'chat.completed', { ...describe(run), turnId:run.turns?.at(-1)?.id||run.finishedAt||run.updatedAt, preview: lastReply(run), ...(scheduled ? { scheduleId: run.schedule.id } : {}) });
       }
       if (before?.status !== run.status) this.log(['failed', 'interrupted'].includes(run.status) ? 'warning' : 'info', 'chat.' + run.status, `Chat ${run.id}: ${run.status}.`, { hostId: hostId() });
     };
@@ -183,17 +216,19 @@ export class ActivityStore extends EventEmitter {
         if(deferred.has(row))break;
         if (!current || current.accountId !== identity.accountId || current.workspaceId !== identity.workspaceId || current.origin !== identity.origin) break;
         const lifetime=row.item.type==='website.notification'?5*60000:7*86400000;
-        if (row.accountId !== current.accountId || row.workspaceId !== current.workspaceId || row.origin !== current.origin || this.clock().getTime() - Date.parse(row.item.createdAt) > lifetime) { this.data.outbox.shift(); this.save(); continue; }
+        const foreign=row.accountId !== current.accountId || row.workspaceId !== current.workspaceId || row.origin !== current.origin;
+        if(foreign&&row.item.type==='life.answer'){this.data.outbox.push(this.data.outbox.shift());deferred.add(row);this.save();continue;}
+        if (foreign || (row.item.type!=='life.answer'&&this.clock().getTime() - Date.parse(row.item.createdAt) > lifetime)) { this.data.outbox.shift(); this.save(); continue; }
         const saved=(row.kind||'notifications')==='notifications'?this.data.notifications.find(item=>item.id===row.item.id):null;
         const historical=(row.kind||'notifications')==='notifications'&&(saved?.readAt||saved?.resolvedAt||this.clock().getTime()-Date.parse(row.item.createdAt)>300000);
         // Preserve history, but delayed upload must not turn an old/resolved
         // event into a fresh alert on another device.
         const item=historical?{...row.item,...saved,silent:true}:row.item;
-        try { await this.publish(item, current,row.kind||'notifications'); } catch (error) {
+        try { const result=await this.publish(item, current,row.kind||'notifications');if(saved&&item.type==='life.answer'){saved.publishedAt=this.clock().toISOString();if(Number.isSafeInteger(result?.pushAcceptedAt)&&result.pushAcceptedAt>0)saved.pushAcceptedAt=result.pushAcceptedAt;} } catch (error) {
           // Older servers do not accept website events yet. Keep those bounded
           // retry receipts until the coordinated web rollout, while allowing
           // ordinary notifications behind them to continue.
-          if(['website.notification','schedule.error'].includes(row.item.type)&&[400,422].includes(error.status)){this.data.outbox.push(this.data.outbox.shift());deferred.add(row);this.save();continue;}
+          if(['website.notification','schedule.error','life.answer'].includes(row.item.type)&&[400,422].includes(error.status)){this.data.outbox.push(this.data.outbox.shift());deferred.add(row);this.save();continue;}
           // Permanently invalid events must not starve unrelated delivery. Authentication,
           // throttling and server outages remain retryable until their owner resolves them.
           if([400,413,422].includes(error.status)){this.data.outbox.shift();this.save();continue;}

@@ -1,3 +1,14 @@
+Nov 11 continuation: account-bound SQLite Reminder replica and recents; independent Scratchpad computer selectors and owner-specific workspace/project filters. Clean scratch contents remain transient, with protected unsent draft recovery.
+
+## Nov 11 continuation — Life Ask (source only)
+
+- Keep saved destination files unchanged on restoration/reselection; failed saves retain the previous owner and can retry. Background transitions suspend only loaded owners, and prewarmed inactive scenes do not start ordinary relay connections.
+- Browser title/history/scroll updates no longer trigger shell membership reconciliation. Batch removals preserve source-adjacent placement and avoid repeated overview publications.
+- Add Life → Ask history with account/owner checks and ordinary chat navigation for answers,
+  recordings and follow-ups. Answer notifications open the exact bound chat.
+- Simulator account/routing checks and Ask navigation pass; physical paired acceptance and
+  rollout remain pending.
+
 ## Nov 3 — 0.2.42 source validation
 
 - Faster heterogeneous state decoding and section-level chat observation.
@@ -70,3 +81,8 @@ from physical installation and live paired-owner acceptance. See the desktop 0.2
 0.2.27 / 2610.20.5 adds an independent App tabs overview immediately left of + in iPad's main strip. It lists the device's top-level roots across connected hosts and keeps workspace/content pinch overview separate. The shared renderer retains iPhone's existing defaults.
 
 0.2.27 / 2610.20.4 adds automatic expansion when a workspace or project name is selected. The full label row responds to taps, including its spacing around short names. Chevron actions still collapse explicitly. This follows the installed 2610.20.3 browser-selection, tab-underline, workspace spacing/divider and plain Engine Room navigation corrections. Source, UI and physical acceptance are recorded separately in PARITY-VALIDATION.md.
+## Nov 14 workbench review
+
+- Combine native Open/Completed/Deleted status toggles, hide timezone fields, and keep save feedback beside the editor heading with compact save/cancel/delete/completion actions.
+- Keep Items and Details proportional, bound narrow tablet content to its own column, and append new feature tabs. Palette lightness now selects system-control appearance.
+- Enable synthetic Life in the separate simulator preview launcher and provide interactive reminder fixtures. Physical installation remains a separate rollout step.

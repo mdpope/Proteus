@@ -1,0 +1,6 @@
+const icons={all:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',inbox:'<path d="M3 4h18v16H3ZM3 13h5l2 3h4l2-3h5"/>',work:'<rect x="3" y="7" width="18" height="14" rx="2"/><path d="M8 7V3h8v4M3 12h18M10 12v3h4v-3"/>',home:'<path d="m3 10 9-7 9 7v11h-7v-7h-4v7H3Z"/>',shopping:'<path d="M4 8h16l-1 13H5ZM8 8V6a4 4 0 0 1 8 0v2"/>',idea:'<path d="M8 16c0-3-3-4-3-8a7 7 0 0 1 14 0c0 4-3 5-3 8ZM8 19h8M10 22h4"/>',list:'<path d="m3 6 2 2 3-4M11 6h10M3 13h4M11 13h10M3 20h4M11 20h10"/>'};
+export function reminderListStyle(row){
+ const name=String(row?.name||''),hash=[...String(row?.id||'all')].reduce((n,c)=>(n*31+c.charCodeAt(0))>>>0,0);
+ const icon=!row?'all':/inbox/i.test(name)?'inbox':/shop|grocer|buy/i.test(name)?'shopping':/work|office|business/i.test(name)?'work':/home|personal|family/i.test(name)?'home':/idea|learn|read/i.test(name)?'idea':'list';
+ return {tone:!row?0:hash%5,icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+icons[icon]+'</svg>'};
+}

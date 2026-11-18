@@ -16,7 +16,7 @@ const credential=()=>({origin,clientId:'public',accessToken:'first-access',refre
 const response=(value,status=200)=>new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json'}});
 const tokens=(suffix='next')=>({access_token:suffix+'-access',refresh_token:suffix+'-refresh',token_type:'Bearer',expires_in:3600});
 function vault(initial=null){let value=initial;return {available(){},exists:()=>!!value,load:()=>value,save:next=>{value=next;},clear:()=>{value=null;},read:()=>value};}
-function fixture(t,options={}){const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-life-api-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));return {home,store:new LifeStore(home,options)};}
+function fixture(t,options={}){const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-life-api-')),stores=[];t.after(async()=>{for(const store of stores.reverse())await store.close();fs.rmSync(home,{recursive:true,force:true});});const track=store=>(stores.push(store),store);return {home,track,store:track(new LifeStore(home,options))};}
 test('legacy config is archived byte-for-byte, SQL never opens, API defaults preserve enable flag',async t=>{
  const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-life-api-migration-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
  const original='{\n "schemaVersion":2, "enabled":true, "profileFile":"/must/not/be/read/private.json", "websiteUrl":"https://life.example.test"\n}\n';fs.writeFileSync(path.join(home,'life.json'),original);
@@ -92,12 +92,12 @@ test('desktop query requests actual API desktop contract and rejects disabled op
  const s=store.get();store.save({schemaVersion:3,enabled:true},s.revision);await store.refresh();await store.data('nutrition',{tab:'foods',foodPage:2,search:'',from:''});assert.deepEqual(sent.query,{tab:'foods',foodPage:2,client:'desktop',projection:'tab'});const identity=store.get().identity;store.save({schemaVersion:3,enabled:false},store.get().revision);await assert.rejects(store.action('food.save',{},'key',identity),/disabled/);
 });
 test('cancel/logout and newer sign-in cannot resurrect a stale discovery or exchange',async t=>{
- const {home}=fixture(t);let release,entered,launched=0,url;const makeGate=()=>{let start;const ready=new Promise(r=>start=r),wait=new Promise(r=>release=r);entered=start;return {ready,wait};};
+ const {home,track}=fixture(t);let release,entered,launched=0,url;const makeGate=()=>{let start;const ready=new Promise(r=>start=r),wait=new Promise(r=>release=r);entered=start;return {ready,wait};};
  let gate=makeGate(),pause='discovery';const fetcher=async(endpoint,options)=>{
   if(endpoint.endsWith('native-config')){if(pause==='discovery'){entered();await gate.wait;}return response({enabled:true,protocol:1,issuer:origin,clientId:'public',redirectUri:LIFE_CALLBACK,authorizationEndpoint:origin+'/oauth/authorize',tokenEndpoint:origin+'/oauth/token',apiBase:origin+'/api/v1/life'});}
   if(endpoint.endsWith('/oauth/token')){if(pause==='exchange'){entered();await gate.wait;}return response(tokens());}return response(profile);
  };
- const store=new LifeStore(home,{vault:vault(),fetch:fetcher,openExternal:async value=>{launched++;url=new URL(value);}});
+ const store=track(new LifeStore(home,{vault:vault(),fetch:fetcher,openExternal:async value=>{launched++;url=new URL(value);}}));
  store.save({schemaVersion:3,enabled:true},store.get().revision);
  const begin=store.auth('begin',{websiteOrigin:origin});await gate.ready;await store.auth('cancel');release();await assert.rejects(begin,/cancelled/);assert.equal(launched,0);assert.equal(store.settings().websiteOrigin,'https://proteus.example');
  gate=makeGate();const second=store.auth('begin',{websiteOrigin:origin});await gate.ready;store.save({schemaVersion:3,enabled:false},store.get().revision);release();await second;assert.equal(launched,1);await store.auth('cancel');

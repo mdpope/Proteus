@@ -5,7 +5,17 @@ const handles=new Set(),mounts=new WeakMap();
 let active=null,context='',observer;
 const synthesis=()=>globalThis.speechSynthesis;
 function setIcon(button,name){if(button.messageActionIcon===name)return;button.messageActionIcon=name;button.innerHTML=svg(name);}
+// display() runs for every completed message on each transcript update. Reuse the
+// resolved voice briefly instead of querying the speech service and storage per row;
+// voice-list changes and preference changes invalidate it immediately.
+let cachedVoice={at:-Infinity,value:undefined};
+function forgetLocalVoice(){cachedVoice={at:-Infinity,value:undefined};}
+globalThis.addEventListener?.('storage',event=>{if(event.key===null||event.key==='proteus-local-speech-voice')forgetLocalVoice();});
 function localVoice(){
+ const now=performance.now();if(now-cachedVoice.at<1000)return cachedVoice.value;
+ const value=resolveLocalVoice();cachedVoice={at:now,value};return value;
+}
+function resolveLocalVoice(){
  const voices=synthesis()?.getVoices?.().filter(v=>v.localService===true)||[];
  const lang=document.documentElement.lang||navigator.language||'en',locale=navigator.language||lang;
  const compatible=v=>v.lang?.split('-')[0].toLowerCase()===lang.split('-')[0].toLowerCase();
@@ -26,24 +36,29 @@ export function readableMessageText(rendered){
  };
  return read(rendered).replace(/[ \t]+\n/g,'\n').replace(/\n{3,}/g,'\n\n').trim();
 }
+// Transcript updates call display() for every completed message. Write only values
+// that changed so a streamed update does not invalidate style for every toolbar.
+function setAttribute(node,name,value){if(node.getAttribute(name)!==value)node.setAttribute(name,value);}
+function setProperty(node,name,value){if(node[name]!==value)node[name]=value;}
 function display(handle){
- const owner=active?.handle===handle?active:null,available=!!localVoice();
- handle.speak.disabled=!owner&&!available;
+ const owner=active?.handle===handle?active:null,available=!!localVoice(),speakLabel=owner?'Stop reading aloud':available?'Read aloud':'Read aloud unavailable: no local system voice';
+ setProperty(handle.speak,'disabled',!owner&&!available);
  setIcon(handle.speak,owner?'stop':'speak');
- handle.speak.setAttribute('aria-label',owner?'Stop reading aloud':available?'Read aloud':'Read aloud unavailable: no local system voice');
- handle.speak.setAttribute('aria-pressed',String(!!owner));
- handle.speak.title=owner?'Stop reading aloud':available?'Read aloud':'Read aloud unavailable: no local system voice';
- handle.playback.hidden=!owner;
- if(handle.voiceSelect){
+ setAttribute(handle.speak,'aria-label',speakLabel);
+ setAttribute(handle.speak,'aria-pressed',String(!!owner));
+ setProperty(handle.speak,'title',speakLabel);
+ setProperty(handle.playback,'hidden',!owner);
+ // Voice choices are only visible while this message is being read aloud.
+ if(handle.voiceSelect&&(owner||handle.voiceSignature!==undefined)){
   const voices=synthesis()?.getVoices?.().filter(v=>v.localService===true)||[],signature=voices.map(v=>v.voiceURI).join('\n');
   if(handle.voiceSignature!==signature){handle.voiceSignature=signature;handle.voiceSelect.replaceChildren(...voices.map(voice=>{const option=document.createElement('option');option.value=voice.voiceURI;option.textContent=voice.name+' · '+voice.lang;return option;}));}
-  handle.voiceSelect.value=(owner?.voice||localVoice())?.voiceURI||'';
+  setProperty(handle.voiceSelect,'value',(owner?.voice||localVoice())?.voiceURI||'');
  }
 
  if(owner){
-  const position=owner.seekPreview??Math.round(owner.index/owner.content.length*1000),percent=Math.round(position/10);
-  setIcon(handle.pause,owner.paused?'resume':'pause');handle.pause.setAttribute('aria-label',owner.paused?'Resume reading':'Pause reading');handle.pause.title=owner.paused?'Resume reading':'Pause reading';
-  handle.seek.value=String(position);handle.position.textContent=percent+'%';handle.seek.setAttribute('aria-valuetext',percent+' percent through message text');
+  const position=owner.seekPreview??Math.round(owner.index/owner.content.length*1000),percent=Math.round(position/10),pauseLabel=owner.paused?'Resume reading':'Pause reading';
+  setIcon(handle.pause,owner.paused?'resume':'pause');setAttribute(handle.pause,'aria-label',pauseLabel);setProperty(handle.pause,'title',pauseLabel);
+  setProperty(handle.seek,'value',String(position));setProperty(handle.position,'textContent',percent+'%');setAttribute(handle.seek,'aria-valuetext',percent+' percent through message text');
  }
 }
 function cancelUtterance(owner){
@@ -64,7 +79,7 @@ function reconcile(){
  if(active&&!active.handle.container.isConnected)stopMessageSpeech();
  releaseObserver();
 }
-function voicesChanged(){for(const handle of handles)display(handle);}
+function voicesChanged(){forgetLocalVoice();for(const handle of handles)display(handle);}
 function releaseObserver(){if(handles.size)return;observer?.disconnect();observer=null;synthesis()?.removeEventListener?.('voiceschanged',voicesChanged);globalThis.removeEventListener('pagehide',stopMessageSpeech);}
 function observe(){
  if(observer||!document.documentElement)return;
@@ -116,7 +131,7 @@ export function mountMessageActions(container,{key,text,rendered,copy,notify}={}
  container.innerHTML=button('copy','Copy message','copy')+button('speak','Read aloud','speak')+`<div class="message-playback" hidden>${button('pause','Pause reading','pause')}${button('stop','Stop reading aloud','stop')}<input type="range" data-message-seek min="0" max="1000" step="1" value="0" aria-label="Reading position" title="Position in message text"><output class="message-playback-position">0%</output><select data-local-speech-voice aria-label="Local speech voice" title="Installed local voices"></select></div><span class="message-action-status" role="status" aria-live="polite"></span>`;
  handle={container,key,text:String(text??''),rendered,copy,notify,copyButton:container.querySelector('[data-message-action="copy"]'),speak:container.querySelector('[data-message-action="speak"]'),pause:container.querySelector('[data-message-action="pause"]'),playback:container.querySelector('.message-playback'),seek:container.querySelector('[data-message-seek]'),position:container.querySelector('.message-playback-position'),status:container.querySelector('.message-action-status'),copyTimer:null,destroyed:false,seeking:false};
  handle.voiceSelect=container.querySelector('[data-local-speech-voice]');
- handle.voiceSelect.onchange=()=>{try{localStorage.setItem('proteus-local-speech-voice',handle.voiceSelect.value);}catch{}if(active?.handle===handle){const owner=active,voice=localVoice();if(voice){cancelUtterance(owner);owner.voice=voice;if(!owner.paused)playChunk(owner);}display(handle);}};
+ handle.voiceSelect.onchange=()=>{try{localStorage.setItem('proteus-local-speech-voice',handle.voiceSelect.value);}catch{}forgetLocalVoice();if(active?.handle===handle){const owner=active,voice=localVoice();if(voice){cancelUtterance(owner);owner.voice=voice;if(!owner.paused)playChunk(owner);}display(handle);}};
  handle.update=value=>{const next=String(value.text??'');if(active?.handle===handle&&handle.text!==next)stopMessageSpeech();Object.assign(handle,{...value,text:next});display(handle);};
  handle.destroy=()=>{if(active?.handle===handle)stopMessageSpeech();clearTimeout(handle.copyTimer);handles.delete(handle);mounts.delete(container);handle.destroyed=true;container.replaceChildren();releaseObserver();};
  handle.copyButton.onclick=async()=>{

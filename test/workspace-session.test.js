@@ -7,6 +7,15 @@ import os from 'node:os';
 import path from 'node:path';
 import session from '../desktop/windows/workspace-session.cjs';
 const {WorkspaceSession,normalizeSession}=session;
+test('Reminders work tabs retain only account-bound references and remain in their parent',()=>{
+ const binding=JSON.stringify(['account','workspace','https://example.test']),id='20000000-0000-4000-8000-000000000002';
+ const tab={id:'reminder-view:test',type:'reminder',reminderId:id,lifeBinding:binding,parentId:'project',title:'Test',body:'PRIVATE',token:'SECRET'};
+ const saved=normalizeSession({tabs:[{id:'project',type:'workspace',workspaceId:'workspace',projectId:'project'},tab],team:{tabs:[tab],active:tab.id}});
+ assert.equal(saved.tabs.find(row=>row.id===tab.id).parentId,'project');assert.equal(saved.tabs.find(row=>row.id===tab.id).lifeBinding,binding);assert.equal(saved.team.tabs[0].reminderId,id);
+ assert.doesNotMatch(JSON.stringify(saved),/PRIVATE|SECRET/);
+ assert.equal(normalizeSession({tabs:[{...tab,lifeBinding:undefined}]}).tabs.length,1);
+ assert.equal(normalizeSession({tabs:[{...tab,reminderId:'invalid'}]}).tabs.length,1);
+});
 test('unavailable document descriptors survive window and Team checkpoints without source grants',()=>{
  const id='document:'+'a'.repeat(64),tab={id:'unavailable-view',type:'unavailable',contentTabId:id,unavailableReason:'Missing source',unavailableDescriptor:{id,type:'document',documentId:'a'.repeat(64),title:'Synthetic',file:'/private/source',content:'PRIVATE_CONTENT',approved:true}};
  const saved=normalizeSession({tabs:[tab],team:{active:tab.id,tabs:[tab]}});
@@ -24,6 +33,16 @@ test('workspace validates URL schemes, credential URLs, paths, types and duplica
 test('workspace survives fresh store, saves mode0600 and preserves unreadable record',()=>{
  const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-workspace-'));
  try {const store=new WorkspaceSession(home);assert.equal(store.get(),null);store.save({active:'feature-omi',tabs:[{id:'feature-omi',type:'omi'}]});assert.equal(new WorkspaceSession(home).get().active,'feature-omi');assertPrivate(store.file,0o600);fs.writeFileSync(store.file,'invalid');assert.throws(()=>store.get(),/preserved/);assert.equal(fs.readFileSync(store.file,'utf8'),'invalid');}finally{fs.rmSync(home,{recursive:true,force:true});}
+});
+test('feature master selection survives a new session reader beside retained browser tabs',()=>{
+ const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-feature-session-'));
+ try {
+  for(const page of ['reminders','scratchpad','life','omi','internet']){
+   new WorkspaceSession(home).save({active:'overview',page,tabs:[{id:'overview',type:'overview'},{id:'reference',type:'browser',url:'https://example.test/reference'}]});
+   const restored=new WorkspaceSession(home).get();assert.equal(restored.page,page);assert.equal(restored.active,'overview');assert.equal(restored.tabs.find(tab=>tab.id==='reference').url,'https://example.test/reference');
+  }
+  assert.equal(normalizeSession({page:'unrecognized'}).page,'home');
+ }finally{fs.rmSync(home,{recursive:true,force:true});}
 });
 test('restored generated document retains stable identity but no read grant or content',()=>{
  const hostId='12345678-1234-4123-8123-123456789abc',runId='chat-1',documentId='a'.repeat(64),parentId=`peer:${hostId}:${runId}`;

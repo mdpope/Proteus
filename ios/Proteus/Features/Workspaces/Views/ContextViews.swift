@@ -685,8 +685,18 @@ struct NativeWorkspaceContentView: View {
         return owner + (navigation["setupPlaceholdersMigrated"].bool ? [] : navigation["setups"].array.compactMap(NativeChatSetup.decode).filter { old in !owner.contains(where: { $0.id == old.id }) })
     }
     private var orderedChildren: [JSON] {
-        NativeWorkspaceNavigation.children(scope: scope, navigationKey: navigationKey, remote: store, shared: shared)
+        NativeWorkspaceNavigation.children(scope: scope, navigationKey: navigationKey, remote: store, shared: shared) + scratchTabs.map { .object(["id": $0["tabID"], "type": .string("scratch"), "title": $0["title"]]) }
     }
+    // Scratches opened from this page are tabs of this workspace/project, like files and chats.
+    @State private var scratchTabs: [JSON] = []
+    private var scratchKey: String { scopeKind + "-scratches:" + scopeID }
+    private func openScratch(_ reference: JSON) {
+        let id = reference["tabID"].string; guard !id.isEmpty else { return }
+        if !scratchTabs.contains(where: { $0["tabID"].string == id }) { scratchTabs.append(reference) }
+        selected = id
+    }
+    private func updateScratch(_ row: JSON) { if let index = scratchTabs.firstIndex(where: { $0["tabID"] == row["tabID"] }) { scratchTabs[index] = row } }
+    private func closeScratch(_ id: String) { scratchTabs.removeAll { $0["tabID"].string == id }; if selected == id { selected = "workspace" } }
     private var navigation: JSON { store.draft(navigationKey) }
     // The saved navigation record is the only selection source. Earlier view-local
     // copies raced the drawer, owner polling and pushed destinations, so a second
@@ -703,10 +713,14 @@ struct NativeWorkspaceContentView: View {
     var body: some View {
         VStack(spacing: 0) {
             if !NativePhonePreview.enabled || !phoneChrome.controlsHidden { workspaceTabStrip; Divider() }
-            if selected == "workspace" { Button("Files", systemImage: "folder") { page = "Files" }.accessibilityIdentifier("workspace-files") }
+            // N11-32: Files (streamed from the owning computer) sits beside Chats and Tabs in a
+            // project; workspace pages keep a labelled entry point.
+            if selected == "workspace" && projectID == nil { Button("Files on \(store.displayName)", systemImage: "folder") { page = "Files" }.padding(.horizontal, 12).padding(.top, 8).frame(maxWidth: .infinity, alignment: .leading).accessibilityIdentifier("workspace-files") }
             if selected == "workspace" {
-                if projectID != nil { Picker("Project page", selection: $page) { Text("Chats").tag("Chats"); Text("Tabs").tag("Tabs") }.pickerStyle(.segmented).padding(12) }
+                if projectID != nil { Picker("Project page", selection: $page) { Text("Chats").tag("Chats"); Text("Tabs").tag("Tabs"); Text("Scratches").tag("Scratches"); Text("Reminders").tag("Reminders"); Text("Files").tag("Files") }.pickerStyle(.segmented).padding(12).accessibilityIdentifier("workspace-files") }
                 if page == "Files" { NativeFileBrowser(workspaceID: workspaceID, onOpenFile: openFile).environment(store) }
+                else if page == "Scratches" { ScratchpadView(owner: store, projectID: projectID, workspaceID: projectID == nil ? workspaceID : nil) }
+                else if page == "Reminders" { LifeScopedRemindersView(workspaceID: workspaceID, projectID: projectID) }
                 else if page == "Projects" && projectID == nil && store.supportsProjects { NativeProjectsView(workspaceID: workspaceID, onOpen: onOpenProject) }
                 else if page == "Tabs" { NativeWorkspaceTabsView(workspaceID: workspaceID, projectID: projectID, onOpen: openManagedTab).environment(store) }
                 else if page == "Configuration" { ContextView(workspaceID: workspaceID).environment(store) }
@@ -715,6 +729,8 @@ struct NativeWorkspaceContentView: View {
                 NewChatView(internet: setup.internet, lockedWorkspaceID: workspaceID, lockedProjectID: projectID, draftKey: setup.draftKey, onCancel: { closeSetup(setup.id) }) { id in closeSetup(setup.id); openChat(id) }.environment(store).id(setup.id)
             } else if let file = orderedChildren.first(where: { $0["id"].string == selected })?["workspaceFile"], file != .null {
                 NativeFileBrowser(workspaceID: file["workspaceId"].string, initialFile: file, onOpenFile: openFile).environment(store).id(selected)
+            } else if let reference = scratchTabs.first(where: { $0["tabID"].string == selected }) {
+                ScratchpadResourceTab(id: selected, reference: reference, changed: { updateScratch($0) }).id(selected)
             } else if selected.hasPrefix("chat:") { ChatView(id: String(selected.dropFirst(5)), onBack: { selected = "workspace" }, workspaceBrowserScope: scope).environment(store).id(selected) }
             else if selected.hasPrefix("document:"), let document = shared.documents(in: scope).first(where: { "document:" + $0.id == selected }), let chatID = document.sourceChatID {
                 ChatView(id: chatID, onBack: { selected = "workspace" }, workspaceBrowserScope: scope, resourceDocumentID: document.id).environment(store).id(selected)
@@ -735,6 +751,7 @@ struct NativeWorkspaceContentView: View {
                 } else { selected = id }
             }
         })
+        .modifier(NativeScratchTabsHost(tabs: $scratchTabs, key: scratchKey, store: store, open: { openScratch($0) }))
         .environment(\.nativeBackPreviewKey, homeImageKey)
         .modifier(NativePageSwipe(enabled: selected == "workspace" && projectID != nil, phone: true, blockBack: true, blockForward: selected != "workspace" || lastTab.isEmpty, forward: { selected = lastTab; if shared.tabs(in: scope).contains(where: { $0.id == selected }) { shared.select(selected, in: scope) } }, forwardPreview: { NativeScreenMemory.image(tabImageKey) }))
         .environment(\.nativeTabStep, { direction in
@@ -763,7 +780,7 @@ struct NativeWorkspaceContentView: View {
             // Poll only while this project is on screen; hidden phone areas stay mounted.
             .task(id: scope + String(areaActive) + String(scenePhase == .active) + String(store.connected)) { guard areaActive, scenePhase == .active else { return }; destinations.activateVisibleOwner(hostID); migrateSetupPlaceholders(); while !Task.isCancelled { await shared.refreshContentTabs(scope: scope, remote: store, kind: scopeKind, id: scopeID); try? await Task.sleep(for: .seconds(3)) } }
     }
-    private var workspacePageNames: [String] { projectID == nil ? (store.supportsProjects ? ["Projects", "Chats", "Tabs", "Configuration"] : ["Chats", "Tabs", "Configuration"]) : [] }
+    private var workspacePageNames: [String] { projectID == nil ? (store.supportsProjects ? ["Projects", "Chats", "Tabs", "Scratches", "Reminders", "Configuration"] : ["Chats", "Tabs", "Scratches", "Reminders", "Configuration"]) : [] }
     private var homeTabID: String { selected == "workspace" ? (projectID == nil ? "page:" + page : "page:home") : selected }
     private var workspaceTabStrip: some View {
         HStack(spacing: 0) {
@@ -792,6 +809,7 @@ struct NativeWorkspaceContentView: View {
             Button {
                 if child["type"].string == "chat-setup" { closeSetup(String(child["id"].string.dropFirst(6))) }
                 else if child["type"].string == "chat" { closeChat(child["chatId"].string) }
+                else if child["type"].string == "scratch" { closeScratch(child["id"].string) }
                 else if child["type"].string == "browser" { shared.close(child["id"].string) }
                 else { mutateTabs([.object(["action": .string("close"), "id": child["sortId"]])]) }
                 if selected == child["id"].string { selected = "workspace" }
@@ -882,7 +900,7 @@ private struct NativeWorkspaceChildMenu: ViewModifier {
             }
         } else {
             content.contextMenu {
-                if let tab = shared.tabs(in: scope).first(where: { $0.id == child["id"].string }) { Button("Send tab", systemImage: "arrow.right.square") { transferTab = tab } }
+                if let tab = shared.tabs(in: scope).first(where: { $0.id == child["id"].string }) { NativeBrowserTabActions(id: tab.id, send: { transferTab = tab }) }
             }
         }
     }
@@ -1073,5 +1091,19 @@ struct NativeScopeTabRows: View {
             NativeWorkspaceNavigation.mutate([.object(["action": .string("close"), "id": child["sortId"]])], kind: kind, id: scopeID, scope: scope, remote: remote, shared: shared)
             if remote.draft(navigationKey)["selected"].string == id { NativeWorkspaceNavigation.select("workspace", navigationKey: navigationKey, remote: remote) }
         }
+    }
+}
+
+/// Provides "open this scratch as a tab" to a workspace/project page and keeps those tabs across launches.
+struct NativeScratchTabsHost: ViewModifier {
+    @Binding var tabs: [JSON]
+    let key: String
+    let store: RemoteStore
+    let open: (JSON) -> Void
+    func body(content: Content) -> some View {
+        content
+            .environment(\.nativeOpenScratchTab, open)
+            .onAppear { if case .array(let saved) = store.draft(key) { tabs = saved } }
+            .onChange(of: tabs) { _, value in store.setDraft(key, .array(value)) }
     }
 }

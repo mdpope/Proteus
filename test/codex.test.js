@@ -19,6 +19,34 @@ class RPC extends EventEmitter {
 }
 const fixture=()=>{const rpc=new RPC();const context={providerContext:()=>({instructionText:'selected context',customAgents:[],disabledLegacyMcp:[],disabledSkills:[],mcpServers:{}})};const provider=new CodexProvider({clientFactory:()=>rpc},{context});const run={id:'run',schedule:{provider:'codex',model:'runtime-model',reasoningEffort:'future',serviceTier:'priority',workspace:{cwd:'/synthetic/work',additionalDirectories:['/synthetic/other']},context:{entries:[],includeDefaults:false}},events:[]};const controller=new AbortController();const args={run,prompt:'Hello',signal:controller.signal,emit:(role,text,data)=>run.events.push({role,text,data}),stream:(id,text)=>{run.liveMessages??={};run.liveMessages[id]=(run.liveMessages[id]||'')+text;},update:()=>{},ask:async()=>'approve'};return {rpc,provider,run,controller,args};};
 const until=async fn=>{for(let i=0;i<100;i++){if(fn())return;await new Promise(r=>setTimeout(r,5));}throw new Error('Timed out');};
+test('Life Ask first answer has web search, no app/MCP/shell tools, read-only sandbox and structured output',async()=>{
+ const f=fixture();f.run.schedule.lifeAsk={requestId:'synthetic'};let approvals=0;
+ f.args.ask=async()=>{approvals++;return 'approve';};
+ f.run.schedule.mcpServers={unselected:{command:'must-not-run'}};
+ try{
+  const task=f.provider.run(f.args);await until(()=>f.provider.active?.turnId);
+  const start=f.rpc.calls.find(row=>row.method==='thread/start').params,turn=f.rpc.calls.find(row=>row.method==='turn/start').params;
+  assert.equal(start.sandbox,'read-only');assert.deepEqual(start.runtimeWorkspaceRoots,['/synthetic/work']);assert.deepEqual(start.dynamicTools,[]);
+  assert.equal(start.config.web_search,'live');assert.equal(start.config.features.shell_tool,false);assert.equal(start.config.features.unified_exec,false);assert.equal(start.config.features.multi_agent,false);
+  assert.equal(start.config.mcp_servers.unselected.enabled,false);assert.equal(start.config.mcp_servers.proteus_app,undefined);
+  assert.match(start.developerInstructions,/Never file professional/);assert.equal(turn.outputSchema.properties.professional.type,'boolean');
+  for(const [id,method] of [[901,'item/commandExecution/requestApproval'],[902,'item/fileChange/requestApproval']])f.rpc.emit('request',{id,method,params:{threadId:'thread',turnId:'turn-1'}});
+  await until(()=>f.rpc.responses.length===2);assert.ok(f.rpc.responses.every(row=>row.result.decision==='decline'));assert.equal(approvals,0);
+  f.rpc.notice('item/agentMessage/delta',{itemId:'answer',delta:'{"kind":'});assert.equal(f.run.liveMessages,undefined);assert.ok(f.run.lifeAskFirstOutputAt);
+  f.rpc.notice('item/completed',{item:{id:'answer',type:'agentMessage',phase:'final',text:JSON.stringify({kind:'search',answer:'**Rich** answer',item:'',professional:false})}});
+  assert.equal(f.run.events.at(-1).text,'**Rich** answer');assert.equal(f.run.events.at(-1).data.lifeAskResult.kind,'search');
+  f.rpc.notice('turn/completed',{turn:{status:'completed'}});await task;
+ }finally{await f.provider.close();}
+});
+test('Life Ask refuses a provider that does not acknowledge read-only confinement',async()=>{
+ const f=fixture();f.run.schedule.lifeAsk={requestId:'synthetic'};const request=f.rpc.request.bind(f.rpc);
+ f.rpc.request=async(method,params)=>{const result=await request(method,params);if(method==='thread/start')result.sandbox={type:'dangerFullAccess'};return result;};
+ try{await assert.rejects(f.provider.run(f.args),/Life Ask read-only/);assert.equal(f.rpc.calls.some(row=>row.method==='turn/start'),false);}finally{await f.provider.close();}
+});
+test('Life Ask follow-up returns to ordinary chat permissions and output',async()=>{
+ const f=fixture();f.run.schedule.lifeAsk={requestId:'synthetic'};f.run.events=[{role:'user',text:'First'},{role:'assistant',text:'Answer'},{role:'user',text:'Follow up'}];
+ try{const task=f.provider.run(f.args);await until(()=>f.provider.active?.turnId);const turn=f.rpc.calls.find(row=>row.method==='turn/start').params;assert.equal(turn.outputSchema,undefined);assert.equal(f.rpc.calls.find(row=>row.method==='thread/start').params.config.web_search,'disabled');f.rpc.notice('turn/completed',{turn:{status:'completed'}});await task;}finally{await f.provider.close();}
+});
 test('Codex preserves native asynchronous question metadata and clears resolved input requests without answering them',async()=>{
  const f=fixture();let requestSignal;
  f.args.ask=async(request,signal)=>{requestSignal=signal;return new Promise((resolve,reject)=>signal.addEventListener('abort',()=>reject(Error('Resolved')),{once:true}));};

@@ -32,6 +32,7 @@ let preferences;
 let defaultState={status:'loading',message:'Loading saved computer connections…',hostId:null,label:''};
 const destinationStore=account?new BrowserDestinationStore(account):null;
 export const defaultMacStatus=()=>({...defaultState});
+export async function scratchpadComputers(){await destinationStore.verifySession();return (await destinationStore.list()).map(host=>({id:host.hostId,name:host.label||'Computer'}));}
 function connectionState(status,message,host={}){
     defaultState={status,message,hostId:host.hostId||preferences?.defaultMacId||null,label:host.label||'',...authenticatedComputerMetadata(host)};
     document.dispatchEvent(new CustomEvent('proteus:default-status',{detail:defaultMacStatus()}));

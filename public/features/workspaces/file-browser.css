@@ -5,3 +5,20 @@
 
 /* Keep narrow remote screens vertical after the desktop split override. */
 @media(max-width:650px){.file-browser-panes{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(150px,1fr) minmax(180px,1fr)}.file-divider{display:none}.file-browser-panes aside{border-top:1px solid var(--line)}}
+
+/* Text, code and Markdown fill the whole preview column or tab. The document owns its
+   scrolling so the editor, not the surrounding page, shows the position in the file. */
+.file-browser-panes aside{display:flex;flex-direction:column;min-height:0;overflow:hidden;padding:0 0 0 12px}
+.file-preview-head{display:flex;align-items:center;gap:10px;flex:none}.file-preview-head h3{margin:4px 0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.file-browser-panes aside article{margin-top:8px;flex:1;min-height:0;overflow:auto}
+.file-browser-panes aside article.file-article-text{overflow:hidden;display:flex;flex-direction:column}
+.file-doc{display:flex;flex-direction:column;flex:1;min-height:0;height:100%;min-width:0}
+.file-doc-bar{display:flex;align-items:center;gap:8px;flex:none;padding:4px 0 6px;font-size:12px;color:var(--proteus-muted,#8e9e95);flex-wrap:wrap}
+.file-doc-kind{color:var(--proteus-ink,#edf2ec);font-weight:600}.file-doc-spacer{flex:1}.file-doc-status{min-width:0}
+.file-doc-button{padding:4px 10px;font-size:12px}.file-doc-button[aria-pressed=true]{background:var(--proteus-control-hover,#334137)}.file-doc-button[hidden]{display:none}
+.file-doc-body{display:flex;flex-direction:column;flex:1;min-height:0;overflow:auto;border:1px solid var(--proteus-line,#303b36);border-radius:6px;background:var(--proteus-input,#111715)}
+.file-doc-editor{flex:1;min-height:0}.file-doc-editor .cm-editor{height:100%}
+.file-doc-markdown{padding:12px 16px}.file-doc-markdown+*{margin:0}
+.file-browser-panes aside .file-doc-body :is(h1,h2,h3){margin-top:1em}
+.file-text-tab{display:flex;flex-direction:column;height:calc(100vh - 150px);min-height:260px}
+.file-text-tab .file-doc{flex:1}

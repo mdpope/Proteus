@@ -24,3 +24,20 @@ test('remote journal diagnostics are authenticated and contain only bounded coun
     for(const secret of [message.id,device.id,'PRIVATE_SYNTHETIC_PAYLOAD','private-synthetic',home])assert.equal(encoded.includes(secret),false);
   }finally{await app?.close();fs.rmSync(home,{recursive:true,force:true});}
 });
+
+test('tab mutation receipts retain a bounded exact reply while full navigation remains pageable',async()=>{
+ const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-bounded-mutation-'));let app;
+ try{
+  app=await startServer({home,port:0,timers:false});
+  const device={id:'bounded-client'};app.remote.config.devices.push(device);
+  const entries=Array.from({length:1200},(_,i)=>({url:'https://example.test/'+i,title:'Page '+i}));
+  app.contentTabs.mutate({scope:'team',id:'team',expectedRevision:0,operations:[{action:'open',tab:{id:'long-history',type:'browser',url:entries.at(-1).url,history:{entries,index:1199}}}]});
+  const message={id:randomUUID(),issuedAt:new Date().toISOString(),method:'tabs.mutate',args:{scope:'team',id:'team',expectedRevision:1,operations:[{action:'visibility',id:'long-history',hidden:true}]}};
+  const first=await app.remote.command({device},message);
+  assert.ok(first.tabs[0].history.entries.length<=32);assert.equal(first.tabs[0].url,entries.at(-1).url);
+  assert.equal((await app.contentTabs.history({scope:'team',id:'team',tabId:'long-history',start:true,limit:100})).total,1200);
+  await app.contentTabs.mutateAsync({scope:'team',id:'team',expectedRevision:first.revision,operations:[{action:'visibility',id:'long-history',hidden:false}]});
+  assert.deepEqual(await app.remote.command({device},message),first,'retry returns original revision and result, without repeating mutation');
+  assert.equal(!!app.contentTabs.get('team','team').tabs[0].hidden,false);
+ }finally{await app?.close();fs.rmSync(home,{recursive:true,force:true});}
+});

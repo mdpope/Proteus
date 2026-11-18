@@ -1,3 +1,4 @@
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -11,7 +12,7 @@ import {createHash} from 'node:crypto';
 import {ownerSelectionUpdate,clearOwnerSelection} from '../src/services/scheduling/source-selection-overrides.js';
 import {startServer} from '../src/server.js';
 const base=cwd=>({schemaVersion:1,id:'workflow-fixture',name:'Fixture',provider:'codex',model:'fixture',workspace:{cwd,additionalDirectories:[]},cron:'0 9 * * *',timezone:'UTC',misfire:'skip',prompt:'Synthetic',enabled:false});
-function home(t,cleanup=true){const dir=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'schedule-access-')));if(cleanup)t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));return dir;}
+function home(t,cleanup=true){const dir=fs.realpathSync(privateTemporaryDirectory(path.join(os.tmpdir(),'schedule-access-')));if(cleanup)t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));return dir;}
 test('capability resolution distinguishes command approval from native sandbox enforcement',()=>{
  for(const provider of ['codex','copilot','claude']){const result=resolveExecutionCapabilities({provider,executionPermissions:{sandboxedCommands:true}});assert.equal(result.capabilities.exactCommandApproval,true);assert.equal(result.supported,true);assert.equal(result.missing.length,0);assert.equal(result.capabilities.runtimeQualificationRequired,provider!=='codex');}
 });

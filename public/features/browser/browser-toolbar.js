@@ -17,6 +17,7 @@ export function browserAddress(prefix, label) {
 
 export function updateAgentAccess(button, info = {}) {
   if (!button) return;
+  button.hidden=info.incognito===true;
   const fill=button.closest('.browserbar')?.querySelector('[id$="fill-login"]');if(fill){fill.hidden=info.extensionsEnabled===true;fill.title='Advanced: fill with configured CLI broker';}
   button.title=info.agentPaused?'Share this tab with agents':info.agentControlling?'An agent is using this tab. Click to stop sharing.':'Stop sharing this tab with agents';
   button.setAttribute('aria-pressed',String(!info.agentPaused));button.classList.toggle('paused',info.agentPaused===true);

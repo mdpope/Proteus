@@ -34,3 +34,11 @@ test('external links ask once per tab, remember an explicit always-allow, and re
     assert.match(errors.at(-1).message, /No application/);
   } finally { fs.rmSync(home, { recursive: true, force: true }); }
 });
+
+
+test('Incognito never hands page URLs to external application handlers or saves exceptions', async () => {
+ const tab={id:'private',incognito:true,profileId:'private'},browser={tabs:new Map([[tab.id,tab]])};
+ const handler=new ExternalProtocols(browser,{show:async()=>assert.fail('no external prompt'),open:async()=>assert.fail('no external launch'),handlerName:()=>assert.fail('no handler lookup')});
+ assert.equal(await handler.request(tab,'zoommtg://zoom.us/join?confno=private'),false);
+ assert.deepEqual(handler.saved,{});
+});

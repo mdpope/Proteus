@@ -45,13 +45,19 @@ struct ProteusRoot: View {
         } else { NativeShell() }
     }
     var body: some View {
-            applicationContent.tint(NativeTheme.accent).foregroundStyle(NativePalette.shared.color("text")).preferredColorScheme(.dark)
+            applicationContent.tint(NativeTheme.accent).foregroundStyle(NativePalette.shared.color("text")).preferredColorScheme(NativePalette.shared.colorScheme)
+                .overlay {
+                    if phase != .active && shared.browserTabs.contains(where: { $0.incognito }) {
+                        Color.black.ignoresSafeArea().overlay { Label("Incognito", systemImage: "eye.slash").foregroundStyle(.white) }
+                    }
+                }
                 .onAppear {
                     if !UserDefaults.standard.bool(forKey: "proteus.foreground-reading-default-v1") { keepScreenAwake = true; UserDefaults.standard.set(true, forKey: "proteus.foreground-reading-default-v1") }
                     UIApplication.shared.isIdleTimerDisabled = keepScreenAwake && phase == .active
                 }
                 .onChange(of: keepScreenAwake) { _, value in UIApplication.shared.isIdleTimerDisabled = value && phase == .active }
-                .onChange(of: phase) { _, next in UIApplication.shared.isIdleTimerDisabled = keepScreenAwake && next == .active; if next != .active { shared.flushCachedState() } }
+                .onChange(of: phase) { _, next in UIApplication.shared.isIdleTimerDisabled = keepScreenAwake && next == .active; if next != .active { shared.persistForBackground(releasingMemory: next == .background) } }
+                .onReceive(NotificationCenter.default.publisher(for: UIApplication.willTerminateNotification)) { _ in shared.closeIncognitoBrowsers() }
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.didReceiveMemoryWarningNotification)) { _ in shared.relieveBrowserMemoryPressure() }
                 .onOpenURL { url in if url.scheme == "proteus" && url.host == "pair" { do { try destinations.add(url.absoluteString, label: "New computer"); incomingPairing = true } catch { destinations.error = error.localizedDescription } } }
                 .sheet(isPresented: $incomingPairing, onDismiss: { destinations.cancelPairing() }) { NavigationStack { PairView().toolbar { Button("Cancel") { incomingPairing = false } } } }
@@ -159,6 +165,9 @@ struct ProteusRoot: View {
                        let remote = destinations.remote(for: "10000000-0000-4000-8000-000000000001") {
                         let heavy = ProcessInfo.processInfo.arguments.contains("--synthetic-heavy-chat")
                         let events: [JSON] = (0..<(heavy ? 1000 : 100)).map { index in
+                            if ProcessInfo.processInfo.arguments.contains("--synthetic-history-activity-boundary"), (750...990).contains(index) {
+                                return .object(["role": .string("tool"), "text": .string("Synthetic tool \(index)"), "at": .string("2026-10-05T21:00:00Z")])
+                            }
                             let varied = ProcessInfo.processInfo.arguments.contains("--synthetic-varied-chat") && (index.isMultiple(of: 17) || index == 999)
                             return .object(["role": .string(index.isMultiple(of: 2) ? "user" : "assistant"),
                                      "text": .string(heavy ? "Message \(index): " + String(repeating: "Rich **history** content. ", count: varied ? 240 : 24) : "Synthetic message \(index): a short bounded-history fixture."),
@@ -180,7 +189,9 @@ struct ProteusRoot: View {
                         return
                     }
                     #endif
-                    destinations.activity(true)
+                    // A prewarmed/background scene must not reconnect every saved
+                    // owner. The active scene transition starts normal connections.
+                    if phase == .active { destinations.activity(true) }
                 }
                 .onChange(of: phase) { _, value in
                     if value != .active { shared.flushDocumentScrollPositions() }

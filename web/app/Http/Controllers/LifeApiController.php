@@ -3,14 +3,21 @@
 namespace App\Http\Controllers;
 
 use App\Models\Attachment;
+use App\Services\AppRecords;
 use App\Services\LifeActions;
 use App\Services\LifeReadModel;
+use App\Services\PushDelivery;
 use App\Services\TenantAccess;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
 class LifeApiController extends Controller
 {
+    public function notifications(Request $request, AppRecords $records, LifeReadModel $read)
+    {
+        return response()->json(['accountId' => $read->profile($request->user())['accountId'], 'notifications' => array_slice($records->all($request->user(), 'notifications'), 0, 20)])->header('Cache-Control', 'private, no-store');
+    }
+
     public function status(Request $request, LifeReadModel $read)
     {
         return response()->json($read->profile($request->user()))->header('Cache-Control', 'private, no-store');
@@ -18,19 +25,36 @@ class LifeApiController extends Controller
 
     public function data(Request $request, LifeReadModel $read)
     {
+        if ($request->hasHeader('X-Proteus-Account')) {
+            $expected = hash_hmac('sha256', 'proteus-browser:'.$request->user()->id, config('app.key'));
+            abort_unless(hash_equals($expected, (string) $request->header('X-Proteus-Account')), 409, 'The account changed. Reload before continuing.');
+        }
+        if ($request->input('section') === 'reminders') {
+            $v = $request->validate(['query' => 'sometimes|array']);
+
+            return response()->json($read->data($request->user(), 'reminders', $v['query'] ?? []))->header('Cache-Control', 'private, no-store');
+        }
         $v = $request->validate(['section' => 'required|in:overview,nutrition,garage,fuel,captures,security,connections', 'query' => 'sometimes|array', 'query.tab' => 'sometimes|in:days,day,averages,foods,versions', 'query.from' => 'nullable|date_format:Y-m-d', 'query.through' => 'nullable|date_format:Y-m-d', 'query.date' => 'nullable|date_format:Y-m-d', 'query.search' => 'nullable|string|max:200', 'query.foodId' => 'nullable|integer|min:1', 'query.vehicleId' => 'nullable|integer|min:1', 'query.captureId' => 'nullable|integer|min:1', 'query.status' => 'nullable|in:review,saved', 'query.page' => 'sometimes|integer|between:1,100000', 'query.foodPage' => 'sometimes|integer|between:1,100000', 'query.client' => 'sometimes|in:desktop', 'query.projection' => 'sometimes|in:tab']);
         abort_if(isset($v['query']['from'], $v['query']['through']) && $v['query']['from'] > $v['query']['through'], 422, 'The start date must not be after the end date.');
 
         return response()->json($read->data($request->user(), $v['section'], $v['query'] ?? []))->header('Cache-Control', 'private, no-store');
     }
 
-    public function action(Request $request, LifeActions $actions, LifeReadModel $read)
+    public function action(Request $request, LifeActions $actions, LifeReadModel $read, PushDelivery $push)
     {
         $v = $request->validate(['action' => 'required|string|max:50', 'input' => 'required|array', 'expectedAccountId' => 'required|string|size:64', 'expectedWorkspaceId' => 'required|string|max:30', 'idempotencyKey' => ['required', 'string', 'regex:/^[a-zA-Z0-9_-]{16,100}$/']]);
         $profile = $read->profile($request->user());
         abort_unless(hash_equals($profile['accountId'], $v['expectedAccountId']) && $profile['workspaceId'] === $v['expectedWorkspaceId'], 409, 'The active Life account changed. Refresh before saving.');
 
-        return response()->json($actions->run($request->user(), $v['action'], $v['input'], $v['idempotencyKey']) + ['accountId' => $profile['accountId'], 'workspaceId' => $profile['workspaceId']])->header('Cache-Control', 'private, no-store');
+        $result = $actions->run($request->user(), $v['action'], $v['input'], $v['idempotencyKey']);
+        if (isset($result['confirmation']['id'])) {
+            $accepted = $push->deliverPending($request->user(), $result['confirmation']['id'], 5);
+            if ($accepted !== null) {
+                $result['confirmation']['pushAcceptedAt'] = $accepted;
+            }
+        }
+
+        return response()->json($result + ['accountId' => $profile['accountId'], 'workspaceId' => $profile['workspaceId']])->header('Cache-Control', 'private, no-store');
     }
 
     public function evidence(Request $request, int $id, TenantAccess $access)

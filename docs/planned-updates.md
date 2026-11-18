@@ -1,8 +1,229 @@
-## Nov 10 — queued interface follow-up
+Unscheduled ideas and known gaps live in [the parking lot](parking-lot.md); they are not part of any release until moved into a plan.
 
-The [Nov 10 plan](2026-11-10-release-plan.md) records clickable links to chats, schedules and
-file-browser resources, a Chats list design investigation, and denser headers across features.
-These are queued requests; Nov 8 release closeout continues independently.
+## Nov 17 — planning only; do not build
+
+The operator requested [a Nov 17 release plan](2026-11-17-release-plan.md). These requests are
+queued, not implemented, and authorize no build or rollout. Nov 15 is closed at 0.2.45;
+the Nov 17 version is not yet reserved.
+
+- **N17-01 — Move tab menu:** the menu blocks the browser window view; reuse the menu
+  treatment already implemented elsewhere.
+- **N17-02 — Workspace rename:** the sidebar retains the old workspace name after renaming;
+  behavior after restart remains unknown.
+- **N17-03 — Linux URL suggestions:** clicking the URL bar repeatedly flashes and fails to
+  list URLs. Investigate a possible KDE interaction without assuming that cause.
+- **N17-04 — Linked-tab insertion:** slide new tabs directly into the slot beside their
+  parent without first appearing at the end or jumping the tab strip. Preserve strip position;
+  if the new tab would be hidden to the right, shift left only enough to reveal it.
+- **N17-05 — Desktop navigation icons:** match macOS Back, Forward, Download and Enter/Go
+  appearance and sizing on Linux and Windows; use shared standard desktop icons if needed.
+  Preserve behavior and verify visual consistency across platforms and display scaling.
+- **N17-06 — Browser DNS configuration:** default to machine DNS with app-managed DoH and
+  automatic upgrades disabled; provide an explicit configurable encrypted-DNS opt-in. Respect
+  OS/VPN settings and document the actual application-wide scope and activation behavior.
+- **N17-07 — Delete schedules:** add complete deletion from Schedules, removing the definition
+  and future triggers persistently. Make run/history/chat handling explicit and respect the
+  owning computer, active work and source-managed schedule behavior.
+- **N17-08 — Save schedules with changed context:** offer inline refresh-and-save and conflict
+  resolution in the editor. Preserve unsaved edits; require no other screen, complex menu or
+  draft-discarding reload. Saving must not start a run or rewrite captured run context.
+- **N17-09 — Work Mac Run now:** schedule header button reportedly does nothing. Trace the
+  request and actual run admission, restore reliable execution with visible state/errors, and
+  prevent duplicate starts. Cause and whether an unseen run started remain unverified.
+- **N17-10 — Saved-access review dead end:** put a human-accessible Review access action
+  directly in the blocked chat, explain changed resources/access, allow explicit review or
+  revocation, and resume without repeating the warning or completed work. No hidden-menu hunt.
+- **N17-11 — Bitwarden biometrics:** review the Browser Preferences guidance and official
+  extension/desktop-helper integration, test real biometric unlock and controlled autofill,
+  and fix supported workflows or misleading setup guidance. Actual Touch ID remains unverified.
+- **N17-12 — Admiral prompt persists:** continue troubleshooting after the targeted Nov 15
+  filter. Reproduce in the affected installed build/profile, inspect current loader and rule
+  application, and require live resolution alongside synthetic regression checks.
+- **N17-13 — Shared extension package library:** reuse already downloaded extension packages
+  when enabling them in another browser profile. Keep each profile's settings, sign-ins, vault
+  state, permissions and enabled/version choices independent; avoid repeated downloads.
+- **N17-14 — Per-site notification controls:** add/select an origin and set Allow/Ask/Block
+  directly in Browser Preferences or address-bar site settings, even without a saved row or
+  old prompt. Reproduce Slack's denied state and verify permission recovery separately from delivery.
+- **N17-15 — Drag scratch associations:** drag scratches in the left file navigation into
+  workspace/project folders, updating metadata and placement together. Retain the dropdowns,
+  preserve content/editor state and keep owner/access boundaries intact.
+- **N17-16 — Glassdoor login/tab behavior:** login in the Social browser profile opens multiple
+  tabs which cannot be closed in the affected window. Investigate popup creation and the Close/
+  shared-membership path; initial inventory also shows five unnamed, unloaded entries there.
+  Neither their origin nor a root cause is confirmed. Verify login and reliable, persistent
+  closure of unwanted tabs while preserving unrelated tabs and profile/session state.
+- **N17-17 — Recurring trackpad scroll stutter:** a brief hitch about once a second affects
+  desktop chats and embedded websites. Correlate physical-trackpad frame gaps with Electron
+  main-process, renderer and compositor traces, fix the measured cause, and verify both surfaces
+  on the affected desktop.
+- **N17-18 — Live Chats operations dashboard:** apply the accepted revision 5 design across
+  chat-list surfaces, with computer filters, counted status buttons, responsive Cards/Table views, live
+  run metrics and clearly marked offline caches. Verify owner state and coordinate incremental
+  rendering and physical-trackpad acceptance with N17-17. See the
+  [dashboard plan](2026-11-17-release-plan.md#n17-18--live-chats-operations-dashboard-across-proteus).
+
+## Nov 15 release — November 16 continuation authorized (0.2.45 unchanged)
+
+The operator now authorizes all queued release changes, Linux fix integration/build/verification,
+primary Mac and iPhone updates, and safe closeout of other branches. Other device installations
+remain outside this targeted rollout. Keep one release and the sole integration branch
+`codex/nov11-continuation`; preserve history and do not push it to privacy-sanitized remotes.
+See [the release plan](2026-11-15-release-plan.md) for scope and acceptance gates.
+
+Application source is frozen at `958f769998f82e195cd4316ba4a21c96fc077305`. Combined source checks
+pass (1,917 Node tests, four skips; static checks), as do focused desktop and iPhone simulator
+Team editing and desktop URL-picker checks. Signed Mac package/official extraction/six-window
+event checks pass; signed iPhone build 2611.15.3 and its profile checks pass. Installation remains
+separate and is tracked in [rollout](releases/2026-11-15/rollout.md). Linux source and exact-package
+acceptance pass; its privately transferred unsigned artifacts and corresponding source are hash
+verified. Other device installs remain deferred.
+The operator explicitly defers N11-41 camera QR pairing to a future Mnemosyne update.
+
+- **N11-66 — Team Tools team editing:** add an edit function to the team list. Implemented in source; focused desktop acceptance passes.
+- **N11-72 — Windows Scratchpad save portability:** native validation reproduced directory-flush
+  `EPERM` after writing. The source omits that unsupported Windows step while retaining file-data
+  flushing and POSIX durability. Native reruns, other Windows failures and packaging remain pending.
+- **N11-71 — Fox News anti-adblock prompt:** operator reports Admiral on the Fox homepage.
+  Source bundles a publisher-scoped rule for the observed Admiral loader. Existing cache,
+  domain/type boundaries, ordinary filtering and the profile toggle have focused/native synthetic
+  acceptance. Live removal of the reported prompt needs the new package; the investigation
+  profile did not reproduce it. Included in the next build freeze.
+- **N11-70 — Settle update checkpoints:** Linux disposable acceptance reproduced checkpoints
+  preceding canonical project-chat hydration. Source now requires successful local-scope
+  synchronization before saving and acknowledging a preservation checkpoint; unresolved intent,
+  failures/backoff and restoring windows block it. Exact preservation remains required. Native
+  two-window restart/failure acceptance passes. Not included in the original frozen packages;
+  older installed owners still require a reviewed bootstrap and baseline verification before retry.
+- **N11-69 — Abandoned update chats:** archived or abandoned chats must not block a current authorized update. Preserve historical failure receipts and provide owner-supported reconciliation through the current update coordinator without reopening the old chat or loading its optional connectors. Queued following rollout diagnosis; not included in the frozen packages.
+
+  A source-owned maintenance bootstrap correction adds explicit authenticated owner revalidation
+  after normal restarts, retaining exact package/signing, recovery, journal and live PID checks.
+  This operations-only helper leaves the accepted app source pin unchanged; the ordinary
+  coordinator/UI correction remains queued. Linux relocation/reconciliation and installation
+  acceptance must be recorded separately.
+- **N11-67 — URL-click destinations:** offer Team Tools, Reminders and Scratchpad as popup targets,
+  preserving shared tab placement and existing permissions. Implemented in source; focused desktop acceptance passes.
+- **N11-68 — Six-window events:** the designated Linux builder reports a SharedWorker event-stream
+  fix and corrected Linux acceptance in two local commits from exact base `fbf058aa`.
+  The full-history private bundle was downloaded, hash/base verified and merged preserving both
+  commits. The plan records its digest. Original Linux source tests pass; combined release tests,
+  package acceptance and rollout are tracked separately. Direct-stream fallback still risks the limit.
+
+The current operator request targets the primary Mac and iPhone for installation and Linux for
+combined-source build/verification. Other device installations remain deferred. Existing installs and tests do not qualify new source.
+Private transfer/device paths and raw receipts stay outside Git. The latest operator request lifts the preceding planning-only hold.
+
+Nov 15 iPhone corrections: persistent Scratchpad owner selection outside availability-dependent pages; collapsed filters/properties and selection-aware Markdown icon toolbar; narrow reminder edge-swipe to Items; upload progress inside the solid reply composer. Source and targeted simulator validation; physical update remains separate.
+
+N11-50: server-owned Reminder SQLite replicas and machine-owned remote Scratchpad selectors are implemented; source validation and signed Build Mac/iPhone/web rollout are in progress. Reminders have no computer association. Scratch tabs/catalogs/edits retain their owner and root. QR remains held.
+
+Nov 14 sidebar follow-up: desktop Reminders and Scratchpad recents reuse the sidebar item format and seven-plus-four expansion. Closed records remain in bounded, account/root-scoped local metadata; reopening validates current owner access. Source and isolated demo qualification only; native/web sidebar parity and packaged rollout remain open.
+
+Nov 14 workbench follow-up (N11-49): replace feature dropdowns with universal New Tab, match project-strip add/close metrics and hover hints, fix scratch file switching/caret/title/highlight, and add a Reminders overview plus Lists/Items/Details work tabs. Scratchpad workspace/project filters share a row with a labelled divider; project selection retains its workspace highlight. Source/demo/simulator qualification remains separate from production rollout. N11-48's general native/cross-owner Scratch tab parity and physical acceptance remain open; QR stays held.
+
+Nov 14 terminal-sharing follow-up: the terminal robot now reuses the browser's lit accent state, including hover under the configured palette. A real disposable Electron/PTY test reproduced the old styling failure and now passes access, input, retry and revocation checks. Source only; installed qualification remains open.
+
+Nov 14 Scratchpad: storage worker, SQLite metadata index, explicit reconciliation, captured-project tool grants, opt-in device sharing, desktop/project editor and website view are implemented. Twenty-six focused model/storage/service tests, two relay tests and the desktop UI flow pass; the full Node suite passed 1,894 tests with four skipped. Native encrypted-draft recovery and stale-write protection pass; visual cold-launch saving/reopening passes on the shared iPhone simulator. No real vault directory or device grant was selected.
+
+Nov 14 Life navigation/Home follow-up: canonical Overview → Ask → Smart Home → Nutrition → Garage → Fuel & mileage → captures → Account → Connections order; dynamic all-exposed Home Assistant services replace the entity allowlist. Desktop third-row tabs and native browser/chat grouping pass focused UI qualification. Website HTTP dashboard embedding remains subject to browser mixed-content/framing rules. No new installation or physical device action is claimed.
+
+Nov 13 continuation: general build/deployment hold was lifted by the operator. N11-41 camera QR pairing remains separately held. N11-42 Reminders, N11-43 protected Life Ask actions, N11-44 native Home Assistant and N11-45 automatic folder-grant continuation are implemented in source; signed rollout/live acceptance remain open. N11-46 iOS history-anchor fix passes focused simulator checks.
+
+N11-41: Mnemosyne camera QR pairing is queued in the Nov 11 continuation; Omi Integration owns implementation. Implementation, build and installation are explicitly held. Reuse scoped pairing validation, request camera permission only on Scan, retain paste fallback and never log invitation/device keys.
+
+Mac signed-package acceptance: fail closed after packager signing warnings; source implemented, exact signed candidate qualification pending. Installation remains on operator hold.
+
+PDF steering: Codex now advertises PDF support through the turn-scoped attachment reader. Immediate and queued steering retain original bytes and consent/retry protection; desktop/web/iOS derive availability from owner capabilities. Source implementation under verification; installed release remains3a3b7695.
+
+Nov 13 restart qualification: the one-minute verification window caused a rollback while full preservation completed. Source now allows a bounded three-minute window; strict identity, history and deadline checks remain. Rebuild and installed acceptance pending. PDF steering is queued until the update is verified.
+
+N11 ledger follow-up: 512 MiB receipt capacity, 32 MiB/256-slot critical-command reserve, and bounded tab mutation history replies are implemented; 27 focused tests, 1,831 full-suite tests (4 skipped) and static checks pass; installation pending. Existing replay results, 24-hour retention and uncertain claims are preserved.
+
+N11-09 follow-up: the global Chats page now permits page scrolling; the old overflow-hidden rule only affected the direct page mount, which the workspace regression missed. Global and workspace UI qualification pass with 260 synthetic chats, preserved reading positions and progressive loading. Installed acceptance is pending.
+
+N11-40 is merged into the consolidated continuation before the next freeze: closing a workspace
+releases its audible browser pages, while protected pages are muted and other windows remain
+untouched. N11-37 and N11-39 remain queued in the Nov 11 plan.
+
+Clickable chat references: question-card and fallback prompt source fixes are implemented across desktop/web/iOS. Desktop routing and answer-preservation acceptance pass; new installed-package acceptance remains pending.
+
+November 12 continuation: tab conversion and failed-update cleanup now have source fixes; see [implementation](releases/2026-11-15/implementation.md). Build Mac/iPhone deployment is authorized. Remaining Nov 11 work and physical acceptance are open.
+
+Native performance follow-up: shell reconciliation observes only browser identity/placement,
+uses indexed membership and publishes overview removals once. The 1,000-tab synthetic comparison
+preserves order and measured 222.7 ms before versus 1.83 ms after in one simulator run. Native
+menu/Incognito duplication and restored large-history overview UI tests pass. Physical performance
+remains unverified; this timing measures reconciliation only.
+
+Startup follow-up avoids unchanged destination-index writes and avoids loading dormant owner
+caches just to suspend them on background transitions. Inactive scenes wait for foreground
+activation before starting ordinary relay connections; active uploads keep their existing holds.
+Full lazy loading of startup caches and physical prewarm measurements remain open.
+
+N11-38 Life Ask: corrected ingress passed the joint Swift qualification. Native helper, cloud
+fallback/mirror and serial execution components now have synthetic recovery/account-isolation tests.
+Host chat/provider wiring, desktop Ask UI and durable answer notification retries are implemented;
+native UI rehearsal and a live synthetic Codex policy/structured-result check pass. Website immediate
+push, account-bound native/web history, exact-chat routing and Life → Ask project placement are
+implemented and tested. Completed admission payloads compact after 30 days without deleting replay
+receipts or chat recordings. End-to-end physical acceptance and rollout remain open; see
+[the contract and current implementation status](life-ask.md).
+
+N11-06 [folder discovery audit](releases/2026-11-15/folder-discovery-audit.md) traces configured roots,
+source-library separation, project binding and remote grants. A reproduced default-workspace root
+leak is corrected; picker grouping proposals still require visual comparison across clients.
+
+N11-07/N11-37 follow-up: the iPhone main-tab drawer now shares the wide tab menu, including
+Incognito duplication. App-owned private iOS copies stay local, expire, and clear on close/startup.
+Native clipboard lifecycle and iPhone drawer menu/Incognito duplication tests pass.
+
+N11-11 now has per-backend Install/Review setup and Open setup chat actions, an explicit destination
+selector, captured destination defaults and active-chat reuse. Remote setup requires current
+management access. Setup grants no updater authority and retains command/OS approvals. Synthetic
+owner/relay and native Engine Room checks pass; no real driver installation was performed.
+
+Default desktop packaging now shares one machine cache across worktrees, keeps only the latest
+verified development output and reclaims recognizable interrupted builds. Explicit release paths
+retain their existing artifact workflow; this does not silently adopt old checkout `dist` folders
+or delete updater recoveries. Native signed Mac package acceptance passes; obsolete checkout output
+and verified duplicate extractions have been retired. Updater recovery cleanup awaits installation.
+
+Chat links now render from Markdown/bare prose, and question replies use bounded arbitrary-file
+attachment reads. N11-37 adds per-tab Incognito sessions with read-only shared-history suggestions,
+no saved session/site data or tab sync, and disposal on close/exit. Source implementation includes
+local-only menu/overview behavior and relay exclusions; physical installed acceptance is pending.
+
+## Nov 11 / 0.2.45 — open release (renamed from Nov 10)
+
+N11-48 is the active Markdown workbench review: CodeMirror 6 live/source editing, independent
+Scratch views, shared file navigation, contextual workspace/project selectors and richer indexed
+filters. The first demo's CSP/folding and missing-bar regressions were corrected with preservation
+evidence and rendered UI tests. Native folder/tab parity and final design acceptance remain open.
+
+N11-47 adds the requested Scratchpad storage refresh/background rebuild, shared feature content
+tabs, Reminders list/card design and isolated demo. Local iPhone/iPad simulators qualify the UI
+before another mobile rollout. This review does not restart the installed owner or change the
+original physical reminder; QR camera pairing remains separately held.
+
+The [Nov 11 plan](2026-11-15-release-plan.md) records clickable links to chats, schedules and
+file-browser resources, a Chats list design investigation, denser headers across features,
+N11-04 reliable cross-device draft synchronization, N11-05 normal in-context Workspace Files
+tabs, N11-06 folder discovery/scope/grouping/duplicate design, N11-07 relevant iOS tab controls
+and Copy Proteus tab ID, N11-08 unsolicited browser URL/history changes, N11-09 Chats list
+scrolling, N11-10 named connection approvals, N11-11 guided desktop-control installation, N11-12
+cross-window Playwright attachment and N11-13 interactive chats mislabeled as scheduled tasks.
+N11-14–16 cover Life capture failure recovery and saved-entry editing, a usable local connection
+to the hosted Life MCP server, and an ownership audit/migration separating Proteus Life and
+website code from the transcription-focused Mnemosyne product. N11-17 is the operator's priority:
+smooth scrolling in desktop chats and browser tabs. The folder questions remain queued for
+analysis; no grouping or access-policy decision is implied. The observed Life 429 and form loss
+require investigation; no cause or fix is yet verified. Local build is authorized; device
+deployment is held.
+
+Implemented in source: N11-17 scrolling (measured on synthetic and isolated live-data copies),
+N11-09 desktop Chats scrolling, N11-13 origin classification, N11-10 named connection approvals
+and N11-12 cross-window Playwright routing. Web/iOS Chats scrolling and the other items remain queued.
 
 ## Nov 8 — complete request audit before further deployment
 
@@ -12494,6 +12715,28 @@ native document tabs are not yet shared owner-navigation tabs; do not claim that
 Nov 8 completion pass: large-folder move destination paging and native file request identity/disposal guards are implemented. Electron and iPhone actual move fixtures pass; new packages and iPad acceptance remain separate.
 
 Nov 8 disk-pressure follow-up: shared, locked simulator compiler-cache reuse implemented; obsolete package/build/temp cleanup uses private plans and actual free-space measurements. Owner-blocked rollback-attention recovery remains explicit.
+
+
+### Nov 14 iOS question chat links
+
+The phone report uses a Markdown-labelled chat reference. Source now links the label itself in question cards, answer history and the question queue; raw chat URLs stay linked. Invalid pairing/credential-bearing references remain literal. Both focused native link regressions pass on the shared iPhone simulator. Signed physical rollout and real question-card tapping remain pending.
+Nov 14 workbench controls follow-up: shared desktop/web Reminders uses independently toggled Open/Completed/Deleted states, compact save/restore/delete/completion actions and keyboard/pointer-resizable columns. Scratchpad destinations remain visible virtually; indexing does not create empty directories, and new workspace notes use the workspace root. Existing files/folders are not moved or deleted. Root-strip double-click no longer inherits feature membership; shared hover contrast covers root/project/feature tabs. Isolated UI and canonical-temporary-root Node qualification pass; native controls and production rollout remain separate.
+Nov 14 navigation conventions follow-up: `docs/feature-navigation.md` is the shared contract for placement, creation order, fixed overviews, separate title/close hover, theme tokens and draft handling. Root Scratch tabs no longer auto-adopt into Scratchpad; resource reuse is container-scoped. Feature strips consume owner order instead of maintaining another ordering cache. Reminders defaults use a fixed Lists rail and a fractional Items/Details split, with whole-card selection and heading-level save feedback. The calendar is a shared palette-aware control rather than Chromium's unthemeable popup. Shared desktop/web source is qualified with isolated UI fixtures; native/mobile parity and production rollout remain separate.
+Nov 14 consistency review: restore full-height root title/X hover regions while retaining original strip/separator dimensions; use measured viewport columns and actual Scratchpad Name sorting; add AM/PM conversion and picker spacing. Native Reminders gains combinable status toggles, compact editor actions/feedback, account-zone loading protection and dynamic column proportions. Native system appearance now follows the selected palette. Simulator preview launch explicitly enables synthetic Life; physical devices and production website remain distinct rollout gates.
+
+Nov 15 Scratchpad regression: the real owner retains two historical projects whose workspaces are unavailable. Virtual folder generation now filters those destinations using one catalog snapshot, preserving actual files and strict explicit association checks. Focused regression passes; corrective rollout pending.
+
+N11-51: shared feature navigation/overview follow-up includes remembered feature-local selection, Workspace Files and typed Scratch/Reminder tabs, grouped screenshot previews, native Team Tools container reuse, favicon/inset parity and persistent selected-reminder styling. Desktop real-favicon/spacing/selection UI, shared website UI, 1,908 Node tests/four skips and static checks pass. Thirteen native projection tests, root-resource cold restoration, iPhone/iPad Team Tools, iPad Reminders and paired Scratchpad save/readback/cold restoration pass. Operator-approved html-to-image 1.11.13 provides session-only web screenshots with bounded capture, iframe fallback and file revalidation clearing; actual web screenshot UI passes. No combined candidate is installed yet.
+
+## Local follow-up: desktop event connection exhaustion
+
+Source implementation shares `/api/events` per origin and browser partition via SharedWorker;
+the previous direct stream remains a compatibility fallback. Verify six-window Home and all
+three event types, window closure and reconnection before release; cross-platform live desktop
+acceptance and behavior when SharedWorker is unavailable remain release verification items.
+The earlier `fbf058aa` Linux package passed its corrected live acceptance and credential-free
+package UI acceptance on November 16; this does not verify a package containing the follow-up.
+
 # Source distribution configuration
 
 The sanitized source distribution uses reserved example endpoints and neutral application IDs.

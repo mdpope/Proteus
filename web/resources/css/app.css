@@ -1,4 +1,8 @@
+@import "../../../public/features/scratchpad/scratchpad.css";
+@import "../../../public/features/tools/reminders.css";
+@import "../../../public/features/workspaces/file-browser.css";
 @import "../../../public/features/settings/connections.css";
+@import "../../../public/shared/navigation/feature-tabs.css";
 @import '../../../public/palette.css';
 @import './palette.css';
 @import '../../../public/toast.css';

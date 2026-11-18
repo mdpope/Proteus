@@ -1,6 +1,6 @@
 import {assertPrivate} from './helpers/permissions.js';
 import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
-import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import {randomBytes,createCipheriv,createDecipheriv} from 'node:crypto';
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import {randomBytes,randomUUID,createCipheriv,createDecipheriv} from 'node:crypto';
 import {DesktopPeers} from '../src/services/remote/desktop-peers.js';import {startServer} from '../src/server.js';import {startRelay} from '../relay/server.js';import {atomicJSON} from '../src/shared/files.js';import {secret} from '../src/services/remote/remote-crypto.js';import {until} from './remote-client.mjs';
 const key=randomBytes(32);const safeStorage={isEncryptionAvailable:()=>true,encryptString:text=>{const iv=randomBytes(12),cipher=createCipheriv('aes-256-gcm',key,iv);return Buffer.concat([iv,cipher.update(text),cipher.final(),cipher.getAuthTag()]);},decryptString:box=>{const decipher=createDecipheriv('aes-256-gcm',key,box.subarray(0,12));decipher.setAuthTag(box.subarray(-16));return Buffer.concat([decipher.update(box.subarray(12,-16)),decipher.final()]).toString();}};
 const record={hostId:'11111111-1111-4111-8111-111111111111',deviceId:'22222222-2222-4222-8222-222222222222',relay:'wss://relay.example.test',key:'ab'.repeat(32),label:'Synthetic peer'};
@@ -196,6 +196,18 @@ await assert.rejects(peers.request(a,'chat.start',{prompt:'must not run'}),/Reco
 const inventory=await peers.request(a,'integrations.list');assert.ok(Array.isArray(inventory.configurations));assert.ok(Array.isArray(inventory.consumers));await assert.rejects(peers.request(a,'integrations.check',{id:'unselected'}),/Unsupported desktop peer command/);await assert.rejects(peers.request(a,'integrations.recover',{id:'unselected'}),/Unsupported desktop peer command/);
 const {runId}=await peers.request(a,'chat.start',{prompt:'Synthetic Alpha only',provider:'rehearsal',workspaceId:sa.context.defaultWorkspaceId});await until(()=>apps[0].engine.getRun(runId).pending);assert.equal(apps[1].engine.listRuns().length,0);await assert.rejects(peers.request(b,'chat.get',{id:runId}),/not found|Unknown/);await assert.rejects(peers.request(a,'schedule.run',{id:'anything'}),/ENOENT|not found/);await assert.rejects(peers.request(a,'arbitrary.execute',{}),/Unsupported/);
 const run=await peers.request(a,'chat.get',{id:runId});await peers.request(a,'chat.reply',{id:runId,requestId:run.pending.id,answer:'Synthetic answer'});await until(()=>apps[0].engine.getRun(runId).status==='completed');
+const draft={kind:'reply',id:runId};
+await apps[0].sharedDrafts.save({...draft,text:'Synthetic owner draft',expectedRevision:0,operationId:randomUUID()});
+assert.equal((await peers.request(a,'draft.text.get',draft)).text,'Synthetic owner draft');
+await peers.request(a,'draft.text.save',{...draft,text:'Synthetic peer draft',expectedRevision:1,operationId:randomUUID()});
+assert.equal(apps[0].sharedDrafts.get(draft).text,'Synthetic peer draft');
+const conflict=await peers.request(a,'draft.text.save',{...draft,text:'Synthetic stale draft',expectedRevision:1,operationId:randomUUID()});
+assert.equal(conflict.conflict,true);assert.equal(conflict.text,'Synthetic peer draft');
+assert.equal(apps[0].sharedDrafts.get(draft).revision,2);
+await assert.rejects(peers.request(b,'draft.text.get',draft),/not found|Unknown/);
+for(const method of ['draft.text.get','draft.text.save'])await assert.rejects(peers.request(a,method,{...draft,agentControl:true}),/human composer/);
+assert.doesNotMatch(JSON.stringify((await peers.request(a,'sync')).state),/Synthetic (owner|peer|stale) draft/);
+peers.records.get(a).paused=true;await assert.rejects(peers.request(a,'draft.text.get',draft),/paused/);peers.records.get(a).paused=false;
 await peers.index();await peers.indexPending;assert.ok((await peers.index()).items.some(item=>item.id===runId));const encryptedIndex=fs.readFileSync(peers.cacheFile);assert.ok(!encryptedIndex.includes(Buffer.from(runId)));assertPrivate(peers.cacheFile,0o600);
 peers.close();peers=new DesktopPeers(path.join(home,'client'),{safeStorage});assert.equal(peers.list().length,2);assert.ok(peers.cache.get(a).items.some(item=>item.id===runId));assert.ok(peers.list().every(p=>p.status==='offline'));await peers.connect(a);assert.equal((await peers.request(a,'chat.get',{id:runId})).id,runId);await peers.connect(b);apps[0].remote.revoke(apps[0].remote.config.devices[0].id);await until(()=>peers.list().length===1);assert.equal(peers.list()[0].hostId,b);assert.equal(peers.cache.has(a),false);assert.equal(JSON.parse(safeStorage.decryptString(fs.readFileSync(peers.cacheFile)))[a],undefined);await assert.rejects(peers.request(a,'chat.resume',{id:runId,prompt:'not authorized'}),/not paired/);assert.equal((await peers.request(b,'sync')).state.runs.length,0);peers.remove(b);assert.equal(peers.list().length,0);assert.deepEqual(JSON.parse(safeStorage.decryptString(fs.readFileSync(peers.cacheFile))),{});assert.deepEqual(await peers.index(),{items:[],hosts:[],partial:false});
 });

@@ -1,3 +1,58 @@
+## Fox News Admiral filtering (N11-71)
+
+A bundled publisher-scoped rule blocks the observed Admiral engage loader script on Fox News.
+It is independent of the downloaded filter cache, retains article scripts and detector bait,
+and follows existing profile/site protection controls. Synthetic request-pipeline acceptance
+does not establish removal of every live prompt or coverage of future vendor domain changes.
+
+## Workspace close and audible pages (N11-40)
+
+Closing a workspace unloads its loaded, non-Persisted browser pages in that window, including
+chat sub-tabs and audible pages. Agent turns, downloads, pop-outs and unsaved pages remain
+protected and are muted if they cannot unload. Other windows retain their views. Logical tabs,
+history and placement remain available when the workspace is reopened.
+
+## Native shell reconciliation — Nov 11 continuation
+
+Browser titles, history and reading positions remain live metadata. Only ID/scope changes trigger
+shell membership reconciliation. Main-tab insertion origins and existing mixed-resource order
+remain stable; closed/moved browser previews are removed in a single batch. No-op reconciliation
+does not publish shell navigation or write it again. Privacy, history and lifecycle rules are
+unchanged. Synthetic large-catalog and native UI checks qualify this path; physical iPhone
+scrolling remains a separate acceptance check.
+
+## Incognito — Nov 11 continuation
+
+The iPhone main-tab drawer and wide tab strip use the same applicable actions. Private tab names,
+links and IDs copied through app menus use the local-only pasteboard with a two-minute expiry.
+Closing their tab clears its still-current copy; later user copies are preserved. Startup clears
+a marked private copy left by an interrupted process, without reading unrelated clipboard data.
+
+New Tab offers an Incognito tile. Link menus place Open Link in Incognito Tab immediately below
+Open Link in Background Tab; tab menus place Duplicate as Incognito tab below Duplicate tab.
+Desktop and native iOS share this ordering. Duplication opens the current URL in a fresh session.
+
+Every private tab owns an independent memory-only Electron partition or nonpersistent WebKit
+store. It reads ordinary shared history but does not append visits. iOS filters its cached shared
+history locally, without sending private typed text to the owner. Titles and URLs remain visible
+in the originating device's navigation and overview only. A generic privacy icon replaces page
+thumbnails and favicons. Private pages do not generate archives, preview captures, saved tab
+descriptors, history outbox operations, site settings, notification records or session checkpoints.
+
+Incognito is excluded from agent inventory/access, Live Browser, resource inventory, project
+following and relay tab synchronization. Transfer and persistence are unavailable. Link-created
+private tabs and duplicates have independent sessions. Private link menus omit ordinary-profile,
+external-app, chat-link, download and share actions; the native Copy Link action uses a local-only,
+expiring clipboard item. A user's explicit copy is an export, not a browsing-history record.
+
+Closing clears cookies, website storage, cache, authentication and connections and drops the local
+tab records. Ordinary tabs keep their existing storage. Clean exit closes private sessions before
+ordinary storage flushing; neither clean restart nor forced-crash restart restores private tabs.
+No private partition directory is allocated, so there is no app-owned private profile to retain
+after a crash. iOS also covers inactive app content while private tabs exist to avoid an app-switcher
+page preview. Nonpersistent storage is an application/browser guarantee, not a claim about OS swap,
+forensic erasure, user screenshots or website/network records.
+
 ## Browser inspector sessions and secure console connections — Nov 6
 
 The private CDP bridge now uses independent native sessions for the primary page and secondary

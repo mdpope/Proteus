@@ -1,3 +1,4 @@
+import {humanTime} from '../src/shared/human-time.js';
 import {assertPrivate} from './helpers/permissions.js';
 import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import test from 'node:test';
@@ -387,7 +388,7 @@ test('Claude default steering read mid-turn finishes with the single combined re
 
 test('Claude allowance failures identify provider scope without inventing reset or account data',()=>{
  const unknown=claudeAllowanceError('test');assert.equal(unknown.code,'PROVIDER_RATE_LIMIT');assert.match(unknown.message,/did not distinguish/);assert.match(unknown.message,/Reset time was not supplied/);assert.match(unknown.message,/not a Proteus release hold/);
- const known=claudeAllowanceError('test',[{remainingPercent:0,resetAt:'2026-11-06T12:00:00Z'}]);assert.match(known.message,/exhausted allowance/);assert.match(known.message,/2026-11-06T12:00:00Z/);
+ const known=claudeAllowanceError('test',[{remainingPercent:0,resetAt:'2026-11-06T12:00:00Z'}]);assert.match(known.message,/exhausted allowance/);assert.ok(known.message.includes('Provider-reported reset: '+humanTime('2026-11-06T12:00:00Z')+'.'),'N11-19: readable time in the configured zone');assert.doesNotMatch(known.message,/2026-11-06T12:00:00Z/);
 });
 
 test('Claude owner bridge exact action grants normalize only captured app tools',async t=>{

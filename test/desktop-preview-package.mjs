@@ -92,7 +92,7 @@ try{
  assert.equal(await page.locator('[data-preview-permissions] details').count(),0);assert.equal(await page.locator('[data-preview-permission-dialog]').count(),0);
  const evidence=path.join(root,'live-verification');await page.screenshot({path:path.join(evidence,'packaged-permissions.png')});
  diagnostics.stage='workspace tabs';await revealSidebar();await studioButton.click();await page.locator('[data-preview-new-project]').waitFor();
- assert.deepEqual(await page.locator('[data-preview-page]').evaluateAll(nodes=>nodes.map(node=>{const copy=node.cloneNode(true);copy.querySelector('[data-preview-tab-icon]')?.remove();return copy.textContent.trim();})),['Projects','Chats','Tabs','Configuration']);
+ assert.deepEqual(await page.locator('[data-preview-page]').evaluateAll(nodes=>nodes.map(node=>{const copy=node.cloneNode(true);copy.querySelector('[data-preview-tab-icon]')?.remove();return copy.textContent.trim();})),['Projects','Chats','Tabs','Scratches','Reminders','Configuration']);
  const placement=await page.evaluate(()=>window.desktop.workspaceSession({action:'get'}));
  // Inspect any already-expanded project without opening, creating or reordering retained resources.
  const projectGroups=await page.locator('[data-preview-project-count]').evaluateAll(nodes=>nodes.map(node=>({id:node.dataset.previewProjectCount,count:Number(node.textContent),description:node.getAttribute('aria-label'),children:node.parentElement.parentElement.querySelectorAll('.preview-tree-item').length,computers:node.parentElement.parentElement.querySelectorAll('.preview-tree-item .preview-tree-computer').length})));

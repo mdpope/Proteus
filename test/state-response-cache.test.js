@@ -1,3 +1,4 @@
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { StateResponseCache } from '../src/services/state/state-response-cache.js';
@@ -39,4 +40,23 @@ test('different generations of the same view coalesce before a fresh snapshot',a
  const first=cache.get('view',produce);revision++;
  const followers=Array.from({length:20},()=>cache.get('view',produce));assert.equal(calls,1);
  gate.resolve('obsolete');assert.deepEqual(await Promise.all([first,...followers]),Array(21).fill('current'));assert.equal(calls,2);
+});
+
+// N11-23: draft saves, follow positions and other state-neutral POSTs must not make a state
+// projection fail; a real mutation still advances the generation.
+test('state-neutral POSTs do not invalidate the owner state projection', async t => {
+  const fs = await import('node:fs'), os = await import('node:os'), path = await import('node:path');
+  const { startServer } = await import('../src/server.js');
+  const home = privateTemporaryDirectory(path.join(os.tmpdir(), 'proteus-state-neutral-'));
+  const app = await startServer({ home, port: 0, timers: false, withSeed: false });
+  t.after(async () => { await app.close(); fs.rmSync(home, { recursive: true, force: true }); });
+  const auth = { authorization: 'Bearer ' + app.token };
+  const call = (route, body) => fetch(app.origin + route, { method: 'POST', headers: { 'Content-Type': 'application/json', ...auth }, body: JSON.stringify(body) });
+  const first = await fetch(app.origin + '/api/state?summaries=1', { headers: auth });
+  assert.equal(first.status, 200);
+  let failures = 0;
+  const hammer = (async () => { for (let i = 0; i < 40; i++) await call('/api/preview', { cron: '0 9 * * *', timezone: 'UTC' }); })();
+  for (let i = 0; i < 10; i++) { const response = await fetch(app.origin + '/api/state?summaries=1&n=' + i, { headers: auth }); if (response.status !== 200) failures++; }
+  await hammer;
+  assert.equal(failures, 0);
 });

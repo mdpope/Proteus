@@ -8,8 +8,10 @@ struct NativeFileBrowser: View {
     let workspaceID: String
     var initialFile: JSON? = nil
     var onOpenFile: ((JSON) -> Void)? = nil
+    var picksFile = false
     @State private var roots: [JSON] = []
     @State private var canWrite = false
+    @State private var restoring = true
     @State private var root = ""
     @State private var directory = ""
     @State private var entries: [JSON] = []
@@ -111,9 +113,12 @@ struct NativeFileBrowser: View {
             }
         }.padding(10).tint(NativeTheme.accent)
         .onAppear { viewActive = true }
+        .onChange(of: active) { _, _ in remember() }
+        .onChange(of: expanded.keys.sorted()) { _, _ in remember() }
+        .onChange(of: directory) { _, _ in remember() }
         .task { await bootstrap() }
         .onChange(of: root) { old, _ in if initialFile == nil && !old.isEmpty { directory = ""; tabs = []; Task { await load() } } }
-        .onDisappear { viewActive = false; listRevision = UUID(); revision = UUID(); document = .null; mediaData = nil; mediaImage = nil; assets = [:]; entries = []; expanded = [:]; tabs = [] }
+        .onDisappear { remember(); viewActive = false; listRevision = UUID(); revision = UUID(); document = .null; mediaData = nil; mediaImage = nil; assets = [:]; entries = []; expanded = [:]; tabs = [] }
         .alert("File name", isPresented: Binding(get: { !editAction.isEmpty }, set: { if !$0 { editAction = "" } })) {
             TextField("Name", text: $name)
             Button("Cancel", role: .cancel) { editAction = "" }
@@ -196,9 +201,34 @@ struct NativeFileBrowser: View {
             if document == .null { Text("Select a file to preview").foregroundStyle(.secondary) }
             else if document["mediaType"].string == "application/pdf", let data = mediaData { NativeFilePDF(data: data).id(active) }
             else if document["mediaType"].string.hasPrefix("image/"), let image = mediaImage { ScrollView([.horizontal, .vertical]) { Image(uiImage: image).resizable().scaledToFit() } }
-            else if document["mediaType"].string == "text/plain" { ScrollView([.horizontal, .vertical]) { Text(document["content"].string).font(.system(.body, design: .monospaced)).textSelection(.enabled) } }
-            else { ScrollView { MarkdownView(text: document["content"].string, runID: "", store: store, height: $height, onDocumentLink: { source in Task { do { let target = try await store.request("files.resolve-link", args.merging(["file": .string(active), "source": .string(source)]) { _, new in new }); await show(target, newTab: true) } catch { failure = error.localizedDescription } } }, documentAssetURLs: assets, allFileLinks: true).frame(height: max(height, 1)) } }
+            else if document["mediaType"].string == "text/plain" || document["mediaType"].string == "text/markdown" {
+                NativeTextDocument(title: document["title"].string, language: document["language"].string.isEmpty ? "text" : document["language"].string, isMarkdown: document["mediaType"].string == "text/markdown", content: document["content"].string,
+                    editable: canWrite && document["editable"].bool && !document["identity"].string.isEmpty, save: { text in try await saveDocument(text) },
+                    markdown: { AnyView(MarkdownView(text: document["content"].string, runID: "", store: store, height: $height, onDocumentLink: { source in Task { do { let target = try await store.request("files.resolve-link", args.merging(["file": .string(active), "source": .string(source)]) { _, new in new }); await show(target, newTab: true) } catch { failure = error.localizedDescription } } }, documentAssetURLs: assets, allFileLinks: true).frame(height: max(height, 1))) }).id(active + document["identity"].string)
+            }
         }
+    }
+    /// Saves through the owner with the identity from preview; a changed file is rejected, never overwritten.
+    private func saveDocument(_ text: String) async throws {
+        let result = try await store.request("files.save", args.merging(["file": .string(active), "content": .string(text), "identity": document["identity"]]) { _, new in new })
+        var value = document.object; value["content"] = .string(text); value["identity"] = result["identity"]; document = .object(value)
+    }
+    private var memoryKey: String { "files-memory:" + workspaceID }
+    /// Expanded folders and the open file survive leaving and returning to this tab.
+    private func remember() {
+        guard !restoring, initialFile == nil, !picksFile else { return }
+        store.setDraft(memoryKey, .object(["root": .string(root), "directory": .string(directory), "expanded": .array(expanded.keys.sorted().map { .string($0) }), "active": .string(active)]))
+    }
+    private func restore(_ saved: JSON) async {
+        defer { restoring = false }
+        guard saved != .null, saved["root"].string == root else { return }
+        let depth: (String) -> Int = { $0.split(separator: "/").count }
+        for path in saved["expanded"].array.map(\.string).sorted(by: { depth($0) < depth($1) }) {
+            guard flatten(entries).contains(where: { $0["path"].string == path && $0["kind"].string == "folder" }), expanded[path] == nil else { continue }
+            expanded[path] = []; await loadExpanded(path)
+        }
+        let file = saved["active"].string
+        if !file.isEmpty, let entry = flatten(entries).first(where: { $0["path"].string == file }) { await show(entry) }
     }
     private func select(_ entry: JSON, modifiers: UIKeyModifierFlags) {
         let path = entry["path"].string, values = flatten(entries)
@@ -254,7 +284,13 @@ struct NativeFileBrowser: View {
                 guard roots.contains(where: { $0["id"] == initialFile["rootId"] && $0["available"].bool }) else { throw RemoteError(message: "This file’s folder is no longer shared. Review Connections on its computer.") }
                 root = initialFile["rootId"].string
                 await show(.object(["path": initialFile["file"], "name": initialFile["title"]]))
-            } else { root = roots.first { $0["available"].bool }?["id"].string ?? ""; guard !root.isEmpty else { throw RemoteError(message: "No available shared folders.") }; await load() }
+            } else {
+                let saved = store.draft(memoryKey)
+                root = roots.contains(where: { $0["id"].string == saved["root"].string && $0["available"].bool }) ? saved["root"].string : roots.first { $0["available"].bool }?["id"].string ?? ""
+                guard !root.isEmpty else { throw RemoteError(message: "No available shared folders.") }
+                if saved["root"].string == root { directory = saved["directory"].string }
+                await load(); await restore(saved)
+            }
         } catch { failure = error.localizedDescription }
     }
     private func load(offset: Int = 0) async {
@@ -294,7 +330,7 @@ struct NativeFileBrowser: View {
         guard viewActive else { return }
         if entry["kind"].string == "folder", initialFile != nil { failure = "This link points to a folder. Open Files to browse it."; return }
         if entry["kind"].string == "folder" { directory = entry["path"].string; await load(); return }
-        if newTab, let onOpenFile { onOpenFile(.object(["workspaceId": .string(workspaceID), "rootId": .string(root), "file": entry["path"], "title": entry["name"]])); return }
+        if newTab || picksFile, let onOpenFile { onOpenFile(.object(["workspaceId": .string(workspaceID), "rootId": .string(root), "file": entry["path"], "title": entry["name"]])); return }
         let token = UUID(), file = entry["path"].string, requestedRoot = root
         let request = args.merging(["file": .string(file)]) { _, new in new }
         revision = token; active = file; assets = [:]; document = .null; mediaData = nil; mediaImage = nil

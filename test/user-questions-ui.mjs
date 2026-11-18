@@ -60,6 +60,13 @@ try{
    binding.stop();binding.stop();return {...active,remainingTimers:timers.size,remainingStatuses:document.querySelectorAll('.shared-draft-status').length};
   }finally{binding?.stop();window.setInterval=set;window.clearInterval=clear;}
  });assert.deepEqual(draftLifecycle,{timers:1,statuses:1,draft:'Retained composer draft',remainingTimers:0,remainingStatuses:0});
+ const links=await page.evaluate(async()=>{
+  const {mountChatLinks}=await import("/public/shared/navigation/chat-links.js");
+  const url="proteus://chat?host=aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa&id=bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+  const prose="<img onerror=bad> Open ("+url+"). Reject "+url+"&token=secret and proteus://pair?key=secret";
+  const node=document.createElement("div");mountChatLinks(node,prose);
+  return {text:node.textContent,expected:prose,links:[...node.querySelectorAll("a")].map(a=>a.href),url,images:node.querySelectorAll("img").length};
+ });assert.equal(links.text,links.expected);assert.deepEqual(links.links,[links.url]);assert.equal(links.images,0);
  await page.setViewportSize({width:640,height:900});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);assert.deepEqual(errors,[]);
  console.log(JSON.stringify({passed:true,pagedQuestionJump:true,firstClickDuringHistoryLoad:true,laterInputCancelsFocus:true,choicesAndCustomAnswer:true,composerAndAnswerDraftsPreserved:true,uncertainOperationPreserved:true,narrowLayout:true}));
 }finally{await browser?.close();await new Promise(resolve=>server.close(resolve));}

@@ -866,3 +866,24 @@ Final acceptance for project deletion:
 - Retired obsolete `design-preview-groups` after confirming no process used it. Kept current
   `design-preview-project-delete` and previous `design-preview-activity`; removed 611,127,010
   file bytes, with measured free-space increase 646,713,344 bytes. No live-data backup was created.
+## Nov 14 — interactive feature demo
+
+Run `npm run desktop:demo` to reuse the isolated Design Preview with synthetic Life reminders
+and a real Scratchpad in its synthetic workspace. The production app and this release's installed
+build remain running. The helper refuses an already-running preview; it never takes over another
+profile. It stages no provider authentication, Life token, device key or operational session.
+
+The demo uses the same renderer/owner code as the application, plus a clearly synthetic Reminders
+fixture retained in its private preview home. Public renderer changes reload the preview after a
+short debounce. Host/desktop edits require restarting only the demo. Existing preview histories and
+settings are preserved. Source-only demo acceptance is distinct from a signed production package,
+simulator interaction and physical installation. The native preview/test helpers continue to reuse
+the shared phone/tablet simulator pool and separate test identities.
+### Scratch editor review safety
+
+Synthetic Reminders now run in the isolated preview owner when the explicit design-demo flag is
+set; they do not depend on a Playwright network interceptor. Existing note files and preview sessions
+are retained. Renderer changes defer reload while a scratch editor is open and offer Reload demo.
+Host changes still require a demo restart. Never replace a user-edited note with fixture seed text.
+The initial workbench demo failed visual/CSP qualification; the release plan records the correction
+and separate preservation evidence. Production and physical-device acceptance remain separate.

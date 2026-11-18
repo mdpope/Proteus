@@ -30,3 +30,14 @@ test('a recovery request receives the remaining overall budget rather than a sho
 test('recovery never accepts a response delivered after its overall deadline',async()=>{
  await assert.rejects(verifyRecovery(job,expected,{timeout:10,interval:1,request:async()=>{await new Promise(resolve=>setTimeout(resolve,30));return {identity};}}),/Timed out:/);
 });
+test('cold startup and large-profile verification may exceed a minute within the bounded default',async t=>{
+ t.mock.timers.enable({apis:['Date'],now:1000});
+ const receipt=await verifyRecovery(job,expected,{request:async(_job,_route,_body,options)=>{
+  assert.equal(options.timeout,180000);
+  t.mock.timers.tick(90000);return {identity,preservation:{runs:382,events:900000}};
+ }});
+ assert.equal(receipt.preservation.runs,382);
+ await assert.rejects(verifyRecovery(job,expected,{request:async()=>{
+  t.mock.timers.tick(180001);return {identity};
+ }}),/Timed out:/);
+});

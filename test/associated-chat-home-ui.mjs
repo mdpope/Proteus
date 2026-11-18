@@ -15,6 +15,20 @@ try{
  const linkRead=page.waitForResponse(response=>new URL(response.url()).pathname==='/api/chat-view'&&new URL(response.url()).searchParams.get('id')===chat.id);
  await app.evaluate(({app},id)=>{const main=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs'),service=main.getService();main.getWindows().current().window.webContents.send('proteus:open-chat-link','proteus://chat?host='+service.remote.info().hostId+'&id='+id);},chat.id);await linkRead;
  await until(async()=>{const value=await session();return value.tabs.find(tab=>tab.id===value.active)?.parentId===fixture.parentId;});
+ // Actual bundled Markdown uses data-link rather than href. Both author-written
+ // and bare links must reach the owner router before a file-link fallback.
+ const host=await app.evaluate(({app})=>process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getService().remote.info().hostId),target=fixture.user[1],url='proteus://chat?host='+host+'&id='+target.id;
+ await page.evaluate(url=>window.fixtureChatURL=url,url);
+ for(const text of ['[Open related chat]('+url+')',url,'question-card']){
+  await page.evaluate(async text=>{await import('/markdown/runtime.js');const element=document.createElement('section');element.id='synthetic-link-check';element.style='position:fixed;z-index:10000;top:100px;left:300px;background:white;padding:20px';document.body.append(element);if(text==='question-card'){const {mountQuestionCard}=await import('/features/chats/user-questions.js');mountQuestionCard(element,{id:'link-question',text:'Open ('+window.fixtureChatURL+').',status:'pending'},{key:'link-question',answer:()=>{throw Error('Link submitted an answer');}});}else window.ProteusMarkdown.mount(element,text,{link:()=>{throw Error('Chat link fell through to file navigation.');}});},text);
+  await page.locator('#synthetic-link-check a').click();
+  await until(async()=>{const value=await session(),tab=value.tabs.find(tab=>tab.id===value.active);return (tab?.runId||tab?.id)===target.id&&tab.parentId===fixture.parentId;});
+  assert.equal((await session()).tabs.filter(tab=>tab.type==='run'&&(tab.runId||tab.id)===target.id).length,1);
+  await page.locator('#synthetic-link-check').evaluate(element=>element.remove());
+ }
+ await page.evaluate(async id=>{const {openIndexedChat}=await import('/features/chats/chats-index.js');await openIndexedChat({local:true,chatId:id});},chat.id);
+ await until(async()=>{const value=await session(),tab=value.tabs.find(tab=>tab.id===value.active);return (tab?.runId||tab?.id)===chat.id;});
+ assert.equal((await session()).chatDrafts[chat.id],'Keep this saved draft');
  // Close the logical chat and reopen it explicitly from the index. Owner
  // hydration may replace its private view ID; the new user selection must win.
  const childIDs=await app.evaluate(({app},id)=>process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getService().contentTabs.get('chat',id).tabs.map(tab=>tab.id),chat.id);assert.ok(childIDs.length);

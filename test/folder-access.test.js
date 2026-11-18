@@ -19,3 +19,40 @@ test('managed Codex preserves an approved additive folder for the next turn whil
  const reduction=codexSandbox(f.schedule,{...profile,folders:[{path:nested,access:'read'}]},{permissionControls:true});assert.equal(codexSandboxPreservesAccess(before,reduction),false);
  const network=structuredClone(addition);network.policy.networkAccess=true;assert.equal(codexSandboxPreservesAccess(before,network),false);
 });
+
+test('approved folders continue exactly once after the current provider exits, including status retries',async t=>{
+ let turns=0,release;const checkpoint=new Promise(resolve=>release=resolve),operationId=randomUUID();
+ const f=fixture(t,async({engine,run,extra})=>{
+  turns++;
+  if(turns===2){assert.equal(engine.describePermissions(run).chatFolders[0].path,extra);return;}
+  assert.equal(turns,1);
+  const args={action:'request',operationId,folder:extra,access:'read',reason:'Read authorized integration details'};
+  const receipt=await requestFolderAccess(engine,run.id,args);
+  assert.equal(receipt.continuation.state,'pending');
+  await requestFolderAccess(engine,run.id,{action:'status',operationId});await requestFolderAccess(engine,run.id,args);
+  await checkpoint;
+ });
+ const run=f.engine.createRun(f.schedule,'chat');await until(()=>run.pending);f.engine.reply(run.id,'approve',run.pending.id);
+ await until(()=>run.folderAccessRequests[operationId].granted);assert.equal(turns,1);assert.equal(run.queuedMessages?.length||0,0);
+ release();await until(()=>turns===2&&!f.engine.running.size);assert.equal(f.error(),undefined);
+ assert.equal(run.events.filter(event=>event.data?.inputOrigin==='folder-access-continuation').length,1);
+ assert.equal(run.folderAccessRequests[operationId].continuation.state,'queued');
+});
+
+test('already queued user input activates the grant without an extra automatic turn',async t=>{
+ let turns=0;const operationId=randomUUID();const f=fixture(t,async({engine,run,extra})=>{
+  if(++turns>1)return;
+  await requestFolderAccess(engine,run.id,{action:'request',operationId,folder:extra,access:'read',reason:'Read source'});
+  await engine.send(run.id,'Continue with the new requirement','queue','user-followup');
+ });const run=f.engine.createRun(f.schedule,'chat');await until(()=>run.pending);f.engine.reply(run.id,'approve',run.pending.id);
+ await until(()=>turns===2&&!f.engine.running.size);assert.equal(f.error(),undefined);
+ assert.equal(run.folderAccessRequests[operationId].continuation.state,'covered-by-queued-input');
+ assert.equal(run.events.filter(event=>event.data?.inputOrigin==='folder-access-continuation').length,0);
+});
+
+test('stopping an approved turn never causes an automatic restart',async t=>{
+ let turns=0,release;const checkpoint=new Promise(resolve=>release=resolve),operationId=randomUUID();
+ const f=fixture(t,async({engine,run,extra})=>{turns++;await requestFolderAccess(engine,run.id,{action:'request',operationId,folder:extra,access:'read',reason:'Read source'});await checkpoint;});
+ const run=f.engine.createRun(f.schedule,'chat');await until(()=>run.pending);f.engine.reply(run.id,'approve',run.pending.id);await until(()=>run.folderAccessRequests[operationId].granted);
+ f.engine.cancel(run.id);release();await until(()=>!f.engine.running.size);assert.equal(turns,1);assert.equal(run.status,'cancelled');assert.equal(run.folderAccessRequests[operationId].continuation.state,'cancelled');
+});

@@ -1,10 +1,30 @@
-let ui;
-const sections = [['overview','Overview'],['nutrition','Nutrition'],['garage','Garage'],['fuel','Fuel & mileage'],['inbox','Capture inbox'],['capture','New capture'],['security','Account & security'],['connections','Connections']];
+import {mountReminders} from './life-reminders.js';
+import {mountHome} from './life-home.js';
+let ui;let remindersView,documentView;
+let homeView;
+export const lifeSections = [['overview','Overview'],['ask','Ask'],['home','Smart Home'],['nutrition','Nutrition'],['garage','Garage'],['inbox','Capture inbox'],['capture','New capture'],['security','Account'],['connections','Connections']];
+const sections=lifeSections;
+// Third-layer pages for sections that have them; the shell renders them as a tab strip.
+export const lifeSectionPages={
+ nutrition:[['overview','Overview'],['days','Meal days'],['day','Daily log'],['averages','Averages'],['foods','Food Library']],
+ garage:[['overview','Overview'],['vehicles','Vehicles'],['fuel','Fuel & mileage']],
+};
+export function lifeSectionPage(section=local().section){
+ if(section==='nutrition'){const view=local().view||'overview';return view==='versions'?'foods':view;}
+ if(section==='garage')return local().garageView||'overview';
+ return null;
+}
+export function selectLifePage(section,page){
+ const state=local();if(!lifeSectionPages[section]?.some(([id])=>id===page))return;
+ state.section=section;delete state.selected;
+ if(section==='nutrition')state.view=page;else state.garageView=page;
+ draw();ui.navigationChanged?.();
+}
 const today = () => new Date().toLocaleDateString('en-CA');
 const identityKey = value => JSON.stringify(value||null);
 const local = () => {
  const identity=ui.state.data?.life?.identity,key=identityKey(identity);
- if(!ui.state.lifeUi||ui.state.lifeUi.identityKey!==key){if(ui.state.lifeUi?.evidenceUrl)URL.revokeObjectURL(ui.state.lifeUi.evidenceUrl);ui.state.lifeUi={identity,identityKey:key,section:'nutrition',view:'days',filters:{date:today()},drafts:{},cache:{},errors:{},busy:{},setup:{}};}
+ if(!ui.state.lifeUi||ui.state.lifeUi.identityKey!==key){if(ui.state.lifeUi?.evidenceUrl)URL.revokeObjectURL(ui.state.lifeUi.evidenceUrl);ui.state.lifeUi={identity,identityKey:key,section:'overview',view:'overview',garageView:'overview',filters:{date:today()},drafts:{},cache:{},errors:{},busy:{},setup:{}};}
  return ui.state.lifeUi;
 };
 function sameOwner(owner){return owner===local();}
@@ -18,12 +38,28 @@ const stamp = value => value ? String(value).slice(0,10) : 'Not recorded';
 const meta = () => ui.state.data?.life || {};
 const act = fn => async event => { event?.preventDefault(); try { await fn(event); } catch(error) { ui.toast(error.message); } };
 export function initLife(value) { ui=value; }
-export function selectLifeSection(section){if(!sections.some(([id])=>id===section))return;local().section=section;local().view=section==='nutrition'?'days':'';delete local().selected;draw();}
+export function currentLifeSection(){return local().section;}
+export async function openLifeDestination(target){
+ const owner=local();if(target.accountId!==owner.identity?.accountId)throw Error('Sign in to the Life account that received this confirmation.');
+ if(target.kind==='reminder'&&!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(target.reminderId||''))throw Error('This confirmation has no valid reminder destination.');
+ if(target.kind==='reminder'){if(ui.openReminder){await ui.openReminder(target);return;}owner.section='reminders';owner.reminderTarget=target.reminderId;const host=document.querySelector('#life-content');if(host)delete host.dataset.reminderOwner;draw();return;}
+ if(target.kind==='document'){
+  remindersView?.destroy();documentView?.dispose?.();owner.section='document';const host=document.querySelector('#life-content');host.textContent='Opening saved memory…';
+  try{const ref=await ui.api('/api/life/document-reference',{documentId:target.documentId,accountId:target.accountId});requireOwner(owner);
+   const request=(action,args)=>ui.api('/api/workspace-explorer/'+action,{...ref,...args});const value=await request('preview',{});requireOwner(owner);
+   const {mountFileDocument}=await import('../workspaces/file-browser.js');if(owner.section!=='document')return;
+   documentView=mountFileDocument(host,{value,request,open:()=>ui.toast('Use the source workspace to open linked documents.'),onError:error=>ui.toast(error.message)});
+  }catch(error){if(sameOwner(owner))host.textContent='Memory saved; document unavailable. '+error.message;}
+ }
+}
+export function selectLifeSection(section){
+ if(section==='fuel'){selectLifePage('garage','fuel');return;}
+ if(!sections.some(([id])=>id===section))return;local().section=section;if(section==='nutrition')local().view=local().view||'overview';delete local().selected;draw();ui.navigationChanged?.();}
 export function renderLife() {
   const main=document.querySelector('#main'); if(!main)return;
   if(!main.querySelector('#life-page')){
-    main.innerHTML=`<div id="life-page"><div class="heading"><div><div class="eyebrow">Personal records</div><h1>Life</h1><p class="muted">Meals, maintenance and the original details.</p></div><button id="life-refresh">Refresh records</button></div><div id="life-connection-state" class="note"></div><nav class="life-tabs" aria-label="Life sections">${sections.map(([id,name])=>`<button data-life-section="${id}">${name}</button>`).join('')}</nav><div id="life-content"></div></div>`;
-    main.querySelectorAll('[data-life-section]').forEach(button=>button.onclick=()=>{local().section=button.dataset.lifeSection;local().view=local().section==='nutrition'?'days':'';delete local().selected;draw();});
+    main.innerHTML=`<div id="life-page"><div class="heading"><div><div class="eyebrow">Personal records</div><h1>Life</h1><p class="muted">Meals, maintenance and the original details.</p></div><button id="life-refresh">Refresh records</button></div><div id="life-connection-state" class="note"></div><nav class="feature-tab-bar" aria-label="Life sections">${sections.map(([id,name])=>`<button data-life-section="${id}">${name}</button>`).join('')}</nav><div id="life-content"></div></div>`;
+    main.querySelectorAll('[data-life-section]').forEach(button=>button.onclick=()=>{selectLifeSection(button.dataset.lifeSection);});
     main.querySelector('#life-refresh').onclick=act(async()=>{local().cache={};local().errors={};draw();});draw();
   }
   const access=JSON.stringify([meta().enabled,meta().configured,meta().connection?.readOnly,meta().capabilities,meta().identity]);if(local().access!==access){local().access=access;local().cache={};local().errors={};draw();}
@@ -48,9 +84,16 @@ function frame(resource,params,render) {
 }
 function draw() {
   const host=document.querySelector('#life-content');if(!host)return;
+  if(local().section!=='home'){homeView?.destroy();homeView=null;delete host.dataset.homeOwner;}
   document.querySelectorAll('[data-life-section]').forEach(b=>{b.classList.toggle('active',b.dataset.lifeSection===local().section);b.setAttribute('aria-current',b.dataset.lifeSection===local().section?'page':'false');});
   if(meta().enabled===false||!meta().configured){host.innerHTML='<section class="card life-empty"><h2>Your records, when you want them</h2><p>Life is optional. Sign in to your website account from Setup.</p><button id="life-open-settings">Open Life setup</button></section>';document.querySelector('#life-open-settings').onclick=()=>ui.openSettings?.();return;}
-  if(local().section==='overview')overview();else if(local().section==='nutrition')nutrition();else if(local().section==='garage')garage();else if(local().section==='fuel')fuel();else if(['inbox','capture'].includes(local().section))captures();else account();
+  if(local().section!=='document'){documentView?.dispose?.();documentView=null;}
+  if(local().section==='reminders'){const owner=local();if(host.dataset.reminderOwner!==owner.identityKey){remindersView?.destroy();host.dataset.reminderOwner=owner.identityKey;remindersView=mountReminders(host,{scopes:ui.reminderScopes,linkFor:ui.reminderLink,selectedId:owner.reminderTarget||null,isCurrent:()=>sameOwner(owner)&&owner.section==='reminders',read:query=>ui.api('/api/life/data',{section:'reminders',query}),write:(action,input,idempotencyKey)=>ui.api('/api/life/action',{action:'reminders.'+action,input,idempotencyKey,identity:owner.identity})});owner.reminderTarget=null;}return;}
+  if(local().section==='document')return;
+  delete host.dataset.reminderOwner;remindersView?.destroy();remindersView=null;
+  if(local().section==='home'){const owner=local();if(host.dataset.homeOwner!==owner.identityKey){homeView?.destroy();host.dataset.homeOwner=owner.identityKey;homeView=mountHome(host,{configure:true,isCurrent:()=>sameOwner(owner)&&owner.section==='home',request:args=>ui.api('/api/life/home',args),openWebsite:url=>ui.openHomeWebsite(url)});}return;}
+  if(local().section==='ask'){const owner=local();void import('./life-ask.js').then(module=>{if(sameOwner(owner)&&owner.section==='ask')module.renderLifeAsk(host,{ui,owner,isCurrent:()=>sameOwner(owner)});}).catch(error=>ui.toast(error.message));}
+  else if(local().section==='overview')overview();else if(local().section==='nutrition')nutrition();else if(local().section==='garage')garageSection();else if(['inbox','capture'].includes(local().section))captures();else account();
 }
 function table(rows,columns,empty='No records found.') {
   if(!rows.length)return `<p class="life-empty">${esc(empty)}</p>`;
@@ -94,6 +137,22 @@ function bindForm(id,extra={},transform=value=>value,onSuccess=()=>{}) {
     requireOwner(owner);if(meta().connection?.readOnly)throw new Error('This connection is read-only.');const {dirty,idempotency_key,...input}=value;const result=await ui.api('/api/life/action',{action:node.dataset.action,input:transform({...input,...extra}),idempotencyKey:idempotency_key,identity:owner.identity});requireOwner(owner);onSuccess(result);if(id==='life-meal-form')delete local().editingMeal;delete local().drafts[savedDraftId];local().cache={};ui.toast('Record saved.');draw();
   }catch(error){status.textContent=error.message;ui.toast(error.message);}finally{button.disabled=false;}};
 }
+// The Life workspace holds the Ask/Smart Home/Nutrition/Garage projects. Its folder is the
+// operator's choice (never silently in application data), picked with the system folder dialog.
+export async function chooseLifeWorkspaceFolder(){
+ if(!window.desktop?.choosePaths)throw new Error('Choose the Life workspace folder in the desktop app.');
+ const paths=await window.desktop.choosePaths({kind:'folder'});if(!paths?.[0])return null;
+ const value=await ui.api('/api/life/workspace',{action:'set-folder',folder:paths[0]});ui.toast('Life workspace folder saved.');return value;
+}
+async function drawWorkspaceCard(card){
+ try{
+  const value=await ui.api('/api/life/workspace');if(!card.isConnected)return;
+  if(!value.signedIn){card.replaceChildren();return;}
+  card.className='life-workspace-card';
+  card.innerHTML='<h3>Life workspace</h3>'+(value.folder?'<p class="life-account-origin">'+esc(value.folder)+'</p><p class="note">Chats and searches started from Life features live in default projects here (Ask, Smart Home, Nutrition, Garage, Fuel &amp; mileage) and appear in their workspace chat history.</p>'+(value.currentFolder&&value.currentFolder!==value.folder?'<p class="banner">The workspace still points at '+esc(value.currentFolder)+'. Choose the folder again to repoint it.</p>':''):'<p class="banner">Choose where Life keeps its workspace. Ask, chats and searches in Life features need a folder you control.</p>')+'<div class="actions"><button id="life-workspace-choose">'+(value.folder?'Change folder…':'Choose folder…')+'</button></div>';
+  card.querySelector('#life-workspace-choose').onclick=act(async()=>{if(await chooseLifeWorkspaceFolder())await drawWorkspaceCard(card);});
+ }catch(error){if(card.isConnected)card.textContent=error.message;}
+}
 export function renderLifeSetup(host) {
  if(typeof host==='string')host=document.querySelector(host);if(!host)return;
  const state=meta(),signature=JSON.stringify([state.enabled,state.configured,state.connected,state.ready,state.identity,state.auth,state.websiteOrigin]);
@@ -101,7 +160,7 @@ export function renderLifeSetup(host) {
  const focused=host.contains(document.activeElement),draft=host.querySelector('#life-website')?.value;
  host.dataset.lifeSignature=signature;
  host.innerHTML='<section id="life-setup-card" class="card"><div class="heading"><div><h2>Proteus account</h2><p class="note">Shared Team Tools, browsing links and optional Life records. Independent of computer destinations.</p></div><label class="life-toggle"><input id="life-enabled" type="checkbox" '+(state.enabled?'checked':'')+'>Enable Life</label></div><div id="life-setup-body"></div></section>';
- host.querySelector('#life-enabled').onchange=act(async event=>{const wanted=event.target.checked;try{ui.state.data.life=await ui.api('/api/life',{settings:{schemaVersion:3,enabled:wanted},expectedRevision:meta().revision});await ui.refresh?.(true);renderLifeSetup(host);if(document.querySelector('#life-page'))renderLife();}catch(error){event.target.checked=!wanted;throw error;}});
+ host.querySelector('#life-enabled').onchange=act(async event=>{const wanted=event.target.checked;try{ui.state.data.life=await ui.api('/api/life',{settings:{schemaVersion:3,enabled:wanted},expectedRevision:meta().revision});await ui.refresh?.(true);renderLifeSetup(host);if(wanted&&meta().configured){try{const workspace=await ui.api('/api/life/workspace');if(workspace.signedIn&&workspace.needsFolder){await chooseLifeWorkspaceFolder();const card=host.querySelector('#life-workspace-card');if(card)await drawWorkspaceCard(card);}}catch(error){ui.toast(error.message);}}if(document.querySelector('#life-page'))renderLife();}catch(error){event.target.checked=!wanted;throw error;}});
  const target=host.querySelector('#life-setup-body');
 
  const message=state.auth?.error||(state.auth?.pending?'Finish signing in in your preferred browser. You can cancel here.':state.auth?.notice||'');
@@ -110,6 +169,7 @@ export function renderLifeSetup(host) {
  '<label>Website<input id="life-website" type="url" value="'+esc(focused&&draft?draft:state.websiteOrigin||'https://proteus.example')+'" autocomplete="off"></label><div class="actions"><button id="life-account-login">'+(state.auth?.pending?'Start sign-in again':'Sign in securely')+'</button>'+(state.auth?.pending?'<button id="life-account-cancel">Cancel sign-in</button>':'')+'</div><p class="note">Complete the website’s passkey or authenticator verification in your preferred browser. Proteus never asks for database credentials.</p>')+
  '<p id="life-account-status" class="note" role="status">'+esc(message)+'</p>';
  const operate=action=>act(async event=>{if(!window.desktop?.lifeAccount)throw new Error('Website sign-in is available in the desktop app.');event.target.disabled=true;try{const result=await window.desktop.lifeAccount({action,websiteOrigin:target.querySelector('#life-website')?.value});ui.state.data.life=result;await ui.refresh?.(true);renderLifeSetup(host);if(document.querySelector('#life-page'))renderLife();}catch(error){target.querySelector('#life-account-status').textContent=error.message;throw error;}finally{event.target.disabled=false;}});
+ {const card=document.createElement('div');card.id='life-workspace-card';target.append(card);if(state.configured&&state.enabled)void drawWorkspaceCard(card);}
  for(const [id,action]of [['login','begin'],['logout','logout'],['refresh','refresh'],['cancel','cancel'],['upgrade','upgrade']])target.querySelector('#life-account-'+id)?.addEventListener('click',operate(action));
 }
 function overview(){frame('overview',{},(host,data)=>{host.innerHTML=`<section class="card"><h2>Your personal records</h2>${cards(data.counts)}<p class="note">Records from the connected workspace.</p></section><div class="life-columns"><section class="card"><h2>Today’s nutrition</h2>${data.nutrition?cards(Object.fromEntries(Object.entries(data.nutrition).filter(([k])=>k!=='date'))):'<p class="note">No meals logged today.</p>'}</section><section class="card"><h2>Maintenance reminders</h2>${table(list(data.tasks),[['title','Task'],['due_on','Due',r=>esc(stamp(r.due_on))],['due_odometer','Mileage',r=>esc(number(r.due_odometer))],['status','Status']])}</section></div><section class="card"><h2>Recent activity</h2>${table(list(data.recentAudit),[['created_at','When',r=>esc(stamp(r.created_at))],['action','Action',r=>esc(label(r.action))],['entity_type','Record type',r=>esc(label(r.entity_type))]])}</section>`;});}
@@ -117,12 +177,13 @@ function overview(){frame('overview',{},(host,data)=>{host.innerHTML=`<section c
 const macros=['calories','protein','carbs','fat'];
 const macroFields=macros.map(name=>[name,name==='calories'?'Calories (kcal)':`${label(name)} (g)`,{type:'number',step:'0.001',required:true}]);
 const foodOptions=data=>[['','Choose a food'],...list(data.foods).map(f=>[f.id,`${f.name} · ${f.serving}`])];
-function switchNutrition(view,selection={}) {if(selection.date&&selection.date!==local().filters.date)delete local().editingMeal;local().view=view;Object.assign(local().filters,selection);draw();}
+function switchNutrition(view,selection={}) {if(selection.date&&selection.date!==local().filters.date)delete local().editingMeal;local().view=view;Object.assign(local().filters,selection);draw();ui.navigationChanged?.();}
 function nutrition() {
-  const view=local().view||'days',filters=local().filters;
+  const view=local().view||'overview',filters=local().filters;
+  if(view==='overview'){nutritionOverview();return;}
   frame('nutrition',{tab:view,...filters},(host,data)=>{
     const tabs=[['days','Meal days'],['day','Daily log'],['averages','Averages'],['foods','Food library']];
-    let content=`<nav class="life-subtabs" aria-label="Nutrition pages">${tabs.map(([id,name])=>`<button data-nutrition-tab="${id}" class="${view===id||view==='versions'&&id==='foods'?'active':''}">${name}</button>`).join('')}</nav>`;
+    let content='';
     const range=`<form id="life-range" class="life-filter">${field('life-range','from','From',filters.from||'',{type:'date'})}${field('life-range','through','Through',filters.through||'',{type:'date'})}<button>View range</button><button type="button" id="life-range-clear">All dates</button></form>`;
     if(view==='days')content+=`<section class="card"><div class="heading"><div><h2>Meal days</h2><p class="note">Every recorded day, newest first.</p></div><span class="pill">${list(data.days).length} days · ${list(data.days).reduce((n,d)=>n+(d.entryCount||0),0)} food entries</span></div>${range}${table(list(data.days),[['date','Day',r=>`<button class="life-link" data-life-date="${esc(r.date)}">${esc(stamp(r.date))}</button><small>${esc(r.entryCount||0)} entries · ${r.complete?'Complete':'Partial'}</small>`],...macros.map(m=>[m,`${label(m)} · ${m==='calories'?'kcal':'g'}`,r=>esc(number(r[m]))]),['foodNames','Food items',r=>list(r.foodNames).map(n=>`<span class="life-food-chip">${esc(n)}</span>`).join('')+(r.entryCount>4?`<small>+${r.entryCount-4} more</small>`:'')]],'No meals recorded in this range.')}</section><section class="card"><h2>Daily averages</h2><p class="note">Across ${esc(data.averages?.completeDays??data.averages?.days??0)} complete days in the selected range. Snacks included; partial and unlogged days excluded.</p>${macroCards(data.averages)}</section>`;
     else if(view==='averages')content+=`<section class="card"><h2>Daily averages by period</h2><p class="note">Only days with breakfast, lunch and dinner recorded count. Explicit skipped-meal entries count toward completeness; snacks are included. Each complete day has equal weight. Partial and unlogged days are excluded.</p><p class="note">Calendar windows use ${esc(data.reportTimezone||'the workspace timezone')} · today ${esc(data.reportDate||'unreported')}. Fixed periods are independent of the custom range below.</p></section>${periodCards(data.periodSummaries)}<section class="card"><h2>Custom range averages</h2>${range}${macroCards(data.averages)}<p class="note">${esc(data.averages?.completeDays??data.averages?.days??0)} complete days · ${esc(data.averages?.partialDays??0)} partial days excluded${data.averages?.calendarDays!=null?' · '+esc(data.averages.calendarDays)+' calendar days in window':''}.</p></section><section class="card"><h2>Monthly averages</h2><p class="note">Within the selected range, per complete day. Entries and calorie totals include complete days only.</p>${table(list(data.monthly),[['month','Month',r=>`${esc(r.month)}<small>${esc(r.entryCount||0)} food entries</small>`],['completeDays','Complete days',r=>esc(r.completeDays??r.days)],...macros.map(m=>[m,`${label(m)} / day`,r=>esc(number(r[m]))]),['caloriesTotal','Complete-day total · kcal',r=>esc(number(r.caloriesTotal))]],'Monthly averages appear after a complete day is recorded.')}</section>`;
@@ -152,6 +213,43 @@ function nutrition() {
   });
 }
 async function mutate(action,input,identity) {const owner=local();if(identityKey(identity)!==owner.identityKey)throw new Error('Life account changed.');const keys=owner.actionKeys ||= {},key=JSON.stringify([action,input]);await ui.api('/api/life/action',{action,input,idempotencyKey:keys[key] ||= crypto.randomUUID(),identity});requireOwner(owner);delete keys[key];owner.cache={};ui.toast('Record updated.');draw();}
+// Several owner reads rendered as one page: loading and failure states are shared.
+function frames(specs,render){
+ const host=document.querySelector('#life-content');if(!host)return;
+ const loaded=specs.map(([resource,params])=>load(resource,params)),failed=loaded.find(item=>item.error),waiting=loaded.some(item=>!item.data);
+ if(waiting){host.innerHTML=`<section class="card">${failed?`<h2>Records unavailable</h2><p role="alert">${esc(failed.error)}</p><button data-life-retry>Try again</button>`:'<p role="status">Reading your records…</p>'}</section>`;host.querySelector('[data-life-retry]')?.addEventListener('click',()=>{for(const [resource,params] of specs)delete local().errors[key(resource,params)];draw();});return;}
+ render(host,loaded.map(item=>item.data));
+}
+function bar(value,max){return `<span class="life-bar" aria-hidden="true"><i style="width:${Math.max(2,Math.min(100,max?value/max*100:0))}%"></i></span>`;}
+function nutritionOverview(){
+ const filters=local().filters;
+ frames([['overview',{}],['nutrition',{tab:'days',...filters}],['nutrition',{tab:'averages',...filters}]],(host,[home,daysData,averages])=>{
+  const days=list(daysData.days).slice(0,7),top=Math.max(1,...days.map(day=>Number(day.calories)||0));
+  host.innerHTML=`<section class="card"><div class="heading"><div><h2>Nutrition overview</h2><p class="note">Today, the last week and your complete-day averages.</p></div><button id="life-nutrition-log">Log a meal</button></div>${home.nutrition?macroCards(Object.fromEntries(Object.entries(home.nutrition).filter(([name])=>macros.includes(name))),'today'):'<p class="note">No meals logged today.</p>'}</section>
+  <div class="life-columns"><section class="card"><h2>Last logged days</h2>${days.length?`<ul class="life-bars">${days.map(day=>`<li><button class="life-link" data-life-date="${esc(stamp(day.date))}">${esc(stamp(day.date))}</button>${bar(Number(day.calories)||0,top)}<strong>${esc(number(day.calories))} kcal</strong></li>`).join('')}</ul>`:'<p class="note">No recorded days yet.</p>'}</section><section class="card"><h2>Averages</h2>${periodCards(averages.periods)}</section></div>`;
+  host.querySelector('#life-nutrition-log').onclick=()=>selectLifePage('nutrition','day');
+  host.querySelectorAll('[data-life-date]').forEach(button=>button.onclick=()=>{Object.assign(local().filters,{date:stamp(button.dataset.lifeDate)});selectLifePage('nutrition','day');});
+ });
+}
+function garageSection(){
+ const view=lifeSectionPage('garage');
+ if(view==='fuel'){fuel();return;}
+ if(view==='vehicles'){garage();return;}
+ garageOverview();
+}
+function garageOverview(){
+ frames([['garage',{}],['fuel',{}],['overview',{}]],(host,[garageData,fuelData,home])=>{
+  const fuelBy=new Map(list(fuelData.vehicleCards).map(card=>[card.vehicle.id,card])),cards=list(garageData.vehicleCards);
+  const fleetMiles=cards.reduce((sum,card)=>sum+(Number(card.latestObservation?.miles)||0),0),open=cards.reduce((sum,card)=>sum+(Number(card.openTaskCount)||0),0);
+  const mpg=[...fuelBy.values()].map(card=>Number(card.report?.weightedMpg)).filter(Number.isFinite),best=Math.max(0,...mpg);
+  const tasks=list(home.tasks).filter(task=>task.status==='open').sort((a,b)=>String(a.due_on||'9999').localeCompare(String(b.due_on||'9999'))).slice(0,6);
+  host.innerHTML=`<section class="card"><div class="heading"><div><h2>Garage overview</h2><p class="note">A scorecard for every vehicle, with upcoming and recent work.</p></div><button id="life-garage-inbox">Open capture inbox</button></div>${metricCards([['Vehicles',cards.length,'In your garage'],['Open tasks',open,'Across all vehicles'],['Best measured MPG',best||null,'Full-to-full intervals'],['Recorded miles',fleetMiles||null,'Latest odometer readings, summed']])}</section>
+  <section class="card"><h2>Mileage scorecard</h2>${cards.length?`<div class="life-vehicle-grid">${cards.map(card=>{const v=card.vehicle,fuel=fuelBy.get(v.id);return `<article class="life-vehicle life-scorecard"><div class="life-vehicle-mark">${vehicleArt(v.kind)}<span class="pill">${esc(label(v.kind))}</span></div><strong>${esc(v.name)}</strong><span>${esc([v.year||'Year not recorded',v.fuel_type||'Towable'].join(' · '))}</span>${metricCards([['Odometer',card.latestObservation?.miles,card.latestObservation?.date||'No reading yet'],['Measured MPG',fuel?.report?.weightedMpg,fuel?`${fuel.fillCount} fill-ups`:'Not a fueled vehicle'],['History',card.historyCount,'Service & purchases'],['Open tasks',card.openTaskCount,'Planned or watching']])}<button data-vehicle="${esc(v.id)}">Open vehicle →</button></article>`;}).join('')}</div>`:'<p class="life-empty">No vehicles recorded yet.</p>'}</section>
+  <div class="life-columns"><section class="card"><h2>Upcoming maintenance</h2>${table(tasks,[['title','Task'],['due_on','Due',r=>esc(stamp(r.due_on))],['due_odometer','Mileage',r=>esc(number(r.due_odometer))]],'Nothing is due.')}</section><section class="card"><h2>Recent activity</h2>${table(list(home.recentAudit).slice(0,6),[['created_at','When',r=>esc(stamp(r.created_at))],['action','Action',r=>esc(label(r.action))],['entity_type','Record',r=>esc(label(r.entity_type))]],'No recent activity.')}</section></div>`;
+  host.querySelector('#life-garage-inbox').onclick=()=>{local().section='inbox';draw();};
+  host.querySelectorAll('[data-vehicle]').forEach(button=>button.onclick=()=>{local().selected=button.dataset.vehicle;selectLifePage('garage','vehicles');});
+ });
+}
 function garage() {
   frame('garage',{vehicleId:local().selected},(host,data)=>{
     const vehicle=data.vehicle;

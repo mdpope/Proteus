@@ -5,6 +5,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {createHash,randomUUID} from 'node:crypto';
+import {CodexProvider} from '../src/providers/codex.js';
+import {SessionProvider} from '../src/providers/session-provider.js';
+import {turnAttachmentTools} from '../src/services/chats/attachment-input.js';
 import {startServer} from '../src/server.js';
 import {startRelay} from '../relay/server.js';
 import {atomicJSON} from '../src/shared/files.js';
@@ -68,6 +71,33 @@ test('explicit first-message and follow-up consent deliver only exact synthetic 
   const structuredConsent=await client.request('chat.attachments.authorize',{id:runId,providerId:'copilot',messageId:structuredId,attachments:[structuredFile]});
   await client.request('chat.answer-question',{id:runId,questionId:structured.id,answer:'More detail',messageId:structuredId,providerId:'copilot',attachments:[structuredFile.attachmentId],consentId:structuredConsent.consentId});
   assert.equal(steered.length,3);assert.deepEqual(steered.at(-1).attachments[0].bytes,png);
+  // Codex advertises PDF steering while keeping its native RPC inputs text/images.
+  const codex=new SessionProvider(()=>new CodexProvider());
+  provider.acceptedSteeringMediaTypes=codex.acceptedSteeringMediaTypes;
+  provider.inlineSteeringMediaTypes=codex.inlineSteeringMediaTypes;
+  const attachmentTool=turnAttachmentTools({attachmentInputs:()=>app.engine.turnAttachments.get(runId)},runId)[0];
+  for(const mode of ['steer','queue']){
+   const pdf=Buffer.from('%PDF-1.7\n%\u0000synthetic original PDF'),messageId=randomUUID();
+   const begun=await client.request('chat.attachments.begin',{id:runId,providerId:'copilot',messageId,name:'correction.pdf',mediaType:'application/pdf',size:pdf.length,sha256:createHash('sha256').update(pdf).digest('hex')});
+   await client.request('chat.attachments.chunk',{uploadId:begun.uploadId,index:0,dataBase64:pdf.toString('base64')});
+   const file=await client.request('chat.attachments.finish',{uploadId:begun.uploadId});
+   const consent=await client.request('chat.attachments.authorize',{id:runId,providerId:'copilot',messageId,attachments:[file]});
+   const offset=app.engine.turnAttachments.get(runId).length;
+   const send={id:runId,providerId:'copilot',messageId,prompt:'PDF correction',mode,attachments:[file.attachmentId],consentId:consent.consentId};
+   await client.request('chat.send',send);
+   if(mode==='queue'){
+    assert.equal((await client.request('chat.get',{id:runId})).queuedMessages.find(m=>m.id===messageId).canSteer,true);
+    await client.request('chat.steer-queued',{id:runId,messageId});
+   }
+   const delivered=steered.at(-1).attachments[0];assert.equal(delivered.mediaType,'text/plain');
+   assert.match(delivered.bytes.toString(),new RegExp('Attached file '+offset+': correction.pdf'));
+   assert.match(delivered.bytes.toString(),/proteus_attachments/);
+   const original=JSON.parse(await attachmentTool.handler({action:'read',index:offset,encoding:'base64'}));
+   assert.deepEqual(Buffer.from(original.content,'base64'),pdf);
+   const count=steered.length;
+   if(mode==='queue')await client.request('chat.steer-queued',{id:runId,messageId});else await client.request('chat.send',send);
+   assert.equal(steered.length,count);assert.equal(app.engine.getRun(runId).status,'running');
+  }
   const ambiguousId=randomUUID(),ambiguousFile=await upload({id:runId,providerId:'copilot',messageId:ambiguousId});
   const ambiguousConsent=await client.request('chat.attachments.authorize',{id:runId,providerId:'copilot',messageId:ambiguousId,attachments:[ambiguousFile]});
   await client.request('chat.send',{id:runId,prompt:'Ambiguous synthetic transport',providerId:'copilot',mode:'queue',messageId:ambiguousId,attachments:[ambiguousFile.attachmentId],consentId:ambiguousConsent.consentId});

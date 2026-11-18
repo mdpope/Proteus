@@ -66,8 +66,8 @@ function stagingStatus(job,{alive=processAlive}={}){
  if(alive(helper))return {directory,eligible:false,reason:'Helper is running'};
  const resolution=job.phase==='attention'?require('./attention-reconciliation.cjs').readAttentionResolution(job):null;
  if(!['cancelled','complete'].includes(job.phase)&&!resolution)return {directory,eligible:false,reason:'Update or recovery is unresolved'};
- if(job.failedBeforeReplacement)return {directory,eligible:false,reason:'Failed pre-install recovery requires inspection'};
- if((job.phase==='complete'||resolution)&&job.recovery){
+ if(job.failedBeforeReplacement&&resolution?.kind!=='superseded-failed-update')return {directory,eligible:false,reason:'Failed pre-install recovery requires inspection'};
+ if((job.phase==='complete'||resolution)&&job.recovery&&resolution?.kind!=='superseded-failed-update'){
   const inventory=recoveryPolicy(job.recoveryPolicy,job),row=inventory.generations.find(row=>row.directory===job.recovery);
   if(!row||!row.verified)return {directory,eligible:false,reason:'Recovery generation is not registered'};
   if(fileDigest(row.receiptFile)!==row.receiptHash)throw Error('Recovery receipt changed; staging was preserved.');

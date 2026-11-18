@@ -30,7 +30,7 @@ export async function openTerminalDialog(parentId=null,onCreated=null,guard=()=>
    const existing=managed.find(item=>item.id===choice);
    if(existing?.attached)throw new Error('This tmux session already has an attached viewer.');
    guard();const session=await bridge({action:'create',profileId:document.querySelector('#terminal-profile').value,rootId,directory,persistence:choice==='process'?'process':'tmux',...(existing?{tmuxSessionId:existing.id,tmuxSessionTag:existing.tag,resumeShell:true}:{})});
-   const tab={...tabFor(session),...(parentId?{parentId}:{})};if(onCreated)onCreated(tab);else ui.openTab(tab);
+   const tab={...tabFor(session),...(parentId?{parentId}:{})};if(onCreated)await onCreated(tab);else ui.openTab(tab);
   });
   const info=()=>{const p=state.profiles.profiles.find(p=>p.id===document.querySelector('#terminal-profile').value),existing=managed.find(item=>item.id===document.querySelector('#terminal-session').value);document.querySelector('#terminal-command').textContent=existing?'Attaches to the selected session; its startup command is not rerun.':p.command?'Startup command: '+p.command:'Starts your configured interactive shell.';};
   if(parent?.type==='workspace'){const select=document.querySelector('#terminal-root');select.querySelector('option[value=""]')?.remove();select.value=(roots.find(root=>root.primary)||roots[0]).id;}

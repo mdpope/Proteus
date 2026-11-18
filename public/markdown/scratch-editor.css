@@ -1,0 +1,3 @@
+html,body,#editor{margin:0;min-height:100%;background:transparent;color:var(--proteus-ink);font:16px/1.6 system-ui}.cm-editor{min-height:100vh}.cm-editor.cm-focused{outline:none}.cm-content{overflow-wrap:anywhere}.cm-selectionBackground{background:color-mix(in srgb,var(--proteus-accent) 28%,transparent)!important}
+
+.rich-text a{color:var(--proteus-accent)}.rich-text blockquote{color:var(--proteus-muted);border-color:var(--proteus-line)}.rich-text hr,.rich-text .md-code,.rich-text code{border-color:var(--proteus-line)}.rich-text code,.rich-text .md-code,.rich-text .md-codebar,.rich-text button{background:var(--proteus-panel);color:var(--proteus-ink)}

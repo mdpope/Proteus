@@ -1,4 +1,5 @@
 import {mountQuestionAttachments} from './question-attachments.js';
+import {mountChatLinks} from '../../shared/navigation/chat-links.js';
 import {bindEnterSubmit as bindQuestionReturn} from '../../shared/ui/enter-submit.js';
 const drafts=new Map(),attempts=new Map(),queueStates=new Map();
 // The transcript retains the original prose. Omit only a card heading that is
@@ -25,9 +26,9 @@ export function mountQuestionCard(host,question,{key,answer,clear,attachments,sh
   const signature=JSON.stringify([question,showHeading]);host.questionActions={answer,clear,notify};
   if(host.questionSignature===signature)return;
   host.questionSignature=signature;host.replaceChildren();host.className='user-question-card';host.dataset.questionId=question.id;
-  if(showHeading){const heading=document.createElement('h4');heading.textContent=question.text;host.append(heading);}
+  if(showHeading){const heading=document.createElement('h4');mountChatLinks(heading,question.text);host.append(heading);}
   if(question.status!=='pending'){
-    const status=document.createElement('p');status.textContent=question.status==='uncertain'?'Answer delivery unconfirmed. Inspect this session before sending another answer.':question.status==='sending'?'Sending answer…':question.status==='dismissed'?'Question dismissed.':'Answered'+(question.answer?': '+question.answer:'')+(question.deliveryState==='queued'?' · queued for the next turn':'');host.append(status);return;
+    const status=document.createElement('p');mountChatLinks(status,question.status==='uncertain'?'Answer delivery unconfirmed. Inspect this session before sending another answer.':question.status==='sending'?'Sending answer…':question.status==='dismissed'?'Question dismissed.':'Answered'+(question.answer?': '+question.answer:'')+(question.deliveryState==='queued'?' · queued for the next turn':''));host.append(status);return;
   }
   const form=document.createElement('form'),label=document.createElement('label'),input=document.createElement('textarea'),choices=document.createElement('div'),submit=document.createElement('button');
   label.textContent='Your answer';input.rows=2;input.value=drafts.get(key)||'';input.setAttribute('aria-label','Your answer');label.append(input);choices.className='user-question-choices';
@@ -60,6 +61,11 @@ export function mountQuestionQueue(host,run,{jump,answer,notify}){
   const open=host.querySelector('details')?.open;host.questionSignature=signature;host.replaceChildren();host.hidden=!questions.length;
   if(!questions.length)return;
   const details=document.createElement('details'),summary=document.createElement('summary');details.open=queueStates.get(run.id)??!!open;details.ontoggle=()=>{if(details.isConnected)queueStates.set(run.id,details.open);};summary.textContent=`Questions to answer (${questions.length})`;details.append(summary);
-  for(const question of questions)details.append(button(question.text,()=>{details.open=false;queueStates.set(run.id,false);void host.questionActions.jump(question);}));
+  for(const question of questions){
+    const open=()=>{details.open=false;queueStates.set(run.id,false);void host.questionActions.jump(question);};
+    const text=document.createElement('div');mountChatLinks(text,question.text);
+    if(text.querySelector('a')){text.append(button('Go to question',open));details.append(text);}
+    else details.append(button(question.text,open));
+  }
   host.className='user-question-queue';host.append(details);
 }

@@ -6,6 +6,9 @@ body.web-desktop-shell[data-browser-account] .shell{display:grid;grid-template-c
 body.web-desktop-shell[data-browser-account] .shell-tabbar{grid-area:1/1/2/-1;position:relative;top:auto;height:40px}
 body.web-desktop-shell[data-browser-account] .shell-workspace{grid-area:2/2;min-height:0;overflow:hidden}
 body.web-desktop-shell[data-browser-account] .main{height:100%;max-width:none;overflow:auto;padding:35px 34px 60px}
+body.web-desktop-shell[data-browser-account] .main:has(#life-reminders),body.web-desktop-shell[data-browser-account] .main:has(#scratchpad){padding:0}
+.web-feature-resource{padding:20px}.web-feature-resource[hidden]{display:none}.web-feature-resource iframe{width:100%;height:70vh;border:1px solid var(--proteus-line);margin-top:12px;border-radius:8px}
+#life-reminders .feature-workspace-tabs,#scratchpad .feature-workspace-tabs{position:sticky;top:0;z-index:10}
 body.web-desktop-shell[data-browser-account] .main:has(.remote-inner-tabs),body.web-desktop-shell[data-browser-account] .main:has(.team-tabs){padding-top:0;--subtab-gutter:34px}
 body.web-desktop-shell[data-browser-account] h1{font-size:29px;letter-spacing:-.8px;font-weight:620;line-height:1.25;margin:5px 0 9px}
 body.web-desktop-shell[data-browser-account] h2{font-size:17px;letter-spacing:-.2px;margin:0 0 17px}

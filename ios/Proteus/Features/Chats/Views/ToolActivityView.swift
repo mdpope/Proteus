@@ -67,8 +67,8 @@ struct NativeProviderActivityView: View {
                         }
                         Text("Values belong to the reported scope. Cache and reasoning counts can be subsets; missing values are not zero.").font(.caption).foregroundStyle(.secondary)
                     } else {
-                        Text("First observed: " + (activity["startedAt"].string.isEmpty ? "Start not recorded" : activity["startedAt"].string)).font(.caption)
-                        Text("Last observed: " + (activity["finishedAt"].string.isEmpty ? "End not recorded" : activity["finishedAt"].string)).font(.caption)
+                        Text("First observed: " + (activity["startedAt"].string.isEmpty ? "Start not recorded" : NativeHumanTime.text(activity["startedAt"].string))).font(.caption)
+                        Text("Last observed: " + (activity["finishedAt"].string.isEmpty ? "End not recorded" : NativeHumanTime.text(activity["finishedAt"].string))).font(.caption)
                         Text("Observed streaming intervals may include transport or waiting. Raw internal reasoning is not stored here.").font(.caption).foregroundStyle(.secondary)
                     }
                 }
@@ -257,7 +257,7 @@ struct ProviderModelPicker: View {
         if provider == "copilot" && !catalog["fusion"]["note"].string.isEmpty { Text(catalog["fusion"]["note"].string).font(.caption).foregroundStyle(.secondary) }
         if efforts.isEmpty { Text(controls["reasoningSupported"] == .bool(false) ? "This model does not support thinking effort." : "Thinking effort choices are not reported.").font(.caption).foregroundStyle(.secondary) }
         if controls["maxOutputTokens"].int > 0 { Text("Context size is the prompt budget. Maximum output: \(modelTokenSize(controls["maxOutputTokens"])) tokens.").font(.caption).foregroundStyle(.secondary) }
-        Text(catalog["checkedAt"].string.isEmpty ? "Catalog not checked yet." : "Catalog checked \(catalog["checkedAt"].string). Refreshes when \(hostName) launches and every five minutes.").font(.caption).foregroundStyle(.secondary)
+        Text(catalog["checkedAt"].string.isEmpty ? "Catalog not checked yet." : "Catalog checked \(NativeHumanTime.text(catalog["checkedAt"].string)). Refreshes when \(hostName) launches and every five minutes.").font(.caption).foregroundStyle(.secondary)
         if catalog["stale"].bool { Text("Using last known choices. \(catalog["error"].string)").font(.caption).foregroundStyle(.orange) }
         if catalog["available"] == .bool(false) || (!catalog["error"].string.isEmpty && models.isEmpty) {
             Text("\(providerName) needs attention on \(hostName). Open Proteus on \(hostName), complete its provider sign-in or reconnect there, then refresh available models here.").font(.caption).foregroundStyle(.orange)

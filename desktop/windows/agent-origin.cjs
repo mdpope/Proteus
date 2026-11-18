@@ -22,4 +22,9 @@ function originTab(tabs,tabId,windowId){
  if(!mirror)throw Error('This tab is not open in the submitting window. Refresh the tab list there or explicitly choose its owning window.');
  return mirror.id;
 }
-module.exports={agentWindow,originTab};
+/** The open app window that owns an exact tab ID, or null when it is closed or unknown. */
+function owningWindow(tabs,tabId,contexts){
+ const id=tabs.get(tabId)?.windowId||'main';if(!tabs.has(tabId))return null;
+ return contexts.some(ctx=>ctx.id===id&&!ctx.window.isDestroyed())?id:null;
+}
+module.exports={agentWindow,originTab,owningWindow};

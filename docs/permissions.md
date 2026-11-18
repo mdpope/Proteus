@@ -24,6 +24,14 @@ acceptance. See [BF-85 release evidence](2026-10-21-browser-chat-release.md).
 ## Production permission controls — October 18 candidate
 
 The tested independent chat mode/read-only/folder/action controls now run in the production host.
+
+Approved `proteus_folder_access` requests now persist a one-shot continuation with the exact chat
+grant. After the current provider exits normally, the owner queues one continuation so its sandbox
+can apply the grant. Already queued user input serves that purpose without an extra turn. Duplicate
+request/status calls do not add messages. Denied/revoked grants, Stop, failure and shutdown do not
+restart work. The tool tells the assistant to save its checkpoint and finish; it never interrupts
+an in-flight command, replays tool calls or widens shell/network/source authority. This source fix
+requires deployment; an older installed owner still needs an explicit next turn.
 The general `permissionControls` option selects this behavior; `desktopPreview` retains only preview
 runtime isolation compatibility. Promotion does not rewrite saved permission files or chat exceptions.
 Workspace defaults and remembered chat grants remain tied to their captured execution origin when

@@ -17,7 +17,7 @@ test('terminal output batches hidden writes, flushes on reveal and retains every
 test('completed runtime values create no scheduler and active timers release on completion/disconnection',()=>{
  const originalSet=globalThis.setInterval,originalClear=globalThis.clearInterval;let callback=null,starts=0,stops=0,reads=0;
  globalThis.setInterval=fn=>{callback=fn;starts++;return starts;};globalThis.clearInterval=()=>{callback=null;stops++;};
- const node={isConnected:true,textContent:'',classList:{add(){}},setAttribute(){}},root={querySelectorAll:()=>[node]};
+ const node={isConnected:true,textContent:'',classList:{add(){},contains:()=>false},setAttribute(){},getAttribute:()=>null},root={querySelectorAll:()=>[node]};
  try{
   bindRuntimeTimer(node,()=>String(++reads),false);assert.equal(starts,0);assert.equal(reads,1);
   let running=true;bindRuntimeTimer(node,()=>String(++reads),()=>running);assert.equal(starts,1);callback();assert.equal(node.textContent,'3');

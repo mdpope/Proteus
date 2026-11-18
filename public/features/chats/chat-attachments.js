@@ -1,6 +1,22 @@
 import {textAttachmentReason,htmlToMarkdown,insertTextAtSelection} from './clipboard-input.js';
 const selections=new Map(),sentPreviews=new Map();
-const MAX_BYTES=8*1024*1024,MAX_BATCH_BYTES=32*1024*1024,MAX_BATCH_FILES=256,CHUNK_BYTES=256*1024;
+// N11-18: no file type or size limits. Files are hashed and uploaded in slices so even very large
+// files never need to fit in renderer memory; the owner checks its own free disk space.
+const MAX_BATCH_FILES=256,CHUNK_BYTES=256*1024,HASH_SLICE_BYTES=4*1024*1024;
+// Incremental SHA-256 (WebCrypto has no streaming digest).
+const K=new Uint32Array([0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2]);
+export function createSha256(){
+  const h=new Uint32Array([0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19]),w=new Uint32Array(64),block=new Uint8Array(64);let used=0,length=0;
+  const compress=bytes=>{for(let i=0;i<16;i++)w[i]=bytes[i*4]<<24|bytes[i*4+1]<<16|bytes[i*4+2]<<8|bytes[i*4+3];
+    for(let i=16;i<64;i++){const a=w[i-15],b=w[i-2];w[i]=((a>>>7|a<<25)^(a>>>18|a<<14)^a>>>3)+w[i-7]+((b>>>17|b<<15)^(b>>>19|b<<13)^b>>>10)+w[i-16]|0;}
+    let [a,b,c,d,e,f,g,k]=h;for(let i=0;i<64;i++){const t1=k+((e>>>6|e<<26)^(e>>>11|e<<21)^(e>>>25|e<<7))+(e&f^~e&g)+K[i]+w[i]|0,t2=((a>>>2|a<<30)^(a>>>13|a<<19)^(a>>>22|a<<10))+(a&b^a&c^b&c)|0;k=g;g=f;f=e;e=d+t1|0;d=c;c=b;b=a;a=t1+t2|0;}
+    h[0]+=a;h[1]+=b;h[2]+=c;h[3]+=d;h[4]+=e;h[5]+=f;h[6]+=g;h[7]+=k;};
+  return {update(bytes){length+=bytes.length;let offset=0;if(used){const take=Math.min(64-used,bytes.length);block.set(bytes.subarray(0,take),used);used+=take;offset=take;if(used<64)return;compress(block);used=0;}
+      for(;offset+64<=bytes.length;offset+=64)compress(bytes.subarray(offset,offset+64));block.set(bytes.subarray(offset),0);used=bytes.length-offset;},
+    hex(){const bits=length*8;block[used++]=0x80;if(used>56){block.fill(0,used);compress(block);used=0;}block.fill(0,used,56);const view=new DataView(block.buffer);view.setUint32(56,Math.floor(bits/2**32));view.setUint32(60,bits>>>0);compress(block);return [...h].map(value=>(value>>>0).toString(16).padStart(8,'0')).join('');}};
+}
+export async function sha256File(file){const hash=createSha256();for(let offset=0;offset<file.size;offset+=HASH_SLICE_BYTES)hash.update(new Uint8Array(await file.slice(offset,offset+HASH_SLICE_BYTES).arrayBuffer()));return hash.hex();}
+export async function uploadFileChunks(file,chunkBytes,sendChunk){for(let offset=0,index=0;offset<file.size;offset+=chunkBytes,index++)await sendChunk(index,base64(new Uint8Array(await file.slice(offset,offset+chunkBytes).arrayBuffer())));}
 const escape=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const providerName=id=>({copilot:'Copilot',codex:'Codex',claude:'Claude'}[id]||id);
 const sizeLabel=size=>size>=1024*1024?(size/1024/1024).toFixed(1)+' MB':Math.ceil(size/1024)+' KB';
@@ -24,7 +40,7 @@ export function mountAttachmentPicker({key,host,textarea,provider,mediaTypes={},
     host.querySelectorAll('[data-attach-preview]').forEach(button=>button.onclick=()=>{const item=selectedAttachments(key)[Number(button.dataset.attachPreview)];if(item?.url)showPreview(item);});
     host.querySelectorAll('[data-attach-remove]').forEach(button=>button.onclick=()=>{const list=selectedAttachments(key),[item]=list.splice(Number(button.dataset.attachRemove),1);if(item?.url)URL.revokeObjectURL(item.url);render();onChange();});
   };
-  const add=files=>{const items=selectedAttachments(key).slice();for(const file of files){if(items.length>=maxFiles){notify('This reply accepts up to '+maxFiles+' attachments.');break;}if(!file.size||file.size>MAX_BYTES){notify('Each attachment must be 8 MB or smaller.');continue;}if(items.reduce((total,item)=>total+item.file.size,0)+file.size>MAX_BATCH_BYTES){notify('This message exceeds the attachment batch size.');break;}items.push({file,url:preview(file)});}selections.set(key,items);render();onChange();};
+  const add=files=>{const items=selectedAttachments(key).slice();for(const file of files){if(items.length>=maxFiles){notify('This reply accepts up to '+maxFiles+' attachments.');break;}items.push({file,url:preview(file)});}selections.set(key,items);render();onChange();};
   textarea?.addEventListener('paste',event=>{
     const clipboard=event.clipboardData;if(!clipboard)return;
     const files=[...(clipboard.items||[])].filter(item=>item.kind==='file').map(item=>item.getAsFile()).filter(Boolean);
@@ -36,18 +52,17 @@ export function mountAttachmentPicker({key,host,textarea,provider,mediaTypes={},
   host.addEventListener('attachments-restored',()=>{render();onChange();});render();return {refresh:render,clear:()=>{clearAttachments(key);render();onChange();}};
 }
 function confirmDelivery(files,destination,providerId){return new Promise(resolve=>{const dialog=document.createElement('dialog');dialog.className='attachment-confirm';dialog.innerHTML=`<h2>Send these files?</h2><p>Destination: <strong>${escape(destination)}</strong><br>AI provider: <strong>${escape(providerName(providerId))}</strong></p><ul>${files.map(item=>`<li>${escape(item.file.name)} · ${escape(item.file.type)} · ${sizeLabel(item.file.size)}</li>`).join('')}</ul><p class="note">Only these selected files will be sent with this message.</p><div class="actions"><button data-cancel>Cancel</button><button class="primary" data-confirm>Confirm Send</button></div>`;document.body.append(dialog);const finish=value=>{dialog.close();dialog.remove();resolve(value);};dialog.querySelector('[data-cancel]').onclick=()=>finish(false);dialog.querySelector('[data-confirm]').onclick=()=>finish(true);dialog.addEventListener('cancel',event=>{event.preventDefault();finish(false);},{once:true});dialog.showModal();});}
-async function sha256(bytes){const digest=await crypto.subtle.digest('SHA-256',bytes);return [...new Uint8Array(digest)].map(byte=>byte.toString(16).padStart(2,'0')).join('');}
 function base64(bytes){let binary='';for(let offset=0;offset<bytes.length;offset+=32768)binary+=String.fromCharCode(...bytes.subarray(offset,offset+32768));return btoa(binary);}
 export async function prepareAttachments({key,providerId,destination,chatId,draftId,messageId,mediaTypes,send}){
   const items=selectedAttachments(key);if(!items.length)return null;
-  if(items.length>MAX_BATCH_FILES||items.reduce((total,item)=>total+item.file.size,0)>MAX_BATCH_BYTES)throw new Error('This message exceeds the attachment batch limit.');
+  if(items.length>MAX_BATCH_FILES)throw new Error('This message has more than '+MAX_BATCH_FILES+' attachments.');
 
   if(!await confirmDelivery(items,destination,providerId))throw new Error('Attachment send cancelled.');
   const attachments=[];
-  for(const item of items){const bytes=new Uint8Array(await item.file.arrayBuffer()),hash=await sha256(bytes),scope=chatId?{id:chatId}:{draftId};const begun=await send('begin',{...scope,providerId,messageId,name:item.file.name,mediaType:item.file.type||'application/octet-stream',size:bytes.length,sha256:hash,...(item.file.lastModified?{modifiedAt:new Date(item.file.lastModified).toISOString()}:{}),...(item.file.createdAt?{createdAt:item.file.createdAt}:{})});for(let offset=0,index=0;offset<bytes.length;offset+=CHUNK_BYTES,index++)await send('chunk',{uploadId:begun.uploadId,index,dataBase64:base64(bytes.subarray(offset,offset+CHUNK_BYTES))});attachments.push(await send('finish',{uploadId:begun.uploadId}));}
+  for(const item of items){const hash=await sha256File(item.file),scope=chatId?{id:chatId}:{draftId};const begun=await send('begin',{...scope,providerId,messageId,name:item.file.name,mediaType:item.file.type||'application/octet-stream',size:item.file.size,sha256:hash,...(item.file.lastModified?{modifiedAt:new Date(item.file.lastModified).toISOString()}:{}),...(item.file.createdAt?{createdAt:item.file.createdAt}:{})});await uploadFileChunks(item.file,CHUNK_BYTES,(index,dataBase64)=>send('chunk',{uploadId:begun.uploadId,index,dataBase64}));attachments.push(await send('finish',{uploadId:begun.uploadId}));}
   const scope=chatId?{id:chatId}:{draftId},grant=await send('authorize',{...scope,providerId,messageId,attachments});
   sentPreviews.set(messageId,items.map(item=>({...item,url:preview(item.file)})));
-  while(sentPreviews.size>8||[...sentPreviews.values()].flat().reduce((total,item)=>total+item.file.size,0)>MAX_BATCH_BYTES){const id=sentPreviews.keys().next().value;for(const item of sentPreviews.get(id))if(item.url)URL.revokeObjectURL(item.url);sentPreviews.delete(id);}
+  while(sentPreviews.size>8||[...sentPreviews.values()].flat().reduce((total,item)=>total+item.file.size,0)>32*1024*1024){const id=sentPreviews.keys().next().value;for(const item of sentPreviews.get(id))if(item.url)URL.revokeObjectURL(item.url);sentPreviews.delete(id);}
   return {...scope,providerId,messageId,attachments:attachments.map(item=>item.attachmentId),consentId:grant.consentId};
 }
 export const prepareLocalAttachments=options=>prepareAttachments({...options,send:(action,args)=>options.post('/api/attachments',{action,...args})});

@@ -10,6 +10,32 @@ import {normalizeContentTabDescriptor,normalizeContentTabHistory,sameContentTab,
 import {createTabSynchronizer,rebaseTabChanges,tabChanges,syncableTabURL,shouldRemoveCapturedTab} from '../public/models/content-tab-sync.js';
 const pendingCount=values=>[...values.keys()].filter(key=>key.startsWith('proteus.navigation.pending:')).length;
 const tab=id=>({id,type:'browser',title:id,url:'https://example.test/'+id});
+test('preservation settle waits for hydration and discovers scopes opened by it',async()=>{
+ const first={scope:'project',id:'first'},second={scope:'project',id:'second'},peer={hostId:'remote-owner',scope:'project',id:'offline'};
+ const visible=[first,peer],local=new Map([['first',[]],['second',[]]]);let release;
+ const ready=new Promise(resolve=>{release=resolve;});let applied=false,done=false;
+ const sync=createTabSynchronizer({scopes:()=>visible,readLocal:async scope=>structuredClone(local.get(scope.id)),request:async scope=>{assert.ok(!scope.hostId);return {revision:1,tabs:[{id:'chat:'+scope.id,type:'chat',chatId:scope.id,title:scope.id}]};},apply:async(scope,tabs)=>{if(scope===first&&!applied){await ready;applied=true;visible.push(second);}local.set(scope.id,structuredClone(tabs));}});
+ const settled=sync.settle().then(result=>{done=true;return result;});await new Promise(resolve=>setImmediate(resolve));assert.equal(done,false);release();
+ assert.deepEqual(await settled,{settled:true,scopes:2});assert.equal(local.get('first').length,1);assert.equal(local.get('second').length,1);
+});
+test('preservation settle fails on swallowed read errors and respects retry backoff',async()=>{
+ let requests=0;const scope={scope:'project',id:'unavailable'};
+ const sync=createTabSynchronizer({scopes:()=>[scope],readLocal:async()=>[],request:async()=>{requests++;throw Error('offline');},apply:async()=>{assert.fail('No owner response');}});
+ await assert.rejects(sync.settle(),/synchronization has not completed/);await assert.rejects(sync.settle(),/synchronization has not completed/);assert.equal(requests,1);
+});
+test('preservation settle retains an uncertain mutation receipt',async()=>{
+ const scope={scope:'project',id:'uncertain'},values=new Map(),storage={getItem:key=>values.get(key),setItem:(key,value)=>values.set(key,value),removeItem:key=>values.delete(key)};let local=[];
+ const sync=createTabSynchronizer({pendingStorage:storage,scopes:()=>[scope],readLocal:async()=>structuredClone(local),request:async(_scope,action)=>{if(action==='get')return {revision:1,tabs:[]};throw Error('Connection lost after submission');},apply:async(_scope,tabs)=>{local=structuredClone(tabs);}});
+ await sync.settle();local=[tab('pending')];await assert.rejects(sync.settle(),/synchronization has not completed/);
+ const before=[...values];assert.ok(before.some(([key])=>key.startsWith('proteus.navigation.request:')));await assert.rejects(sync.settle(),/synchronization has not completed/);assert.deepEqual([...values],before);
+});
+test('preservation settle rejects journal backoff and unresolved navigation conflicts',async()=>{
+ for(const code of ['JOURNAL_BUSY','NAVIGATION_CONFLICT']){
+  const scope={scope:'project',id:code};let requests=0;
+  const sync=createTabSynchronizer({scopes:()=>[scope],readLocal:async()=>[],request:async()=>{requests++;throw Object.assign(Error(code),{code});},apply:async()=>{}});
+  await assert.rejects(sync.settle(),/synchronization has not completed/);if(code==='JOURNAL_BUSY'){await assert.rejects(sync.settle(),/synchronization has not completed/);assert.equal(requests,1);}
+ }
+});
 test('explicit draft replacement retains its position after owner chat creation',async t=>{
  const host=hostStore(t),scope={scope:'project',id:'draft-replacement'},before=tab('before'),draft=tab('draft'),after=tab('after');
  host.mutate({...scope,expectedRevision:0,operations:[before,draft,after].map(tab=>({action:'open',tab}))});

@@ -5,6 +5,7 @@ const {browserErrorDocument,errorColors}=require('./browser-error.cjs');
 const {BrowserCertificates}=require('./browser-certificates.cjs');
 const {mirrorHolds,restoreNavigation,commitNavigation,traverseNavigation,validPendingNavigation,acknowledgesNavigation}=require('./browser-navigation.cjs');
 const {BrowserCookieStore}=require('./browser-cookie-store.cjs');
+const {IncognitoSessions}=require('./incognito-sessions.cjs');
 const {BrowserPermissions}=require('./browser-permissions.cjs');
 const {BrowserExtensions}=require('./browser-extensions.cjs');
 const {preserveBackgroundFocus}=require('./browser-background-focus.cjs');
@@ -49,11 +50,12 @@ class BrowserTabs {
       void tab.view.webContents.loadURL(documentURL).catch(()=>{});
     }
     let site='this page';try{site=new URL(url||tab.view?.webContents?.getURL()).host;}catch{}
-    let log;try{log=this.options.onLoadError?.({tabId:tab.id,windowId:tab.windowId||'main',error,url,detail:description});}catch{/* A logging failure must not crash browser navigation. */}
+    let log;try{if(!tab.incognito)log=this.options.onLoadError?.({tabId:tab.id,windowId:tab.windowId||'main',error,url,detail:description});}catch{/* A logging failure must not crash browser navigation. */}
     if(log?.notificationId)return;
-    this.actions.send({type:'load-error',id:tab.id,logId:log?.id,hostId:log?.hostId,message:`Could not load ${site}: ${error.replace(/\s+/g,' ').slice(0,180)}`});
+    this.actions.send({type:tab.incognito?'error':'load-error',id:tab.id,logId:log?.id,hostId:log?.hostId,message:`Could not load ${site}: ${error.replace(/\s+/g,' ').slice(0,180)}`});
   }
   constructor(window, appOrigin, options = {}) {
+    this.incognito=new IncognitoSessions();
     this.options={...options,projects:options.projects===true||options.preview===true};this.history=options.history;this.sessions=new Map();this.certificates=new BrowserCertificates();this.cookieStores=new Map();this.sessionNames=new Map();this.blocker=options.home?new BrowserBlocker(options.home):null;
     this.agentAccess=options.home?new (require('./browser-agent-access.cjs').BrowserAgentAccess)(options.home):null;
     this.certificateReview=new (require('./browser-certificate-review.cjs').BrowserCertificateReview)(this);
@@ -77,6 +79,7 @@ class BrowserTabs {
         return;
       }
       if(this.transition)return;
+      if(tab.incognito){void this.command({action:direction,id:tab.id,gesture:true}).catch(()=>{});return;}
       const transition=this.transition=new PageSlide(this.window,tab.view.webContents,tab.view.getBounds());
       void transition.play(direction,()=>{void this.command({action:direction,id:tab.id,gesture:true}).catch(()=>{});},()=>!this.shuttingDown&&this.active===tab.id&&!!tab.view?.webContents&&!tab.view.webContents.isDestroyed()).finally(()=>{if(this.transition===transition)this.transition=null;});
     };
@@ -113,20 +116,21 @@ class BrowserTabs {
   async closeWindow(id){const ctx=this.windowRegistry?.contexts.get(id);if(!ctx)return;await this.windowRegistry.run(id,async()=>{this.actions.downloadManager?.closeWindow(id);this.transition?.cancel();for(const tab of this.windowTabs())await this.close(tab.id,{preserveCache:true});});}
   configureSession(partition,profileId){
     if(this.sessions.has(profileId))return partition;
-    this.sessions.set(profileId,partition);this.sessionNames.set(profileId,this.options.profiles?.partition(profileId)||'persist:proteus-browser');if(this.options.home)this.cookieStores.set(profileId,new BrowserCookieStore(this.options.home,partition,error=>this.actions.send({type:'error',message:'Browser sign-in persistence: '+error.message}),this.options.diagnostics));
+    this.sessions.set(profileId,partition);this.sessionNames.set(profileId,this.partitionName(profileId));if(this.options.home&&!this.incognito.has(profileId))this.cookieStores.set(profileId,new BrowserCookieStore(this.options.home,partition,error=>this.actions.send({type:'error',message:'Browser sign-in persistence: '+error.message}),this.options.diagnostics));
     this.certificates.install(partition);
     this.permissions.install(partition,profileId);partition.registerPreloadScript({type:'frame',filePath:require('node:path').join(__dirname,'browser-video-preload.cjs')});
     if(this.blocker){partition.registerPreloadScript({type:'frame',filePath:require.resolve('@ghostery/adblocker-electron-preload')});partition.webRequest.onHeadersReceived((details,callback)=>{const tab=[...this.tabs.values()].find(tab=>tab.view?.webContents&&!tab.view.webContents.isDestroyed()&&tab.view.webContents.id===details.webContentsId);if(!tab||!this.profileAvailable(tab)||!this.protection(tab).enabled||this.protection(tab).paused||!this.blocker.engine)return callback({});this.blocker.engine.onHeadersReceived(details,callback);});}
-    partition.on('will-download',(_event,item,webContents)=>{const tab=[...this.tabs.values()].find(t=>t.view?.webContents===webContents);if(!tab)return;tab.downloads??=new Set();tab.downloads.add(item);item.once('done',()=>tab.downloads.delete(item));});
-    if(partition!==this.partition)partition.on('will-download',this.actions.downloadHandler);
+    partition.on('will-download',(_event,item,webContents)=>{if(this.incognito.has(profileId)){_event.preventDefault();item.cancel();this.actions.send({type:'error',message:'Files are not saved from Incognito tabs. Open this download in an ordinary tab to save it.'});return;}const tab=[...this.tabs.values()].find(t=>t.view?.webContents===webContents);if(!tab)return;tab.downloads??=new Set();tab.downloads.add(item);item.once('done',()=>tab.downloads.delete(item));});
+    if(partition!==this.partition&&!this.incognito.has(profileId))partition.on('will-download',this.actions.downloadHandler);
     // This gate owns Electron's single request listener; integrations must compose here.
-    partition.webRequest.onBeforeRequest((details,callback)=>{let origin;try{origin=new URL(details.url).origin;}catch{return callback({cancel:true});}if(origin===this.appOrigin)return callback({cancel:true});let settings;try{if(this.sessionNames.get(profileId)!==(this.options.profiles?.partition(profileId)||'persist:proteus-browser'))throw new Error();settings=this.profile(profileId).settings||{};}catch{return callback({cancel:true});}const tab=[...this.tabs.values()].find(tab=>tab.view?.webContents&&!tab.view.webContents.isDestroyed()&&tab.view.webContents.id===details.webContentsId);if(tab&&details.resourceType==='mainFrame')tab.requestMethod=details.method;let site;try{site=new URL(tab?.view?.webContents?.getURL()||details.referrer||details.url).origin;}catch{}if(settings.blockingEnabled===false||settings.exceptions?.includes(site)||!this.blocker)return callback({});this.blocker.before(details,result=>{if(result.cancel&&tab){tab.blockedCount=(tab.blockedCount||0)+1;if(!this.blockNoticeTimer)this.blockNoticeTimer=setTimeout(()=>{this.blockNoticeTimer=null;this.changed();},150);}callback(result);});});
+    partition.webRequest.onBeforeRequest((details,callback)=>{let origin;try{origin=new URL(details.url).origin;}catch{return callback({cancel:true});}if(origin===this.appOrigin)return callback({cancel:true});let settings;try{if(this.sessionNames.get(profileId)!==this.partitionName(profileId))throw new Error();settings=this.profile(profileId).settings||{};}catch{return callback({cancel:true});}const tab=[...this.tabs.values()].find(tab=>tab.view?.webContents&&!tab.view.webContents.isDestroyed()&&tab.view.webContents.id===details.webContentsId);if(tab&&details.resourceType==='mainFrame')tab.requestMethod=details.method;let site;try{site=new URL(tab?.view?.webContents?.getURL()||details.referrer||details.url).origin;}catch{}if(settings.blockingEnabled===false||settings.exceptions?.includes(site)||!this.blocker)return callback({});this.blocker.before(details,result=>{if(result.cancel&&tab){tab.blockedCount=(tab.blockedCount||0)+1;if(!this.blockNoticeTimer)this.blockNoticeTimer=setTimeout(()=>{this.blockNoticeTimer=null;this.changed();},150);}callback(result);});});
     return partition;
   }
-  profile(id='default'){return this.options.profiles?.get(id)|| (id==='default'?{id:'default',name:'Default'}:(()=>{throw new Error('Browser profile unavailable.');})());}
-  sessionFor(id='default'){this.profile(id);if(this.sessions.has(id)&&this.sessionNames.get(id)!==(this.options.profiles?.partition(id)||'persist:proteus-browser'))throw new Error('This profile belongs to a different account. Restart Proteus before opening it.');return this.sessions.get(id)||this.configureSession(session.fromPartition(this.options.profiles.partition(id)),id);}
+  partitionName(id='default'){return this.incognito.has(id)?this.incognito.partition(id):this.options.profiles?.partition(id)||'persist:proteus-browser';}
+  profile(id='default'){return this.incognito.profiles.get(id)||this.options.profiles?.get(id)|| (id==='default'?{id:'default',name:'Default'}:(()=>{throw new Error('Browser profile unavailable.');})());}
+  sessionFor(id='default'){this.profile(id);if(this.sessions.has(id)&&this.sessionNames.get(id)!==this.partitionName(id))throw new Error('This profile belongs to a different account. Restart Proteus before opening it.');return this.sessions.get(id)||this.configureSession(session.fromPartition(this.partitionName(id),this.incognito.has(id)?{cache:false}:undefined),id);}
 
-  profileAvailable(tab){try{this.profile(tab.profileId);return !this.sessionNames.has(tab.profileId)||this.sessionNames.get(tab.profileId)===(this.options.profiles?.partition(tab.profileId)||'persist:proteus-browser');}catch{return false;}}
+  profileAvailable(tab){try{this.profile(tab.profileId);return !this.sessionNames.has(tab.profileId)||this.sessionNames.get(tab.profileId)===this.partitionName(tab.profileId);}catch{return false;}}
   refreshErrorThemes(){
     if(!this.options.errorPalette)return;const colors=errorColors(this.options.errorPalette()),signature=JSON.stringify(colors);
     for(const tab of this.tabs.values()){const wc=tab.view?.webContents,page=tab.errorPage;if(!page||!wc||wc.isDestroyed()||wc.getURL()!==page.documentURL||page.paletteSignature===signature)continue;page.paletteSignature=signature;wc.send('proteus:browser-error-colors',colors);}
@@ -147,25 +151,25 @@ class BrowserTabs {
   protection(tab){let origin;try{origin=new URL(tab.view?.webContents?.getURL()||tab.snapshot?.url).origin;}catch{}let settings;try{settings=this.profile(tab.profileId).settings||{};}catch{settings={blockingEnabled:false};}return {ready:!!this.blocker?.engine,enabled:settings.blockingEnabled!==false,paused:!!origin&&settings.exceptions?.includes(origin)===true,count:tab.blockedCount||0};}
   savedIcons({profileId='default',urls=[]}={}) {
     this.profile(profileId);if(!Array.isArray(urls)||urls.length>100)throw Error('Choose at most 100 saved website icons.');
-    const partition=this.options.profiles?.partition(profileId)||'persist:proteus-browser';
+    const partition=this.partitionName(profileId);
     if(this.sessionNames.has(profileId)&&this.sessionNames.get(profileId)!==partition)throw Error('Browser profile unavailable.');
     const entries=this.siteSettings?.entries(partition)||{},icons={};let bytes=0;
     for(const url of urls){const origin=siteOrigin(url),icon=origin&&safeFavicon(entries[origin]?.favicon);if(icon&&bytes+icon.length<=512000){icons[url]=icon;bytes+=icon.length;}}
     return {icons};
   }
   agentIdentity(tab){return tab.thumbnailId||tab.id;}
-  agentStatus(tab){return {agentPaused:this.agentAccess?this.agentAccess.paused(this.agentIdentity(tab)):tab.agentPaused!==false,agentAccessRevision:this.agentAccess?.revision||0};}
+  agentStatus(tab){if(tab.incognito)return {agentPaused:true,agentAccessRevision:0};return {agentPaused:this.agentAccess?this.agentAccess.paused(this.agentIdentity(tab)):tab.agentPaused!==false,agentAccessRevision:this.agentAccess?.revision||0};}
   state(tab, includeHistory=false) { return this.profileDisplay(()=>this.projectState(tab,includeHistory)); }
   projectState(tab, includeHistory=false) {
-    const audio={audioMuted:tab.audioMuted===true,audioPlaying:!!tab.view?.webContents&&!tab.view.webContents.isDestroyed()&&tab.view.webContents.isCurrentlyAudible()};
-    if(!tab.view?.webContents||tab.view.webContents.isDestroyed())return {...tab.snapshot,...audio,navigationPending:tab.navigationPending===true,...this.previewState(tab),...this.agentStatus(tab),associationChatId:tab.associationChatId||null,persist:tab.persist===true,openedAt:tab.openedAt?new Date(tab.openedAt).toISOString():null,profileLocked:!this.profileAvailable(tab),siteMode:this.siteMode(tab),extensionsEnabled:this.extensions?.hasEnabled(tab.profileId)===true,profileName:this.options.profiles?.list().items.find(p=>p.id===tab.profileId)?.name||'Unavailable profile',profileId:tab.profileId||'default',id:tab.id,group:tab.group||'main',parentId:tab.parentId||null,loaded:false,loading:false,findRevision:tab.findRevision||0,shared:false,owner:null,resumeOwner:tab.resumeOwner||null,agentControlling:false,lastTouchedAt:tab.lastTouchedAt?new Date(tab.lastTouchedAt).toISOString():null};
+    const audio={incognito:tab.incognito===true,audioMuted:tab.audioMuted===true,audioPlaying:!!tab.view?.webContents&&!tab.view.webContents.isDestroyed()&&tab.view.webContents.isCurrentlyAudible()};
+    if(!tab.view?.webContents||tab.view.webContents.isDestroyed())return {...tab.snapshot,...audio,navigationPending:tab.navigationPending===true,...this.previewState(tab),...this.agentStatus(tab),associationChatId:tab.associationChatId||null,persist:tab.persist===true,openedAt:tab.openedAt?new Date(tab.openedAt).toISOString():null,profileLocked:!this.profileAvailable(tab),siteMode:this.siteMode(tab),extensionsEnabled:this.extensions?.hasEnabled(tab.profileId)===true,profileName:tab.incognito?'Incognito':this.options.profiles?.list().items.find(p=>p.id===tab.profileId)?.name||'Unavailable profile',profileId:tab.profileId||'default',id:tab.id,group:tab.group||'main',parentId:tab.parentId||null,loaded:false,loading:false,findRevision:tab.findRevision||0,shared:false,owner:null,resumeOwner:tab.resumeOwner||null,agentControlling:false,lastTouchedAt:tab.lastTouchedAt?new Date(tab.lastTouchedAt).toISOString():null};
     const wc = tab.view.webContents,liveURL=wc.getURL(),privateLocal=!tab.errorPage&&!!liveURL&&liveURL!=='about:blank'&&(!safeHistoryURL(liveURL,this.appOrigin)||isAuthenticationURL(liveURL));
     const selectedEntry=tab.logicalHistory?.entries[tab.logicalHistory.index];
     if(selectedEntry?.url===liveURL&&!wc.isLoading()&&wc.getTitle()&&!mirrorHolds(tab))selectedEntry.title=String(wc.getTitle()).slice(0,200);
     const pendingLogical=tab.navigationPending&&selectedEntry&&(tab.navigationURL||tab.pageNavigationURL||wc.isLoading());
     const rememberedTitle=selectedEntry?.title||tab.retainedTitle;
     const pageTitle=pendingLogical?(selectedEntry.title||new URL(selectedEntry.url).hostname):(tab.applyingShared||wc.isLoading()||!liveURL||liveURL==='about:blank')&&rememberedTitle?rememberedTitle:wc.getTitle()||rememberedTitle;
-    return {...(tab.localLanding&&mirrorHolds(tab)&&selectedEntry?{sharedURL:selectedEntry.url}:{}),...this.previewState(tab),...audio,...this.agentStatus(tab),associationChatId:tab.associationChatId||null,developerShared:tab.developerShared===true, persist:tab.persist===true,openedAt:tab.openedAt?new Date(tab.openedAt).toISOString():null,navigationPending:tab.navigationPending===true,privateLocal,id: tab.id,destination:tab.destination,workspaceName:tab.workspaceName,siteMode:this.siteMode(tab),extensionsEnabled:this.extensions?.hasEnabled(tab.profileId)===true,protection:this.protection(tab),profileLocked:!this.profileAvailable(tab),blockedCount:tab.blockedCount||0,profileId:tab.profileId||'default',profileName:this.options.profiles?.list().items.find(p=>p.id===tab.profileId)?.name||'Default',group:tab.group||'main',parentId:tab.parentId||null,loaded:true,findRevision:tab.findRevision||0,pid:wc.getOSProcessId(),lastTouchedAt:tab.lastTouchedAt?new Date(tab.lastTouchedAt).toISOString():null, url: pendingLogical?selectedEntry.url:safeHistoryURL(wc.getURL(),this.appOrigin)?wc.getURL():(selectedEntry?.url||wc.getURL()), title: pageTitle || (liveURL ? new URL(liveURL).hostname : 'New tab'), loading: wc.isLoading()||this.reloading.has(tab.id),
+    return {...(tab.localLanding&&mirrorHolds(tab)&&selectedEntry?{sharedURL:selectedEntry.url}:{}),...this.previewState(tab),...audio,...this.agentStatus(tab),associationChatId:tab.associationChatId||null,developerShared:tab.developerShared===true, persist:tab.persist===true,openedAt:tab.openedAt?new Date(tab.openedAt).toISOString():null,navigationPending:tab.navigationPending===true,privateLocal,id: tab.id,destination:tab.destination,workspaceName:tab.workspaceName,siteMode:this.siteMode(tab),extensionsEnabled:this.extensions?.hasEnabled(tab.profileId)===true,protection:this.protection(tab),profileLocked:!this.profileAvailable(tab),blockedCount:tab.blockedCount||0,profileId:tab.profileId||'default',profileName:tab.incognito?'Incognito':this.options.profiles?.list().items.find(p=>p.id===tab.profileId)?.name||'Default',group:tab.group||'main',parentId:tab.parentId||null,loaded:true,findRevision:tab.findRevision||0,pid:wc.getOSProcessId(),lastTouchedAt:tab.lastTouchedAt?new Date(tab.lastTouchedAt).toISOString():null, url: pendingLogical?selectedEntry.url:safeHistoryURL(wc.getURL(),this.appOrigin)?wc.getURL():(selectedEntry?.url||wc.getURL()), title: pageTitle || (liveURL ? new URL(liveURL).hostname : 'New tab'), loading: wc.isLoading()||this.reloading.has(tab.id),
       canGoBack: tab.logicalHistory?tab.logicalHistory.index>0:wc.navigationHistory.canGoBack(), canGoForward: tab.logicalHistory?tab.logicalHistory.index<tab.logicalHistory.entries.length-1:wc.navigationHistory.canGoForward(), shared: tab.shared, owner: tab.owner,resumeOwner:tab.resumeOwner||null, agentControlling:!!tab.agentActions, favicon:tab.favicon||'', error: tab.error || null, ...((includeHistory||tab.logicalHistory)?{history:tab.logicalHistory||normalizeHistory({entries:wc.navigationHistory.getAllEntries(),index:wc.navigationHistory.getActiveIndex()},this.appOrigin)}:{}) };
   }
   list(includeHistory=false) { const project=()=>this.profileDisplay(()=>[...this.tabs.values()].filter(tab=>!tab.closePromise&&!tab.pendingCreation).map(tab=>this.state(tab,includeHistory)));return this.options.diagnostics?this.options.diagnostics.measureSync('browser.state.project',project):project(); }
@@ -265,12 +269,12 @@ class BrowserTabs {
   }
   thumbnailKey(tab){return 'browser:'+(this.sessionNames?.get(tab.profileId)||tab.profileId||'default')+':'+(tab.thumbnailId||tab.id);}
   scheduleThumbnail(tab){
-    if(!this.thumbnails||this.active!==tab.id||this.overviewOpen||this.overlays?.size||this.shuttingDown||tab.thumbnailTimer)return;
+    if(tab.incognito||!this.thumbnails||this.active!==tab.id||this.overviewOpen||this.overlays?.size||this.shuttingDown||tab.thumbnailTimer)return;
     tab.thumbnailTimer=setTimeout(()=>{tab.thumbnailTimer=null;void this.captureThumbnail(tab);},Math.max(650,5000-(Date.now()-(tab.thumbnailAt||0))));tab.thumbnailTimer.unref?.();
   }
   async captureThumbnail(tab){
     if(this.windowRegistry&&tab.windowId!==this.windowId())return this.windowRegistry.run(tab.windowId,()=>this.captureThumbnail(tab));
-    const wc=tab.view?.webContents;if(Date.now()-(tab.lastScrollAt||0)<1200)return;if(!this.thumbnails||this.active!==tab.id||this.overviewOpen||this.overlays?.size||this.shuttingDown||this.tabs.get(tab.id)!==tab||!wc||wc.isDestroyed()||wc.isLoading()||!this.profileAvailable(tab)||!safeHistoryURL(wc.getURL(),this.appOrigin)||isAuthenticationURL(wc.getURL()))return;
+    const wc=tab.view?.webContents;if(Date.now()-(tab.lastScrollAt||0)<1200)return;if(tab.incognito||!this.thumbnails||this.active!==tab.id||this.overviewOpen||this.overlays?.size||this.shuttingDown||this.tabs.get(tab.id)!==tab||!wc||wc.isDestroyed()||wc.isLoading()||!this.profileAvailable(tab)||!safeHistoryURL(wc.getURL(),this.appOrigin)||isAuthenticationURL(wc.getURL()))return;
     const revision=tab.captureRevision||0,key=this.thumbnailKey(tab);tab.thumbnailAt=Date.now();
     try{const image=await wc.capturePage();if(image.isEmpty()||this.tabs.get(tab.id)!==tab||tab.view?.webContents!==wc||revision!==(tab.captureRevision||0)||this.overviewOpen||this.overlays.size)return;this.thumbnails.set(key,image.resize({width:360}).toJPEG(65));}catch{/* Keep the last good thumbnail. */}
   }
@@ -304,13 +308,17 @@ class BrowserTabs {
     } finally { this.retentionBusy=false; }
   }
   async create(url, owner = null, savedHistory = null, descriptor = {}) {
+    if(descriptor.incognito===true||this.incognito.has(descriptor.profileId)){
+      if(owner)throw Error('Incognito tabs cannot be shared with an agent.');
+      descriptor={...descriptor,incognito:true,persist:false,profileId:descriptor.recreating&&this.incognito.has(descriptor.profileId)?descriptor.profileId:this.incognito.create()};
+    }
     // Persist keeps an existing live page resident. It must not eagerly create
     // another renderer for a dormant representation in a sibling window.
     if(descriptor.restore&&descriptor.unloaded&&descriptor.contentTabId&&[...this.tabs.values()].some(tab=>tab.windowId!==this.windowId()&&tab.thumbnailId===descriptor.contentTabId&&tab.parentId===descriptor.parentId&&tab.profileId===(descriptor.profileId||'default')))descriptor.mirror=true;
-    if(descriptor.deferLoad===true)descriptor.unloaded=true;else if(descriptor.persist&&descriptor.mirror!==true){descriptor.unloaded=false;if(descriptor.hidden)descriptor.background=true;}else if(this.options.projects&&descriptor.hidden===true&&!descriptor.background)descriptor.unloaded=true;const profileId=descriptor.profileId||'default';if(!/^default$|^[a-f0-9-]{36}$/i.test(profileId))throw new Error('Choose a browser profile.');let partition;try{partition=this.sessionFor(profileId);}catch(error){if(!descriptor.restore)throw error;descriptor.unloaded=true;}if(partition){await this.cookieStores.get(profileId)?.ready;await this.extensions?.initialize(profileId,partition);}
+    if(descriptor.deferLoad===true)descriptor.unloaded=true;else if(descriptor.persist&&descriptor.mirror!==true){descriptor.unloaded=false;if(descriptor.hidden)descriptor.background=true;}else if(this.options.projects&&descriptor.hidden===true&&!descriptor.background)descriptor.unloaded=true;const profileId=descriptor.profileId||'default';if(!/^default$|^[a-f0-9-]{36}$/i.test(profileId))throw new Error('Choose a browser profile.');let partition;try{partition=this.sessionFor(profileId);}catch(error){if(!descriptor.restore)throw error;descriptor.unloaded=true;}if(partition){await this.cookieStores.get(profileId)?.ready;if(!descriptor.incognito)await this.extensions?.initialize(profileId,partition);}
     if(descriptor.unloaded===true){
       const logicalHistory=restoreNavigation(savedHistory,this.appOrigin),history=logicalHistory||normalizeHistory(savedHistory,this.appOrigin), address=history?.entries[history.index]?.url||safeHistoryURL(url,this.appOrigin)||'';
-      const tab={audioMuted:descriptor.audioMuted===true,logicalHistory,navigationPending:descriptor.navigationPending===true&&validPendingNavigation(savedHistory)&&!!logicalHistory,...(this.options.projects?{hidden:descriptor.hidden===true,destination:descriptor.destination,workspaceName:descriptor.workspaceName,lastActivityAt:Date.parse(descriptor.lastActivityAt)||Date.parse(descriptor.openedAt)||(descriptor.restore||descriptor.recreating?null:Date.now())}:{}),associationChatId:descriptor.associationChatId||owner||null,resumeOwner:owner||descriptor.resumeOwner||null,persist:descriptor.persist===true,openedAt:Date.parse(descriptor.openedAt)||(descriptor.restore||descriptor.recreating?null:Date.now()),profileId,parentId:typeof descriptor.parentId==='string'?descriptor.parentId.slice(0,256):null,id:descriptor.id||randomUUID(),group:descriptor.group==='team'?'team':'main',shared:false,owner:null,view:null,lastTouchedAt:Date.parse(descriptor.lastTouchedAt)||(descriptor.restore||descriptor.recreating?null:Date.now()),snapshot:{favicon:safeFavicon(descriptor.favicon),url:address,title:descriptor.title|| (address?new URL(address).hostname:'New tab'),history,canGoBack:(history?.index||0)>0,canGoForward:!!history&&history.index<history.entries.length-1,error:null}};
+      const tab={incognito:descriptor.incognito===true,audioMuted:descriptor.audioMuted===true,logicalHistory,navigationPending:descriptor.navigationPending===true&&validPendingNavigation(savedHistory)&&!!logicalHistory,...(this.options.projects?{hidden:descriptor.hidden===true,destination:descriptor.destination,workspaceName:descriptor.workspaceName,lastActivityAt:Date.parse(descriptor.lastActivityAt)||Date.parse(descriptor.openedAt)||(descriptor.restore||descriptor.recreating?null:Date.now())}:{}),associationChatId:descriptor.associationChatId||owner||null,resumeOwner:owner||descriptor.resumeOwner||null,persist:descriptor.persist===true,openedAt:Date.parse(descriptor.openedAt)||(descriptor.restore||descriptor.recreating?null:Date.now()),profileId,parentId:typeof descriptor.parentId==='string'?descriptor.parentId.slice(0,256):null,id:descriptor.id||randomUUID(),group:descriptor.group==='team'?'team':'main',shared:false,owner:null,view:null,lastTouchedAt:Date.parse(descriptor.lastTouchedAt)||(descriptor.restore||descriptor.recreating?null:Date.now()),snapshot:{favicon:safeFavicon(descriptor.favicon),url:address,title:descriptor.title|| (address?new URL(address).hostname:'New tab'),history,canGoBack:(history?.index||0)>0,canGoForward:!!history&&history.index<history.entries.length-1,error:null}};
       const placement=this.previewPlacement(tab);if(placement)Object.assign(tab,placement);
       mirrorRestoredEntry(tab,descriptor);tab.pendingCreation=descriptor.pendingCreation===true;tab.windowId=this.windowId();tab.thumbnailId=descriptor.contentTabId||descriptor.thumbnailId||tab.id;tab.agentPaused=!owner;if(owner)this.agentAccess?.set(this.agentIdentity(tab),false);this.tabs.set(tab.id,tab);this.changed();return this.state(tab,true);
     }
@@ -318,7 +326,7 @@ class BrowserTabs {
     if(partition!==this.sessionFor(profileId))throw new Error('The browser profile changed.');
     const backgroundWindow=descriptor.background?this.window:null,previousFocus=backgroundWindow?.isFocused()?webContents.getFocusedWebContents():null;
     const preserveFocus=previousFocus&&(previousFocus===backgroundWindow.webContents||this.windowTabs().some(tab=>tab.view?.webContents===previousFocus));
-    const tab = { audioMuted:descriptor.audioMuted===true,...(this.options.projects?{hidden:descriptor.hidden===true,lastActivityAt:Date.parse(descriptor.lastActivityAt)||Date.parse(descriptor.openedAt)||(descriptor.restore||descriptor.recreating?null:Date.now())}:{}),associationChatId:descriptor.associationChatId||owner||null,persist:descriptor.persist===true,openedAt:Date.parse(descriptor.openedAt)||(descriptor.restore||descriptor.recreating?null:Date.now()),profileId,parentId:typeof descriptor.parentId==='string'?descriptor.parentId.slice(0,256):descriptor.explicitParent?null:owner,destination:descriptor.destination,workspaceName:descriptor.workspaceName,id: descriptor.id||randomUUID(), group:descriptor.group==='team'?'team':'main', favicon:safeFavicon(descriptor.favicon), agentActions:owner?1:0,lastAgentProgressAt:owner?Date.now():null, shared: false, owner, lastTouchedAt:Date.parse(descriptor.lastTouchedAt)||(descriptor.restore||descriptor.recreating?null:Date.now()), view: new WebContentsView({ webPreferences: {
+    const tab = { incognito:descriptor.incognito===true,audioMuted:descriptor.audioMuted===true,...(this.options.projects?{hidden:descriptor.hidden===true,lastActivityAt:Date.parse(descriptor.lastActivityAt)||Date.parse(descriptor.openedAt)||(descriptor.restore||descriptor.recreating?null:Date.now())}:{}),associationChatId:descriptor.associationChatId||owner||null,persist:descriptor.persist===true,openedAt:Date.parse(descriptor.openedAt)||(descriptor.restore||descriptor.recreating?null:Date.now()),profileId,parentId:typeof descriptor.parentId==='string'?descriptor.parentId.slice(0,256):descriptor.explicitParent?null:owner,destination:descriptor.destination,workspaceName:descriptor.workspaceName,id: descriptor.id||randomUUID(), group:descriptor.group==='team'?'team':'main', favicon:safeFavicon(descriptor.favicon), agentActions:owner?1:0,lastAgentProgressAt:owner?Date.now():null, shared: false, owner, lastTouchedAt:Date.parse(descriptor.lastTouchedAt)||(descriptor.restore||descriptor.recreating?null:Date.now()), view: new WebContentsView({ webPreferences: {
       ...pageWebPreferences({preload: require('node:path').join(__dirname,'browser-preload.cjs'), session: partition, webSecurity: true, disableHtmlFullscreenWindowResize:true, backgroundThrottling: true, additionalArguments:this.media?.blocked?['--proteus-block-video-autoplay']:[]})
     } }) };
     tab.pendingCreation=descriptor.pendingCreation===true;tab.windowId=this.windowId();tab.retainedTitle=descriptor.title;tab.logicalHistory=restoreNavigation(savedHistory||descriptor.retainedNavigation,this.appOrigin);tab.navigationPending=descriptor.navigationPending===true&&validPendingNavigation(savedHistory||descriptor.retainedNavigation)&&!!tab.logicalHistory;mirrorRestoredEntry(tab,descriptor);tab.applyingShared=!!tab.logicalHistory||!!(this.options.projects&&(descriptor.restore||descriptor.recreating));
@@ -334,7 +342,7 @@ class BrowserTabs {
     backgroundFocus.restore();
     for(const event of ['media-started-playing','media-paused'])tab.view.webContents.on(event,()=>this.updateThrottling());
     tab.thumbnailId=descriptor.contentTabId||descriptor.thumbnailId||tab.thumbnailId||tab.id;
-    const wc = tab.view.webContents;const bind=callback=>this.windowRegistry?this.windowRegistry.bind(tab.windowId,callback):callback;const on=(name,callback)=>wc.on(name,bind(callback));on('did-start-navigation',details=>{if(details.isMainFrame&&!details.isSameDocument)tab.blockedCount=0;});this.extensions?.addTab(profileId,wc);
+    const wc = tab.view.webContents;const bind=callback=>this.windowRegistry?this.windowRegistry.bind(tab.windowId,callback):callback;const on=(name,callback)=>wc.on(name,bind(callback));on('did-start-navigation',details=>{if(details.isMainFrame&&!details.isSameDocument)tab.blockedCount=0;});if(!tab.incognito)this.extensions?.addTab(profileId,wc);
     this.certificateReview.bind(tab,wc);
     wc.setAudioMuted(tab.audioMuted);on('audio-state-changed',()=>{this.updateThrottling();this.changed();});
     this.videoPopout.bind(tab);wc.setZoomMode('isolated');
@@ -391,16 +399,17 @@ class BrowserTabs {
     on('input-event',(_event,input)=>{if(!tab.videoPopout&&['gesturePinchBegin','gesturePinchEnd'].includes(input.type))wc.send('proteus:pinch-boundary',{type:input.type,zoom:wc.getZoomFactor()});});
     // Links to other applications (zoommtg:, msteams:, mailto:…) ask before opening,
     // like a real browser, instead of being silently dropped as invalid addresses.
+    const callback=target=>!tab.incognito&&this.options.handleCallback?.(target);
     const external=(target)=>{const url=externalProtocolURL(target);if(!url)return false;void this.externalProtocols.request(tab,url.href,wc.getURL()).catch(error=>this.actions.send({type:'error',id:tab.id,message:error.message}));return true;};
-    on('will-frame-navigate',details=>{if(details.isMainFrame===false&&!this.options.handleCallback?.(details.url)&&external(details.url))details.preventDefault?.();});
+    on('will-frame-navigate',details=>{if(details.isMainFrame===false&&!callback(details.url)&&external(details.url))details.preventDefault?.();});
     wc.setWindowOpenHandler(bind(({ url: next }) => {
-      try { if(this.options.handleCallback?.(next))return {action:'deny'};if(external(next))return {action:'deny'};const address = this.address(next); void this.create(address, tab.owner,null,{profileId:tab.profileId,group:tab.group,parentId:tab.parentId}).then(info=>this.actions.send({type:'select-tab',info,afterId:tab.id})).catch(error=>this.actions.send({type:'error',message:error.message})); } catch { /* Unsupported schemes remain blocked. */ }
+      try { if(callback(next))return {action:'deny'};if(external(next))return {action:'deny'};const address = this.address(next); void this.create(address, tab.owner,null,{profileId:tab.profileId,group:tab.group,parentId:tab.parentId}).then(info=>this.actions.send({type:'select-tab',info,afterId:tab.id})).catch(error=>this.actions.send({type:'error',message:error.message})); } catch { /* Unsupported schemes remain blocked. */ }
       return { action: 'deny' };
     }));
-    on('will-redirect',(event,next,_same,isMainFrame)=>{if((event.isMainFrame??isMainFrame)===false)return;if(this.options.handleCallback?.(event.url||next)){event.preventDefault();return;}if(external(event.url||next)){event.preventDefault();return;}const address=safeHistoryURL(event.url||next,this.appOrigin);if(address){void this.applySiteMode(tab,address,false);commitNavigation(tab,address,'',{redirect:true});this.changed();}});
+    on('will-redirect',(event,next,_same,isMainFrame)=>{if((event.isMainFrame??isMainFrame)===false)return;if(callback(event.url||next)){event.preventDefault();return;}if(external(event.url||next)){event.preventDefault();return;}const address=safeHistoryURL(event.url||next,this.appOrigin);if(address){void this.applySiteMode(tab,address,false);commitNavigation(tab,address,'',{redirect:true});this.changed();}});
     on('will-navigate', (event, next) => {
       try {
-        if(this.options.handleCallback?.(event.url||next)){event.preventDefault();return;}
+        if(callback(event.url||next)){event.preventDefault();return;}
         if(external(event.url||next)){event.preventDefault();return;}
         const address=this.address(event.url||next);
         void this.applySiteMode(tab,address,false);
@@ -495,15 +504,19 @@ class BrowserTabs {
     const tab=this.tabs.get(id);if(!tab)return;
     if(tab.closePromise)return tab.closePromise;
     tab.closePromise=(async()=>{
-      if(!this.shuttingDown&&!preserveCache&&!presentationOnly)await this.options.closeLogicalTab?.(tab);
+      if(!tab.incognito&&!this.shuttingDown&&!preserveCache&&!presentationOnly)await this.options.closeLogicalTab?.(tab);
       if(id===this.active)this.transition?.cancel();this.videoPopout.close(tab);
       tab.shared=false;tab.owner=null;tab.resumeOwner=null;tab.faviconResolver?.close();clearTimeout(tab.thumbnailTimer);if(!this.shuttingDown&&!preserveCache)this.thumbnails?.delete(this.thumbnailKey(tab));
       if(tab.view){const wc=tab.view.webContents;cancelNavigation(wc,'Browser tab closed during navigation.');await this.disconnect(tab);if(!wc.isDestroyed()){this.window.contentView.removeChildView(tab.view);wc.close();}}
+      if(tab.incognito){const partition=this.sessions.get(tab.profileId);await this.incognito.close(tab.profileId,partition);this.certificates.forget(partition);this.certificateReview.forget(tab,partition);this.siteSettings.forget(this.sessionNames.get(tab.profileId));this.permissions.forget(tab.profileId);for(const [key,value]of this.siteData.snapshots)if(value.profileId===tab.profileId)this.siteData.snapshots.delete(key);this.sessions.delete(tab.profileId);this.sessionNames.delete(tab.profileId);}
       this.tabs.delete(id);if(this.active===id)this.active=null;this.changed();
     })().finally(()=>{if(this.tabs.get(id)===tab)tab.closePromise=null;});return tab.closePromise;
   }
-  async unload(id, {hiding=false,requesterRunId=null}={}) {
-    const owner=this.tabs.get(id)?.windowId;if(this.windowRegistry&&owner&&owner!==this.windowId())return this.windowRegistry.run(owner,()=>this.unload(id,{hiding,requesterRunId}));
+  // `workspaceClosed`: the user closed this tab's workspace in its window. That explicit
+  // intent releases audible pages too; active agent turns, downloads, pop-outs and unsaved
+  // pages remain protected (the caller mutes those instead).
+  async unload(id, {hiding=false,requesterRunId=null,workspaceClosed=false}={}) {
+    const owner=this.tabs.get(id)?.windowId;if(this.windowRegistry&&owner&&owner!==this.windowId())return this.windowRegistry.run(owner,()=>this.unload(id,{hiding,requesterRunId,workspaceClosed}));
     // A restored view exists before its history/navigation promise completes.
     // Wait for that exact restore before taking a snapshot or closing the view.
     await this.reloading.get(id);
@@ -512,7 +525,7 @@ class BrowserTabs {
     // its own idle lease, but never an in-flight action, another run or a download.
     const otherRuns=[...(tab.automationRuns||[])].some(id=>id!==requesterRunId);
     if(tab.agentActions||otherRuns&&!this.agentStatus(tab).agentPaused||tab.downloads?.size)throw new Error('Wait for the active browser turn or download before unloading this tab.');
-    const wc=tab.view.webContents;if(wc.isCurrentlyAudible())throw new Error('Stop audio before unloading this tab.');
+    const wc=tab.view.webContents;if(wc.isCurrentlyAudible()&&!workspaceClosed)throw new Error('Stop audio before unloading this tab.');if(workspaceClosed)wc.setAudioMuted(true);
     tab.snapshot=this.state(tab,true);this.transition?.cancel();await this.disconnect(tab);
     const closed=await new Promise(resolve=>{let done=false;const finish=value=>{if(done)return;done=true;clearTimeout(timer);wc.removeListener('will-prevent-unload',blocked);resolve(value);};const blocked=()=>finish(false);const timer=setTimeout(()=>finish(wc.isDestroyed()),3000);wc.once('destroyed',()=>finish(true));wc.once('will-prevent-unload',blocked);wc.close({waitForBeforeUnload:true});});
     if(!closed)throw new Error('This page has unsaved work. Finish or close it before unloading.');
@@ -552,6 +565,7 @@ class BrowserTabs {
   async resolveFavicon(tab,icons) {
     const wc=tab.view?.webContents,url=wc?.getURL();
     if(this.shuttingDown||!wc||wc.isDestroyed()||!url||!this.profileAvailable(tab))return;
+    if(tab.incognito)return false;
     tab.faviconResolver??=new FaviconResolver();
     return tab.faviconResolver.resolve(url,icons,async isCurrent=>{
     if(!isCurrent()||wc.isDestroyed()||wc.getURL()!==url||!this.profileAvailable(tab))return false;
@@ -626,7 +640,7 @@ class BrowserTabs {
     if(action.startsWith('extensions-'))return this.extensions.command(value);
     if(action==='filters-status')return this.blocker?.status()||{ready:false};
     if(action==='filters-update'){await this.blocker?.update();this.changed();return this.blocker?.status();}
-    if(action==='protection-toggle'){const tab=this.get(id),origin=new URL(tab.view?.webContents?.getURL()||tab.snapshot?.url).origin,profile=this.profile(tab.profileId),settings=profile.settings||{};if(!/^https?:/.test(origin))throw new Error('Open a website first.');const exceptions=settings.exceptions||[];await this.options.profiles.handle({action:'settings',id:profile.id,settings:{...settings,exceptions:exceptions.includes(origin)?exceptions.filter(item=>item!==origin):[...exceptions,origin]}});this.changed();return this.state(tab);}
+    if(action==='protection-toggle'){const tab=this.get(id),origin=new URL(tab.view?.webContents?.getURL()||tab.snapshot?.url).origin,profile=this.profile(tab.profileId),settings=profile.settings||{};if(!/^https?:/.test(origin))throw new Error('Open a website first.');const exceptions=settings.exceptions||[];const next={...settings,exceptions:exceptions.includes(origin)?exceptions.filter(item=>item!==origin):[...exceptions,origin]};if(tab.incognito)profile.settings=next;else await this.options.profiles.handle({action:'settings',id:profile.id,settings:next});this.changed();return this.state(tab);}
     if(action==='find-stop'){const tab=this.get(id),wc=tab.view?.webContents;tab.cancelFind?.();if(wc&&!wc.isDestroyed())wc.stopFindInPage('clearSelection');return;}
     if(action==='find'){
       const tab=this.get(id),wc=tab.view?.webContents;
@@ -722,9 +736,10 @@ class BrowserTabs {
     if(action==='history')return this.history?.list(value)||{items:[],total:0,page:1,pageSize:50};
     if(['history-clear','history-delete','history-settings'].includes(action))return this.history.update(value);
     if(action==='visibility')return this.visibility(id,value.hidden);
-    if(action==='unload')return this.unload(id);
+    if(action==='unload')return this.unload(id,{workspaceClosed:value.reason==='workspace-closed'});
     if(action==='agent-access'){
       const tab=this.get(id),logical=this.agentIdentity(tab);
+      if(tab.incognito)throw Error('Incognito tabs cannot be shared with an agent.');
       try{if(this.agentAccess)this.agentAccess.set(logical,value.paused,value.expectedRevision);else{if(typeof value.paused!=='boolean')throw Error('Choose whether to pause agent control.');for(const candidate of this.tabs.values())if(this.agentIdentity(candidate)===logical)candidate.agentPaused=value.paused;}
         if(value.paused)await Promise.all([...this.tabs.values()].filter(candidate=>this.agentIdentity(candidate)===logical).map(candidate=>{candidate.automationRuns?.clear();return this.disconnect(candidate);}));
         return this.state(tab,true);
@@ -735,6 +750,7 @@ class BrowserTabs {
     if(!value.gesture&&['back','forward','reload','stop'].includes(action))this.transition?.cancel();
     // restoreIdentity lets a reloaded renderer adopt a child created by an abandoned restore.
     if (action === 'list') return this.list(true).filter(info=>this.ownsWindow(this.tabs.get(info.id))).map(info=>({...info,restoreIdentity:this.tabs.get(info.id).thumbnailId}));
+    if (action === 'duplicate-incognito') {const source=this.get(id);if(!this.ownsWindow(source))throw Error('Choose a tab in this window.');return this.create(this.state(source).url,null,null,{incognito:true,group:source.group,parentId:source.parentId,explicitParent:true,destination:structuredClone(source.destination),workspaceName:source.workspaceName});}
     if (action === 'duplicate') {
       const source=this.get(id);if(!this.ownsWindow(source))throw Error('Choose a tab in this window.');
       const snapshot=this.state(source,true),history=structuredClone(snapshot.history||null);
@@ -744,10 +760,10 @@ class BrowserTabs {
       this.changed();return this.state(copy,true);
     }
     if (action === 'create') {
-      const info=await this.create(value.restore===true?safeHistoryURL(value.url,this.appOrigin):value.url,null,value.restore===true?value.history:null,{contentTabId:value.contentTabId,hidden:value.restore===true&&value.hidden===true,lastActivityAt:value.restore===true?value.lastActivityAt:undefined,associationChatId:value.restore===true?value.associationChatId:undefined,persist:value.persist===true,openedAt:value.restore===true?value.openedAt:undefined,restore:value.restore===true,mirror:value.restore===true&&value.mirror===true,deferLoad:value.restore===true&&value.deferLoad===true,navigationPending:value.restore===true&&value.navigationPending===true,profileId:value.profileId,group:value.group,parentId:value.parentId,unloaded:value.restore===true&&value.unloaded===true,title:String(value.title||'').slice(0,200),favicon:value.restore===true?value.favicon:undefined,lastTouchedAt:value.restore===true?value.lastTouchedAt:undefined});
+      const info=await this.create(value.restore===true?safeHistoryURL(value.url,this.appOrigin):value.url,null,value.restore===true?value.history:null,{incognito:value.incognito===true,contentTabId:value.contentTabId,hidden:value.restore===true&&value.hidden===true,lastActivityAt:value.restore===true?value.lastActivityAt:undefined,associationChatId:value.restore===true?value.associationChatId:undefined,persist:value.persist===true,openedAt:value.restore===true?value.openedAt:undefined,restore:value.restore===true,mirror:value.restore===true&&value.mirror===true,deferLoad:value.restore===true&&value.deferLoad===true,navigationPending:value.restore===true&&value.navigationPending===true,profileId:value.profileId,group:value.group,parentId:value.parentId,unloaded:value.restore===true&&value.unloaded===true,title:String(value.title||'').slice(0,200),favicon:value.restore===true?value.favicon:undefined,lastTouchedAt:value.restore===true?value.lastTouchedAt:undefined});
       return this.state(this.get(info.id),true);
     }
-    if(action==='persist'){const tab=this.get(id);if(typeof value.enabled!=='boolean')throw new Error('Choose whether to persist this tab.');tab.persist=value.enabled;if(tab.persist&&!tab.view&&value.passive!==true)await this.reload(tab.id,true,{background:tab.hidden===true});this.changed();return this.state(tab,true);}
+    if(action==='persist'){if(this.get(id).incognito)throw Error('Incognito tabs exist only until they are closed.');const tab=this.get(id);if(typeof value.enabled!=='boolean')throw new Error('Choose whether to persist this tab.');tab.persist=value.enabled;if(tab.persist&&!tab.view&&value.passive!==true)await this.reload(tab.id,true,{background:tab.hidden===true});this.changed();return this.state(tab,true);}
     if(action==='sync-metadata'){
       const tab=this.get(id);let changed=false;
       if(!tab.openedAt&&Number.isFinite(Date.parse(value.openedAt))){tab.openedAt=Date.parse(value.openedAt);changed=true;}
@@ -819,6 +835,7 @@ class BrowserTabs {
     }
     else if (action === 'stop' && !cancelNavigation(wc)) wc.stop();
     else if (action === 'share') {
+      if(tab.incognito)throw Error('Incognito tabs cannot be shared.');
       tab.shared = value.shared === true;
       if (!tab.shared) { tab.developerShared=false;tab.owner = null;tab.resumeOwner=null; await this.disconnect(tab); }
     }
@@ -826,8 +843,11 @@ class BrowserTabs {
   }
   agent(value,runId){
     // Capture this invocation's turn origin before joining an asynchronous tool queue.
-    const origin=this.options.agentWindow?.(runId,value.windowId);
-    if(origin&&value.tabId){const {originTab}=require('../windows/agent-origin.cjs');value={...value,tabId:originTab(this.tabs,value.tabId,origin.id)};}
+    let origin=this.options.agentWindow?.(runId,value.windowId);
+    // N11-12: an exact stable tab ID identifies its owning window. When the tab is not open
+    // in the turn's window, use the window that owns it instead of failing; sharing, pause
+    // and profile checks still apply to that tab. An explicit windowId is never overridden.
+    if(origin&&value.tabId){const {originTab,owningWindow}=require('../windows/agent-origin.cjs');try{value={...value,tabId:originTab(this.tabs,value.tabId,origin.id)};}catch(error){const owner=!value.windowId&&owningWindow(this.tabs,value.tabId,[...(this.windowRegistry?.contexts.values()||[])]);if(!owner)throw error;origin={id:owner,note:'Owning app window of the requested tab.'};}}
     this.agentQueues??=new Map();const key=value.tabId||'open:'+runId,previous=this.agentQueues.get(key)||Promise.resolve();
     const perform=async()=>{
       const result=await this.performAgent(value,runId);
@@ -840,7 +860,7 @@ class BrowserTabs {
   async performAgent(value, runId) {
     if(value.diagnostics!==undefined&&(typeof value.diagnostics!=='boolean'||value.action!=='fill'))throw Error('Field diagnostics are supported only for fill.');
     const allowed = tab => this.tabs.get(tab.id)===tab&&this.profileAvailable(tab)&&!this.agentStatus(tab).agentPaused;
-    if (value.action === 'list') return this.list().filter(info => this.ownsWindow(this.get(info.id))&&this.profileAvailable(this.get(info.id))).map(({history,...info})=>info);
+    if (value.action === 'list') return this.list().filter(info => !info.incognito&& this.ownsWindow(this.get(info.id))&&this.profileAvailable(this.get(info.id))).map(({history,...info})=>info);
     if(value.action==='destinations')return {...(this.options.agentDestinations?.(runId)||{destinations:[{type:'chat',id:runId}]}),defaultProfileId:'default',profiles:(this.options.profiles?.list().items||[{id:'default',name:'Default'}]).map(({id,name})=>({id,name,available:this.profileAvailable({profileId:id})}))};
     if (value.action === 'open') {
       const destination=await this.options.agentDestination?.(runId,value.destination)||{parentId:runId};
@@ -850,6 +870,7 @@ class BrowserTabs {
       return {...created,destination:this.options.projects?{...this.resolvePreviewRoute(destination),parentId:created.parentId,destination:created.destination}:destination};
     }
     const tab = this.get(value.tabId);
+    if(tab.incognito)throw Error('Incognito tabs are available only to their local browser window.');
     if (!this.profileAvailable(tab)) throw new Error('This tab’s browser profile is unavailable. Reconnect the owning account or restore its profile.');
     if(value.action==='close'){await this.close(tab.id);return {closed:true};}
     if(value.action==='hide'||value.action==='restore')return this.command({action:'visibility',id:tab.id,hidden:value.action==='hide'});
@@ -961,6 +982,6 @@ class BrowserTabs {
       catch { throw new Error('Could not fill this page. Check its login fields and complete the step manually.'); }
     });
   }
-  async dispose() { this.stateBatch?.close();clearTimeout(this.activityTimer);ipcMain.removeListener('proteus:browser-scroll',this.scrollHandler);this.prepareShutdown();this.videoPopout.dispose();clearInterval(this.thumbnailTimer);for(const tab of this.tabs.values())clearTimeout(tab.thumbnailTimer);clearInterval(this.profileTimer);clearTimeout(this.blockNoticeTimer);await Promise.allSettled([...this.cookieStores.values()].map(store=>store.close()));this.extensions?.close();this.permissions.close();await this.history?.close();await Promise.allSettled([...this.sessions.values()].map(async partition=>{partition.flushStorageData();await partition.cookies.flushStore();})); clearInterval(this.retentionTimer); this.actions.dispose();if(this.blocker){ipcMain.removeHandler('@ghostery/adblocker/inject-cosmetic-filters');ipcMain.removeHandler('@ghostery/adblocker/is-mutation-observer-enabled');} ipcMain.removeListener('proteus:site-notification',this.siteNotificationHandler);ipcMain.removeListener('proteus:browser-gesture',this.gestureHandler);ipcMain.removeListener('proteus:navigation-intent',this.navigationIntentHandler);ipcMain.removeListener('proteus:browser-interaction',this.interactionHandler); for (const id of [...this.tabs.keys()]) await this.close(id); }
+  async dispose() { this.stateBatch?.close();clearTimeout(this.activityTimer);ipcMain.removeListener('proteus:browser-scroll',this.scrollHandler);this.prepareShutdown();await Promise.all([...this.tabs.values()].filter(tab=>tab.incognito).map(tab=>this.close(tab.id)));this.videoPopout.dispose();clearInterval(this.thumbnailTimer);for(const tab of this.tabs.values())clearTimeout(tab.thumbnailTimer);clearInterval(this.profileTimer);clearTimeout(this.blockNoticeTimer);await Promise.allSettled([...this.cookieStores.values()].map(store=>store.close()));this.extensions?.close();this.permissions.close();await this.history?.close();await Promise.allSettled([...this.sessions.entries()].filter(([id])=>!this.incognito.has(id)).map(async ([,partition])=>{partition.flushStorageData();await partition.cookies.flushStore();})); clearInterval(this.retentionTimer); this.actions.dispose();if(this.blocker){ipcMain.removeHandler('@ghostery/adblocker/inject-cosmetic-filters');ipcMain.removeHandler('@ghostery/adblocker/is-mutation-observer-enabled');} ipcMain.removeListener('proteus:site-notification',this.siteNotificationHandler);ipcMain.removeListener('proteus:browser-gesture',this.gestureHandler);ipcMain.removeListener('proteus:navigation-intent',this.navigationIntentHandler);ipcMain.removeListener('proteus:browser-interaction',this.interactionHandler); for (const id of [...this.tabs.keys()]) await this.close(id); }
 }
 module.exports = { BrowserTabs, normalizeURL };

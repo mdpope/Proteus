@@ -1,3 +1,181 @@
+## Nov 15 continuation — Team editing and link destinations
+
+- Windows Scratchpad saves retain the file-data flush while omitting the unsupported directory
+  flush that reported `EPERM` after a successful replacement. POSIX directory flushing remains.
+  Native Windows source and package acceptance are tracked separately.
+
+- Bundle a Fox News-specific filter for its observed Admiral engage loader, including existing
+  cached-filter profiles. Source and synthetic Electron acceptance pass; the reported live prompt
+  still needs rollout acceptance with the new package.
+
+- Update checkpoints settle local canonical tab hydration before saving window state and
+  acknowledging preservation. Pending writes, synchronization conflicts/backoff and restoring
+  windows fail the checkpoint safely. Ordinary close/quit and exact preservation checks remain
+  unchanged. This correction is source-only pending a new accepted package and rollout.
+
+- Maintenance bootstrap can explicitly revalidate an authenticated live owner after a normal
+  restart when reconciling a superseded failed attempt. Exact package, recovery and journal
+  checks remain required. This source-owned operations correction does not rebuild the frozen apps.
+
+- Edit the selected Team Tools list from its overview on desktop and iPhone, preserving
+  revision checks, member identities and standup links.
+- Route operating-system website links to Team Tools, Reminders and Scratchpad from the Mac
+  picker, including remembered defaults and routing rules. Feature tabs retain their container.
+- Integrate the Linux six-window event-stream fix and corrected Linux acceptance below.
+  Package acceptance and installation are tracked separately from source checks.
+
+## Local follow-up — shared desktop event connection
+
+- Desktop windows in the same browser partition share one owner event stream, preventing
+  six long-lived connections from blocking Home and other local requests. Tab and project
+  events still reach each window; unsupported or failed shared workers fall back to the
+  existing direct stream. This source change is not yet part of an accepted release.
+- Updated Linux live acceptance for the tab-based New Chat form and current last-window close
+  behavior. The original Nov 15 `fbf058aa` package passed the corrected live test and the
+  credential-free package UI test on Linux; the event-stream fix needs its own package acceptance.
+
+## Nov 15 release — operator batch (N11-53 … N11-65)
+
+The operator renamed the open release **Nov 15** (version 0.2.45 unchanged) and added this batch.
+
+- **N11-53 Code viewer/editor.** Files preview, full file tabs, remote web and iOS share one text
+  viewer. Desktop/web use a lazily loaded CodeMirror 6 chunk set (core ≈ 340 KB loaded on first
+  open; each language grammar is its own few-KB chunk: JS/TS/JSX/TSX, JSON, Python, CSS, HTML, XML,
+  YAML, PHP, Java, C/C++, Rust, Go, SQL, Markdown, Swift, shell, Ruby, TOML, config, Dockerfile,
+  Lua, Perl, PowerShell, diff, R). Unknown languages show as clean text. It fills the whole column,
+  is read-only until **Edit**, saves through the owner with the preview identity (stale files are
+  rejected), and Markdown edits use the Scratchpad live editor. iOS uses a small native
+  highlighter and the same read-only/Edit/Save flow.
+- **N11-54 File typing.** `src/shared/file-kind.js` decides by content, not name: binary signatures,
+  NUL/control-character and UTF-8/UTF-16/Windows-1252 checks, shebang and marker detection. Any
+  text file (`.txt`, dotfiles, `Package.resolved`, extensionless scripts) opens; binaries are
+  refused with their detected type.
+- **N11-55 Files memory.** Expanded folders, list scroll, selected file, scroll/caret in the file and
+  unsaved edits survive switching tabs and remounts (desktop, web and iOS expansions/selection).
+- **N11-56 Reminders ↔ workspaces/projects.** Account reminders gain optional `workspaceId`/`projectId`
+  (website migration, replicas, iOS), editor selectors, Workspace Scratches and Reminders pages and
+  a project Reminders page. Scoped pages hard-filter; the project Scratches page no longer
+  duplicates the tab strip. The pendant resolves "in list … for project …" names exactly or asks.
+- **N11-57 Scratchpad sidebar.** No computer selector; recents list every computer.
+- **N11-58 Life workspace.** The Life workspace folder is chosen with the system picker when Life
+  is enabled (existing installs are prompted to repoint). Default projects Ask, Smart Home,
+  Nutrition, Garage, Fuel & mileage are created on demand; chats and searches started from a Life
+  feature live in its project.
+- **N11-59 Life navigation.** Smart Home, Nutrition and Garage use the shared feature tab strip
+  (right-side overview/new-tab buttons, double-click, same tab types plus Chat and Internet
+  Search). Garage = Overview/Vehicles/Fuel & mileage; Nutrition = Overview/Meal days/Daily log/
+  Averages/Food Library. iOS gets the same pages without the content-tab strip (phone size).
+- **N11-60 Connections.** Per-computer expandable workspace permission list with Allow-all
+  Browse/Edit switches.
+- **N11-61 Links.** Life Ask, reminders and scratch links show their destination like browser tabs.
+- **N11-62 iPhone Reminders.** Save is a disk icon with its name, at the trailing edge of the actions.
+- **N11-63 Tab menus.** "Move to…" and "Copy to…" for every tab type; Chats are no longer
+  destinations; destination headings are bolder.
+- **N11-64 Performance.** Synthetic and live-copy scroll profiles recorded below.
+
+Not done / limits: iOS has no Life content-tab strip for Nutrition/Garage; iOS file highlighting is
+generic; web Life pages do not yet have Garage/Nutrition tabs. Physical-device acceptance and the
+website deployment of the reminders migration are recorded in rollout.md.
+
+## Nov 11 continuation — additional source changes
+
+- Keep the native Scratchpad computer selector reachable while offline, group filters/properties, use selection-aware icon formatting, support reminder edge-swipe back to Items, and put upload progress inside the reply composer card.
+
+- Add bounded, session-only website tab screenshots with approved html-to-image 1.11.13; use resource icons for unsupported browser embeds and clear file previews when access is revalidated.
+
+- Restore feature-local selected tabs from the sidebar, expose Workspace Files with Scratch/Reminders in shared selectors, and show feature-owned screenshot-card overview groups without root-tab duplication. Reuse the native feature container in Team Tools; retain account/owner boundaries and Incognito preview exclusion.
+- Match feature tab title insets and browser favicons to existing navigation, and keep the selected reminder card highlighted in the lists/items/details workbench.
+
+- Keep the Scratchpad folder tree available when historical projects reference removed workspaces; omit invalid virtual destinations without deleting or moving existing files.
+
+- Keep Reminders account-owned: remove computer labels and synchronize revisioned local SQLite replicas on desktop, browser and iOS. Add independent Scratchpad computer selectors, remote catalogs and owner-bound edits/tabs; native clean contents stay transient while unsent drafts retain protected recovery.
+- Add desktop sidebar recents under Reminders and Scratchpad with the existing seven-item limit, four-at-a-time More expansion, resource icons, title hints, computer and activity age. Retain closed items locally, isolate account/storage histories and revalidate resources when reopening.
+- Separate Scratchpad project filters from workspaces on the same row and retain the workspace highlight while filtering by project.
+- Fill the root tab's existing title/close hit regions without changing separator geometry. Extend workbench dividers to the viewport bottom with independent column scrolling and honor Scratchpad Name sorting.
+- Add AM/PM selection and clearer spacing to the shared date picker. Bring native reminder filters, editor feedback/actions, proportional columns and palette-based system appearance into the simulator preview; enable synthetic Life explicitly in its launcher.
+- Keep root scratch/reminder views separate from feature organization areas, append feature tabs using owner order and restore independent title/close hover targets. Document shared feature/navigation rules for future implementations.
+- Give Reminders a fixed Lists rail with proportional Items/Details columns, whole-card selection, larger title editing and save feedback beside the editor heading. Reuse a palette-aware shared date/time picker in desktop and web.
+- Add combinable Open/Completed/Deleted icon filters, compact reminder actions and persistent resizable workbench columns; retain account-local due-time interpretation without listing a timezone.
+- Keep Scratchpad workspace/project destinations virtual until a note is saved, show user folders alongside them and place new unassigned notes directly in the applicable root. Keep old files in place.
+- Fix top-level New Tab inheriting a feature strip and apply whole-tab hover contrast across root and nested navigation.
+- Align feature tab chrome with projects: shared add/close icons, full-title hover hints, empty-strip double click and the universal New Tab page instead of dropdowns.
+- Add a Reminders overview and independent Lists/Items/Details work tabs, with list-prefilled creation in the details column and account-bound session restoration.
+- Fix the Markdown caret, scratch file-switch/save isolation and selected-file titles/highlighting; compact the Scratchpad filters and file controls.
+- Fix a native browser-close callback that could steal selection from a newly opened feature record. Qualify feature navigation on shared iPhone/iPad simulators before physical rollout.
+
+- Restore remembered project tabs; add independent Markdown Scratch tabs, workspace/project/category filters and CodeMirror 6 live/source editing. Reuse Workspace Files navigation/viewers and retain the Scratchpad master bar. Demo refinement and cross-client tab parity remain under review.
+- Fix CodeMirror styling under the application CSP with a scoped style nonce and remove document folding controls. Protect active scratch editors from automatic demo reloads; keep synthetic Reminders in the isolated demo host.
+- Refresh Scratchpad storage choices from current Source Library registrations, put configured storage behind a gear and index a newly chosen root in the background without moving old files.
+- Share flush Reminders/Scratchpad navigation with auxiliary resource tabs, add/overview controls and consistent closes. Improve Reminders list navigation and themed task cards on desktop, web, iPhone and iPad.
+- Restore an isolated interactive design demo with synthetic Life data and automatic renderer reload, keeping the installed application running during review.
+- Fix terminal robot sharing feedback: use the browser's accent-enabled state and prevent theme hover colors from hiding it. Verify actual PTY access and revocation independently of the highlight.
+- Add Scratchpad owner storage, SQLite indexing, explicit file reconciliation, project-scoped agent permissions and opt-in device sharing. Desktop, website and native editors retain revision-protected retries; project home pages include Scratches. Physical qualification remains open.
+- Promote Reminders to the main navigation and give records stable detail tabs. Opening, switching and closing tabs preserves drafts without completing or deleting records; typed confirmations open the exact account-bound reminder.
+
+- Render Markdown chat-link labels as tappable text in iOS question and approval cards, retaining strict owner/chat validation.
+
+- Add account-scoped Life Reminders, lists, recoverable deletion, revision-protected agent CRUD, separate action confirmations and timed due alerts. Date-only reminders never invent a notification time.
+- Route saved reminders directly to their records and saved memories through authorized source-library document viewing; preserve old chat notification compatibility.
+- Add native Home Assistant control in Life → Smart Home for all exposed devices and services, dynamic discovery, protected local credentials, and no repeated service POST after uncertain delivery. On/Off confirms observed state; other services report acceptance.
+- Put Overview first in the shared Life navigation order and add persistent Smart Home / Home Assistant tabs with ordinary additional content tabs on desktop.
+- Add a protected permission card for sensitive Life Ask MCP/chat actions; voice similarity is not authentication.
+- Automatically continue once after an approved folder grant activates, coalescing queued user input and respecting Stop.
+- Preserve iOS chat history anchors across activity-group pagination and ignore geometry measurements from an earlier presentation.
+
+Source and synthetic tests are separate from installed/live acceptance. QR pairing remains held.
+
+Mac packaging now verifies the complete signed bundle before reporting success or rotating its build cache; signing failures cannot produce a ready receipt.
+
+- Let Codex PDF attachments steer active turns through the existing bounded original-file reader, including Steer now for queued messages. Native input remains text/images.
+
+- Allow up to three minutes for cold restart identity and full-history preservation verification; late responses still fail and rollback remains required on failure.
+
+## Nov 11 continuation — source only
+
+- Raise command receipt capacity to 512 MiB, reserve update/recovery headroom, and bound tab mutation replies to paged history instead of copying full histories into every receipt. Preserve exact retries and existing receipts.
+
+- Restore wheel scrolling on the global desktop Chats page; retain progressive loading and reading position.
+
+- Make owner-bound chat URLs clickable in question headings, answers, question queues and fallback prompts; native question text uses lightweight attributed links.
+
+- Avoid rewriting unchanged iOS destination selection on launch, preserve selection after a failed save, and stop loading dormant owner caches during background transitions. Start ordinary connections only when the scene is active.
+- Reconcile the iPhone/iPad shell only when browser membership or placement changes, and batch overview removals. Live title/history updates no longer trigger repeated membership scans or unchanged shell writes.
+- Add account-bound Life Ask history on web and iPhone, exact-chat notification links, and a separate Life → Ask project. Retire redundant completed request payloads after 30 days while preserving replay receipts and chat recordings.
+- Wire opt-in Life Ask to durable engine chats, original audio attachments, a restricted research-only first turn, formatted answers and account-bound notification retries. Add desktop Ask settings/history and scoped Mnemosyne pairing controls.
+- Add Life Ask native ASR/filing adapters, bounded account-bound iCloud admission, create-only answer mirrors, and a restart-aware serial executor with stable chat/event claims. Live host wiring and rollout remain in progress.
+- Correct Life Ask terminal receipt binding/IDs, account-switch isolation, integer latency fields and legacy audio byte counts; add legacy iCloud timestamp normalization.
+- Keep Workspace Files scoped to the selected workspace instead of inheriting the default workspace's library and every-chat folders.
+- Add per-backend guided desktop-control setup on the selected computer, with active-chat reuse and normal approvals.
+- Distinguish unavailable Mac session evidence from a locked console before signing.
+- Reuse one machine-wide development package cache across worktrees; retire superseded outputs after verification and reclaim interrupted builds. Keep the two older versions in updater recovery rather than another development archive chain.
+- Add independent, local-only Incognito tabs on desktop/iOS, New Tab and link/duplicate actions, privacy icons and close/exit disposal; exclude private pages from persistence, previews and relay sharing.
+- Give Mute tab its context-menu icon.
+- Use the full browser menu in the iPhone main-tab drawer, including Incognito duplication. Keep app-owned iOS private copies local, expire them, and clear the current copy on tab close or after an interrupted launch.
+
+- Render owner-bound chat links in Markdown and bare prose; preserve their existing project and drafts.
+- Let question replies use the normal file picker and bounded original-file reads without the old four-file/type restriction.
+- Preserve new-tab conversion slots and Files placement; stabilize live browser labels and reserve audio/close width.
+- Reconcile superseded failed update attempts with two verified recoveries and preserved audit evidence.
+- Batch iOS thumbnail refreshes and reduce descriptor-cache write frequency while retaining lifecycle flushes.
+- N11-40: closing a workspace unloads that window's loaded browser tabs in it, including pages playing audio or video. Persisted tabs stay loaded. Tabs protected by an active agent turn, a download, a pop-out or unsaved work are muted instead. Other windows keep their own views.
+- N11-38 Life Ask (source only): a single-use `life-ask` invitation pairs Mnemosyne as a host-scoped `mnemosyne.ask` device limited to admission/status/revocation. Bound requests are admitted exactly once, with permanent tombstones. The continuation implements host execution, desktop settings/history, scoped pairing UI and immediate website answer push; physical acceptance and rollout remain open.
+
+## Nov 11 / 0.2.45 — source in progress, not deployed
+- N11-33 (iPhone/iPad): attachment sends show upload progress and continue briefly in the background when switching apps or locking.
+- N11-26–32 (iPhone/iPad): jump-to-latest arrow, composer caret stays visible, batched streaming renders and less frequent cache re-encoding, overview close buttons/menus and correct thumbnails, shared browser-tab menu with Copy Proteus tab ID, pinch overview from unloaded pages, Files beside Chats/Tabs.
+- N11-25: iPhone/iPad keep and restore the last page when returning from the background; reclaimed pages recover instead of going blank.
+- N11-24: iPhone/iPad no longer block the main thread saving caches when leaving the foreground (watchdog crash fix).
+- N11-18: no attachment type or size limits; owner free disk space is the constraint, files stream and large/non-inline files are paged from disk.
+- N11-19: human-readable times in the user's time zone for owner messages, labels and rendered messages.
+- N11-20/22: iPhone address bar is single-line and scrolls; Internet Search provider choices use a grid.
+- N11-21/23: iOS cache writes coalesce; state-neutral requests no longer cause owner state 503s.
+- N11-17: smooth desktop chat and browser scrolling. Streamed transcript refreshes write only changed DOM (labels, timers, activity summaries, tool rows, message-action toolbars); Markdown replaces only changed trailing blocks and caches highlighted code; host follow-scroll capture is coalesced; chat sub-tab rows patch in place; the browser preload samples scroll after a frame. Main-thread hot paths reuse the validated content-tab registry and stop scanning network interfaces per navigation.
+- N11-09: the desktop Chats list scrolls from anywhere over it; the page scroller is the single surface, progressive loading keeps position and reports the end, and unchanged polls no longer rebuild rows.
+- N11-13: chats are classified by recorded origin (chatType, then trigger), so interactive chats with internal schedule records are no longer shown as Scheduled Tasks (desktop/web shared module and iOS source).
+- N11-10: connection approvals name the service and configured connection, state their turn-only duration and that tool calls keep their own permission checks.
+- N11-12: Playwright/developer calls on an exact tab ID route to the tab's owning app window and accept the browser tool's validated windowId selector.
+- Restore human draft read/save commands in the paired desktop transport so remote desktop composers use the same owner draft revisions as mobile/web. Preserve conflict copies, pairing/pause/revocation and agent denial. Installed acceptance remains pending; Nov 8 packages are unchanged.
+
 ## Nov 8 / 0.2.44 — source in progress
 - Establish the recovery baseline before measuring settlement, budget comparisons from observed scan duration and retain scan-count/timing progress. Reject late comparisons and retain live-owner and snapshot verification checks.
 - Match Claude owner-bridge approvals to captured unprefixed tool/action rules; route Codex scoped-command transport directly to the host identity gate without a redundant outer approval. Preserve command consent, owner checks and containment.
@@ -2278,6 +2456,7 @@ Nov 8 source follow-up: durable explicit schedule access overlay and owner conne
 - Add on-demand iPhone/iPad workspace browsing, preview resources and a separately consented
   per-device file-editing permission. No whole-folder mobile replication is introduced.
 - Source/simulator acceptance is separate from physical installation; see docs/file-browser.md.
+
 # Source distribution privacy
 
 Sanitize source history, contributor metadata, operator paths, device references and private

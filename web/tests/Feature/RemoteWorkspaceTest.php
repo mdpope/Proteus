@@ -10,6 +10,18 @@ class RemoteWorkspaceTest extends TestCase
 {
     use CreatesBrain, LazilyRefreshDatabase;
 
+    public function test_life_ask_requires_strong_authentication_and_opens_owner_history(): void
+    {
+        $this->get('/life/ask')->assertRedirect('/login');
+        $user = $this->owner();
+        $this->actingAs($user)->get('/life/ask')->assertRedirect('/security');
+        $this->signedIn($user)->get('/life/ask')->assertOk()
+            ->assertSee('id="life-ask-history"', false)
+            ->assertSee('data-active-feature="life"', false)
+            ->assertSee('Your pendant questions and answers.')
+            ->assertSee('href="'.route('life.ask').'"', false);
+    }
+
     public function test_home_is_the_entry_point_and_is_loaded_only_when_visited(): void
     {
         $this->get('/')->assertRedirect('/home');

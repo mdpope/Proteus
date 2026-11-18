@@ -30,7 +30,6 @@ export class ChatAttachmentConsents {
       if(JSON.stringify(metadata(declared))!==JSON.stringify(bound))throw new Error('Attachment details changed. Review the files and destination again.');
       exact.push(bound);
     }
-    if(exact.reduce((total,item)=>total+item.size,0)>chatAttachmentLimits.maxBatchBytes)throw new Error('This message exceeds the attachment batch limit.');
     const consentId=randomUUID(),expiresAt=this.clock()+TTL_MS;
     this.grants.set(consentId,{consentId,chatId,messageId,providerId,deviceId,attachments:exact,expiresAt});
     return {consentId,expiresAt:new Date(expiresAt).toISOString(),providerId,attachments:exact};
@@ -67,9 +66,11 @@ export class ChatAttachmentConsents {
     const proof=this.prepared.get(proofId);
     if(!proof||proof.used||proof.chatId!==chatId||proof.providerId!==providerId||!Array.isArray(attachmentIds)||JSON.stringify(proof.attachments.map(item=>item.attachmentId))!==JSON.stringify(attachmentIds))throw new Error('Attachment provider consent is missing or changed. No file was forwarded.');
     const files=[];
-    if(proof.attachments.length>chatAttachmentLimits.maxBatchFiles||proof.attachments.reduce((total,item)=>total+item.size,0)>chatAttachmentLimits.maxBatchBytes)throw new Error('Attachment batch exceeds the approved delivery limit.');
-    for(const item of proof.attachments){const current=await this.store.read(item);if(JSON.stringify(metadata({attachmentId:item.attachmentId,...current}))!==JSON.stringify(metadata(item)))throw new Error('Attachment bytes changed. No file was forwarded.');files.push(current);}
+    if(proof.attachments.length>chatAttachmentLimits.maxBatchFiles)throw new Error('Attachment batch exceeds the approved delivery count.');
+    for(const item of proof.attachments){const current=await this.store.read(item);/* Pick fields explicitly: spreading would load a file-backed body. */if(JSON.stringify(metadata({attachmentId:item.attachmentId,name:current.name,mediaType:current.mediaType,size:current.size,sha256:current.sha256,createdAt:current.createdAt,modifiedAt:current.modifiedAt}))!==JSON.stringify(metadata(item)))throw new Error('Attachment bytes changed. No file was forwarded.');files.push(current);}
     proof.used=true;this.persistProofs();
+    // N11-34: keep delivered files viewable with the chat immediately, not only after the turn ends.
+    for(const item of proof.attachments){try{await this.store.preserve?.(item,proof.chatId);}catch{/* releaseProof retries; viewing is optional. */}}
     return files;
   }
   assertPrepared({proofId,chatId,providerId,attachmentIds}={}){

@@ -28,7 +28,7 @@ function stopIdleTimer(){if(!timers.size&&timer!==null){clearInterval(timer);tim
 // of a loaded transcript. The optional predicate also handles a running tool's
 // transition to a fixed duration without leaving an idle interval behind.
 export function bindRuntimeTimer(node,read,active=true){
- if(!node)return;readers.set(node,read);node.classList.add('runtime-timer');node.setAttribute('aria-live','off');paint(node,read);
+ if(!node)return;readers.set(node,read);if(!node.classList.contains('runtime-timer'))node.classList.add('runtime-timer');if(node.getAttribute('aria-live')!=='off')node.setAttribute('aria-live','off');paint(node,read);
  if(typeof active==='function'?active():active)timers.set(node,{read,active});else timers.delete(node);
  if(timers.size&&timer===null)timer=setInterval(()=>{
   for(const [node,binding]of timers){if(!node.isConnected){timers.delete(node);continue;}paint(node,binding.read);if(typeof binding.active==='function'&&!binding.active())timers.delete(node);}

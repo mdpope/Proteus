@@ -3,7 +3,7 @@ const submissions=new Map();
 /** Retain the exact delivery across an uncertain reply, rather than resending files. */
 export function mountQuestionAttachments({key,host,textarea,providerId,mediaTypes,destination,chatId,requestId,send,notify}){
   if(!host)return {payload:async()=>({}),clear:()=>{}};
-  mountAttachmentPicker({key,host,textarea,provider:()=>providerId,mediaTypes,maxFiles:4,notify});
+  mountAttachmentPicker({key,host,textarea,provider:()=>providerId,mediaTypes,notify});
   return {
     files:()=>selectedAttachments(key).map(item=>item.file),
     async payload(answer,messageId=crypto.randomUUID()){

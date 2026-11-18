@@ -14,7 +14,7 @@ export function mountSubagentViewer(target,run,{agentPage,notify=()=>{}}={}){
   view={id:run.id,button,panel,selected:selections.get(run.id)||null,generation:0,cache:new Map()};mounts.set(target,view);
  }
  view.run=run;view.agentPage=agentPage;view.notify=notify;
- const rows=run.subagents||[];view.button.hidden=!rows.length;view.button.textContent=`Agents ${rows.length}`;
+ const rows=run.subagents||[],label=`Agents ${rows.length}`;if(view.button.hidden!==!rows.length)view.button.hidden=!rows.length;if(view.button.textContent!==label)view.button.textContent=label;
  const composer=root.querySelector('.composer'),pending=root.querySelector('.chat-pane > .pending,.remote-chat-main > .pending');
  const show=selected=>{
   if(!view.selected&&selected)view.parentTop=target.querySelector('.conversation')?.scrollTop;
