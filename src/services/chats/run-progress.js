@@ -11,7 +11,9 @@ export function providerProgress(run,at,{observable=false}={}){
  if(observable||run.progress.toolSignature!==signature){run.progress.lastProgressAt=at;run.progress.stalled=false;delete run.progress.stalledSince;}
  run.progress.lastProviderEventAt=at;run.progress.toolSignature=signature;
  const running=tools.filter(tool=>tool.status==='running');
- run.progress.stage=running.length?'tool':'provider';
+ const stage=running.length?'tool':'provider';
+ if(run.progress.stage!==stage)run.progress.stageAt=at;
+ run.progress.stage=stage;
  run.progress.waitingTools=running.map(tool=>({id:tool.callId,name:tool.name,startedAt:tool.startedAt}));
 }
 export function checkProgress(run,at,{stallMs=5*60_000,timeoutMs=executionSafeguardMs}={}){

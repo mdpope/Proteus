@@ -1,6 +1,7 @@
 import {isOwnerScopedCommandRequest} from './services/scheduling/scoped-command-request.js';
 import {scopedCommandTools} from './services/scheduling/scoped-command-tools.js';
-import {addScheduleAccess,scheduleAccessBinding,effectiveScheduleAccess,assertScheduleManagedAccess} from './services/scheduling/access-overlay.js';
+import {sourceRefreshEvent} from './services/scheduling/schedule-context.js';
+import {addScheduleAccess,scheduleAccessBinding,effectiveScheduleAccess,assertScheduleManagedAccess,revokeScheduleAccess} from './services/scheduling/access-overlay.js';
 import {attachmentPrompt,providerPrompt} from './services/chats/attachment-prompt.js';
 import { isActiveExecutionLimit } from './providers/execution-policy.js';
 import {taskFeedbackDelivery} from './services/chats/task-feedback-kind.js';
@@ -49,6 +50,9 @@ export class Engine extends EventEmitter {
   constructor(home, providers = {}, clock = () => new Date(), { desktopPreview = false, permissionControls = desktopPreview, recoveryBarrier=false } = {}) {
     super();this.updateBarrier=recoveryBarrier;this.historyCache=new RunHistoryCache(id=>path.join(home,'runs',id+'.json'),4,{isPinned:run=>this.runWriter?.pending(run.id)||this.running?.has(run.id)||[...(this.backgroundRuns?.values()||[])].some(slot=>slot.id===run.id)}); this.home = home; this.clock = clock;
     this.schedules = new ScheduleStore(path.join(home, 'schedules'));
+    this.scheduleDeletionEpoch = 0;
+    this.deletedScheduleEpochs = new Map();
+    this.scheduleReviewCache = new Map();
     this.permissions = new PermissionStore(home, {preserveInheritedDefaults:permissionControls===true});
     this.runsDir = path.join(home, 'runs');
     this.runWriter = new RunWriter({fileFor:id=>path.join(this.runsDir,`${id}.json`),canWrite:run=>!this.tombstones?.[run.id]&&this.runs.get(run.id)===run,onError:(error,run)=>{this.runWriter.failed.add(run.id);this.emit('scheduler-error',{at:this.now(),code:'RUN_PERSIST',message:'A chat record could not be saved in the background. The next save is written immediately.',runId:run.id,error:error?.code||'IO_ERROR'});}});
@@ -113,13 +117,74 @@ export class Engine extends EventEmitter {
   listRuns() { return [...this.runs.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)); }
   visibleRuns(includeArchived = false) { return this.listRuns().filter(run => !run.delegation && (includeArchived || !run.archivedAt)); }
   getRun(id) { const run = this.runs.get(id); if (!run) throw new Error('Run not found.'); return run; }
+  scheduleReviewFile(id) {
+    if (!/^[a-f0-9-]{36}$/i.test(id)) throw Error('Choose a captured schedule run.');
+    return path.join(this.home, 'schedule-access-reviews', id+'.json');
+  }
+  scheduleAccessReview({id, action, expectedRevision, expectedUpdatedAt}) {
+    const run=this.getRun(id);
+    const scope=run.schedule.permissionScope;
+    if(scope?.kind!=='schedule'||!['failed','interrupted'].includes(run.status)||this.running.has(id)) {
+      throw Error('Open an interrupted schedule run to review its saved access.');
+    }
+    const current=this.schedules.get(scope.id),currentRevision=revision(current);
+    const overlay=current.accessOverlay,activeGrants=overlay?.grants.filter(grant=>!grant.revokedAt)||[];
+    const binding=scheduleAccessBinding(run.schedule);
+    const cannotReuse=!activeGrants.length||overlay.binding!==binding;
+    const capturedNeeds=run.schedule.scheduleAccessBasePermissions||undefined;
+    const canKeep=(()=>{
+      if(cannotReuse)return false;
+      try{
+        if(run.schedule.managedConnectionBindings)assertScheduleManagedAccess(current,run.schedule.managedConnectionBindings);
+        effectiveScheduleAccess({...run.schedule,executionPermissions:capturedNeeds,accessOverlay:overlay});
+        return true;
+      }catch{return false;}
+    })();
+    if(action==='view'){
+      const describe=schedule=>({
+        folders:[schedule.workspace.cwd,...(schedule.workspace.additionalDirectories||[])],
+        sourceIds:schedule.contextSelection?.selectedIds||[],
+        services:(schedule.managedConnections||[]).map(item=>item.name),
+      });
+      return {expectedRevision:currentRevision,expectedUpdatedAt:run.updatedAt,canKeep,
+        captured:describe(run.schedule),future:describe(current),
+        grants:activeGrants.map(grant=>grant.folder?`${grant.folder.access} · ${grant.folder.path}`
+          :grant.rule?.origin||grant.rule?.tool||'Approved workflow command')};
+    }
+    if(expectedRevision!==currentRevision||expectedUpdatedAt!==run.updatedAt)throw Error('The saved schedule or chat changed. Review access again.');
+    if(action==='keep-captured'){
+      if(!canKeep)throw Error('The saved grants cannot be verified for this capture. Revoke them before continuing.');
+      const receipt={revision:currentRevision,binding};
+      atomicJSON(this.scheduleReviewFile(id),receipt);
+      this.scheduleReviewCache.set(id,receipt);
+    }else if(action==='revoke'){
+      if(activeGrants.length){
+        let saved=current;
+        for(const grant of activeGrants)saved=revokeScheduleAccess(saved,grant.id);
+        this.schedules.save(saved,currentRevision);
+        this.recheckPermissions();
+      }
+    }else throw Error('Choose a review action.');
+    return {accepted:true};
+  }
   describePermissions(run) {
     if(!run.delegation){
       if(run.schedule.permissionScope?.kind==='schedule'&&run.schedule.scheduleAccessBasePermissions!==undefined){
         let current;try{current=this.schedules.get(run.schedule.permissionScope.id);}catch(error){if(error.code!=='ENOENT')throw error;return this.permissions.describeRun(run.schedule.accessOverlay?{...run,schedule:{...run.schedule,executionPermissions:run.schedule.scheduleAccessBasePermissions||undefined,accessOverlay:undefined}}:run);}
-        if(!current.accessOverlay&&!run.schedule.accessOverlay)return this.permissions.describeRun(run);
+        if(!current.accessOverlay?.grants.some(grant=>!grant.revokedAt)){
+          return this.permissions.describeRun({...run,schedule:{...run.schedule,
+            executionPermissions:run.schedule.scheduleAccessBasePermissions||undefined,accessOverlay:undefined}});
+        }
+        const binding=scheduleAccessBinding(run.schedule);
+        if(!this.scheduleReviewCache.has(run.id))this.scheduleReviewCache.set(run.id,readJSON(this.scheduleReviewFile(run.id),null));
+        const review=this.scheduleReviewCache.get(run.id);
+        if(review?.revision===revision(current)&&review.binding===binding){
+          if(run.schedule.managedConnectionBindings)assertScheduleManagedAccess(current,run.schedule.managedConnectionBindings);
+          const executionPermissions=effectiveScheduleAccess({...run.schedule,executionPermissions:run.schedule.scheduleAccessBasePermissions||undefined,accessOverlay:current.accessOverlay});
+          return this.permissions.describeRun({...run,schedule:{...run.schedule,executionPermissions,accessOverlay:current.accessOverlay}});
+        }
         const prepared=this.prepareSchedule?this.prepareSchedule(current):current;
-        if(scheduleAccessBinding(prepared)!==scheduleAccessBinding(run.schedule))throw Error('Schedule resources changed; review and start a new run.');
+        if(scheduleAccessBinding(prepared)!==binding)throw Error('Schedule resources changed. Review saved access before continuing.');
         if(run.schedule.managedConnectionBindings)assertScheduleManagedAccess(current,run.schedule.managedConnectionBindings);
         const executionPermissions=effectiveScheduleAccess({...current,executionPermissions:run.schedule.scheduleAccessBasePermissions||undefined});
         return this.permissions.describeRun({...run,schedule:{...run.schedule,executionPermissions,accessOverlay:current.accessOverlay}});
@@ -155,6 +220,7 @@ export class Engine extends EventEmitter {
     if (context.id !== expectedContextId) throw new Error('Workspace configuration changed. Review the permission context.');
     if (expectedChatRevision !== (run.chatPermissionRevision || null)) throw new Error('Chat approval changed. Refresh before saving.');
     if (!(this.permissions.preserveInheritedDefaults ? ['ask','custom','autopilot','inherit'] : ['autopilot', 'inherit']).includes(mode)) throw new Error('Choose chat auto-approval or inherit workspace settings.');
+    if(run.schedule.executionPermissions?.sandboxedCommands&&['ask','autopilot'].includes(mode))throw Error('This run uses scoped commands. Use the schedule’s saved permissions and approve scoped commands individually.');
     const previous = run.chatPermission?.contextId === context.id ? run.chatPermission : {};
     const folders = previous.folders || [];
     run.chatPermission = this.permissions.preserveInheritedDefaults ? { ...previous, mode, folders, contextId: context.id, grantedAt: this.now() } : mode === 'autopilot' || folders.length ? { mode, folders, contextId: context.id, grantedAt: this.now() } : null;
@@ -259,7 +325,21 @@ export class Engine extends EventEmitter {
     this.runWriter.writeNow(run);this.emit('change',run);
     return {id:run.id,failureEventAt:run.failureEventAt,failureReviewedAt:run.failureReviewedAt,attentionRequired:false};
   }
-  createRun(schedule, trigger = 'manual', slot = null, {deferStart=false,attachmentOnly=false,inputOrigin=null,setupId=null,prepared=false,scheduleTest=null,runId=null} = {}) {
+  runSchedule({id, operationId, expectedRevision}) {
+    if (operationId === undefined) return this.createRun(this.schedules.get(id));
+    if (!/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(operationId) || !/^[a-f0-9]{64}$/.test(expectedRevision)) {
+      throw new Error('Choose a schedule revision and a stable start request.');
+    }
+    const prior = this.runs.get(operationId);
+    if (prior) {
+      if (prior.schedule.id !== id || prior.manualScheduleRevision !== expectedRevision) throw new Error('This start request belongs to another schedule or revision.');
+      return prior;
+    }
+    const schedule = this.schedules.get(id);
+    if (revision(schedule) !== expectedRevision) throw new Error('Schedule changed. Review the current revision before running.');
+    return this.createRun(schedule,'manual',null,{runId:operationId,manualScheduleRevision:expectedRevision});
+  }
+  createRun(schedule, trigger = 'manual', slot = null, {deferStart=false,attachmentOnly=false,inputOrigin=null,setupId=null,prepared=false,scheduleTest=null,runId=null,manualScheduleRevision=null} = {}) {
     if(trigger!=='scheduled')this.updateGuard?.();
     const submittedPrompt=schedule.prompt;
     if(attachmentOnly&&deferStart)schedule={...schedule,prompt:attachmentPrompt};
@@ -271,6 +351,7 @@ export class Engine extends EventEmitter {
     for (const dir of [schedule.workspace.cwd, ...schedule.workspace.additionalDirectories]) if (!fs.statSync(dir).isDirectory()) throw new Error(`Workspace directory unavailable: ${dir}`);
     const run = {
       id: runId||randomUUID(),...(scheduleTest?{scheduleTest:structuredClone(scheduleTest)}:{}), ...(setupId?{setupId}:{}), schedule: structuredClone(schedule), scheduleRevision: revision(schedule),
+      ...(manualScheduleRevision ? {manualScheduleRevision} : {}),
       title: trigger === 'chat' ? (schedule.chatTitleManual ? schedule.name.trim() : suggestedChatTitle(schedule.prompt)) : schedule.name,
       ...(trigger === 'chat' ? { titleKind: schedule.chatTitleManual ? 'manual' : 'generated', titleRevision: randomUUID() } : {}),
       chatType:trigger==='chat'&&['internet','life-ask'].includes(schedule.chatType)?schedule.chatType:trigger==='chat'?'user':'scheduled',
@@ -279,6 +360,8 @@ export class Engine extends EventEmitter {
       ...(inputOrigin?{turnOrigin:inputOrigin}:{}),providerSessionId: null, usage: { inputTokens: 0, outputTokens: 0, observed: false },
       nextPrompt: attachmentOnly&&deferStart?submittedPrompt:schedule.prompt,...(deferStart?{deferredStart:true,...(attachmentOnly?{requiresAttachmentDispatch:true}:{})}:{})
     };
+    const refresh=sourceRefreshEvent(schedule.context,run.createdAt);
+    if(refresh)run.events.push(refresh);
     this.runs.set(run.id, run);
     try { this.persist(run); }
     catch (error) {
@@ -549,7 +632,7 @@ export class Engine extends EventEmitter {
         permissionProfile: () => this.describePermissions(run),
         emit: (role, text, data) => this.event(run, role, text, data),
         stream: (id, text) => this.stream(run, id, text),
-        update: () => {providerProgress(run,this.now());this.persist(run,{deferred:run.status==='running'});},
+        update: ({durable=false}={}) => {providerProgress(run,this.now());this.persist(run,{deferred:!durable&&run.status==='running'});},
         ask: (request,requestSignal) => this.ask(run, request, requestSignal||controller.signal)
       });
       if(controller.progressTimeout)throw Error(controller.progressTimeout);
@@ -616,6 +699,21 @@ export class Engine extends EventEmitter {
     operation.then(() => { this.schedulerTick = null; }, () => { this.schedulerTick = null; });
     return operation;
   }
+  deleteSchedule({id, expectedRevision, operationId}) {
+    return this.schedules.remove(id, expectedRevision, operationId, schedule => {
+      if (schedule.source?.manifest) {
+        throw new Error('Remove this schedule from its source manifest and reconcile on the owning computer. A source refresh would recreate a local deletion.');
+      }
+      if (schedule.provider === 'local-process') throw new Error('Remove this schedule through its native service owner.');
+      if ([...this.runs.values()].some(run => run.schedule.id === id &&
+          (this.running.has(run.id) || ['queued','running','awaiting_input'].includes(run.status)))) {
+        throw new Error('This schedule has active or queued work. Wait for that work to settle before deleting it.');
+      }
+    }, () => {
+      this.deletedScheduleEpochs.set(id, ++this.scheduleDeletionEpoch);
+      this.emit('change');
+    });
+  }
   async drainSchedulerTicks() {
     while (this.pendingSchedulerTime && !this.stopping&&!this.updateBarrier) {
       const timestamp = this.pendingSchedulerTime; this.pendingSchedulerTime = null;
@@ -623,6 +721,7 @@ export class Engine extends EventEmitter {
       if (this.performanceDiagnostics) this.performanceDiagnostics.measureSync('scheduler.permissions', recheck); else recheck();
       if (new Date(timestamp) <= new Date(this.journal.lastPoll)) continue;
       this.schedulerWorker ??= new SchedulerWorker(this.home);
+      const scanEpoch = this.scheduleDeletionEpoch;
       const plan = await this.schedulerWorker.scan(this.journal, timestamp);
       if (this.stopping||this.updateBarrier) break;
       const currentErrors = new Map(plan.errors.map(error => [error.schedule, error.error]));
@@ -632,6 +731,7 @@ export class Engine extends EventEmitter {
       if (this.stopping||this.updateBarrier) break;
       const journal = { ...this.journal, slots: { ...this.journal.slots }, lastPoll: timestamp };
       for (const { schedule, slot } of plan.due) {
+        if ((this.deletedScheduleEpochs.get(schedule.id) || 0) > scanEpoch) continue;
         // createRun synchronously persists before queuing provider work. This
         // durable run remains a claim even if the subsequent checkpoint fails.
         const exists = [...this.runs.values()].some(run => run.schedule.id === schedule.id && run.slot === slot);

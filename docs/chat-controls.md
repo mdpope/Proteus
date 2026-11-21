@@ -1,3 +1,19 @@
+## Send a macOS screenshot to Proteus
+
+Choose **Send to Proteus** from the screenshot thumbnail’s Share menu. Enable
+the entry under **Edit Extensions** if macOS has hidden it. Proteus opens a tray
+of thumbnails. Drag a thumbnail to a chat composer, an editable Markdown file
+or scratch, or the file list or folder in a workspace. The chat composer adds
+the image alongside existing draft text and files.
+
+The tray’s minimize button hides it and keeps the images in memory. Click
+**Screenshots** to reopen it. The **×** on a thumbnail removes that image from
+the tray. Quitting Proteus clears the tray. The extension creates no separate
+screenshot file on receipt. The tray accepts
+images up to 32 MB. Document embeds and file drops to a paired computer use their
+existing 4 MiB limit. If Proteus cannot receive the image, the Share sheet offers
+**Try Again** and **Copy Image**.
+
 ## R20 — clear reviewed questions from the open queue
 
 Question cards add **Clear from queue** immediately left of **Send answer**. The owner persists
@@ -266,6 +282,12 @@ patches. Legacy remote clients keep compatible page responses and events. See th
 [follow-up ledger](2026-10-07-followup-release.md) for validation/install status.
 
 ## Search chats and keyboard delivery (0.2.6)
+
+In the desktop and web Chats dashboard, failed, interrupted, and waiting chats become Stale after
+72 hours in their current state. Recently finished includes them, and the Stale filter finds them
+directly. A waiting chat still accepts its answer, and a failed chat retains its recovery controls.
+The Card size slider between Search and the view selector remembers its 75–200% setting on the client.
+It scales card dimensions and type together. Completed titles use the standard text color.
 
 Chats has User Chats, Scheduled Tasks and Internet Searches tabs with the same filters. Sidebar
 recents show up to seven user chats or searches. Internet Searches starts a normal provider

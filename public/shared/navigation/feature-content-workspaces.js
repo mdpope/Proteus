@@ -31,5 +31,5 @@ export function createFeatureContentWorkspaces(ui){
   if(feature&&!views.has(feature))ui.initialize(feature);
   const view=views.get(feature);
   if(view){listeners.get(feature)?.();view.bar.id='feature-content-navigation';document.querySelector('#main').before(view.bar);}
- },update(){const feature=owner(ui.selected())||masterFeature()||ui.page();listeners.get(feature)?.();},inherit(before,tab){const feature=owner(before);if(feature){groups.add(binding(feature),tab.id,{private:tab.incognito||tab.info?.incognito});save();}},replace(before,tab){groups.replace(before,tab.id,{private:tab.incognito||tab.info?.incognito});save();},remove(id){groups.remove(id);save();},restore(ids){groups.remap(ids);save();}};
+ },update(){const feature=owner(ui.selected())||masterFeature()||ui.page();listeners.get(feature)?.();},inherit(before,tab){const feature=owner(before);if(feature){groups.add(binding(feature),tab.id,{afterId:before,private:tab.incognito||tab.info?.incognito});save();}},replace(before,tab){groups.replace(before,tab.id,{private:tab.incognito||tab.info?.incognito});save();},remove(id){groups.remove(id);save();},restore(ids){groups.remap(ids);save();}};
 }

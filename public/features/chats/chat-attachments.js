@@ -1,4 +1,6 @@
 import {textAttachmentReason,htmlToMarkdown,insertTextAtSelection} from './clipboard-input.js';
+import {bindScreenshotDrop} from '../../shared/ui/screenshot-drop.js';
+import {imageViewport,imageZoomView} from '../../shared/ui/content-zoom.js';
 const selections=new Map(),sentPreviews=new Map();
 // N11-18: no file type or size limits. Files are hashed and uploaded in slices so even very large
 // files never need to fit in renderer memory; the owner checks its own free disk space.
@@ -22,11 +24,43 @@ const providerName=id=>({copilot:'Copilot',codex:'Codex',claude:'Claude'}[id]||i
 const sizeLabel=size=>size>=1024*1024?(size/1024/1024).toFixed(1)+' MB':Math.ceil(size/1024)+' KB';
 function preview(file){if(!['image/png','image/jpeg','image/gif','image/webp'].includes(file.type))return null;return URL.createObjectURL(file);}
 function closePreview(){document.querySelector('#attachment-image-preview')?.close();document.querySelector('#attachment-image-preview')?.remove();}
-function showPreview(item){closePreview();const dialog=document.createElement('dialog');dialog.id='attachment-image-preview';dialog.className='attachment-image-preview';dialog.innerHTML=`<div class="heading"><strong>${escape(item.file.name)}</strong><button aria-label="Close image preview">×</button></div><img alt="${escape(item.file.name)}" src="${item.url}">`;document.body.append(dialog);dialog.querySelector('button').onclick=()=>dialog.close();dialog.addEventListener('click',event=>{if(event.target===dialog)dialog.close();});dialog.addEventListener('close',()=>dialog.remove(),{once:true});dialog.showModal();}
+function showPreview(attachments,item){
+  closePreview();
+  const items=attachments.filter(entry=>entry.url);
+  let index=items.indexOf(item);
+  if(index<0)return;
+  const dialog=document.createElement('dialog');
+  dialog.id='attachment-image-preview';dialog.className='attachment-image-preview';
+  dialog.innerHTML='<div class="heading"><strong aria-live="polite"></strong><div class="actions"><button data-previous aria-label="Previous attachment">←</button><button data-next aria-label="Next attachment">→</button><button data-close aria-label="Close image preview">×</button></div></div><img alt="">';
+  const previous=dialog.querySelector('[data-previous]'),next=dialog.querySelector('[data-next]'),image=dialog.querySelector('img');
+  const {viewport,controls,reset}=imageViewport(image);dialog.append(controls,viewport);
+  const update=()=>{
+    const current=items[index];
+    dialog.querySelector('strong').textContent=current.file.name;
+    reset();image.alt=current.file.name;image.src=current.url;
+    previous.disabled=index===0;next.disabled=index===items.length-1;
+  };
+  const step=direction=>{if(items[index+direction]){index+=direction;update();}};
+  previous.onclick=()=>step(-1);next.onclick=()=>step(1);
+  dialog.querySelector('[data-close]').onclick=()=>dialog.close();
+  dialog.addEventListener('keydown',event=>{if(['ArrowLeft','ArrowRight'].includes(event.key)){event.preventDefault();step(event.key==='ArrowLeft'?-1:1);}});
+  dialog.addEventListener('click',event=>{if(event.target===dialog)dialog.close();});
+  dialog.addEventListener('close',()=>dialog.remove(),{once:true});
+  document.body.append(dialog);update();dialog.showModal();
+}
 export function selectedAttachments(key){return selections.get(key)||[];}
+export function appendDraftAttachments(key,files,maxFiles=MAX_BATCH_FILES){
+  const items=selectedAttachments(key).slice(),available=Math.max(0,maxFiles-items.length);
+  const added=files.slice(0,available).map(file=>({file,url:preview(file)}));
+  if(added.length){
+    selections.set(key,items.concat(added));
+    for(const host of document.querySelectorAll('.chat-attachment-picker'))if(host.dataset.attachmentKey===key)host.dispatchEvent(new Event('attachments-restored'));
+  }
+  return added.length;
+}
 export function clearAttachments(key){for(const item of selections.get(key)||[])if(item.url)URL.revokeObjectURL(item.url);selections.delete(key);for(const host of globalThis.document?.querySelectorAll('.chat-attachment-picker')||[])if(host.dataset.attachmentKey===key)host.dispatchEvent(new Event('attachments-restored'));}
 export function sentAttachmentPreview(messageId,name){return sentPreviews.get(messageId)?.find(item=>item.file.name===name)?.url||null;}
-export function openSentAttachmentPreview(messageId,name){const item=sentPreviews.get(messageId)?.find(entry=>entry.file.name===name);if(item?.url)showPreview(item);}
+export function openSentAttachmentPreview(messageId,name){const items=sentPreviews.get(messageId)||[],item=items.find(entry=>entry.file.name===name);if(item?.url)showPreview(items,item);}
 export function restoreSentAttachments(key,messageId){
   clearAttachments(key);const files=sentPreviews.get(messageId)||[];
   selections.set(key,files.map(item=>({...item,url:preview(item.file)})));
@@ -37,10 +71,14 @@ export function mountAttachmentPicker({key,host,textarea,provider,mediaTypes={},
   host.classList.add('chat-attachment-picker');host.dataset.attachmentKey=key;
   const render=()=>{const items=selectedAttachments(key);host.innerHTML=`<div class="attachment-strip">${items.map((item,index)=>`<div class="attachment-chip"><button type="button" data-attach-preview="${index}" ${item.url?'':'disabled'}>${item.url?`<img src="${item.url}" alt="">`:'▤'} <span>${escape(item.file.name)}<small>${sizeLabel(item.file.size)}</small></span></button><button type="button" data-attach-remove="${index}" aria-label="Remove ${escape(item.file.name)}">×</button></div>`).join('')}</div><div class="attachment-controls"><button type="button" class="subtle attachment-add" data-attach-add aria-label="Attach files" title="Attach files" ${provider()?'':'disabled'}><span aria-hidden="true">＋</span></button><input type="file" multiple hidden></div>`;
     const input=host.querySelector('input[type=file]');input.accept='';host.querySelector('[data-attach-add]').onclick=()=>input.click();input.onchange=()=>{add([...input.files]);input.value='';};
-    host.querySelectorAll('[data-attach-preview]').forEach(button=>button.onclick=()=>{const item=selectedAttachments(key)[Number(button.dataset.attachPreview)];if(item?.url)showPreview(item);});
+    host.querySelectorAll('[data-attach-preview]').forEach(button=>button.onclick=()=>{const item=selectedAttachments(key)[Number(button.dataset.attachPreview)];if(item?.url)showPreview(selectedAttachments(key),item);});
     host.querySelectorAll('[data-attach-remove]').forEach(button=>button.onclick=()=>{const list=selectedAttachments(key),[item]=list.splice(Number(button.dataset.attachRemove),1);if(item?.url)URL.revokeObjectURL(item.url);render();onChange();});
   };
-  const add=files=>{const items=selectedAttachments(key).slice();for(const file of files){if(items.length>=maxFiles){notify('This reply accepts up to '+maxFiles+' attachments.');break;}items.push({file,url:preview(file)});}selections.set(key,items);render();onChange();};
+  const add=files=>{if(appendDraftAttachments(key,files,maxFiles)<files.length)notify('This reply accepts up to '+maxFiles+' attachments.');};
+  const composer=host.closest('.composer,form');
+  const receiveScreenshot=()=>provider()&&!textarea?.disabled?async read=>add([await read()]):null;
+  bindScreenshotDrop(composer||host,receiveScreenshot,notify);
+  if(!composer&&textarea&&!host.contains(textarea))bindScreenshotDrop(textarea,receiveScreenshot,notify);
   textarea?.addEventListener('paste',event=>{
     const clipboard=event.clipboardData;if(!clipboard)return;
     const files=[...(clipboard.items||[])].filter(item=>item.kind==='file').map(item=>item.getAsFile()).filter(Boolean);
@@ -86,7 +124,7 @@ export async function openStoredAttachments(items,index,load){
       const file=await load(item,selected);if(version!==generation||!dialog.isConnected)return;details({...item,...file});
       const type=String(file.mediaType||'').toLowerCase(),url=URL.createObjectURL(new Blob([file.bytes],{type:'application/octet-stream'}));urls.push(url);
       const save=dialog.querySelector('a');save.href=url;save.download=file.name||item.name||'Attachment';save.hidden=false;content.replaceChildren();
-      if(['image/png','image/jpeg','image/gif','image/webp'].includes(type)){const image=document.createElement('img');image.alt=item.name||'Attachment';image.src=URL.createObjectURL(new Blob([file.bytes],{type}));urls.push(image.src);content.append(image);}
+      if(['image/png','image/jpeg','image/gif','image/webp'].includes(type)){const image=document.createElement('img');image.alt=item.name||'Attachment';image.src=URL.createObjectURL(new Blob([file.bytes],{type}));urls.push(image.src);content.append(imageZoomView(image));}
       else if(textTypes.test(type)&&file.bytes.byteLength<=2*1024*1024){const pre=document.createElement('pre');pre.className='attachment-text';pre.textContent=new TextDecoder().decode(file.bytes);content.append(pre);}
       else content.textContent=(type||'This file type')+' is not previewed in Proteus. Save a copy to open it with another app.';
     }catch(error){if(version===generation)content.textContent=error.message||'This attachment could not be opened.';}

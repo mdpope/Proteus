@@ -95,3 +95,11 @@
 .reminder-card[aria-current=true]{background:var(--proteus-control-hover);border-color:var(--proteus-accent);box-shadow:inset 3px 0 var(--proteus-accent);}
 .reminder-scope-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.reminder-scope-fields label{min-width:0}
 .reminder-scope-badge{padding:1px 7px;border:1px solid var(--proteus-line);border-radius:999px;color:var(--proteus-muted);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.reminder-import {
+  width: min(42rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 2rem);
+  overflow: auto;
+}
+.reminder-import label, .reminder-import fieldset { margin-block: .75rem; }
+.reminder-import [hidden] { display: none; }
+.reminder-import pre { overflow: auto; max-width: 100%; }

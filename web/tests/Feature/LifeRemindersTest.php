@@ -34,6 +34,42 @@ class LifeRemindersTest extends TestCase
         return $this->postJson('/api/v1/life/data', ['section' => 'reminders', 'query' => $query]);
     }
 
+    public function test_bulk_import_preserves_source_lists_dates_and_completion_and_is_safe_to_repeat(): void
+    {
+        $user = $this->owner();
+        $profile = $this->login($user);
+        $source = ['format' => 'proteus-reminders-1', 'sourceId' => 'apple:fixture', 'sourceName' => 'Synthetic Apple account', 'lists' => [
+            ['id' => 'work', 'name' => 'Work', 'items' => [
+                ['id' => 'done', 'title' => 'Earlier task', 'notes' => "  Original note\n", 'completed' => true, 'completedAt' => '2024-01-03T15:04:05+00:00', 'createdAt' => '2024-01-01T00:00:00+00:00', 'dueKind' => 'date', 'dueDate' => '2024-01-02', 'extras' => ['priority' => 1]],
+                ['id' => 'open', 'title' => 'Timed task', 'completed' => false, 'dueKind' => 'datetime', 'dueAt' => '2028-07-01T10:00:00-06:00', 'timeZone' => 'America/Denver'],
+            ]],
+            ['id' => 'empty', 'name' => 'Empty list', 'items' => []],
+        ]];
+        $input = ['source' => json_encode($source, JSON_THROW_ON_ERROR)];
+        $first = $this->change($profile, 'import.preview', $input)->assertOk()->assertJsonPath('createdItems', 2)->json();
+        $this->assertDatabaseCount('life_reminders', 0);
+        $this->change($profile, 'list.create', ['name' => 'Work'])->assertOk();
+        $this->change($profile, 'import.apply', $input + ['digest' => $first['digest']])->assertConflict();
+        $this->assertDatabaseCount('life_reminders', 0);
+
+        $preview = $this->change($profile, 'import.preview', $input)->assertOk()->assertJsonPath('lists.0.destination', 'Work (Imported)')->json();
+        $apply = $input + ['digest' => $preview['digest']];
+        $key = (string) Str::uuid();
+        $this->change($profile, 'import.apply', $apply, $key)->assertOk()->assertJsonPath('createdItems', 2)->assertJsonPath('createdLists', 2);
+        $this->change($profile, 'import.apply', $apply, $key)->assertOk()->assertJsonPath('createdItems', 2);
+        $this->change($profile, 'import.preview', $input)->assertOk()->assertJsonPath('createdItems', 0)->assertJsonPath('lists.0.skipped', 2);
+
+        $completed = $this->data(['completed' => 'completed'])->assertOk()->assertJsonCount(1, 'items')->json();
+        $list = collect($completed['lists'])->firstWhere('name', 'Work (Imported)');
+        $this->assertSame($list['id'], $completed['items'][0]['listId']);
+        $this->assertSame('2024-01-03T15:04:05+00:00', $completed['items'][0]['completedAt']);
+        $this->assertSame('2024-01-01T00:00:00+00:00', $completed['items'][0]['createdAt']);
+        $this->assertSame('2024-01-02', $completed['items'][0]['dueDate']);
+        $this->assertSame("  Original note\n", $completed['items'][0]['notes']);
+        $this->data(['completed' => 'open'])->assertOk()->assertJsonPath('items.0.dueAt', '2028-07-01T16:00:00+00:00')->assertJsonPath('items.0.timeZone', 'America/Denver');
+        $this->assertSame([], app(AppRecords::class)->all($user, 'notifications'));
+    }
+
     public function test_editing_without_rescheduling_does_not_repeat_a_due_alert(): void
     {
         $this->travelTo(CarbonImmutable::parse('2026-11-14T17:00:00Z'));

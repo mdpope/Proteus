@@ -485,6 +485,16 @@ container. Resume a partial copy after unlock and verify coverage, instead of cr
 before/after trees for each lock/retry. Failed-attempt metadata can remain small; retain at most
 two accepted full recovery generations and resolve any temporary in-flight exception promptly.
 
+New physical iPhone and iPad recovery generations omit both the shared WebKit network cache
+and `NetworkCache` under each WebKit website data store. They also omit Proteus's automatically
+captured page archives and tab thumbnails. Keep browser tabs, URLs, history and pending visits,
+reading positions, site data such as cookies and IndexedDB, and encrypted offline computer
+records. Normal in-place updates reuse the live data container. iPadOS and WebKit can invalidate
+its caches independently. After a recovery that omits the derived content, reachable sites can
+reload and produce fresh caches and previews. An unreachable tab keeps its URL and history.
+Pin the inventory policy for each recovery generation so retries can still verify older backups
+with their original file set.
+
 Verify that the **Mac is unlocked before checking Apple accounts or signing availability**.
 If computer access reports a locked screen, ask the operator to unlock it and repeat the checks
 after unlock. A locked Mac can produce misleading “No Accounts” or missing-profile errors;
@@ -657,6 +667,14 @@ and unverified on physical devices. See `release-validation.md` for the current 
 
 
 ## Packaged Mac smoke test and Keychain isolation
+
+The macOS screenshot Share extension is embedded in `Contents/PlugIns` when
+packaging with an existing Apple team signing identity. The containing app,
+sandboxed extension and container resolver use the same team-prefixed App Group.
+The isolated Design Preview uses a separate bundle and App Group. Place the
+signed rehearsal app in an Applications folder before checking PlugInKit
+registration. macOS may require the user to enable the Share entry from
+**Edit Extensions** in the Share menu.
 
 Run `node test/packaged-mac.mjs` against the built Mac bundle (or pass its path).
 The test checks bundle identity/artwork, signatures, preserved GitHub vendor binaries,

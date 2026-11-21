@@ -5,6 +5,21 @@ import {createRequire} from 'node:module';
 import {execFileSync} from 'node:child_process';
 const {environment}=createRequire(import.meta.url)('../desktop/updates/update-helper.cjs');
 const {helperEnvironment}=createRequire(import.meta.url)('../desktop/updates/helper-environment.cjs');
+const {relaunchMac}=createRequire(import.meta.url)('../desktop/updates/macos-relaunch.cjs');
+
+test('macOS LaunchServices receives the app environment and returns the actual app PID',()=>{
+ const bundle='/synthetic/Proteus.app',args=['--user-data-dir=/synthetic/browser'];
+ const env=environment('/synthetic/home',false,{PROTEUS_UPDATE_JOB:'/synthetic/job'},{ELECTRON_RUN_AS_NODE:'1',CODEX_HOME:'/synthetic/codex'});
+ const run=(file,invocation,options)=>{
+  assert.equal(file,'/usr/bin/osascript');
+  assert.equal(invocation.includes(bundle),false);
+  assert.deepEqual(options.env,{CODEX_HOME:'/synthetic/codex',PROTEUS_HOME:'/synthetic/home',PORT:'0',PROTEUS_UPDATE_JOB:'/synthetic/job'});
+  assert.deepEqual(JSON.parse(options.input),{bundle,args,environment:options.env});
+  return '2176\n';
+ };
+ assert.deepEqual(relaunchMac(bundle,args,env,{run}),{pid:2176});
+ assert.throws(()=>relaunchMac(bundle,args,env,{run:()=>''}),/process ID/);
+});
 
 test('helper child drops process-specific Crashpad pipes while preserving ordinary launch context',()=>{
  const source={CHROME_CRASHPAD_PIPE_NAME:'synthetic-pipe',ELECTRON_CRASHPAD_PIPE_NAME:'synthetic-pipe',chromium_crashpad_pipe_name:'synthetic-pipe',CODEX_HOME:'/synthetic/codex',XDG_CURRENT_DESKTOP:'KDE',PATH:process.env.PATH,SYNTHETIC_PROVIDER_OPTION:'preserved'};

@@ -6,4 +6,4 @@ window.configureScratch=(value,source,colors)=>{
 };
 // Formatting uses the editor selection and its undo history, never an append to
 // a stale SwiftUI copy of the document.
-window.insertScratch=(before,after)=>editor?.insert(before,after);
+window.insertScratch=(before,after,replace)=>{if(replace)editor?.replaceSelection(before);else editor?.insert(before,after);};

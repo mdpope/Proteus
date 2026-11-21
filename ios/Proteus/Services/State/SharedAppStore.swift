@@ -181,6 +181,15 @@ let nativeFixtureRelayOrigin = ""
     private var contentReadSessions: [String: Int] = [:]
     private var contentHosts: [String: String] = [:]
     private var contentSnapshots: [String: JSON] = [:]
+    private var contentSnapshotRevision = 0
+    private var tabCacheSlots = NativeTabCacheSlots()
+    private var tabCacheReadError: RemoteError?
+
+    private func setContentSnapshot(_ value: JSON?, in scope: String) {
+        guard contentSnapshots[scope] != value else { return }
+        contentSnapshots[scope] = value
+        contentSnapshotRevision &+= 1
+    }
     // Temporary, bounded reconciliation evidence contains no URLs, titles, text or keys.
     // This lets a guided device check distinguish a live owner read from a saved cache.
     private var contentReadEvidence: [String: JSON] = [:]
@@ -386,7 +395,11 @@ let nativeFixtureRelayOrigin = ""
     @Published private(set) var browserPreviews: [String: UIImage] = [:]
     @Published private(set) var historyCache: [String: [JSON]] = [:]
     @Published private(set) var historyStatus: [String: String] = [:]
-    @Published private(set) var historyOutbox: [JSON] = []
+    private(set) var historyOutbox: [JSON] = []
+    private var historyCacheVersion = 0
+    private var historyInvalidations: [String: Int] = [:]
+    private var legacyHistoryOutbox: [JSON] = []
+    private var historyJournalReadError: Error?
     private var historyFlushing = Set<String>()
     private var historyRefreshing = Set<String>()
     private var historyRefreshed: [String: Date] = [:]
@@ -395,18 +408,118 @@ let nativeFixtureRelayOrigin = ""
     private let sharedCacheRoot: URL
     private let sharedCacheKey: () -> String?
     let browserClipboard: NativeBrowserClipboard
-    init(cacheWriter: NativeSharedCacheWriter = .shared, cacheRoot: URL? = nil, cacheKey: @escaping () -> String? = BrowserCacheKeychain.key, maintenanceArguments: [String] = ProcessInfo.processInfo.arguments, browserClipboard: NativeBrowserClipboard? = nil) {
+    @Published private(set) var startupCachesReady = false
+    private var startupCacheRead: Task<StartupCaches, Never>?
+    private let maintenanceArguments: [String]
+
+    private struct StartupCaches: Sendable {
+        var documents: JSON = .null
+        var contentSnapshots: [String: JSON] = [:]
+        var ownerSnapshotReference: JSON = .null
+        var tabCacheError: RemoteError?
+        var documentTabs: [NativeDocumentDescriptor] = []
+        var conflicts: [NativeBrowserNavigationConflict] = []
+        var history: [String: [JSON]] = [:]
+        var legacyVisits: [JSON] = []
+        var visits: [JSON] = []
+        var journalError: RemoteError?
+        var error: String?
+    }
+
+    init(cacheWriter: NativeSharedCacheWriter = .shared, cacheRoot: URL? = nil, cacheKey: @escaping () -> String? = BrowserCacheKeychain.key, maintenanceArguments: [String] = ProcessInfo.processInfo.arguments, browserClipboard: NativeBrowserClipboard? = nil, deferStartupRead: Bool = false) {
         self.browserClipboard = browserClipboard ?? .shared
         self.cacheWriter = cacheWriter
+        self.maintenanceArguments = maintenanceArguments
         if let cacheRoot { contentEvidenceURL = cacheRoot.appendingPathComponent("proteus-tab-sync-evidence.json") }
         chatPositionNamespace = cacheRoot?.path ?? ""
         sharedCacheRoot = cacheRoot ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Proteus")
         sharedCacheKey = cacheKey
-        UserDefaults.standard.removeObject(forKey: "proteus.download-history"); loadDocumentTabs(); loadHistoryCache()
+        if !deferStartupRead {
+            applyStartupCaches(Self.readStartupCaches(root: sharedCacheRoot, key: sharedCacheKey(), writer: cacheWriter))
+        }
+    }
+
+    func restoreStartupCaches() async {
+        guard !startupCachesReady else { return }
+        if startupCacheRead == nil {
+            let root = sharedCacheRoot, key = sharedCacheKey(), writer = cacheWriter
+            startupCacheRead = Task.detached(priority: .userInitiated) {
+                Self.readStartupCaches(root: root, key: key, writer: writer)
+            }
+        }
+        guard let loaded = await startupCacheRead?.value, !startupCachesReady else { return }
+        applyStartupCaches(loaded)
+        startupCacheRead = nil
+    }
+
+    private nonisolated static func readStartupCaches(root: URL, key: String?, writer: NativeSharedCacheWriter) -> StartupCaches {
+        var result = StartupCaches()
+        do { try writer.flush() } catch { result.error = error.localizedDescription }
+        guard let key else {
+            result.journalError = RemoteError(message: "Unlock this device before syncing local browser visits.")
+            return result
+        }
+        func read(_ file: String, aad: String) throws -> JSON {
+            let bytes = try Data(contentsOf: root.appendingPathComponent(file))
+            return try RemoteCrypto.open(String(decoding: bytes, as: UTF8.self), key: key, aad: aad)
+        }
+        func decode<T: Decodable>(_ value: JSON, as type: T.Type) -> T? {
+            guard let bytes = try? JSONEncoder().encode(value) else { return nil }
+            return try? JSONDecoder().decode(type, from: bytes)
+        }
+        if let documents = try? read("document-tabs.enc", aad: "proteus-mobile-document-tabs-v1") {
+            result.documents = documents
+            let reference = documents["ownerSnapshots"]
+            if reference == .null {
+                result.contentSnapshots = documents["contentSnapshots"].object
+            } else {
+                do {
+                    result.contentSnapshots = try NativeTabCacheSlots.read(reference, root: root, key: key)
+                    result.ownerSnapshotReference = reference
+                } catch {
+                    result.tabCacheError = RemoteError(message: "Local tab synchronization data could not be read: " + error.localizedDescription)
+                    result.error = result.tabCacheError?.message
+                }
+            }
+            result.documentTabs = Array((decode(documents["tabs"], as: [NativeDocumentDescriptor].self) ?? []).prefix(100))
+            result.conflicts = decode(documents["browserConflicts"], as: [NativeBrowserNavigationConflict].self) ?? []
+        }
+        if let history = try? read("browser-history.enc", aad: "proteus-mobile-history-v1") {
+            result.legacyVisits = history["outbox"].array
+            let threshold = historyCacheStart()
+            result.history = history["cache"].object.mapValues {
+                $0.array.filter { ProviderAllowance.date($0["visitedAt"].string).map { $0 >= threshold } == true }
+            }
+        }
+        do {
+            let journal = try read("browser-history-outbox.enc", aad: "proteus-mobile-history-outbox-v1")
+            guard case .array(let visits) = journal else { throw RemoteError(message: "Invalid browser history outbox.") }
+            result.visits = visits
+            result.legacyVisits = []
+        } catch let error as CocoaError where error.code == .fileReadNoSuchFile {
+            result.visits = result.legacyVisits
+        } catch {
+            result.journalError = RemoteError(message: error.localizedDescription)
+            result.error = "Local browser visits could not be read: " + error.localizedDescription
+        }
+        return result
+    }
+
+    private func applyStartupCaches(_ caches: StartupCaches) {
+        UserDefaults.standard.removeObject(forKey: "proteus.download-history")
+        error = caches.error
+        tabCacheSlots = NativeTabCacheSlots(reference: caches.ownerSnapshotReference)
+        tabCacheReadError = caches.tabCacheError
+        applyDocumentTabCache(caches)
+        historyCache = caches.history
+        legacyHistoryOutbox = caches.legacyVisits
+        historyOutbox = caches.visits
+        historyJournalReadError = caches.journalError
         for (key, value) in legacyContentReview where key.hasPrefix("owner-reset:") && value["phase"].string == "awaiting-owner" { ownerProjectResets[value["scope"].string] = value["operationId"].string }
         if let index = maintenanceArguments.firstIndex(of: "--restore-project-tabs-from-owner"), maintenanceArguments.count > index + 3 { try? requestOwnerProjectTabReset(hostID: maintenanceArguments[index + 1], projectID: maintenanceArguments[index + 2], operationID: maintenanceArguments[index + 3]) }
-
+        startupCachesReady = true
     }
+
     /// Operator-only OS launch maintenance. Web links cannot trigger this reset.
     /// Only the named local project cache/outbox is retired; owner tabs are read.
     func requestOwnerProjectTabReset(hostID: String, projectID: String, operationID: String) throws {
@@ -445,7 +558,7 @@ let nativeFixtureRelayOrigin = ""
             let ids = fresh["tabs"].array.map { $0["id"].string }
             guard ids.allSatisfy({ !$0.isEmpty }), Set(ids).count == ids.count else { throw RemoteError(message: "Owner returned an invalid tab inventory.") }
             legacyContentReview[key] = .object(["scope": .string(scope), "operationId": .string(operation), "phase": .string("completed"), "completedAt": .string(ISO8601DateFormatter().string(from: Date())), "ownerRevision": fresh["revision"], "retiredPending": .array(contentPending[scope] ?? []), "retiredRequest": contentRequests[scope] ?? .null])
-            contentPending[scope] = nil; contentRequests[scope] = nil; contentSnapshots[scope] = nil
+            contentPending[scope] = nil; contentRequests[scope] = nil; setContentSnapshot(nil, in: scope)
             contentHosts[scope] = host; contentSync[scope] = (remote, "project", id, host)
             let wasApplying = applyingContent; applyingContent = true
             let stale = tabs(in: scope).filter { !ids.contains($0.contentTabId ?? $0.id) }
@@ -480,7 +593,7 @@ let nativeFixtureRelayOrigin = ""
             let intent = JSON.object(value); queued.append(intent); return intent
         }
         contentPending[scope] = queued
-        if contentSnapshots[scope] == nil { contentSnapshots[scope] = .object(["revision": .number(0), "tabs": .array(localContentTabs(scope))]) }
+        if contentSnapshots[scope] == nil { setContentSnapshot(.object(["revision": .number(0), "tabs": .array(localContentTabs(scope))]), in: scope) }
         if Self.isOrganizationalScope(scope) {
             workspaceContentDescriptors[scope] = Self.projectContentOperations(intents, onto: workspaceContentDescriptors[scope] ?? contentSnapshots[scope]?["tabs"].array ?? [])
         }
@@ -516,13 +629,13 @@ let nativeFixtureRelayOrigin = ""
         let parts = scope.split(separator: ":", maxSplits: 2).map(String.init)
         guard parts.count >= 2, UUID(uuidString: parts[1]) != nil else { return }
         contentHosts[scope] = parts[1]
-        if contentSnapshots[scope] == nil { contentSnapshots[scope] = .object(["revision": .number(0), "tabs": .array([])]) }
+        if contentSnapshots[scope] == nil { setContentSnapshot(.object(["revision": .number(0), "tabs": .array([])]), in: scope) }
         let op: JSON = .object(["action": .string("close"), "id": .string(id), "intentId": .string(UUID().uuidString.lowercased())])
         if Self.isOrganizationalScope(scope) { workspaceContentDescriptors[scope] = Self.projectContentOperations([op], onto: workspaceContentDescriptors[scope] ?? []) }
         contentPending[scope] = (contentPending[scope] ?? []) + [op]; saveDocumentTabs()
         Task { await self.flushContentTabs(scope) }
     }
-    func localContentTabs(_ scope: String) -> [JSON] {
+    func localContentTabs(_ scope: String, includeBrowserHistory: Bool = true) -> [JSON] {
         let scopedBrowsers = tabs(in: scope).filter { !$0.incognito }
         var priorByID: [String: JSON] = [:]
         for prior in contentSnapshots[scope]?["tabs"].array ?? [] where priorByID[prior["id"].string] == nil { priorByID[prior["id"].string] = prior }
@@ -541,7 +654,10 @@ let nativeFixtureRelayOrigin = ""
             value["hidden"] = .bool(tab.hidden); value["persist"] = .bool(tab.persist)
             if prior == nil, explicitBrowserNavigations.contains(tab.id) || browserOperations[tab.id] != nil { value["url"] = .string("") }
             if tab.hidden { value["hidden"] = .bool(true) }; if tab.persist { value["persist"] = .bool(true) }; if let date = tab.openedAt.flatMap(ProviderAllowance.date) { value["openedAt"] = .string(instant.string(from: date)) }; if let date = tab.lastTouchedAt.flatMap(ProviderAllowance.date) { value["lastTouchedAt"] = .string(instant.string(from: date)) }
-            if let customTitle = tab.customTitle { value["customTitle"] = .string(customTitle) }; if value["url"]?.string.isEmpty == false, let history = Self.safeBrowserHistory(tab.history), let data = try? JSONEncoder().encode(history), let json = try? JSONDecoder().decode(JSON.self, from: data) { value["history"] = json }; return .object(value)
+            if let customTitle = tab.customTitle { value["customTitle"] = .string(customTitle) }
+            if includeBrowserHistory, value["url"]?.string.isEmpty == false, let history = Self.safeBrowserHistory(tab.history),
+               let data = try? JSONEncoder().encode(history), let json = try? JSONDecoder().decode(JSON.self, from: data) { value["history"] = json }
+            return .object(value)
         }
         let docs = documents(in: scope).filter { $0.previewSource == nil }.map { tab -> JSON in var value: [String: JSON] = ["id": .string("document:" + tab.id), "type": .string("document"), "documentId": .string(tab.id), "title": .string(tab.title), "mediaType": .string(tab.mediaType)]; if let chatID = tab.sourceChatID { value["chatId"] = .string(chatID) }; if let customTitle = tab.customTitle { value["customTitle"] = .string(customTitle) }; if let prior = priorByID["document:" + tab.id] { for (key, field) in prior.object where value[key] == nil && key != "customTitle" { value[key] = field } }; return .object(value) }
         // Keep owner descriptors that this view cannot render. Omitting them would
@@ -557,7 +673,9 @@ let nativeFixtureRelayOrigin = ""
             guard contentHosts[scope] != nil, !scope.hasPrefix("main:") else { continue }
             let prior = snapshot["tabs"].array
             let priorByID = Dictionary(prior.map { ($0["id"].string, $0) }, uniquingKeysWith: { first, _ in first })
-            let current = localContentTabs(scope).filter { tab in tab["type"].string != "browser" || priorByID[tab["id"].string] != nil }
+            // Navigation has its own ordered outbox. Metadata-only reconciliation
+            // reuses the owner history below so it need not encode every local stack.
+            let current = localContentTabs(scope, includeBrowserHistory: false).filter { tab in tab["type"].string != "browser" || priorByID[tab["id"].string] != nil }
             let currentIDs = Set(current.map { $0["id"].string })
             var operations: [JSON] = []
             for tab in current where priorByID[tab["id"].string] != tab {
@@ -599,25 +717,36 @@ let nativeFixtureRelayOrigin = ""
         let incoming = response["tabs"].array.filter { !$0["id"].string.isEmpty && seen.insert($0["id"].string).inserted }
         let ids = Set(incoming.filter { $0["type"].string == "browser" && $0["setup"] == .null }.map { $0["id"].string })
         let existingBrowsers = tabs(in: scope).filter { !$0.incognito }
-        let privateLocal = existingBrowsers.filter { $0.url != nil && Self.safeURL($0.url ?? "") == nil }
+        let existingByOwnerID = Dictionary(existingBrowsers.map { ($0.contentTabId ?? $0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let privateLocal = Set(existingBrowsers.filter { $0.url != nil && Self.safeURL($0.url ?? "") == nil }.map(\.id))
+        let pendingNavigationIDs = Set((contentPending[scope] ?? []).filter { $0["action"].string.hasPrefix("browser-") }.map { $0["tabId"].string })
+        func keepsLocalPage(_ existing: BrowserDescriptor, owner tab: JSON) -> Bool {
+            let profile = tab["profileId"].string.isEmpty ? "default" : tab["profileId"].string
+            guard profile == existing.profileId else { return false }
+            let ownerRevision = tab["history"]["revision"]
+            let staleHistory = ownerRevision != .null && ownerRevision.int < (existing.history?.revision ?? 0)
+            return privateLocal.contains(existing.id) || explicitBrowserNavigations.contains(existing.id)
+                || activeHistoryTraversals[existing.id] != nil || pendingNavigationIDs.contains(existing.contentTabId ?? existing.id) || staleHistory
+        }
         for old in existingBrowsers where !ids.contains(old.contentTabId ?? old.id) { unload(old.id, force: true); unloadedBrowsers.remove(old.id) }
         for tab in incoming where tab["type"].string == "browser" && tab["setup"] == .null {
-            if let existing = existingBrowsers.first(where: { ($0.contentTabId ?? $0.id) == tab["id"].string }), browserViews[existing.id] != nil,
+            guard let existing = existingByOwnerID[tab["id"].string], !keepsLocalPage(existing, owner: tab) else { continue }
+            if browserViews[existing.id] != nil,
                !tab["history"]["currentEntryId"].string.isEmpty, existing.history?.currentEntryId != tab["history"]["currentEntryId"].string {
                 // A different owner entry can select the same URL. It still
                 // starts a mirror, without reloading a device-private landing.
                 mirroredBrowserLoads.insert(existing.id)
             }
-            if let existing = existingBrowsers.first(where: { ($0.contentTabId ?? $0.id) == tab["id"].string }), !privateLocal.contains(existing), !explicitBrowserNavigations.contains(existing.id), browserViews[existing.id]?.url.map({ Self.safeURL($0.absoluteString) == nil }) != true, existing.url ?? "" != tab["url"].string, let url = Self.safeURL(tab["url"].string) { if profileAvailable(existing.profileId) && (tab["profileId"].string.isEmpty ? "default" : tab["profileId"].string) == existing.profileId, let view = browserViews[existing.id] { mirroredBrowserLoads.insert(existing.id); pendingBrowserLoads[existing.id] = url.absoluteString; view.load(URLRequest(url: url)) } }
+            if browserViews[existing.id]?.url.map({ Self.safeURL($0.absoluteString) == nil }) != true, existing.url ?? "" != tab["url"].string, let url = Self.safeURL(tab["url"].string) { if profileAvailable(existing.profileId) && (tab["profileId"].string.isEmpty ? "default" : tab["profileId"].string) == existing.profileId, let view = browserViews[existing.id] { mirroredBrowserLoads.insert(existing.id); pendingBrowserLoads[existing.id] = url.absoluteString; view.load(URLRequest(url: url)) } }
         }
         let localIDs = Set(existingBrowsers.map(\.id))
         let privatePositions = browserTabs.enumerated().filter { $0.element.incognito }
         var nextBrowsers = browserTabs.filter { !localIDs.contains($0.id) && !$0.incognito }
         for tab in incoming where tab["type"].string == "browser" && tab["setup"] == .null {
-            let existing = existingBrowsers.first { ($0.contentTabId ?? $0.id) == tab["id"].string }
+            let existing = existingByOwnerID[tab["id"].string]
             // Keep a live login flow local while retaining its full URLs in browsing history.
             // Retain that live view exactly once rather than appending a restored copy on refresh.
-            if let existing, (privateLocal.contains(existing) || explicitBrowserNavigations.contains(existing.id)), existing.profileId == (tab["profileId"].string.isEmpty ? "default" : tab["profileId"].string) { nextBrowsers.append(existing); continue }
+            if let existing, keepsLocalPage(existing, owner: tab) { nextBrowsers.append(existing); continue }
             let localID = existing?.id ?? ("sync:" + SHA256.hash(data: Data((scope + "\0" + tab["id"].string).utf8)).map { String(format: "%02x", $0) }.joined())
             let favicon = tab["favicon"].string
             if (browserViews[localID]?.url == nil || browserViews[localID]?.url?.absoluteString == tab["url"].string),
@@ -678,7 +807,7 @@ let nativeFixtureRelayOrigin = ""
         documentTabs.removeAll { $0.chatKey == scope && $0.previewSource == nil }
         for tab in incoming where tab["type"].string == "document" { documentTabs.append(NativeDocumentDescriptor(id: tab["documentId"].string, chatKey: scope, title: tab["title"].string, mediaType: tab["mediaType"].string, customTitle: tab["customTitle"].string.isEmpty ? nil : tab["customTitle"].string, sourceChatID: tab["chatId"].string.isEmpty ? nil : tab["chatId"].string)) }
         chatChildOrder[scope] = incoming.map { tab in tab["type"].string == "document" ? tab["documentId"].string : (tabs(in: scope).first { ($0.contentTabId ?? $0.id) == tab["id"].string }?.id ?? tab["id"].string) }
-        contentSnapshots[scope] = response
+        setContentSnapshot(response, in: scope)
         if Self.isOrganizationalScope(scope), let config = contentSync[scope] {
             NativeWorkspaceNavigation.adoptOwnerChats(incoming, navigationKey: config.kind + "-navigation:" + config.id, remote: config.remote)
         }
@@ -715,7 +844,7 @@ let nativeFixtureRelayOrigin = ""
             contentRequests[scope] = nil
             for doc in documents(in: scope) { documentContents.removeValue(forKey: scope + ":" + doc.id); documentSessions.removeValue(forKey: scope + ":" + doc.id) }
             documentTabs.removeAll { $0.chatKey == scope }
-            if var snapshot = contentSnapshots[scope]?.object { snapshot["tabs"] = .array((snapshot["tabs"]?.array ?? []).filter { $0["type"].string != "document" }); contentSnapshots[scope] = .object(snapshot) }
+            if var snapshot = contentSnapshots[scope]?.object { snapshot["tabs"] = .array((snapshot["tabs"]?.array ?? []).filter { $0["type"].string != "document" }); setContentSnapshot(.object(snapshot), in: scope) }
             if let pending = contentPending[scope] { contentPending[scope] = browserOnlyOperations(pending); if contentPending[scope]?.isEmpty == true { contentPending[scope] = nil } }
         }
         saveDocumentTabs()
@@ -731,14 +860,22 @@ let nativeFixtureRelayOrigin = ""
         contentBackoff[host] = nil
         browserConflicts.removeAll { $0.tab.ownerHostId == host || $0.scope.hasPrefix("chat:" + host + ":") || $0.scope.hasPrefix("workspace:" + host + ":") || $0.scope.hasPrefix("project:" + host + ":") };
         for tab in browserTabs where tab.ownerHostId == host { unload(tab.id, force: true) }; browserTabs.removeAll { $0.ownerHostId == host }
-        historyOutbox.removeAll { $0["ownerHostId"].string == host }; historyCache = historyCache.filter { !$0.key.hasPrefix(host + "|") }; historyStatus[host] = nil; saveHistoryCache()
+        historyInvalidations[host, default: 0] += 1
+        historyOutbox.removeAll { $0["ownerHostId"].string == host }
+        legacyHistoryOutbox.removeAll { $0["ownerHostId"].string == host }
+        saveHistoryOutbox()
+        // A legacy file can contain revoked visits even if its coverage was empty.
+        replaceHistoryCache(historyCache.filter { !$0.key.hasPrefix(host + "|") })
+        saveHistoryCache()
+        historyRefreshed[host] = nil
+        historyStatus[host] = nil
         let affected = Set(contentSnapshots.keys.filter { $0.hasPrefix("project:" + host + ":") || $0.hasPrefix("workspace:" + host + ":") || $0.hasPrefix("chat:" + host + ":") } + contentHosts.filter { $0.value == host }.map(\.key) + browserTabs.filter { ($0.scope.hasPrefix("chat:" + host + ":") || $0.scope.hasPrefix("workspace:" + host + ":") || $0.scope.hasPrefix("project:" + host + ":")) }.map(\.scope) + documentTabs.filter { $0.chatKey.hasPrefix("chat:" + host + ":") || $0.chatKey.hasPrefix("workspace:" + host + ":") || $0.chatKey.hasPrefix("project:" + host + ":") }.map(\.chatKey))
         applyingContent = true; defer { applyingContent = false }
         for scope in affected {
             for tab in tabs(in: scope) { unload(tab.id); unloadedBrowsers.remove(tab.id) }
             browserTabs.removeAll { $0.scope == scope }
             for doc in documents(in: scope) { documentContents.removeValue(forKey: scope + ":" + doc.id); documentSessions.removeValue(forKey: scope + ":" + doc.id) }
-            documentTabs.removeAll { $0.chatKey == scope }; contentSync[scope] = nil; contentSnapshots[scope] = nil; contentPending[scope] = nil; contentHosts[scope] = nil; workspaceContentDescriptors[scope] = nil
+            documentTabs.removeAll { $0.chatKey == scope }; contentSync[scope] = nil; setContentSnapshot(nil, in: scope); contentPending[scope] = nil; contentHosts[scope] = nil; workspaceContentDescriptors[scope] = nil
             contentRequests[scope] = nil; chatSelectedChildren[scope] = "chat"; chatChildOrder[scope] = []
         }
         saveDocumentTabs(); saveBrowsers()
@@ -773,7 +910,7 @@ let nativeFixtureRelayOrigin = ""
             sourceSnapshot["tabs"] = .array(sourceRows.filter { $0["id"].string != tabID })
             let destinationRows = destinationSnapshot["tabs"]?.array ?? []
             destinationSnapshot["tabs"] = .array(destinationRows.filter { $0["id"].string != tabID } + [row])
-            contentSnapshots[source] = .object(sourceSnapshot); contentSnapshots[destination] = .object(destinationSnapshot)
+            setContentSnapshot(.object(sourceSnapshot), in: source); setContentSnapshot(.object(destinationSnapshot), in: destination)
             if Self.isOrganizationalScope(source) { workspaceContentDescriptors[source] = sourceSnapshot["tabs"]?.array }
             if Self.isOrganizationalScope(destination) { workspaceContentDescriptors[destination] = destinationSnapshot["tabs"]?.array }
         }
@@ -805,7 +942,7 @@ let nativeFixtureRelayOrigin = ""
             let ids = Set(existing.map { $0["id"].string })
             let moved = (contentSnapshots[source]?["tabs"].array ?? []).filter { !ids.contains($0["id"].string) }
             snapshot["tabs"] = .array(existing + moved)
-            contentSnapshots[destination] = .object(snapshot)
+            setContentSnapshot(.object(snapshot), in: destination)
             workspaceContentDescriptors[destination] = existing + moved
             browserTabs = browserTabs.map { tab in var next = tab; if next.scope == source { next.scope = destination }; return next }
             documentTabs = documentTabs.map { tab in var next = tab; if next.chatKey == source { next.chatKey = destination }; return next }
@@ -819,7 +956,7 @@ let nativeFixtureRelayOrigin = ""
             if chatSelectedChildren[destination] == nil { chatSelectedChildren[destination] = chatSelectedChildren[source] }
             if scopedSelection[destination] == nil { scopedSelection[destination] = scopedSelection[source] }
             contentHosts[destination] = hostID
-            contentSnapshots[source] = nil; workspaceContentDescriptors[source] = nil; contentSync[source] = nil; contentHosts[source] = nil
+            setContentSnapshot(nil, in: source); workspaceContentDescriptors[source] = nil; contentSync[source] = nil; contentHosts[source] = nil
             chatChildOrder[source] = nil; chatSelectedChildren[source] = nil; scopedSelection[source] = nil
         }
         saveDocumentTabs(); saveBrowsers()
@@ -832,7 +969,7 @@ let nativeFixtureRelayOrigin = ""
             guard remote.supportsProjects, scope == "project:" + host + ":" + id,
                   remote.projectCatalog.project(id: id)?["id"].string == id else { recordContentAttempt(scope, phase: "invalid-project"); return }
         }
-        if let previous = contentHosts[scope], previous != host { contentSnapshots[scope] = nil; contentPending[scope] = nil }
+        if let previous = contentHosts[scope], previous != host { setContentSnapshot(nil, in: scope); contentPending[scope] = nil }
         contentHosts[scope] = host
         remote.onAuthenticatedRevocation = { [weak self] in self?.revokeContentHost(host) }
         contentSync[scope] = (remote, kind, id, host)
@@ -864,7 +1001,7 @@ let nativeFixtureRelayOrigin = ""
                     var displayed = fresh.object
                     displayed["tabs"] = .array(Self.projectContentOperations(Self.rebaseContentOperations(pending, snapshot: fresh), onto: fresh["tabs"].array))
                     applyContentTabs(.object(displayed), scope: scope)
-                    contentSnapshots[scope] = fresh
+                    setContentSnapshot(fresh, in: scope)
                     contentReadAt[scope] = Date(); recordContentRead(fresh, scope: scope)
                     saveDocumentTabs()
                 } catch { recordContentAttempt(scope, phase: "failed", error: error) }
@@ -934,13 +1071,14 @@ let nativeFixtureRelayOrigin = ""
                 if let cursor { args["cursor"] = .string(cursor) } else { args["start"] = .bool(true) }
                 let page = try await remote.request("tabs.history", args)
                 let currentRevision = page["history"]["revision"].int
-                if let revision, currentRevision != revision { throw RemoteError(message: "Browser history changed while loading. Refresh to continue.") }
+                guard Self.matchesNavigationSnapshot(page["history"], history) else { throw RemoteError(message: "Browser history changed while loading. Refresh to continue.") }
                 revision = currentRevision; selected = page["history"]["currentEntryId"]
                 entries += page["entries"].array
                 cursor = page["hasMore"].bool && !page["nextCursor"].string.isEmpty ? page["nextCursor"].string : nil
                 guard entries.count <= 10000 else { throw RemoteError(message: "Browser history exceeds the owner navigation limit.") }
             } while cursor != nil && !Task.isCancelled
-            guard !Task.isCancelled, let position = entries.firstIndex(where: { $0["id"] == selected }) else { continue }
+            guard !Task.isCancelled, entries.count == history["total"].int,
+                  let position = entries.firstIndex(where: { $0["id"] == selected }), entries[position]["url"] == tab["url"] else { continue }
             var value = tab.object; value["history"] = .object(["entries": .array(entries), "index": .number(Double(position)), "currentEntryId": selected, "revision": .number(Double(revision ?? 0))]); tabs[index] = .object(value)
             } catch {
                 // Keep the owner’s current history window and retry paging later. Membership
@@ -949,6 +1087,9 @@ let nativeFixtureRelayOrigin = ""
             }
         }
         result["tabs"] = .array(tabs); return .object(result)
+    }
+    static func matchesNavigationSnapshot(_ page: JSON, _ window: JSON) -> Bool {
+        page["revision"] == window["revision"] && page["currentEntryId"] == window["currentEntryId"]
     }
     // A rejected tab branch is durable until the user chooses how to recover it.
     // Unrelated operations retain their original IDs and order against the fresh owner state.
@@ -961,7 +1102,7 @@ let nativeFixtureRelayOrigin = ""
             let id = tab.contentTabId ?? tab.id
             let retained = pending.filter { target($0) == id && $0["action"].string != "close" }
             browserConflicts.append(NativeBrowserNavigationConflict(id: UUID().uuidString, scope: scope, tabID: id, tab: tab, operations: retained))
-            explicitBrowserNavigations.remove(tab.id); browserOperations[tab.id] = nil
+            explicitBrowserNavigations.remove(tab.id); activeHistoryTraversals[tab.id] = nil; historyNavigation[tab.id] = nil; browserOperations[tab.id] = nil
         }
         contentPending[scope] = remaining.isEmpty ? nil : remaining
         // Applying a fresh owner snapshot must not erase another tab's optimistic page/name.
@@ -971,7 +1112,7 @@ let nativeFixtureRelayOrigin = ""
         descriptors += current.filter { local in unaffected.contains(local["id"].string) && !descriptors.contains(where: { $0["id"] == local["id"] }) }
         displayed["tabs"] = .array(descriptors)
         applyContentTabs(.object(displayed), scope: scope)
-        contentSnapshots[scope] = fresh
+        setContentSnapshot(fresh, in: scope)
         saveDocumentTabs(); saveBrowsers()
     }
     func resolveBrowserNavigationConflict(_ id: String, openLocalCopy: Bool) {
@@ -1086,7 +1227,7 @@ let nativeFixtureRelayOrigin = ""
                         // a fresh scope envelope but its original navigation base.
                         // Only the owner can decide whether intervening changes
                         // were title-only; never rebase onto an arbitrary read.
-                        contentSnapshots[scope] = fresh
+                        setContentSnapshot(fresh, in: scope)
                         Task { await self.flushContentTabs(scope) }
                         return
                     }
@@ -1132,7 +1273,7 @@ let nativeFixtureRelayOrigin = ""
                     Task { await self.flushContentTabs(scope) }
                 }
             } else {
-                if response["revision"].int >= (contentSnapshots[scope]?["revision"].int ?? -1) { contentSnapshots[scope] = response }
+                if response["revision"].int >= (contentSnapshots[scope]?["revision"].int ?? -1) { setContentSnapshot(response, in: scope) }
                 if Self.isOrganizationalScope(scope) { workspaceContentDescriptors[scope] = Self.projectContentOperations(remaining, onto: response["tabs"].array) }
                 Task { await self.flushContentTabs(scope) }
             }
@@ -1156,7 +1297,7 @@ let nativeFixtureRelayOrigin = ""
             } else if error.localizedDescription.contains("View chat documents") {
                 revokeDocumentTabs(config.host)
                 if let fresh = try? await config.remote.request("tabs.get", ["scope": .string(config.kind), "id": .string(config.id)]), config.remote.connection?.hostId == config.host {
-                    if contentPending[scope] == nil { applyContentTabs(fresh, scope: scope) } else { contentSnapshots[scope] = fresh }
+                    if contentPending[scope] == nil { applyContentTabs(fresh, scope: scope) } else { setContentSnapshot(fresh, in: scope) }
                 }
                 self.error = error.localizedDescription
             } else { self.error = error.localizedDescription }
@@ -1186,7 +1327,7 @@ let nativeFixtureRelayOrigin = ""
             for tab in browserTabs where tab.scope != "team" && tab.scope != "main" { if scopedSelection[tab.scope] == nil { let saved = savedSelections[tab.scope]?.string ?? ""; scopedSelection[tab.scope] = saved.isEmpty ? tab.id : saved } }
             unloadedBrowsers = Set(browserTabs.filter { $0.url != nil }.map(\.id))
         }
-        historyNavigation = [:]; pendingBrowserLoads = [:]; nativeHistoryPosition = [:]; insertionOrigins = [:]; if !UserDefaults.standard.bool(forKey: profilePreferenceKey + ".desktop-parity-v1") {
+        historyNavigation = [:]; activeHistoryTraversals = [:]; pendingBrowserLoads = [:]; nativeHistoryPosition = [:]; insertionOrigins = [:]; if !UserDefaults.standard.bool(forKey: profilePreferenceKey + ".desktop-parity-v1") {
             profilesEnabled = true
             UserDefaults.standard.set(true, forKey: profilePreferenceKey)
             UserDefaults.standard.set(true, forKey: profilePreferenceKey + ".desktop-parity-v1")
@@ -1227,12 +1368,11 @@ let nativeFixtureRelayOrigin = ""
         return (try? RemoteCrypto.open(String(decoding: data, as: UTF8.self), key: key, aad: "proteus-mobile-navigation-v1")) ?? .null
     }
     private var documentCacheURL: URL { sharedCacheRoot.appendingPathComponent("document-tabs.enc") }
-    private func loadDocumentTabs() {
-        do { try cacheWriter.flush() } catch { self.error = error.localizedDescription }
-        guard let key = sharedCacheKey(), let data = try? Data(contentsOf: documentCacheURL), let payload = try? RemoteCrypto.open(String(decoding: data, as: UTF8.self), key: key, aad: "proteus-mobile-document-tabs-v1") else { return }
-        if let encoded = try? JSONEncoder().encode(payload["tabs"]), let tabs = try? JSONDecoder().decode([NativeDocumentDescriptor].self, from: encoded) { documentTabs = Array(tabs.prefix(100)) }
-        if let encoded = try? JSONEncoder().encode(payload["browserConflicts"]), let conflicts = try? JSONDecoder().decode([NativeBrowserNavigationConflict].self, from: encoded) { browserConflicts = conflicts }
-        contentSnapshots = payload["contentSnapshots"].object; contentPending = payload["contentPending"].object.mapValues { $0.array }; contentRequests = payload["contentRequests"].object; contentHosts = payload["contentHosts"].object.mapValues { $0.string }
+    private func applyDocumentTabCache(_ caches: StartupCaches) {
+        let payload = caches.documents
+        documentTabs = caches.documentTabs
+        browserConflicts = caches.conflicts
+        contentSnapshots = caches.contentSnapshots; contentPending = payload["contentPending"].object.mapValues { $0.array }; contentRequests = payload["contentRequests"].object; contentHosts = payload["contentHosts"].object.mapValues { $0.string }
         legacyContentReview = payload["legacyContentReview"].object
         // Old caches can contain an empty outbox. It must not suppress every
         // owner refresh. An orphaned delivery envelope is retained for review,
@@ -1256,25 +1396,32 @@ let nativeFixtureRelayOrigin = ""
         chatChildOrder = payload["order"].object.mapValues { $0.array.map(\.string).filter { !$0.isEmpty } }
     }
     @discardableResult private func saveDocumentTabs() -> NativeCacheWriteReceipt {
+        if let tabCacheReadError { self.error = tabCacheReadError.message; return NativeCacheWriteReceipt(result: .failure(tabCacheReadError)) }
         let tabs = Array(documentTabs.suffix(100)), conflicts = browserConflicts
+        let snapshots = contentSnapshots, revision = contentSnapshotRevision, slots = tabCacheSlots
+        let url = documentCacheURL, key = sharedCacheKey()
         let privateIDs = Set(browserTabs.filter(\.incognito).map(\.id))
-        let fields: [String: JSON] = ["legacyContentReview": .object(legacyContentReview), "contentSnapshots": .object(contentSnapshots), "contentPending": .object(contentPending.mapValues(JSON.array)), "contentRequests": .object(contentRequests), "contentHosts": .object(contentHosts.mapValues(JSON.string)), "selected": .object(chatSelectedChildren.filter { !privateIDs.contains($0.value) }.mapValues(JSON.string)), "order": .object(chatChildOrder.mapValues { .array($0.filter { !privateIDs.contains($0) }.map(JSON.string)) })]
-        return saveSharedCache(url: documentCacheURL, aad: "proteus-mobile-document-tabs-v1") {
+        let fields: [String: JSON] = ["legacyContentReview": .object(legacyContentReview), "contentPending": .object(contentPending.mapValues(JSON.array)), "contentRequests": .object(contentRequests), "contentHosts": .object(contentHosts.mapValues(JSON.string)), "selected": .object(chatSelectedChildren.filter { !privateIDs.contains($0.value) }.mapValues(JSON.string)), "order": .object(chatChildOrder.mapValues { .array($0.filter { !privateIDs.contains($0) }.map(JSON.string)) })]
+        return cacheWriter.save(url: url, commit: { write in
+            guard let key else { throw RemoteError(message: "Unlock this device before syncing local tab/history changes.") }
             var payload = fields
-            payload["tabs"] = try JSONDecoder().decode(JSON.self, from: JSONEncoder().encode(tabs))
-            payload["browserConflicts"] = try JSONDecoder().decode(JSON.self, from: JSONEncoder().encode(conflicts))
-            return .object(payload)
-        }
+            payload["tabs"] = try JSON.decode(JSONEncoder().encode(tabs))
+            payload["browserConflicts"] = try JSON.decode(JSONEncoder().encode(conflicts))
+            try slots.persist(journal: payload, snapshots: snapshots, revision: revision, at: url, key: key, write: write)
+        }, onFailure: cacheWriteFailure)
     }
     private func saveSharedCache(url: URL, aad: String, snapshot: @escaping () throws -> JSON) -> NativeCacheWriteReceipt {
         let key = sharedCacheKey()
         return cacheWriter.save(url: url, snapshot: {
             guard let key else { throw RemoteError(message: "Unlock this device before syncing local tab/history changes.") }
             return Data(try RemoteCrypto.seal(snapshot(), key: key, aad: aad).utf8)
-        }, onFailure: { [weak self] error in
+        }, onFailure: cacheWriteFailure)
+    }
+    private var cacheWriteFailure: (Error) -> Void {
+        { [weak self] error in
             let message = error.localizedDescription
             Task { @MainActor [weak self] in self?.error = "Local tab/history changes could not be saved: " + message }
-        })
+        }
     }
     /// N11-24: leaving the foreground must not block the main thread. iOS kills an app whose
     /// scene update exceeds ~10 seconds (0x8BADF00D); waiting here for large encrypted tab/history
@@ -1396,7 +1543,11 @@ let nativeFixtureRelayOrigin = ""
         draftSessionIDs.removeValue(forKey: key)
         saveDocumentTabs()
     }
-    func selectChatChild(_ id: String, for chatKey: String) { chatSelectedChildren[chatKey] = id; saveDocumentTabs() }
+    func selectChatChild(_ id: String, for chatKey: String) {
+        guard (chatSelectedChildren[chatKey] ?? "chat") != id else { return }
+        chatSelectedChildren[chatKey] = id
+        saveDocumentTabs()
+    }
     func refresh(_ life: LifeStore, collections: [String]? = nil) async {
         if NativeDesignPreview.fixtureService {
             do { snapshot = try await fixtureAppRequest(); error = nil } catch { self.error = error.localizedDescription }
@@ -1611,7 +1762,7 @@ let nativeFixtureRelayOrigin = ""
         let scope = syncScope(tab), parts = scope.split(separator: ":", maxSplits: 2).map(String.init)
         guard !applyingContent, !restoring, parts.count >= 2, UUID(uuidString: parts[1]) != nil else { return }
         contentHosts[scope] = parts[1]
-        if contentSnapshots[scope] == nil { contentSnapshots[scope] = .object(["revision": .number(0), "tabs": .array([])]) }
+        if contentSnapshots[scope] == nil { setContentSnapshot(.object(["revision": .number(0), "tabs": .array([])]), in: scope) }
         guard let descriptor = localContentTabs(scope).first(where: { $0["id"].string == (tab.contentTabId ?? tab.id) }) else { return }
         let operation: JSON = .object(["action": .string("open"), "explicitReopen": .bool(true), "observedClosedRevision": contentSnapshots[scope]?["closed"][descriptor["id"].string] ?? .number(0), "intentId": .string(UUID().uuidString.lowercased()), "tab": descriptor])
         contentPending[scope] = (contentPending[scope] ?? []) + [operation]; saveDocumentTabs()
@@ -1621,7 +1772,7 @@ let nativeFixtureRelayOrigin = ""
     func refreshTeamBrowserTabs(_ remote: RemoteStore) async {
         guard let host = remote.connection?.hostId else { return }
         if let oldHost = contentHosts["team"], contentSnapshots["team:" + oldHost] == nil {
-            contentSnapshots["team:" + oldHost] = contentSnapshots.removeValue(forKey: "team"); contentPending["team:" + oldHost] = contentPending.removeValue(forKey: "team"); contentHosts["team:" + oldHost] = oldHost; contentHosts["team"] = nil
+            setContentSnapshot(contentSnapshots["team"], in: "team:" + oldHost); setContentSnapshot(nil, in: "team"); contentPending["team:" + oldHost] = contentPending.removeValue(forKey: "team"); contentHosts["team:" + oldHost] = oldHost; contentHosts["team"] = nil
             for index in browserTabs.indices where browserTabs[index].scope == "team" && browserTabs[index].ownerHostId == nil { browserTabs[index].ownerHostId = oldHost }
         }
         for tab in browserTabs where tab.scope == "team" && tab.ownerHostId == nil { assignBrowserOwner(tab.id, host: host) }
@@ -1761,6 +1912,7 @@ let nativeFixtureRelayOrigin = ""
         explicitBrowserNavigations.insert(id)
         browserTabs[index].url = url.absoluteString
         historyNavigation.removeValue(forKey: id)
+        activeHistoryTraversals.removeValue(forKey: id)
         pendingBrowserLoads[id] = url.absoluteString
         browserTabs[index].title = browserTabs[index].customTitle ?? url.host ?? "Browser"
         unloadedBrowsers.remove(id)
@@ -1769,16 +1921,29 @@ let nativeFixtureRelayOrigin = ""
         return true
     }
     private var historyCacheURL: URL { sharedCacheRoot.appendingPathComponent("browser-history.enc") }
-    private func loadHistoryCache() {
-        do { try cacheWriter.flush() } catch { self.error = error.localizedDescription }
-        guard let key = sharedCacheKey(), let data = try? Data(contentsOf: historyCacheURL), let payload = try? RemoteCrypto.open(String(decoding: data, as: UTF8.self), key: key, aad: "proteus-mobile-history-v1") else { return }
-        historyOutbox = payload["outbox"].array
-        let threshold = Self.historyCacheStart()
-        historyCache = payload["cache"].object.mapValues { $0.array.filter { ProviderAllowance.date($0["visitedAt"].string).map { $0 >= threshold } == true } }
+    private var historyOutboxURL: URL { sharedCacheRoot.appendingPathComponent("browser-history-outbox.enc") }
+    @discardableResult private func saveHistoryOutbox() -> NativeCacheWriteReceipt {
+        if let historyJournalReadError { return NativeCacheWriteReceipt(result: .failure(historyJournalReadError)) }
+        let visits = historyOutbox
+        let receipt = saveSharedCache(url: historyOutboxURL, aad: "proteus-mobile-history-outbox-v1") { .array(visits) }
+        if !legacyHistoryOutbox.isEmpty {
+            Task { [weak self] in
+                // Keep the embedded legacy visits recoverable until the new journal is durable.
+                if (try? await receipt.value()) != nil { self?.legacyHistoryOutbox = [] }
+            }
+        }
+        return receipt
     }
-    @discardableResult private func saveHistoryCache() -> NativeCacheWriteReceipt {
-        let payload: JSON = .object(["outbox": .array(historyOutbox), "cache": .object(historyCache.mapValues(JSON.array))])
-        return saveSharedCache(url: historyCacheURL, aad: "proteus-mobile-history-v1") { payload }
+    private func saveHistoryCache() {
+        guard historyJournalReadError == nil else { return }
+        let cache = historyCache, legacy = legacyHistoryOutbox
+        _ = saveSharedCache(url: historyCacheURL, aad: "proteus-mobile-history-v1") {
+            .object(["outbox": .array(legacy), "cache": .object(cache.mapValues(JSON.array))])
+        }
+    }
+    private func replaceHistoryCache(_ rows: [String: [JSON]]) {
+        historyCacheVersion += 1
+        historyCache = rows
     }
     func assignBrowserOwner(_ id: String, host: String?) {
         guard let host, let index = browserTabs.firstIndex(where: { $0.id == id }), browserTabs[index].ownerHostId == nil else { return }
@@ -1795,45 +1960,83 @@ let nativeFixtureRelayOrigin = ""
         guard !tab.incognito else { return }
         guard let host = contentHosts[tab.scope] ?? tab.ownerHostId, let url = Self.historyURL(operation["url"].string) else { return }
         let visit: JSON = .object(["eventId": operation["operationId"], "url": .string(url.absoluteString), "title": operation["title"], "visitedAt": operation["visitedAt"], "sourceHostId": .string(host), "profileId": .string(tab.profileId), "tabId": .string(tab.contentTabId ?? tab.id), "entryId": operation["entryId"], "deviceId": .string(Self.historyDeviceID()), "ownerHostId": .string(host)])
-        historyOutbox.append(visit); saveHistoryCache()
+        historyOutbox.append(visit); saveHistoryOutbox()
         if let config = contentSync[syncScope(tab)] { Task { await flushHistory(config.remote) } }
     }
     func flushHistory(_ remote: RemoteStore) async {
         guard remote.connected, let host = remote.connection?.hostId, !historyFlushing.contains(host) else { return }
-        let requestAccount = account
+        let requestAccount = account, invalidation = historyInvalidations[host]
         historyFlushing.insert(host); defer { historyFlushing.remove(host) }
         do {
             while remote.connected, remote.connection?.hostId == host, account == requestAccount {
                 let visits = Array(historyOutbox.filter { $0["ownerHostId"].string == host }.prefix(100))
                 if visits.isEmpty { break }
-                try await saveHistoryCache().value()
+                try await saveHistoryOutbox().value()
                 try Task.checkCancellation()
-                guard account == requestAccount, remote.connected, remote.connection?.hostId == host, visits.allSatisfy({ historyOutbox.contains($0) }) else { break }
+                guard account == requestAccount, historyInvalidations[host] == invalidation, remote.connected, remote.connection?.hostId == host, visits.allSatisfy({ historyOutbox.contains($0) }) else { break }
                 let response = try await remote.request("browser.history.record", ["events": .array(visits)])
+                guard account == requestAccount, historyInvalidations[host] == invalidation else { break }
                 let acknowledged = Set(response["acknowledgedEventIds"].array.map(\.string))
                 guard !acknowledged.isEmpty else { break }
-                historyOutbox.removeAll { $0["ownerHostId"].string == host && acknowledged.contains($0["eventId"].string) }; saveHistoryCache()
+                historyOutbox.removeAll { $0["ownerHostId"].string == host && acknowledged.contains($0["eventId"].string) }; saveHistoryOutbox()
             }
         } catch { historyStatus[host] = "Pending visits retained until this computer reconnects." }
     }
-    static func historyCacheStart(now: Date = Date(), calendar: Calendar = .current) -> Date { calendar.date(byAdding: .day, value: -30, to: calendar.startOfDay(for: now)) ?? now.addingTimeInterval(-30 * 86400) }
+    nonisolated static func historyCacheStart(now: Date = Date(), calendar: Calendar = .current) -> Date { calendar.date(byAdding: .day, value: -30, to: calendar.startOfDay(for: now)) ?? now.addingTimeInterval(-30 * 86400) }
     func refreshHistoryCache(_ remote: RemoteStore) async {
         guard remote.connected, let host = remote.connection?.hostId, !historyRefreshing.contains(host), Date().timeIntervalSince(historyRefreshed[host] ?? .distantPast) >= 300 else { return }
         historyRefreshing.insert(host); defer { historyRefreshing.remove(host) }
+        let account = self.account, invalidation = historyInvalidations[host]
         let from = Self.historyCacheStart(); var cursor: String? = nil, rows: [JSON] = []
         repeat {
-            let response = await queryHistory(remote, profileId: "", from: from, cursor: cursor)
+            let response = await queryHistory(remote, profileId: "", from: from, cursor: cursor, updateCache: false)
             guard response != .null, !Task.isCancelled, remote.connection?.hostId == host else { return }
             rows += response["items"].array
             cursor = response["hasMore"].bool && !response["nextCursor"].string.isEmpty ? response["nextCursor"].string : nil
         } while cursor != nil
-        historyCache = historyCache.filter { !$0.key.hasPrefix(host + "|") }
-        for (profile, values) in Dictionary(grouping: rows, by: { $0["profileId"].string.isEmpty ? "default" : $0["profileId"].string }) { historyCache[host + "|" + profile] = values }
-        historyRefreshed[host] = Date(); historyStatus[host] = "Synced last 30 days with " + remote.displayName; saveHistoryCache()
+        let fetched = rows, prefix = host + "|"
+        let normalized = await Task.detached(priority: .utility) {
+            Self.normalizedHistory(fetched, host: host, threshold: from)
+        }.value
+        while !Task.isCancelled, self.account == account, historyInvalidations[host] == invalidation, remote.connection?.hostId == host {
+            let previous = historyCache, version = historyCacheVersion
+            let updated: [String: [JSON]]? = await Task.detached(priority: .utility) {
+                var result = previous.filter { !$0.key.hasPrefix(prefix) }
+                result.merge(normalized) { _, fresh in fresh }
+                return result == previous ? nil : result
+            }.value
+            guard !Task.isCancelled, self.account == account, historyInvalidations[host] == invalidation, remote.connection?.hostId == host else { return }
+            if historyCacheVersion != version { continue }
+            if let updated { replaceHistoryCache(updated); saveHistoryCache() }
+            historyRefreshed[host] = Date()
+            setHistoryStatus(host, "Synced last 30 days with " + remote.displayName)
+            return
+        }
     }
-    func queryHistory(_ remote: RemoteStore, profileId: String = "default", query: String = "", from: Date? = nil, before: Date? = nil, cursor: String? = nil) async -> JSON {
+    private nonisolated static func normalizedHistory(_ rows: [JSON], host: String, threshold: Date) -> [String: [JSON]] {
+        var seen = Set<String>(), profiles: [String: [JSON]] = [:]
+        for row in rows {
+            guard let date = ProviderAllowance.date(row["visitedAt"].string), date >= threshold,
+                  historyURL(row["url"].string) != nil else { continue }
+            let profile = row["profileId"].string.isEmpty ? "default" : row["profileId"].string
+            let id = row["eventId"].string.isEmpty ? row["id"].string : row["eventId"].string
+            guard seen.insert(profile + "|" + id).inserted else { continue }
+            if row["favicon"] == .null { profiles[host + "|" + profile, default: []].append(row) }
+            else {
+                var fields = row.object
+                fields.removeValue(forKey: "favicon")
+                profiles[host + "|" + profile, default: []].append(.object(fields))
+            }
+        }
+        return profiles.mapValues { $0.sorted { $0["visitedAt"].string > $1["visitedAt"].string } }
+    }
+    private func setHistoryStatus(_ host: String, _ status: String) {
+        if historyStatus[host] != status { historyStatus[host] = status }
+    }
+    func queryHistory(_ remote: RemoteStore, profileId: String = "default", query: String = "", from: Date? = nil, before: Date? = nil, cursor: String? = nil, updateCache: Bool = true) async -> JSON {
         guard let host = remote.connection?.hostId else { return .null }
-        guard remote.connected else { historyStatus[host] = "Offline · cached coverage only"; return .null }
+        guard remote.connected else { setHistoryStatus(host, "Offline · cached coverage only"); return .null }
+        let account = self.account, invalidation = historyInvalidations[host]
         var args: [String: JSON] = ["profileId": .string(profileId), "limit": .number(200), "query": .string(query)]
         let formatter = ISO8601DateFormatter()
         if let from { args["from"] = .string(formatter.string(from: from)) }
@@ -1841,19 +2044,17 @@ let nativeFixtureRelayOrigin = ""
         if let cursor { args["cursor"] = .string(cursor) }
         do {
             let response = try await remote.request("browser.history.query", args)
-            guard remote.connection?.hostId == host else { return .null }
-            let key = host + "|" + profileId, threshold = Self.historyCacheStart()
-            if query.isEmpty {
-                var seen = Set<String>()
-                historyCache[key] = (response["items"].array + (historyCache[key] ?? [])).map { item in var fields = item.object; fields.removeValue(forKey: "favicon"); return JSON.object(fields) }.filter { item in
-                    guard Self.historyURL(item["url"].string) != nil, let date = ProviderAllowance.date(item["visitedAt"].string), date >= threshold else { return false }
-                    return seen.insert(item["eventId"].string.isEmpty ? item["id"].string : item["eventId"].string).inserted
-                }.sorted { $0["visitedAt"].string > $1["visitedAt"].string }
-                saveHistoryCache()
+            guard !Task.isCancelled, self.account == account, historyInvalidations[host] == invalidation, remote.connection?.hostId == host else { return .null }
+            if updateCache, query.isEmpty, !response["items"].array.isEmpty, before.map({ $0 > Self.historyCacheStart() }) != false {
+                // A paginated UI read should never sort or rewrite the month-wide offline cache.
+                Task { await refreshHistoryCache(remote) }
             }
-            historyStatus[host] = "Synced with " + remote.displayName
+            if updateCache { setHistoryStatus(host, "Synced with " + remote.displayName) }
             return response
-        } catch { historyStatus[host] = "Cached history · " + error.localizedDescription; return .null }
+        } catch {
+            if !Task.isCancelled, self.account == account, historyInvalidations[host] == invalidation { setHistoryStatus(host, "Cached history · " + error.localizedDescription) }
+            return .null
+        }
     }
     func browserFavicon(_ id: String) -> UIImage? {
         if isIncognito(id) { return UIImage(systemName: "eye.slash") }
@@ -1919,34 +2120,47 @@ let nativeFixtureRelayOrigin = ""
             }
         }
     }
-    func goBack(_ id: String) { if let item = browserHistory(id, back: true).first { goBrowserHistory(item, in: id) } }
-    func goForward(_ id: String) { if let item = browserHistory(id, back: false).first { goBrowserHistory(item, in: id) } }
-    /// Cheap check used while rendering; browserHistory(_:back:) builds the full URL list.
-    func hasBrowserHistory(_ id: String, back: Bool) -> Bool {
-        guard let history = Self.safeBrowserHistory(browserTabs.first(where: { $0.id == id })?.history) else { return false }
-        return back ? history.index > 0 : history.index + 1 < history.entries.count
+    func goBack(_ id: String) { if let item = adjacentHistoryItem(id, back: true) { goBrowserHistory(item, in: id) } }
+    func goForward(_ id: String) { if let item = adjacentHistoryItem(id, back: false) { goBrowserHistory(item, in: id) } }
+    func hasBrowserHistory(_ id: String, back: Bool) -> Bool { adjacentHistoryItem(id, back: back) != nil }
+    private func adjacentHistoryItem(_ id: String, back: Bool) -> BrowserHistoryItem? {
+        guard let history = browserTabs.first(where: { $0.id == id })?.history, history.entries.indices.contains(history.index) else { return nil }
+        let step = back ? -1 : 1
+        var index = history.index + step
+        while history.entries.indices.contains(index) {
+            if let item = historyItem(history, index: index) { return item }
+            index += step
+        }
+        return nil
+    }
+    private func historyItem(_ history: BrowserTabHistory, index: Int) -> BrowserHistoryItem? {
+        let entry = history.entries[index]
+        return Self.historyURL(entry.url).map { BrowserHistoryItem(index: index, url: $0, title: entry.title, entryId: entry.id) }
     }
     func browserHistory(_ id: String, back: Bool) -> [BrowserHistoryItem] {
-        guard let history = Self.safeBrowserHistory(browserTabs.first(where: { $0.id == id })?.history) else { return [] }
-        let indices = back ? Array((0..<history.index).reversed()) : Array((history.index + 1)..<history.entries.count)
-        return indices.map { BrowserHistoryItem(index: $0, url: URL(string: history.entries[$0].url)!, title: history.entries[$0].title, entryId: history.entries[$0].id) }
+        guard let history = browserTabs.first(where: { $0.id == id })?.history, history.entries.indices.contains(history.index) else { return [] }
+        if back { return (0..<history.index).reversed().compactMap { historyItem(history, index: $0) } }
+        return ((history.index + 1)..<history.entries.count).compactMap { historyItem(history, index: $0) }
     }
     func goBrowserHistory(_ item: BrowserHistoryItem, in id: String) {
-        beginLiveBrowserLoad(id)
         guard let index = browserTabs.firstIndex(where: { $0.id == id }), let history = browserTabs[index].history else { return }
         let target = item.entryId.flatMap { selected in history.entries.firstIndex { $0.id == selected } } ?? (item.entryId == nil ? item.index : -1)
         guard history.entries.indices.contains(target), target != history.index, history.entries[target].url == item.url.absoluteString else { return }
         mirroredBrowserLoads.remove(id)
+        explicitBrowserNavigations.remove(id)
         let item = BrowserHistoryItem(index: target, url: item.url, title: item.title, entryId: history.entries[target].id)
         queueBrowserOperation(browserTabs[index], action: "browser-traverse", entry: history.entries[item.index])
-        browserTabs[index].history?.currentEntryId = history.entries[item.index].id
-        browserTabs[index].history?.index = item.index
+        var selected = browserTabs[index]
+        selected.history?.currentEntryId = history.entries[item.index].id
+        selected.history?.index = item.index
         beginLiveBrowserLoad(id)
         serverRedirectedBrowsers.remove(id); originalBrowserLoads[id] = item.url.absoluteString
         historyNavigation[id] = item.index
-        browserTabs[index].url = item.url.absoluteString
+        activeHistoryTraversals[id] = history.entries[target].id
+        pendingBrowserLoads[id] = item.url.absoluteString
+        selected.url = item.url.absoluteString
+        browserTabs[index] = selected
         if let view = browserViews[id] {
-            pendingBrowserLoads[id] = item.url.absoluteString
             let backwards = item.index < history.index, distance = abs(item.index - history.index)
             let candidates = backwards ? Array(view.backForwardList.backList.reversed()) : view.backForwardList.forwardList
             let expected = (1...distance).map { history.entries[history.index + (backwards ? -$0 : $0)].url }
@@ -1956,6 +2170,7 @@ let nativeFixtureRelayOrigin = ""
             if let native { view.go(to: native) } else { view.load(URLRequest(url: item.url)) }
         } else { reload(id) }
     }
+    private var activeHistoryTraversals: [String: String] = [:]
     func prepareBrowserHistoryNavigation(_ url: URL, in id: String) {
         // App traversals set historyNavigation first. Script back/forward from a
         // passive mirror stays local until trusted interaction releases that guard.
@@ -1993,10 +2208,15 @@ let nativeFixtureRelayOrigin = ""
         // Navigation type alone is not evidence of trusted input: a script can
         // activate a link/form too. Only the isolated-world interaction callback
         // (or explicit app navigation) releases a mirror.
-        applyPageScale(id, url: url); pendingBrowserLoads[id] = url.absoluteString
+        applyPageScale(id, url: url)
+        if activeHistoryTraversals[id] == nil { pendingBrowserLoads[id] = url.absoluteString }
         if originalBrowserLoads[id] == nil { originalBrowserLoads[id] = url.absoluteString }
     }
     func markBrowserRedirect(_ id: String, url: URL? = nil) {
+        if activeHistoryTraversals[id] != nil {
+            serverRedirectedBrowsers.insert(id)
+            return
+        }
         if mirroredBrowserLoads.contains(id), !explicitBrowserNavigations.contains(id) {
             if let url { completeBrowserNavigation(url, title: "", in: id) }
             return
@@ -2027,6 +2247,7 @@ let nativeFixtureRelayOrigin = ""
     }
     func failBrowserNavigation(_ id: String, currentURL: URL?) {
         beginLiveBrowserLoad(id)
+        if activeHistoryTraversals.removeValue(forKey: id) != nil, browserViews[id] != nil { mirroredBrowserLoads.insert(id) }
         serverRedirectedBrowsers.remove(id); originalBrowserLoads.removeValue(forKey: id)
         pendingBrowserLoads.removeValue(forKey: id); historyNavigation.removeValue(forKey: id)
         // Engine failures and authentication overlays are local lifecycle states.
@@ -2052,6 +2273,15 @@ let nativeFixtureRelayOrigin = ""
             return
         }
         guard let index = browserTabs.firstIndex(where: { $0.id == id }) else { return }
+        if let target = activeHistoryTraversals[id], let selected = browserTabs[index].history?.currentEntryId, target == selected {
+            // A completed swipe already chose the durable entry. An outgoing
+            // WebKit observation cannot branch it, and redirects stay local.
+            if browserTabs[index].url != url.absoluteString {
+                guard !sameDocumentObservation, serverRedirectedBrowsers.contains(id) else { return }
+                mirroredBrowserLoads.insert(id)
+            } else { mirroredBrowserLoads.remove(id) }
+            activeHistoryTraversals[id] = nil
+        }
         if Self.historyURL(url.absoluteString) == nil {
             if let requested = originalBrowserLoads[id], let original = Self.historyURL(requested) {
                 completeBrowserNavigation(original, title: "Originally requested page", in: id, nativePosition: nativePosition)
@@ -2150,12 +2380,26 @@ let nativeFixtureRelayOrigin = ""
         pendingBrowserPositions[id] = nil
         guard force || browserTabs.first(where: { $0.id == id })?.persist != true else { error = "Turn off Persist before unloading this tab."; return }
         historyNavigation.removeValue(forKey: id)
+        activeHistoryTraversals.removeValue(forKey: id)
         mirroredBrowserLoads.remove(id)
         pendingBrowserLoads.removeValue(forKey: id); nativeHistoryPosition.removeValue(forKey: id)
         browserObservations.removeValue(forKey: id)?.forEach { $0.invalidate() }
         browserNavigation.removeValue(forKey: id)
         if let view = browserViews.removeValue(forKey: id) { view.navigationDelegate = nil; view.uiDelegate = nil; view.stopLoading() }
         unloadedBrowsers.insert(id)
+    }
+    /// Release view residency on workspace close while retaining its saved navigation and descriptors.
+    func releaseWorkspaceResources(host: String, workspace: String, projects: [String]) {
+        let scopes = Set(["workspace:" + host + ":" + workspace] + projects.map { "project:" + host + ":" + $0 })
+        let chats = Set(scopes.flatMap { scope in
+            (workspaceContentDescriptors[scope] ?? []).compactMap { row in
+                let chat = row["chatId"].string
+                return row["type"].string == "chat" && !chat.isEmpty ? "chat:" + host + ":" + chat : nil
+            }
+        })
+        let grouped = scopes.union(chats)
+        for tab in browserTabs where grouped.contains(tab.scope) && !tab.persist && browserViews[tab.id] != nil { unload(tab.id) }
+        documentContents = documentContents.filter { key, _ in !grouped.contains(where: { key.hasPrefix($0 + ":") }) }
     }
     func reload(_ id: String) { unloadedBrowsers.remove(id) }
     func unloadBrowsers() { for id in Array(browserViews.keys) { unload(id, force: true) } }
@@ -2172,6 +2416,7 @@ let nativeFixtureRelayOrigin = ""
         // The owner controls membership and logical navigation. Its mirrored
         // login/redirect page can differ locally: the address must describe the
         // actual loaded page without publishing private URLs back to the owner.
+        if activeHistoryTraversals[tab.id] != nil || explicitBrowserNavigations.contains(tab.id) { return tab.url ?? "" }
         if isBrowserLoaded(tab.id), browserSavedPages[tab.id] == nil,
            let actual = browserNavigation[tab.id]?.url, !actual.isEmpty { return actual }
         return tab.url ?? ""

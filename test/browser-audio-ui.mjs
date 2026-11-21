@@ -11,8 +11,34 @@ const native=(fn,value)=>app.evaluate(({app},{code,value})=>new Function('main',
 try{
  app=await electron.launch({args:['.','--use-mock-keychain','--user-data-dir='+fixture.locations.userData],env:{...process.env,PROTEUS_DESKTOP_PREVIEW:'1',PROTEUS_PREVIEW_HOME:fixture.locations.root,PROTEUS_HOME:fixture.locations.home,CODEX_HOME:fixture.auth,PORT:'0'}});
  const page=await app.firstWindow();await page.locator('#topbar-home').waitFor();
- const id=await native(async(main,origin)=>{await main.getService().browserProfiles.handle({action:'settings',id:'default',settings:{blockingEnabled:false,notifications:[{origin,permission:'allow'}]}});return (await main.getBrowser().create(origin)).id;},origin);
+ const id=await native(async(main,origin)=>(await main.getBrowser().create(origin)).id,origin);
  const node=page.locator('[data-tab-container="'+id+'"]');await node.waitFor();
+ await page.locator('[data-tab="'+id+'"]').click();
+ const pageScript=source=>native((main,{id,source})=>main.getBrowser().get(id).view.webContents.executeJavaScript(source,true),{id,source});
+ await until(async()=>await pageScript('Notification.permission')==='default','untouched notification permission is askable');
+ await pageScript('window.noticePermission = Notification.requestPermission(); true');
+ await until(()=>native((main,origin)=>main.getBrowser().permissions.list().some(item=>item.origin===origin&&item.kind==='site-permission'),origin),'site notification request reached owner');
+ await page.locator('#sidebar [data-page=engine]').click();
+ await page.locator('[data-engine-section=preferences]').click();
+ await page.getByRole('tab',{name:'Site Permissions',exact:true}).click();
+ const notifications=page.locator('[data-sites]');
+ await notifications.getByLabel('Website origin').fill(origin+'/meeting/settings');
+ await notifications.getByLabel('Website origin').blur();
+ await notifications.getByLabel('Notifications').selectOption('allow');
+ await notifications.getByRole('button',{name:'Save notification permission'}).click();
+ const remove=notifications.getByRole('button',{name:'Remove notification permission for '+origin,exact:true});
+ await remove.waitFor();
+ assert.equal(await page.getByRole('tab',{name:'Site Permissions',exact:true}).getAttribute('aria-selected'),'true');
+ assert.equal(await pageScript('window.noticePermission'),'granted');
+ if(process.argv.includes('--permission-only')){
+  await remove.click();await remove.waitFor({state:'detached'});
+  await until(async()=>await pageScript('Notification.permission')==='default','removal restores Ask');
+  await page.locator('[data-tab="'+id+'"]').click();
+  await pageScript('window.noticePermission = Notification.requestPermission(); true');
+  await until(()=>native((main,origin)=>main.getBrowser().permissions.list().some(item=>item.origin===origin&&item.kind==='site-permission'),origin),'site requested notification permission again');
+  console.log(JSON.stringify({passed:true,siteInitiatedNotification:true,pastedPageURL:true,pendingRequestResolved:true,removeThenAskAgain:true}));
+ }else{
+ await page.locator('[data-tab="'+id+'"]').click();
  await native(async(main,id)=>{const wc=main.getBrowser().get(id).view.webContents;await wc.executeJavaScript('window.audio=new AudioContext();window.oscillator=audio.createOscillator();window.gain=audio.createGain();gain.gain.value=0.01;oscillator.connect(gain).connect(audio.destination);oscillator.start();audio.resume();true',true);},id);
  await until(()=>native((main,id)=>main.getBrowser().state(main.getBrowser().get(id)).audioPlaying,id),'Chromium detects WebAudio');
  await node.locator('[aria-label="Audio playing"]').waitFor();assert.equal(await node.locator('.tab-audio').evaluate(el=>el.nextElementSibling?.classList.contains('tabclose')),true);
@@ -36,4 +62,5 @@ try{
  assert.equal(await native((main,id)=>main.getBrowser().get(id).view.webContents.isAudioMuted(),id),true);
  const saved=await until(async()=>{const session=await page.evaluate(()=>window.desktop.workspaceSession({action:'get'}));return session.tabs.find(tab=>tab.id===id&&tab.audioMuted);},'mute saved in window session');assert.equal(saved.audioMuted,true);
  console.log(JSON.stringify({passed:true,webAudio:true,speakerBeforeClose:true,actualContextMenuMute:true,visualNotificationsWhileMuted:true,notificationSoundIntent:true,unloadDoesNotLoad:true,muteSurvivesReloadAndWindowSession:true}));
+ }
 }finally{await app?.close().catch(()=>{});await new Promise(resolve=>server.close(resolve));await fixture.cleanup();}

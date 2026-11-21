@@ -8,14 +8,17 @@ export class StateResponseCache {
   }
   clear() { this.cache.clear(); }
   async get(key, produce) {
-    for (let attempt = 0; attempt < 2; attempt++) {
+    for (;;) {
       const stamp = this.stamp(), cached = this.cache.get(key);
       if (cached?.stamp === stamp && this.clock() - cached.at < this.ttlMs) return cached.body;
       let pending = this.pending.get(key);
-      // A generation change waits for the prior snapshot instead of starting
-      // another worker job for the same view. Never return its stale permissions.
-      if(pending&&pending.stamp!==stamp){await pending.promise;continue;}
-      if (!pending || pending.stamp !== stamp) {
+      // A later request waits for the worker slot and captures the new owner
+      // state. Only callers that joined the older snapshot can receive it.
+      if (pending && pending.stamp !== stamp) {
+        await pending.promise.catch(() => {});
+        continue;
+      }
+      if (!pending) {
         if (this.active.size >= this.maxPending) throw Object.assign(new Error('State display is busy. Retry the refresh.'),{code:'STATE_CACHE_BUSY'});
         const promise = produce();
         pending = { stamp, promise }; this.pending.set(key, pending); this.active.add(pending);
@@ -26,11 +29,13 @@ export class StateResponseCache {
         }).catch(() => {});
       }
       const body = await pending.promise;
-      if (pending.stamp !== this.stamp()) continue;
-      if (this.cache.size >= this.maxEntries) this.cache.delete(this.cache.keys().next().value);
-      this.cache.set(key, { stamp: pending.stamp, body, at: this.clock() });
+      // Return the coherent snapshot captured for this request even when the
+      // owner changes during serialization. It cannot populate the next generation.
+      if (pending.stamp === this.stamp()) {
+        if (this.cache.size >= this.maxEntries) this.cache.delete(this.cache.keys().next().value);
+        this.cache.set(key, { stamp: pending.stamp, body, at: this.clock() });
+      }
       return body;
     }
-    throw Object.assign(new Error('State changed during refresh. Retry the refresh.'),{code:'STATE_CHANGED'});
   }
 }

@@ -8,6 +8,13 @@ import { revision } from '../scheduling/schedules.js';
 import { agentMetadata } from '../chats/agent-tools.js';
 
 const hash = value => createHash('sha256').update(value).digest('hex');
+const frontmatterHash = text => hash(text.match(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/)?.[0] || '');
+const isRefreshableText = entry => entry.kind === 'instruction' || entry.kind === 'skill';
+function sourceScopeRevision(profile) {
+  const { cwd, additionalDirectories, libraryFolders, universalFolders, documents, workspaceFiles, modes, discovery, approvals } = profile;
+  const { selectedIds, agentId, includeDefaults } = profile.defaults || {};
+  return revision({ cwd, additionalDirectories, libraryFolders, universalFolders, documents, workspaceFiles, modes, discovery, approvals, selectedIds, agentId, includeDefaults });
+}
 const modes = new Set(['universal', 'workspace', 'available', 'disabled']);
 export const discoveryExclusions = ['.git', 'node_modules', '.venv', 'venv', '__pycache__', '.next', 'bin', 'obj', 'dist', 'build', '.obsidian', '.trash', 'vendor', '.cache', '.build', 'DerivedData', '.swiftpm', 'Pods', 'Carthage'];
 const scopedKeys = ['libraryFolders', 'universalFolders', 'documents', 'modes', 'workspaceFiles', 'defaults', 'discovery', 'approvals'];
@@ -57,6 +64,26 @@ function readDocument(file) {
   if (fs.statSync(file).size > 256_000) throw new Error('Instruction is larger than 256 KB.');
   return fs.readFileSync(file, 'utf8');
 }
+function refreshText(entry, content, nextHash) {
+  const previousHeader = entry.content === undefined ? entry.frontmatterHash : frontmatterHash(entry.content);
+  if (previousHeader !== frontmatterHash(content)) {
+    throw new Error('Source metadata changed. Review and refresh context: ' + entry.name);
+  }
+  const { name, description } = markdownMetadata(content, entry.path);
+  return { ...entry, content, name, description, hash: nextHash, characters: content.length };
+}
+function readCapturedDocument(entry) {
+  try {
+    if (fs.realpathSync(entry.path) !== entry.path || !fs.statSync(entry.path).isFile()) {
+      throw new Error('Source path or file type changed. Review and refresh context for ' + entry.name);
+    }
+    return readDocument(entry.path);
+  } catch (error) {
+    if (['ENOENT', 'ENOTDIR'].includes(error.code)) throw new Error('Selected source is missing. Review and refresh context for ' + entry.name);
+    throw error;
+  }
+}
+const sourceRevisionChange = (previous, current) => ({ id: previous.id, name: current.name, from: previous.hash, to: current.hash });
 export class ContextStore {
   constructor(home, settings, { skipRefresh = false } = {}) {
     this.home = home; this.settings = settings; this.file = path.join(home, 'context.json'); this.catalogFile = path.join(home, 'context-catalog.json'); this.catalog = readJSON(this.catalogFile, { entries: [] });
@@ -245,7 +272,7 @@ export class ContextStore {
         const scope = meta.applyTo || (['AGENTS.md', 'CLAUDE.md'].includes(path.basename(file)) ? path.dirname(file) : path.basename(file) === 'copilot-instructions.md' ? root : 'Selected task');
         const agent = kind === 'agent' ? agentMetadata(text) : undefined;
         const defaultMode = kind === 'instruction' && [path.join(root, 'AGENTS.md'), path.join(root, 'CLAUDE.md'), path.join(root, '.github/copilot-instructions.md')].includes(file) ? 'workspace' : 'available';
-        entries.set(id, { id, kind, path: canonical, sources: unique([...(existing?.sources||[]),file]), roots: unique([...(existing?.roots||[]),root]), name: meta.name, characters: text.length, description: meta.description, runtimeName: meta.fields.name || path.basename(path.dirname(file)), agent, unsupportedAgentFields: agent?.issues || [], scope, hash: hash(text), defaultMode });
+        entries.set(id, { id, kind, path: canonical, sources: unique([...(existing?.sources||[]),file]), roots: unique([...(existing?.roots||[]),root]), name: meta.name, characters: text.length, description: meta.description, runtimeName: meta.fields.name || path.basename(path.dirname(file)), agent, unsupportedAgentFields: agent?.issues || [], scope, hash: hash(text), frontmatterHash: frontmatterHash(text), defaultMode });
       } catch (error) { errors.push({ path: file, message: error.message }); }
     };
     const walk = (dir, root) => {
@@ -295,7 +322,7 @@ export class ContextStore {
     atomicJSON(this.catalogFile, this.catalog);
     return this.get();
   }
-  capture({ workspaceId, workspace, selectedIds, agentId, includeDefaults } = {}) {
+  capture({ workspaceId, workspace, selectedIds, agentId, includeDefaults, autoRefreshSources = false } = {}) {
     const configured = this.scope(workspaceId).defaults || {};
     const defaultOverrides = { selectedIds: selectedIds !== undefined && revision(Array.isArray(selectedIds) ? [...selectedIds].sort() : selectedIds) !== revision([...(configured.selectedIds || [])].sort()), agentId: agentId !== undefined && (agentId || null) !== (configured.agentId || null), includeDefaults: includeDefaults !== undefined && includeDefaults !== (configured.includeDefaults ?? true) };
     selectedIds ??= configured.selectedIds || []; if (agentId === undefined) agentId = configured.agentId; includeDefaults ??= configured.includeDefaults ?? true;
@@ -319,7 +346,7 @@ export class ContextStore {
     if (!Array.isArray(selectedIds) || selectedIds.some(id => !catalog.entries.some(e => e.id === id))) throw new Error('Refresh the context list before selecting sources.');
     if (!includeDefaults && selectedIds.some(id => catalog.entries.find(e => e.id === id)?.mode === 'disabled')) throw new Error('A selected source is disabled. Update this selection before running.');
     const chosen = contextPlan(catalog, { workspace: { cwd, additionalDirectories: original.additionalDirectories }, selectedIds, agentId, includeDefaults }).entries;
-    const records = []; let total = 0;
+    const records = [], changes = []; let total = 0;
     for (const entry of chosen) {
       const availableRoots = entry.roots.map(availableDirectory).filter(Boolean);
       const sourceFolderMissing = [...unavailableRoots].some(root => { const relative = path.relative(root, entry.path); return relative === '' || (!relative.startsWith('..' + path.sep) && relative !== '..' && !path.isAbsolute(relative)); });
@@ -329,10 +356,15 @@ export class ContextStore {
       }
       if (entry.missing) throw new Error('Selected source is missing: ' + entry.path);
       if (entry.kind === 'agent' && entry.unsupportedAgentFields?.length) throw new Error('Agent is unavailable: ' + entry.name + '. ' + entry.unsupportedAgentFields.join('; '));
-      const record = { ...entry }; delete record.defaultMode;
+      let record = { ...entry }; delete record.defaultMode;
       if (entry.kind !== 'mcp') {
-        const text = readDocument(entry.path);
-        if (hash(text) !== entry.hash) throw new Error('Instructions changed. Refresh context before starting: ' + entry.name);
+        const text = autoRefreshSources ? readCapturedDocument(entry) : readDocument(entry.path);
+        const currentHash = hash(text);
+        if (currentHash !== entry.hash) {
+          if (!autoRefreshSources || !isRefreshableText(entry)) throw new Error('Instructions changed. Refresh context before starting: ' + entry.name);
+          record = refreshText(record, text, currentHash);
+          changes.push(sourceRevisionChange(entry, record));
+        }
         total += Buffer.byteLength(text);
         if (total > 300_000) throw new Error('Selected context exceeds 300 KB. Select fewer sources for this chat.');
         record.content = text;
@@ -342,7 +374,35 @@ export class ContextStore {
     }
     if (agentId && records.find(e => e.id === agentId)?.agent?.userInvocable === false) throw new Error('This agent cannot be selected as the main agent.');
     if (agentId && !records.some(e => e.id === agentId && e.kind === 'agent')) throw new Error('Select the agent in this chat context first.');
-    return { schemaVersion: 1, baseWorkspace: { cwd, additionalDirectories: original.additionalDirectories }, followsWorkspace: !!profile && revision({ cwd, additionalDirectories: original.additionalDirectories }) === revision({ cwd: profile.cwd, additionalDirectories: profile.additionalDirectories }), workspaceId: profile?.id || null, workspaceName: profile?.name || path.basename(cwd), configurationRevision: profile ? revision(profile) : catalog.revision, defaultOverrides, includeDefaults, selectedIds, agentId: agentId || null, capturedAt: new Date().toISOString(), workspace: { cwd, additionalDirectories: roots.filter(root => root !== cwd) }, entries: records, warnings };
+    return { schemaVersion: 1, baseWorkspace: { cwd, additionalDirectories: original.additionalDirectories }, followsWorkspace: !!profile && revision({ cwd, additionalDirectories: original.additionalDirectories }) === revision({ cwd: profile.cwd, additionalDirectories: profile.additionalDirectories }), workspaceId: profile?.id || null, workspaceName: profile?.name || path.basename(cwd), configurationRevision: profile ? revision(profile) : catalog.revision, ...(profile ? { sourceScopeRevision: sourceScopeRevision(profile) } : {}), defaultOverrides, includeDefaults, selectedIds, agentId: agentId || null, capturedAt: new Date().toISOString(), workspace: { cwd, additionalDirectories: roots.filter(root => root !== cwd) }, entries: records, warnings, ...(changes.length ? { sourceRefresh: changes } : {}) };
+  }
+  refreshCapturedText(snapshot) {
+    const references = (snapshot.sourceWorkspaces || []).filter(ref => ref.categories.length);
+    if (snapshot.workspaceId && snapshot.followsWorkspace) references.unshift(snapshot);
+    for (const ref of references) {
+      const profile = this.executionScope(ref.workspaceId);
+      const scopeChanged = ref.sourceScopeRevision ? ref.sourceScopeRevision !== sourceScopeRevision(profile) : ref.configurationRevision && ref.configurationRevision !== revision(profile);
+      if (profile.deletedAt || scopeChanged) {
+        throw new Error('Workspace configuration changed. Review and refresh context before continuing: ' + profile.name);
+      }
+    }
+    const changes = [];
+    let total = 0;
+    const entries = snapshot.entries.map(entry => {
+      if (entry.kind === 'mcp') { this.resolveMcp(entry, false); return entry; }
+      const text = readCapturedDocument(entry);
+      total += Buffer.byteLength(text);
+      const currentHash = hash(text);
+      if (currentHash === entry.hash) return entry;
+      if (!isRefreshableText(entry)) throw new Error('Selected agent changed. Review and refresh context before continuing: ' + entry.name);
+      const current = refreshText(entry, text, currentHash);
+      changes.push(sourceRevisionChange(entry, current));
+      return current;
+    });
+    if (!changes.length) return snapshot;
+    if (total > 300_000) throw new Error('Selected context exceeds 300 KB. Select fewer sources before continuing.');
+    const { suppliedAt, delivery, ...captured } = snapshot;
+    return { ...captured, capturedAt: new Date().toISOString(), entries, sourceRefresh: changes };
   }
   resolveMcp(record, resolveEnvironment = true) {
     if((record.canonicalSource&&this.mcpCanonicalPath(record.path)!==record.canonicalSource)||(record.canonicalRoot&&this.mcpCanonicalPath(record.roots[0])!==record.canonicalRoot))throw new Error('Selected MCP source or folder changed. Refresh this chat context: '+record.name);

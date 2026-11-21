@@ -17,7 +17,7 @@ export function initBrowserNotifications(options){
 }
 async function act({browserIssueId,issueAction='review',browserIssueTarget}){
   if(processing.has(browserIssueId))return;processing.add(browserIssueId);
-  let item;
+  let item, actionCompleted=false;
   try{
     item=(await ui.api('/api/notifications')).items.find(item=>item.id===browserIssueId);
     const issue=browserIssueTarget||item?.browserIssue;
@@ -29,9 +29,11 @@ async function act({browserIssueId,issueAction='review',browserIssueTarget}){
     }else if(issueAction==='logs')return ui.logs(issue.logId);
     else if(issueAction==='reload'||issueAction==='open-tab')await ui.browser(issue.tabId,issueAction);
     else throw Error('Choose an available browser notification action.');
+    actionCompleted=true;
     await ui.api('/api/notifications',{action:'read',id:item.id});await ui.refresh(true);
   }catch(error){
-    // Keep recovery actions in the inbox, including an owner/action that disappeared.
-    if(item)await recordBrowserIssue({...item.browserIssue,title:item.title,body:error.message}).catch(()=>{});
+    // A later display/acknowledgement failure cannot recreate a resolved conflict.
+    if(item&&issueAction!=='review'&&!actionCompleted)await recordBrowserIssue({...item.browserIssue,title:item.title,body:error.message}).catch(()=>{});
+    else ui.notify?.(error.message);
   }finally{processing.delete(browserIssueId);}
 }

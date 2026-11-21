@@ -14,7 +14,7 @@ struct LifeAskView: View {
     }
 
     var body: some View {
-        List {
+        NativeList {
             Section {
                 Text("Your pendant questions and answers. Open a chat to play its recording or continue with messages and attachments.")
                 Button("Refresh") { Task { await load() } }.disabled(busy)
@@ -43,7 +43,6 @@ struct LifeAskView: View {
                 }
             }
         }
-        .navigationTitle("Ask").nativeFeaturePage("Life")
         .task(id: life.accountIdentity) { values = [:]; failures = [:]; await load() }
         .refreshable { await load() }
         .onDisappear { generation = UUID(); values = [:]; failures = [:] }

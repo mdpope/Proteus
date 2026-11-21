@@ -6,6 +6,61 @@ import XCTest
 @testable import Proteus
 
 final class NativeBrowserNavigationTests: XCTestCase {
+    @MainActor func testRapidBackThenForwardIgnoresOlderOwnerAndWebKitResults() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString), key = RemoteCrypto.random()
+        let shared = SharedAppStore(cacheWriter: NativeSharedCacheWriter(), cacheRoot: root, cacheKey: { key })
+        defer { shared.flushCachedState(); try? FileManager.default.removeItem(at: root) }
+        let scope = "project:host:fixture"
+        let entries = ["one", "two", "three"].map { BrowserHistoryEntry(id: $0, url: "https://example.test/" + $0, title: $0) }
+        func snapshot(position: Int, revision: Int) throws -> JSON {
+            let history = BrowserTabHistory(entries: entries, index: position, currentEntryId: entries[position].id, revision: revision)
+            let encoded = try JSONDecoder().decode(JSON.self, from: JSONEncoder().encode(history))
+            return .object(["revision": .number(Double(revision)), "tabs": .array([.object([
+                "type": .string("browser"), "id": .string("fixture"), "title": .string(entries[position].title),
+                "url": .string(entries[position].url), "history": encoded
+            ])])])
+        }
+        shared.applyContentTabs(try snapshot(position: 2, revision: 7), scope: scope)
+        let id = try XCTUnwrap(shared.tabs(in: scope).first?.id)
+        defer { shared.close(id) }
+        shared.goBack(id)
+        shared.goForward(id)
+        shared.applyContentTabs(try snapshot(position: 1, revision: 8), scope: scope)
+        shared.completeBrowserNavigation(URL(string: entries[1].url)!, title: "Outgoing page", in: id)
+        XCTAssertEqual(shared.tabs(in: scope).first?.url, entries[2].url)
+        XCTAssertEqual(shared.tabs(in: scope).first?.history?.entries, entries)
+        shared.completeBrowserNavigation(URL(string: entries[2].url)!, title: entries[2].title, in: id)
+        shared.applyContentTabs(try snapshot(position: 2, revision: 9), scope: scope)
+        shared.applyContentTabs(try snapshot(position: 1, revision: 8), scope: scope)
+        XCTAssertEqual(shared.tabs(in: scope).first?.history?.currentEntryId, entries[2].id)
+        XCTAssertEqual(shared.contentPending[scope]?.filter { $0["action"].string == "browser-traverse" }.map { $0["entryId"].string }, [entries[1].id, entries[2].id])
+    }
+
+    @MainActor func testBackRedirectKeepsForwardHistoryAndLocalLanding() throws {
+        let shared = SharedAppStore()
+        let entries = ["one", "two"].map { BrowserHistoryEntry(id: $0, url: "https://example.test/" + $0, title: $0) }
+        let id = "redirected-traversal"
+        shared.browserTabs = [BrowserDescriptor(id: id, title: "two", url: entries[1].url, scope: "main", history: BrowserTabHistory(entries: entries, index: 1, currentEntryId: entries[1].id))]
+        defer { shared.close(id) }
+        shared.goBack(id)
+        let landing = URL(string: "https://example.test/device-local")!
+        shared.markBrowserRedirect(id, url: landing)
+        shared.completeBrowserNavigation(landing, title: "Local page", in: id)
+        XCTAssertEqual(shared.browserTabs.first?.url, entries[0].url)
+        XCTAssertEqual(shared.browserTabs.first?.history?.entries, entries)
+        XCTAssertEqual(shared.browserNavigation[id]?.url, landing.absoluteString)
+        shared.goForward(id)
+        shared.completeBrowserNavigation(URL(string: entries[1].url)!, title: "two", in: id)
+        XCTAssertEqual(shared.browserTabs.first?.history?.currentEntryId, entries[1].id)
+        XCTAssertEqual(shared.browserTabs.first?.history?.entries, entries)
+    }
+
+    @MainActor func testHistoryHydrationRequiresExpectedRevisionAndSelection() {
+        let expected: JSON = .object(["revision": .number(7), "currentEntryId": .string("one")])
+        XCTAssertTrue(SharedAppStore.matchesNavigationSnapshot(expected, expected))
+        XCTAssertFalse(SharedAppStore.matchesNavigationSnapshot(.object(["revision": .number(8), "currentEntryId": .string("one")]), expected))
+        XCTAssertFalse(SharedAppStore.matchesNavigationSnapshot(.object(["revision": .number(7), "currentEntryId": .string("two")]), expected))
+    }
     @MainActor func testPrivateClipboardClosesOnlyItsOwnCopyAndClearsInterruptedCopies() throws {
         let name = UIPasteboard.Name("proteus-test-" + UUID().uuidString)
         let board = try XCTUnwrap(UIPasteboard(name: name, create: true))
@@ -132,6 +187,36 @@ final class NativeBrowserNavigationTests: XCTestCase {
         shared.completeBrowserNavigation(URL(string: "https://example.test/two")!, title: "Two", in: "local")
         XCTAssertEqual(shared.browserTabs.first?.history?.revision, 9)
         XCTAssertTrue(shared.contentPending.isEmpty)
+    }
+
+    @MainActor func testHistoryCoveragePersistsOnceForMultipleOwnerPages() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let key = RemoteCrypto.random(), profile = UUID().uuidString.lowercased()
+        let remote = RemoteStore(connection: nil, cacheRoot: root.appendingPathComponent("remote"), legacyCredentials: false)
+        let persisted = expectation(description: "one offline coverage write")
+        persisted.assertForOverFulfill = true
+        let writer = NativeSharedCacheWriter(writeFile: { data, url in
+            try NativeSharedCacheWriter.writeFile(data, url)
+            if url.lastPathComponent == "browser-history.enc" { persisted.fulfill() }
+        })
+        let shared = SharedAppStore(cacheWriter: writer, cacheRoot: root.appendingPathComponent("shared"), cacheKey: { key })
+        defer { remote.forget(); try? writer.flush(); try? FileManager.default.removeItem(at: root) }
+        let (pairing, _) = try await URLSession.shared.data(from: URL(string: nativeFixtureHTTPOrigin + "/pair")!)
+        try remote.pair(try JSONDecoder().decode(JSON.self, from: pairing)["code"].string)
+        try await wait { remote.connected && remote.stateValue("capabilities").array.contains(.string("browser.history.v1")) }
+        let host = try XCTUnwrap(remote.connection?.hostId)
+        let visitedAt = Date().ISO8601Format()
+        for range in [0..<200, 200..<201] {
+            let visits: [JSON] = range.map { index in
+                .object(["eventId": .string(UUID().uuidString.lowercased()), "url": .string("https://example.test/coverage/\(index)"), "profileId": .string(profile), "visitedAt": .string(visitedAt)])
+            }
+            let result = try await remote.request("browser.history.record", ["events": .array(visits)])
+            XCTAssertEqual(result["acknowledgedEventIds"].array.count, visits.count)
+        }
+        await shared.refreshHistoryCache(remote)
+        try writer.flush()
+        await fulfillment(of: [persisted], timeout: 5)
+        XCTAssertEqual(shared.historyCache[host + "|" + profile]?.count, 201)
     }
 
     @MainActor func testQueuedNavigationsAndTraversalsAdoptOwnerRebaseAfterAnotherClientsTitleSettles() async throws {

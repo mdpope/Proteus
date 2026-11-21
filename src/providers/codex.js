@@ -1,3 +1,4 @@
+import {recordTurnUsage} from '../services/chats/run-timing.js';
 import {mergeManagedServers} from '../services/integrations/managed-run.js';
 import {lifeAskFirstTurn,lifeAskInstructions,lifeAskResultSchema,lifeReminderInstructions,lifeHomeInstructions} from '../services/life/life-ask-policy.js';
 import {scopedExecutionSandbox} from '../services/scheduling/scoped-execution.js';
@@ -39,7 +40,15 @@ export function codexModel(model) {
 // Filesystem grants never imply approval of a shell command. Keep native untrusted
 // approval routing; the engine applies the user's separate saved operation rules.
 export function codexSandbox(schedule, profile, { desktopPreview = false, permissionControls = desktopPreview } = {}) {
- const scoped=scopedExecutionSandbox(schedule);if(scoped){if(!permissionControls||profile?.mode!=='custom')throw Error('Scoped command enforcement is unavailable or its permission mode changed.');return scoped;}
+ const scoped=scopedExecutionSandbox(schedule);
+ if(scoped){
+  if(!permissionControls)throw Error('This Proteus owner cannot enforce the scoped-command approval policy.');
+  if(profile?.mode!=='custom'){
+   if(['ask','autopilot'].includes(profile?.chatMode))throw Error('This chat’s approval override conflicts with scoped commands. In Chat Details, choose Use schedule permissions, then Continue.');
+   throw Error('Scoped commands require Saved rules only. Review the schedule’s captured execution permissions before continuing.');
+  }
+  return scoped;
+ }
  if(permissionControls&&profile?.workingFolders?.length){
   const cwd=canonicalPath(schedule.workspace.cwd,schedule.workspace.cwd);
   if(!cwd)throw Error('The working folder is unavailable.');
@@ -137,7 +146,7 @@ export class CodexRPC extends EventEmitter {
 }
 export class CodexProvider {
  // PDF steering uses the owner attachment reader; the native RPC still receives text/images only.
- constructor(options={}, {browser,context}={}){this.options=options;this.browser=browser;this.context=context;this.active=null;this.starting=null;this.supportsManagedConnections=true;this.acceptedMediaTypes=Object.freeze(['image/png','image/jpeg','image/gif','image/webp','text/plain']);this.inlineSteeringMediaTypes=this.acceptedMediaTypes;this.acceptedSteeringMediaTypes=Object.freeze([...this.acceptedMediaTypes,'application/pdf']);}
+ constructor(options={}, {browser,context,lifeAskPolicy}={}){this.options=options;this.browser=browser;this.context=context;this.lifeAskPolicy=lifeAskPolicy;this.active=null;this.starting=null;this.supportsManagedConnections=true;this.acceptedMediaTypes=Object.freeze(['image/png','image/jpeg','image/gif','image/webp','text/plain']);this.inlineSteeringMediaTypes=this.acceptedMediaTypes;this.acceptedSteeringMediaTypes=Object.freeze([...this.acceptedMediaTypes,'application/pdf']);}
  async connect(){
   if(!this.starting){
    const client=this.options.clientFactory?this.options.clientFactory():new CodexRPC(this.options);this.client=client;
@@ -171,6 +180,7 @@ export class CodexProvider {
   let imageDir=null,appBridge=null;
   const client=await this.connect();const model=(await this.models(client)).find(m=>m.id===run.schedule.model);if(!model)throw new Error('Choose an available Codex model from the provider catalog.');validateModelOptions(run.schedule,model);
   const lifeAnswer=lifeAskFirstTurn(run);
+  const lifePolicy=lifeAnswer?this.lifeAskPolicy?.(run):null;
   const snapshot=run.schedule.context, managed=!lifeAnswer&&snapshot&&this.context?this.context.providerContext(snapshot):null;
   // Tool scopes are an execution contract. Do not silently drop provider-specific restrictions.
   const restricted=managed?.customAgents.filter(a=>a.tools!==null);
@@ -179,11 +189,11 @@ export class CodexProvider {
   const native=await client.request('config/read',{includeLayers:true});const existing={};for(const layer of native.layers||[])Object.assign(existing,layer.config?.mcp_servers||{});
   Object.assign(existing,native.config?.mcp_servers||{});
   const plugins={};for(const layer of native.layers||[])Object.assign(plugins,layer.config?.plugins||{});Object.assign(plugins,native.config?.plugins||{});
-  const selected=lifeAnswer?{}:mergeManagedServers(managed?{...Object.fromEntries(Object.entries(run.schedule.mcpServers||{}).filter(([name])=>!managed.disabledLegacyMcp.includes(name))),...managed.mcpServers}:run.schedule.mcpServers||{},managedMcp);
+  const selected=lifeAnswer?(lifePolicy?.servers||{}):mergeManagedServers(managed?{...Object.fromEntries(Object.entries(run.schedule.mcpServers||{}).filter(([name])=>!managed.disabledLegacyMcp.includes(name))),...managed.mcpServers}:run.schedule.mcpServers||{},managedMcp);
   if(run.schedule.skillDirectories?.length && snapshot?.includeDefaults!==false)throw new Error('For Codex, select individual skills from the context list; legacy skill directories are not supported.');
   const mcp=Object.fromEntries(Object.keys(existing).map(name=>[name,{enabled:false}]));
   for(const [name,def] of Object.entries(selected)){
-    const answer=Object.hasOwn(managedMcp,name)?'approve-auto':await ask({type:'permission',question:`Connect selected ${name} server for this Codex turn?`,details:{kind:'mcp-connect',serverName:name,approvalScope:'turn',toolName:'*',intention:`Connect the selected ${name} MCP server. Individual tool calls retain their own permissions.`,readOnly:false}});
+    const answer=lifeAnswer||Object.hasOwn(managedMcp,name)?'approve-auto':await ask({type:'permission',question:`Connect selected ${name} server for this Codex turn?`,details:{kind:'mcp-connect',serverName:name,approvalScope:'turn',toolName:'*',intention:`Connect the selected ${name} MCP server. Individual tool calls retain their own permissions.`,readOnly:false}});
     if(!['approve','approve-auto'].includes(answer))throw new Error('Selected MCP server declined: '+name);
     if(def.type==='sse')throw new Error('Codex requires streamable HTTP for remote MCP servers. Update the selected server transport first.');
     if(def.type==='http')mcp[name]={enabled:true,url:def.url,...(def.headers?{http_headers:def.headers}:{})};
@@ -194,7 +204,7 @@ export class CodexProvider {
   const roots=[...new Set([run.schedule.workspace.cwd,...run.schedule.workspace.additionalDirectories,...(folderProfile?.mode!=='ask'?folderProfile?.chatFolders||[]:[]).filter(folder=>(folderProfile?.folders||[]).some(active=>active.path===folder.path)).map(folder=>folder.path)])];
   const sandbox=lifeAnswer?codexSandbox({...run.schedule,workspace:{cwd:run.schedule.workspace.cwd,additionalDirectories:[]},executionPermissions:undefined},null):codexSandbox(run.schedule,permissionProfile?.(),{permissionControls:(this.options.permissionControls===true||this.options.desktopPreview===true)});
   if(sandbox.scopedCommands&&(native.config?.permissions?.[sandbox.managedProfile]||(native.layers||[]).some(layer=>layer.config?.permissions?.[sandbox.managedProfile])))throw Error('A native configuration layer already defines this scoped profile. Review it before running.');
-  const currentBrowserTools=lifeAnswer?[]:browserTools(this.browser,run.id),currentIntegrationTools=lifeAnswer?[]:[...integrationTools(this.integrations,run.id),...chatControlTools(this.chatControl,run.id)];const browser=lifeAnswer?[]:[...scopedTools,...questionAttachmentTools(this,run.id),...currentBrowserTools,...currentIntegrationTools];const items=new Map();const calls=new Map();
+  const currentBrowserTools=lifeAnswer?[]:browserTools(this.browser,run.id),currentIntegrationTools=lifeAnswer?[]:[...integrationTools(this.integrations,run.id),...chatControlTools(this.chatControl,run.id)];const browser=lifeAnswer?(lifePolicy?.tools||[]):[...scopedTools,...questionAttachmentTools(this,run.id),...currentBrowserTools,...currentIntegrationTools];const items=new Map();const calls=new Map();
   const approvedBridgeCalls=new Map();
   captureAppCapabilities(run,browser,update);
   let resolveTurn,rejectTurn,settled=false,abortTimer;const completed=new Promise((resolve,reject)=>{resolveTurn=resolve;rejectTurn=reject;});completed.catch(()=>{});
@@ -235,7 +245,7 @@ export class CodexProvider {
     if(lifeAnswer){if(!run.lifeAskFirstOutputAt){run.lifeAskFirstOutputAt=Date.now();update();}}
     else stream(p.itemId,p.delta);
    }
-   if(method==='thread/tokenUsage/updated'){run.usage={observed:true,inputTokens:p.tokenUsage.total.inputTokens,outputTokens:p.tokenUsage.total.outputTokens};run.contextUsage=p.tokenUsage;update();}
+   if(method==='thread/tokenUsage/updated'){run.usage={observed:true,inputTokens:p.tokenUsage.total.inputTokens,outputTokens:p.tokenUsage.total.outputTokens};recordTurnUsage(run,p.tokenUsage.total);run.contextUsage=p.tokenUsage;update();}
    if(method==='turn/plan/updated')emit('system',(p.explanation?p.explanation+'\n\n':'')+(p.plan||[]).map(x=>`- [${x.status==='completed'?'x':' '}] ${x.step}`).join('\n'));
    if(method==='error'&&p.willRetry)emit('system','Codex is retrying: '+displayText(p.error?.message||'temporary provider error',1500));
    if(method==='error'&&!p.willRetry)rejectTurn(Object.assign(new Error(p.error?.message||'Codex turn failed.'),{code:p.error?.codexErrorInfo||p.error?.code}));
@@ -257,7 +267,28 @@ export class CodexProvider {
   const onRequest=async msg=>{if(handledRequests.has(msg.id))return;handledRequests.add(msg.id);const p=msg.params||{};if(p.threadId&&p.threadId!==run.providerSessionId&&!agents.allows(p.threadId,p.turnId)||(!p.threadId||p.threadId===run.providerSessionId)&&p.turnId&&active.turnId&&p.turnId!==active.turnId){emit('system','Provider request rejected: unverified or expired agent scope; no user decision was requested.');return client.write({id:msg.id,error:{code:-32000,message:'Unverified or expired Proteus agent scope. This is an adapter scope rejection, not a user refusal.'}});}try{
    if(lifeAnswer){
     if(['item/commandExecution/requestApproval','item/fileChange/requestApproval'].includes(msg.method))return client.respond(msg.id,{decision:'decline'});
-    throw new Error('Life Ask initial answers allow web research only. Return any clarification in the answer.');
+    assertAppToolActive();
+    if(p.threadId!==run.providerSessionId||!active.turnId||p.turnId!==active.turnId)throw Error('Life Ask tool request does not belong to the active turn.');
+    lifePolicy?.assert();
+    if(msg.method==='item/tool/call'){
+     const tool=lifePolicy?.tools.find(tool=>tool.name===p.tool);
+     if(!tool)throw Error('This tool is outside Life Ask.');
+     const result=await tool.handler(p.arguments);assertAppToolActive();
+     return client.respond(msg.id,{success:true,contentItems:codexToolContent(result)});
+    }
+    if(msg.method==='mcpServer/elicitation/request'){
+     const meta=p._meta, name=p.message?.match(/tool "([^"\n]+)"\?$/)?.[1];
+     const definition=lifePolicy?.servers&&Object.hasOwn(lifePolicy.servers,p.serverName)?lifePolicy.servers[p.serverName]:null;
+     if(p.mode==='form'&&meta?.codex_approval_kind==='mcp_tool_call'&&definition?.tools.includes(name)&&
+       p.message==='Allow the '+p.serverName+' MCP server to run tool "'+name+'"?'&&
+       meta.tool_params&&typeof meta.tool_params==='object'&&!Array.isArray(meta.tool_params)&&
+       p.requestedSchema?.type==='object'&&!Object.keys(p.requestedSchema.properties||{}).length){
+      lifePolicy.assertServer(p.serverName);
+      return client.respond(msg.id,{action:'accept',content:{}});
+     }
+     return client.respond(msg.id,{action:'decline',content:null});
+    }
+    throw Error('This request is outside the Life Ask tools. Return any clarification in the answer.');
    }
    const scopeAsk=(request,requestSignal)=>ask(p.threadId&&p.threadId!==run.providerSessionId?{...request,details:{...request.details,delegation:{provider:'codex',rootThreadId:run.providerSessionId,threadId:p.threadId,parentThreadId:agents.find(p.threadId)?.parentNativeId,runId:run.id}}}:request,requestSignal);
    if(active.recheckPermissions())throw new Error('Workspace permissions changed; this tool request was cancelled.');

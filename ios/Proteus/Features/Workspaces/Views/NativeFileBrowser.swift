@@ -51,15 +51,13 @@ struct NativeFileBrowser: View {
     private let columns = [("name", "Name"), ("type", "Type"), ("size", "Size"), ("fileCreatedAt", "Created"), ("fileModifiedAt", "Modified")]
     var body: some View {
         VStack(spacing: 8) {
-            if let initialFile {
-                HStack { Text(initialFile["title"].string).font(.headline).lineLimit(1); Spacer(); Button("Refresh", systemImage: "arrow.clockwise") { Task { await bootstrap() } } }.contentShape(Rectangle()).nativeAdjacentTabSwipe()
+            if initialFile != nil {
                 if !failure.isEmpty { Text(failure).font(.caption).foregroundStyle(.orange).textSelection(.enabled) }
                 reader.accessibilityIdentifier("workspace-file-reader").frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             else {
             HStack {
                 Picker("Folder", selection: $root) { ForEach(roots, id: \.self) { Text($0["name"].string).tag($0["id"].string) } }
-                Button("Refresh", systemImage: "arrow.clockwise") { Task { if root.isEmpty { await bootstrap() } else { await load() } } }
                 Menu {
                     ForEach(columns, id: \.0) { key, label in Button(label + (sort == key ? (descending ? " ↓" : " ↑") : "")) { changeSort(key) } }
                     Toggle("Show all columns", isOn: $showColumns)
@@ -80,6 +78,9 @@ struct NativeFileBrowser: View {
             }
             ScrollView(.horizontal) {
                 HStack(spacing: 4) {
+                    fileTool("Open in tab", "doc.text", disabled: selectedEntries.count != 1 || selectedEntries.first?["kind"].string == "folder") {
+                        if let entry = selectedEntries.first { Task { await show(entry, newTab: true) } }
+                    }
                     fileTool("New file", "doc.badge.plus", disabled: !canWrite) { editAction = "create"; name = "Untitled.md" }
                     fileTool("New folder", "folder.badge.plus", disabled: !canWrite) { editAction = "mkdir"; name = "New folder" }
                     fileTool("Copy path", "doc.on.doc", disabled: selected.isEmpty) { copySelection() }
@@ -179,7 +180,7 @@ struct NativeFileBrowser: View {
                 Button("More in " + entry["name"].string) { Task { await loadExpanded(entry["path"].string, offset: offset) } }
                     .padding(.leading, CGFloat(entry["depth"].int + 1) * 16).disabled(expansionRequests[entry["path"].string] != nil)
             }
-        }; if let nextOffset { Button("More files") { Task { await load(offset: nextOffset) } } } }.listStyle(.plain).overlay { if busy { ProgressView() } }
+        }; if let nextOffset { Button("More files") { Task { await load(offset: nextOffset) } } } }.listStyle(.plain).refreshable { if root.isEmpty { await bootstrap() } else { await load() } }.overlay { if busy { ProgressView() } }
         .onChange(of: cursor) { _, path in if !path.isEmpty { proxy.scrollTo(path, anchor: .center) } }
         .onChange(of: document != .null) { _, loaded in if loaded && !cursor.isEmpty { proxy.scrollTo(cursor, anchor: .center) } }
         .overlay(alignment: .top) { dragEdge(-1, proxy: proxy) }
@@ -204,9 +205,25 @@ struct NativeFileBrowser: View {
             else if document["mediaType"].string == "text/plain" || document["mediaType"].string == "text/markdown" {
                 NativeTextDocument(title: document["title"].string, language: document["language"].string.isEmpty ? "text" : document["language"].string, isMarkdown: document["mediaType"].string == "text/markdown", content: document["content"].string,
                     editable: canWrite && document["editable"].bool && !document["identity"].string.isEmpty, save: { text in try await saveDocument(text) },
-                    markdown: { AnyView(MarkdownView(text: document["content"].string, runID: "", store: store, height: $height, onDocumentLink: { source in Task { do { let target = try await store.request("files.resolve-link", args.merging(["file": .string(active), "source": .string(source)]) { _, new in new }); await show(target, newTab: true) } catch { failure = error.localizedDescription } } }, documentAssetURLs: assets, allFileLinks: true).frame(height: max(height, 1))) }).id(active + document["identity"].string)
+                    paste: { fields in
+                        try await store.request("files.paste", args.merging(fields.merging(["file": .string(active)]) { _, new in new }) { _, new in new })
+                    },
+                    draftStore: documentDraftBinding(), markdown: { AnyView(MarkdownView(text: document["content"].string, runID: "", store: store, height: $height, onDocumentLink: { source in Task { do { let target = try await store.request("files.resolve-link", args.merging(["file": .string(active), "source": .string(source)]) { _, new in new }); await show(target, newTab: true) } catch { failure = error.localizedDescription } } }, documentAssetURLs: assets, resolveDocumentAsset: { source, _ in
+                        let target = try await store.request("files.resolve-link", args.merging(["file": .string(active), "source": .string(source)]) { _, new in new })
+                        guard target["type"].string == "application/pdf" else { throw RemoteError(message: "Choose a PDF in this workspace.") }
+                        return try await store.request("files.pdf", args.merging(["file": target["path"]]) { _, new in new })["dataURL"].string
+                    }, allFileLinks: true).frame(height: max(height, 1))) }).id(active + document["identity"].string)
             }
         }
+    }
+    private func documentDraftBinding() -> Binding<String?> {
+        let key = ["workspace-file-draft", workspaceID, root, active, document["identity"].string].joined(separator: ":")
+        return Binding(get: {
+            let value = store.draft(key)
+            return value == .null ? nil : value.string
+        }, set: { text in
+            store.setDraft(key, text.map(JSON.string) ?? .null)
+        })
     }
     /// Saves through the owner with the identity from preview; a changed file is rejected, never overwritten.
     private func saveDocument(_ text: String) async throws {

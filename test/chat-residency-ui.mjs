@@ -13,6 +13,18 @@ try{
  await open();await page.waitForFunction(()=>document.querySelector('.conversation [data-key="event-1200"]'));
  await page.waitForFunction(async()=>{const {captureConversationPosition}=await import('/features/chats/conversation.js');const position=captureConversationPosition(document.querySelector('.conversation'));return position?.key==='event-1200'&&Math.abs(position.offset-8)<2;});
  assert.equal(await page.locator('#followup').inputValue(),'Keep my unsent draft while its transcript is unloaded');
+ await page.locator('.conversation').dispatchEvent('wheel',{ctrlKey:true,deltaY:-45});
+ const slider=page.getByRole('slider',{name:'Chat size'}),reset=page.getByRole('button',{name:'Reset chat size to 100%'});
+ const scale=()=>page.locator('.conversation-messages').evaluate(node=>Number(getComputedStyle(node).zoom));
+ assert.ok(await scale()>1.4);
+ assert.equal(Number(await slider.inputValue())/100,await scale());
+ const chatActions=await page.locator('#chat-delete').boundingBox(),zoomSlider=await slider.boundingBox();
+ assert.ok(zoomSlider.y>=chatActions.y+chatActions.height);
+ await slider.fill('130');assert.equal(await scale(),1.3);
+ if(process.env.PROTEUS_TEST_EVIDENCE)await page.screenshot({path:path.join(process.env.PROTEUS_TEST_EVIDENCE,'nov17-chat-zoom.png')});
+ await reset.click();assert.equal(await scale(),1);
+ assert.equal(await slider.getAttribute('aria-valuetext'),'100%');
+ assert.equal(await page.locator('#followup').inputValue(),'Keep my unsent draft while its transcript is unloaded');
  await page.locator('[data-page=engine]').first().click();await page.locator('[data-engine-section=resources]').click();await page.locator('[data-memory-chat]').fill('2');await page.locator('[data-memory-document]').fill('3');await page.locator('[data-memory-idle]').fill('5');await page.locator('[data-memory-save]').click();await page.locator('[data-memory-status]').getByText('Saved for this computer.',{exact:false}).waitFor();
  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(home,'settings.json'))).resources,{chatViewLimit:2,documentViewLimit:3,inactiveMinutes:5});assert.deepEqual(errors,[]);
  if(process.env.PROTEUS_TEST_EVIDENCE)await page.screenshot({path:path.join(process.env.PROTEUS_TEST_EVIDENCE,'oct30-memory-settings.png')});

@@ -5,8 +5,32 @@ import {applyStatePatch} from './state-patch.js';
 const encoder = new TextEncoder();
 const decoder = new TextDecoder('utf-8', { fatal: true });
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
-const bytes64 = text => Uint8Array.from(atob(text), character => character.charCodeAt(0));
-const base64 = bytes => { let text = ''; for (let i = 0; i < bytes.length; i += 8192) text += String.fromCharCode(...bytes.subarray(i, i + 8192)); return btoa(text); };
+// Electron's peer client shares this module with the browser worker. On Node,
+// avoid expanding ciphertext into a binary string and running a per-byte callback.
+const nodeBuffer = globalThis.process?.versions?.node ? globalThis.Buffer : undefined;
+const byteLength = text => nodeBuffer ? nodeBuffer.byteLength(text) : encoder.encode(text).length;
+function bytes64(text) {
+    if (nodeBuffer) {
+        const compact = text.replace(/[\t\n\f\r ]/g, '');
+        const padding = compact.indexOf('=');
+        // Buffer's base64 decoder also accepts URL-safe characters and can
+        // silently ignore malformed tails. Preserve atob's envelope validation.
+        if (/[^A-Za-z0-9+/=]/.test(compact) || (padding < 0 ? compact.length % 4 === 1 :
+            compact.length % 4 !== 0 || !/^={1,2}$/.test(compact.slice(padding)))) {
+            throw new DOMException('Invalid base64.', 'InvalidCharacterError');
+        }
+        return nodeBuffer.from(compact, 'base64');
+    }
+    if (typeof Uint8Array.fromBase64 === 'function') return Uint8Array.fromBase64(text);
+    return Uint8Array.from(atob(text), character => character.charCodeAt(0));
+}
+function base64(bytes) {
+    if (nodeBuffer) return nodeBuffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength).toString('base64');
+    if (typeof bytes.toBase64 === 'function') return bytes.toBase64();
+    let text = '';
+    for (let i = 0; i < bytes.length; i += 8192) text += String.fromCharCode(...bytes.subarray(i, i + 8192));
+    return btoa(text);
+}
 export async function importKey(hex) {
     if (!/^[a-f0-9]{64}$/i.test(hex || '')) throw new Error('Invalid pairing key.');
     return crypto.subtle.importKey('raw', Uint8Array.from(hex.match(/../g), value => parseInt(value, 16)), 'AES-GCM', false, ['encrypt', 'decrypt']);
@@ -70,14 +94,14 @@ export class BrowserRemoteClient extends EventTarget {
     queueMessage(data) {
         if(this.status==='closed')return;
         if(typeof data!=='string'||data.length>limits.packetBytes){this.fail('The relay sent an oversized or unsupported message. Reconnect before retrying.');return;}
-        const bytes=encoder.encode(data).length;
+        const bytes=byteLength(data);
         if(bytes>limits.packetBytes||this.queuedReceivePackets>=limits.queuedReceivePackets||this.queuedReceiveBytes+bytes>limits.queuedReceiveBytes){this.fail('The remote connection is receiving more data than it can process. Reconnect to refresh its state.');return;}
         this.queuedReceivePackets++;this.queuedReceiveBytes+=bytes;
         this.receiveQueue=this.receiveQueue.then(()=>{if(this.status!=='closed')return this.receive(JSON.parse(data));}).catch(()=>{if(this.status!=='closed'){this.event('recovery-blocked',{reason:'verification'});this.fail('Encrypted verification failed during '+this.stage+'. Reconnect or generate a fresh invitation.');}}).finally(()=>{this.queuedReceivePackets--;this.queuedReceiveBytes-=bytes;});
     }
     raw(packet) {
         if(this.socket?.readyState!==1)throw new Error('Computer is not connected.');
-        const encoded=JSON.stringify(packet),bytes=encoder.encode(encoded).length;
+        const encoded=JSON.stringify(packet),bytes=byteLength(encoded);
         if(bytes>limits.packetBytes||(this.socket.bufferedAmount||0)+bytes>limits.bufferedBytes)throw new Error('The remote connection cannot buffer more data. Reconnect to refresh its state.');
         this.socket.send(encoded);
     }
@@ -133,12 +157,12 @@ export class BrowserRemoteClient extends EventTarget {
         try { if (base !== this.stateVersion || !this.stateBaseline) throw new Error('Missed state patch.'); next = applyStatePatch(this.stateBaseline, patch); }
         catch { this.resynchronizeState(value.cursor); return; }
         this.stateBaseline = next; this.stateVersion = version;
-        this.event('change', { type: 'event', event: 'state', data: this.presentedState(next), cursor: value.cursor });
+        this.event('change', { type: 'event', event: 'state', data: this.presentedState(next), cursor: value.cursor, ownerObservedAt: value.ownerObservedAt });
     }
     resynchronizeState(cursor) {
         this.stateBaseline = null; this.stateVersion = null; this.stateResync = true;
         this.request('sync', { cursor: cursor || '' })
-            .then(result => { if (result?.state) this.event('change', { type: 'event', event: 'state', data: result.state, cursor: result.cursor }); })
+            .then(result => { if (result?.state) this.event('change', { type: 'event', event: 'state', data: result.state, cursor: result.cursor, ownerObservedAt: result.ownerObservedAt }); })
             .catch(() => {})
             .finally(() => { this.stateResync = false; });
     }
@@ -161,7 +185,7 @@ export class BrowserRemoteClient extends EventTarget {
         if (this.status !== 'online') return Promise.reject(new Error('Connect this computer first.'));
         if (this.waiting.has(id)) return Promise.reject(new Error('This action is already waiting for a response.'));
         if(this.waiting.size>=limits.pendingRequests)return Promise.reject(Object.assign(new Error('Too many remote actions are pending. Wait for the current responses before retrying.'),{code:'REMOTE_BUSY'}));
-        let serialized,wireBytes;try{serialized=JSON.stringify({id,method,args,issuedAt});wireBytes=4*Math.ceil((encoder.encode(serialized).length+28)/3)+128;}catch(error){return Promise.reject(error);}
+        let serialized,wireBytes;try{serialized=JSON.stringify({id,method,args,issuedAt});wireBytes=4*Math.ceil((byteLength(serialized)+28)/3)+128;}catch(error){return Promise.reject(error);}
         if(wireBytes>limits.packetBytes)return Promise.reject(new Error('This remote request exceeds the encrypted message limit.'));
         if(this.queuedSendBytes+wireBytes>limits.queuedSendBytes)return Promise.reject(Object.assign(new Error('The remote send queue is full. Wait for the current requests before retrying.'),{code:'REMOTE_BUSY'}));
         this.queuedSendBytes+=wireBytes;

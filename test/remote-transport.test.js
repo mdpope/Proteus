@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {BrowserRemoteClient,importKey,unseal} from '../src/services/remote/remote-client.js';
+import {BrowserRemoteClient,importKey,seal,unseal} from '../src/services/remote/remote-client.js';
 import {remoteTransportLimits as limits,transportBudget} from '../src/services/remote/remote-transport.js';
 import {sendRelayPacket} from '../relay/server.js';
+import {seal as ownerSeal, unseal as ownerUnseal} from '../src/services/remote/remote-crypto.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -12,6 +13,21 @@ import {execFileSync} from 'node:child_process';
 class Socket extends EventTarget {readyState=1;bufferedAmount=0;sent=[];send(value){this.sent.push(JSON.parse(value));}close(code){this.readyState=3;this.closeCode=code;}}
 const tick=()=>new Promise(resolve=>setTimeout(resolve,0));
 async function client(){const key=await importKey('a'.repeat(64)),value=new BrowserRemoteClient({hostId:'synthetic',deviceId:'device',key});value.socket=new Socket();value.status='online';value.prefix='synthetic';return value;}
+
+test('native transport handles large encrypted messages without relaxing the base64 envelope', async () => {
+ const secret='b'.repeat(64),key=await importKey(secret),aad='synthetic:host:1';
+ const value={message:'Résumé 漢字 '.repeat(360_000)};
+ const wire=ownerSeal(secret,value,aad);
+ assert.ok(wire.length>7_000_000);
+ assert.deepEqual(await unseal(key,wire,aad),value);
+ assert.deepEqual(await unseal(key,wire.slice(0,100)+' \n\t'+wire.slice(100),aad),value);
+ assert.deepEqual(ownerUnseal(secret,await seal(key,value,aad),aad),value);
+ const small=ownerSeal(secret,{text:'x'},aad);
+ for(const malformed of [small.slice(0,5)+'!'+small.slice(5),'-'+small.slice(1),small+'=',small+'\v']){
+  await assert.rejects(unseal(key,malformed,aad),error=>error.name==='InvalidCharacterError');
+ }
+ await assert.rejects(unseal(key,wire,aad+'other'));
+});
 
 test('request queues reject excess actions before transmission and release all queued bytes on close',async()=>{
  const remote=await client();let release;remote.sendQueue=new Promise(resolve=>{release=resolve;});

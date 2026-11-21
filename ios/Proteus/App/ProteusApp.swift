@@ -2,7 +2,7 @@ import SwiftUI
 
 @main struct ProteusApp: App {
     @UIApplicationDelegateAdaptor(ProteusAppDelegate.self) private var appDelegate
-    @StateObject private var shared = SharedAppStore()
+    @StateObject private var shared = SharedAppStore(deferStartupRead: true)
     @StateObject private var destinations = DestinationStore()
     @StateObject private var life = LifeStore()
     var body: some Scene {
@@ -45,7 +45,7 @@ struct ProteusRoot: View {
         } else { NativeShell() }
     }
     var body: some View {
-            applicationContent.tint(NativeTheme.accent).foregroundStyle(NativePalette.shared.color("text")).preferredColorScheme(NativePalette.shared.colorScheme)
+            applicationContent.disabled(!shared.startupCachesReady).tint(NativeTheme.accent).foregroundStyle(NativePalette.shared.color("text")).preferredColorScheme(NativePalette.shared.colorScheme)
                 .overlay {
                     if phase != .active && shared.browserTabs.contains(where: { $0.incognito }) {
                         Color.black.ignoresSafeArea().overlay { Label("Incognito", systemImage: "eye.slash").foregroundStyle(.white) }
@@ -63,6 +63,7 @@ struct ProteusRoot: View {
                 .sheet(isPresented: $incomingPairing, onDismiss: { destinations.cancelPairing() }) { NavigationStack { PairView().toolbar { Button("Cancel") { incomingPairing = false } } } }
                 .onChange(of: destinations.pairingCompletion) { _, completion in if completion != nil { incomingPairing = false } }
                 .task {
+                    await shared.restoreStartupCaches()
                     #if DEBUG
                     if ProcessInfo.processInfo.arguments.contains("--reset-pairing") { destinations.resetForTesting() }
                     // Simulator pairing with a real host: the side-by-side release app can claim proteus:// URLs.
@@ -81,7 +82,7 @@ struct ProteusRoot: View {
                     if ProcessInfo.processInfo.arguments.contains("--synthetic-destinations") {
                         destinations.resetForTesting()
                         // Keep synthetic count and long-message fixtures isolated from relay reconnects.
-                        if ProcessInfo.processInfo.arguments.contains("--synthetic-nav-counts") || ProcessInfo.processInfo.arguments.contains("--synthetic-long-chat") || ProcessInfo.processInfo.arguments.contains("--synthetic-many-chat") || ProcessInfo.processInfo.arguments.contains("--synthetic-heavy-chat") { destinations.activity(false) }
+                        if ProcessInfo.processInfo.arguments.contains("--synthetic-nav-counts") || ProcessInfo.processInfo.arguments.contains("--synthetic-long-chat") || ProcessInfo.processInfo.arguments.contains("--synthetic-many-chat") || ProcessInfo.processInfo.arguments.contains("--synthetic-heavy-chat") || ProcessInfo.processInfo.arguments.contains("--synthetic-attention-filters") { destinations.activity(false) }
                         let linuxHost = ProcessInfo.processInfo.arguments.contains("--synthetic-linux-host")
                         for (id, label, platform, arch) in [("10000000-0000-4000-8000-000000000001", linuxHost ? "Alpha Linux" : "Alpha Mac", linuxHost ? "linux" : "darwin", "x64"), ("10000000-0000-4000-8000-000000000002", "Beta Mac", "darwin", "arm64")] {
                             try? destinations.register(DeviceConnection(relay: "ws://127.0.0.1:1", hostId: id, deviceId: UUID().uuidString, key: RemoteCrypto.random()), label: label)
@@ -89,6 +90,21 @@ struct ProteusRoot: View {
                             destinations.selected?.flushCache()
                         }
                         try? destinations.select("10000000-0000-4000-8000-000000000001", connect: false)
+                    }
+                    if ProcessInfo.processInfo.arguments.contains("--synthetic-attention-filters"),
+                       let alpha = destinations.remote(for: "10000000-0000-4000-8000-000000000001"),
+                       let beta = destinations.remote(for: "10000000-0000-4000-8000-000000000002") {
+                        alpha.state = .object(["attention": .array([
+                            .object(["id": .string("browser-fixture"), "title": .string("General · Browser history needs attention"),
+                                     "body": .string("Preserve the pending page."), "kind": .string("notification"),
+                                     "browserIssue": .object(["kind": .string("history-conflict")]), "at": .string("2026-11-17T20:00:00Z")])
+                        ])])
+                        beta.state = .object(["attention": .array([
+                            .object(["id": .string("chat-fixture"), "title": .string("Synthetic completed operation"),
+                                     "kind": .string("notification"), "notificationType": .string("chat.completed"),
+                                     "at": .string("2026-11-18T20:00:00Z")])
+                        ])])
+                        return
                     }
                     if ProcessInfo.processInfo.arguments.contains("--synthetic-notification-fixtures"),
                        let remote = destinations.remote(for: "10000000-0000-4000-8000-000000000001") {

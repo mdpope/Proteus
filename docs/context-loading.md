@@ -264,6 +264,20 @@ Only selected sources excludes automatic universal/workspace sources and the leg
 operating instructions explicitly when using this mode. In either mode, a disabled source cannot
 be supplied. Missing/changed sources require a refresh or revised selection before execution.
 
+In desktop Chat Details, **Refresh current sources** updates the next turn using the chat's
+saved selections. **Choose context** opens the source picker. A schedule's chat refresh also
+reloads its captured workspace references and checks that the managed connection still has its
+original workspace binding. The chat keeps its prior snapshots and captured execution permissions.
+Refreshing does not start another turn.
+
+**Refresh instruction and skill edits automatically** is off by default. Turn it on in an idle
+chat's Details for later turns of that chat, or in a schedule's editor for newly launched runs.
+Each opted-in capture reads the current text for the sources it already selected. It retains
+the previous chat snapshot and records the old and new hashes when it picks up an edit. It
+uses the existing source catalog so discovery and selection still have their normal controls.
+Review path, frontmatter, selected-agent and MCP changes through the usual context controls.
+Permission, connector and account checks still run on the owning computer.
+
 The picker previews selected/automatic source counts, paths, and loading reasons. Its text estimate
 is instruction and skill body characters divided by four, not provider-measured tokens. Selected
 skills currently contribute their full SKILL.md text. Registered agent definitions, tool schemas,

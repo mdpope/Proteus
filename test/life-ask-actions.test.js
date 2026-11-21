@@ -13,6 +13,8 @@ function fixture(t){
 test('sensitive voice request requires protected human approval even under auto-approve',async t=>{
  const f=fixture(t);f.engine.permissions.setMode(f.run.schedule,'autopilot');assert.equal((await f.actions.step(f.receipt,f.proposal)).state,'awaiting_input');await until(()=>f.run.pending);
  assert.equal(f.run.pending.details.managedApprovalRequired,true);assert.equal(f.run.pending.details.kind,'life-ask-action');assert.deepEqual(f.run.pending.permissionChoices,[]);assert.equal(f.executions(),0);
+ assert.match(f.state().prompt,/registered Proteus app tools for Life Reminders, Scratchpad/);
+ assert.match(f.state().prompt,/For external services, use only explicitly selected MCP servers/);
  f.engine.reply(f.run.id,'approve',f.run.pending.id);await until(()=>f.state().status==='approved');await f.actions.step(f.receipt,f.proposal);await until(()=>f.executions()===1&&!f.engine.running.size);
  const result=await f.actions.step(f.receipt,f.proposal);assert.equal(result.result.answer,'Synthetic action verified.');assert.deepEqual(await f.actions.step(f.receipt,f.proposal),result);assert.equal(f.executions(),1);
  f.engine.event(f.run,'user','A later follow-up');f.engine.event(f.run,'assistant','Another answer',{phase:'final'});assert.deepEqual(await f.actions.step(f.receipt,f.proposal),result);

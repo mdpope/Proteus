@@ -1,3 +1,4 @@
+import {recordTurnUsage} from '../services/chats/run-timing.js';
 import {humanTime} from '../shared/human-time.js';
 import {claudeToolAllowed} from './claude-tool-policy.js';
 import {subagentJournal} from '../services/chats/subagents.js';
@@ -369,7 +370,7 @@ export class ClaudeProvider {
         if(id){this.rateLimits??=new Map();this.rateLimitsObservedAt=new Date().toISOString();const reset=q.resetsAt??q.resets_at;this.rateLimits.set(id,{id,label:id.replaceAll('_',' '),remainingPercent:Number.isFinite(q.utilization)?Math.max(0,Math.min(100,100-q.utilization*100)):null,resetAt:Number.isFinite(reset)?new Date(reset*1000).toISOString():null,status:q.status,unlimited:false});}
       }
       if(m.type==='result'){
-        if(resultSeen)return;resultSeen=true;if(m.usage)run.usage=accumulateClaudeUsage(run.usage,m.usage);run.contextUsage=m.modelUsage||null;update();
+        if(resultSeen)return;resultSeen=true;if(m.usage){run.usage=accumulateClaudeUsage(run.usage,m.usage);recordTurnUsage(run,{inputTokens:m.usage.input_tokens,outputTokens:m.usage.output_tokens});}run.contextUsage=m.modelUsage||null;update();
         // A steered message Claude has not read yet becomes its next turn in this session.
         if(!m.is_error&&m.subtype==='success'&&[...queued.values()].some(item=>!item.acknowledged)){resultSeen=false;return;}
         if(steering&&!steering.sent){steering.boundary.resolve();return;}

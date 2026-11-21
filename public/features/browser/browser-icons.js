@@ -1,3 +1,14 @@
+const navigationPaths = {
+  back: 'M19 12H5m6-6-6 6 6 6',
+  forward: 'M5 12h14m-6-6 6 6-6 6',
+  download: 'M12 4v12m-5-5 5 5 5-5M5 20h14',
+  go: 'M19 5v8H5m5-5-5 5 5 5',
+};
+
+export function browserNavigationIcon(action) {
+  return `<svg class="browser-navigation-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${navigationPaths[action]}"/></svg>`;
+}
+
 // Icons are bounded raster data received from the embedded browser session.
 export function browserTabIcon(info={},escape=value=>String(value)) {
   if(info.incognito)return '<svg class="browser-tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-label="Incognito"><path d="M3 10h18M6 10l2-7h8l2 7M10 16h4"/><circle cx="6" cy="17" r="4"/><circle cx="18" cy="17" r="4"/></svg>';

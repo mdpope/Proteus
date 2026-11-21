@@ -12,12 +12,16 @@ const {preserveBackgroundFocus}=createRequire(import.meta.url)('../desktop/brows
 const pagePreferences=createRequire(import.meta.url)('../desktop/browser/browser-page-preferences.cjs');
 
 const copy=value=>JSON.parse(JSON.stringify(value));
+const browserSource=fs.readFileSync(new URL('../desktop/browser/browser.cjs',import.meta.url),'utf8');
+const linkedMethod=browserSource.slice(browserSource.indexOf('  async createLinkedTab('),browserSource.indexOf('  openPagePopup('));
+const {createLinkedTab}=vm.runInNewContext('({' + linkedMethod + '})');
 test('a native link menu callback keeps its originating window after focus moves elsewhere',async()=>{
  const scope=new AsyncLocalStorage(),created=[],electron={app:{getApplicationNameForProtocol:()=> 'Browser'},Menu:{buildFromTemplate:items=>({items})}};
  const sandbox={module:{exports:{}},URL,process:{platform:'linux'},require:name=>name==='electron'?electron:name==='node:path'?path:name==='./browser-history.cjs'?{}:name==='./browser-downloads.cjs'?{}:name==='./browser-page-preferences.cjs'?pagePreferences:name==='../services/edit-context-menu.cjs'?createRequire(import.meta.url)('../desktop/services/edit-context-menu.cjs'):assert.fail(name)};
  vm.createContext(sandbox);vm.runInContext(fs.readFileSync(new URL('../desktop/browser/browser-actions.cjs',import.meta.url),'utf8'),sandbox);
- const source={id:'source',windowId:'first',profileId:'default',parentId:'project:local:one'},browser={options:{},partition:{on(){}},tabs:new Map([[source.id,source]]),appOrigin:'http://app.test',withTabWindow:(tab,fn)=>scope.run(tab.windowId,fn),create:async()=>{await Promise.resolve();created.push(scope.getStore()||'other-focused-window');return {id:'new'};},sendAction(){}};
- const menu=scope.run('first',()=>new sandbox.module.exports.BrowserActions(browser).menu(source,{linkURL:'https://example.test/'}));
+ const source={id:'source',windowId:'first',profileId:'default',parentId:'project:local:one'},browser={options:{},partition:{on(){}},tabs:new Map([[source.id,source]]),appOrigin:'http://app.test',withTabWindow:(tab,fn)=>scope.run(tab.windowId,fn),createLinkedTab,create:async()=>{await Promise.resolve();created.push(scope.getStore()||'other-focused-window');return {id:'new'};},get:()=>({}),changed(){},sendAction(){}};
+ browser.actions=new sandbox.module.exports.BrowserActions(browser);
+ const menu=scope.run('first',()=>browser.actions.menu(source,{linkURL:'https://example.test/'}));
  for(const action of menu.items.slice(0,4)){scope.run('other-focused-window',()=>action.click());await new Promise(resolve=>setImmediate(resolve));}
  assert.deepEqual(created,['first','first','first','first']);
 });
@@ -26,16 +30,37 @@ test('native link menu keeps foreground/background/unloaded choices distinct and
   const sandbox={module:{exports:{}},URL,process:{platform:'linux'},require:name=>name==='electron'?electron:name==='node:path'?path:name==='./browser-history.cjs'?{}:name==='./browser-downloads.cjs'?{}:name==='./browser-page-preferences.cjs'?pagePreferences:name==='../services/edit-context-menu.cjs'?createRequire(import.meta.url)('../desktop/services/edit-context-menu.cjs'):assert.fail(name)};
   vm.createContext(sandbox);vm.runInContext(fs.readFileSync(new URL('../desktop/browser/browser-actions.cjs',import.meta.url),'utf8'),sandbox);
   const source={id:'source',profileId:'profile-a',group:'team',parentId:'chat',destination:{type:'chat',id:'chat'},workspaceName:'Workspace',associationChatId:'chat'};
-  const browser={options:{},partition:{on(){}},tabs:new Map([[source.id,source]]),appOrigin:'http://app.test',create:async(url,_owner,_history,descriptor)=>{created.push({url,descriptor:copy(descriptor)});return {id:'created',...descriptor};},sendAction:value=>sent.push(copy(value))};
-  const actions=new sandbox.module.exports.BrowserActions(browser),menu=actions.menu(source,{linkURL:'https://example.test/page'});
+  const published=[];
+  const browser={options:{},partition:{on(){}},tabs:new Map([[source.id,source]]),appOrigin:'http://app.test',createLinkedTab,create:async(url,_owner,_history,descriptor)=>{created.push({url,descriptor:copy(descriptor)});const tab={id:'created-'+created.length,...descriptor};browser.tabs.set(tab.id,tab);return tab;},get:id=>browser.tabs.get(id),changed:()=>published.push(sent.length),sendAction:value=>{assert.equal(browser.get(value.info.id).pendingCreation,true);sent.push(copy(value));}};
+  browser.actions=new sandbox.module.exports.BrowserActions(browser);
+  const menu=browser.actions.menu(source,{linkURL:'https://example.test/page'});
   assert.deepEqual(copy(menu.items.slice(0,4).map(item=>item.label)),['Open Link in New Default Browser Tab','Open Link in Background Tab','Open Link in Incognito Tab','Open Link in Unloaded Tab']);
   source.profileId='later-profile';source.parentId='later-chat';
   menu.items[1].click();await new Promise(resolve=>setImmediate(resolve));
-  assert.deepEqual(created[0],{url:'https://example.test/page',descriptor:{incognito:false,profileId:'profile-a',group:'team',parentId:'chat',destination:{type:'chat',id:'chat'},workspaceName:'Workspace',associationChatId:'chat',hidden:false,unloaded:false,background:true}});
+  assert.deepEqual(created[0],{url:'https://example.test/page',descriptor:{incognito:false,profileId:'profile-a',group:'team',parentId:'chat',destination:{type:'chat',id:'chat'},workspaceName:'Workspace',associationChatId:'chat',hidden:false,unloaded:false,background:true,pendingCreation:true}});
   assert.equal(sent[0].type,'background-tab');assert.equal(sent[0].afterId,'source');
   menu.items[0].click();menu.items[3].click();await new Promise(resolve=>setImmediate(resolve));
   assert.deepEqual(sent.map(value=>value.type),['background-tab','select-tab','unloaded-tab']);
+  assert.deepEqual(published,[1,2,3]);
   assert.equal(created[1].descriptor.unloaded,undefined);assert.equal(created[2].descriptor.unloaded,true);assert.equal(created[2].descriptor.hidden,true);
+});
+
+test('page-opened tabs stay in the background once their opener loses selection',async()=>{
+  const source={id:'source',view:{getVisible:()=>browser.active==='source'}};
+  const events=[],descriptors=[];
+  let finish;
+  const browser={active:'source',get:()=>({}),create:async(_url,_owner,_history,descriptor)=>{
+    descriptors.push(descriptor);
+    await new Promise(resolve=>{finish=resolve;});
+    return {id:'new'};
+  },actions:{send:event=>events.push(event)},changed(){}};
+  const open=()=>createLinkedTab.call(browser,source,'https://example.test/',{pageInitiated:true});
+  const slow=open();browser.active=null;finish();await slow;
+  assert.equal(events.at(-1).type,'background-tab');
+  const inactive=open();assert.equal(descriptors.at(-1).background,true);finish();await inactive;
+  assert.equal(events.at(-1).type,'background-tab');
+  browser.active='source';const visible=open();finish();await visible;
+  assert.equal(events.at(-1).type,'select-tab');
 });
 
 test('initial background loading preserves latest source, address bar or selected tab focus and cleans listeners',()=>{
@@ -49,13 +74,40 @@ test('initial background loading preserves latest source, address bar or selecte
   background.focus();assert.equal(focused,source,'initial hidden-view focus returns immediately');
   renderer.focus();background.focus();assert.equal(focused,renderer,'later address-bar input wins');
   browser.active='other';other.focus();background.focus();assert.equal(focused,other,'later visible tab wins');
-  guard.stop();guard.stop();
+  guard.finish();guard.finish();
   for(const emitter of [window,source,other,background,renderer])assert.equal(emitter.eventNames().length,0,'temporary listeners removed');
   const selectedGuard=preserveBackgroundFocus(browser,browser.tabs.get('background'),window,other);
-  browser.active='background';background.focus();assert.equal(focused,background,'intentional new-tab selection stays focused');selectedGuard.stop();
+  browser.active='background';background.focus();assert.equal(focused,background,'intentional new-tab selection stays focused');selectedGuard.finish();
   browser.active='source';source.focus();const blurredGuard=preserveBackgroundFocus(browser,browser.tabs.get('background'),window,source);
-  windowFocused=false;window.emit('blur');background.focus();assert.equal(focused,background,'guard does not focus an inactive window');blurredGuard.stop();
+  windowFocused=false;window.emit('blur');background.focus();assert.equal(focused,background,'guard does not focus an inactive window');blurredGuard.finish();
   for(const emitter of [window,source,other,background,renderer])assert.equal(emitter.eventNames().length,0);
+});
+
+test('completion restores the latest keyboard surface when native loading retains hidden focus',()=>{
+  let focused,loadingFocus=false;
+  const contents=()=>Object.assign(new EventEmitter(),{
+    isDestroyed:()=>false,
+    isFocused(){return focused===this;},
+    focus(){if(!loadingFocus){focused=this;this.emit('focus');}}
+  });
+  const source=contents(),renderer=contents(),background=contents();
+  const window=Object.assign(new EventEmitter(),{webContents:renderer,isDestroyed:()=>false,isFocused:()=>true});
+  const sourceTab={id:'source',view:{webContents:source,getVisible:()=>true}};
+  const tab={id:'background',view:{webContents:background,getVisible:()=>false}};
+  const browser={active:sourceTab.id,tabs:new Map([[sourceTab.id,sourceTab],[tab.id,tab]]),windowTabs:()=>[sourceTab,tab]};
+  for(const target of [source,renderer]){
+    source.focus();
+    const guard=preserveBackgroundFocus(browser,tab,window,source);
+    target.focus();
+    loadingFocus=true;
+    focused=background;
+    background.emit('focus');
+    assert.equal(focused,background,'native loading can retain focus after the callback');
+    loadingFocus=false;
+    guard.finish();
+    assert.equal(focused,target);
+    assert.equal(background.listenerCount('focus'),0);
+  }
 });
 
 test('background loading falls back to a newer selected view or renderer after its remembered target becomes stale',()=>{
@@ -73,7 +125,7 @@ test('background loading falls back to a newer selected view or renderer after i
   browser.active=null;background.focus();assert.equal(focused,renderer,'renderer receives focus when remembered target is destroyed and no native view is visible');
   browser.active='newer';
   renderer.focus();background.focus();assert.equal(focused,renderer,'explicit address input wins even with another native view selected');
-  guard.stop();for(const emitter of [window,source,newer,background,renderer])assert.equal(emitter.eventNames().length,0);
+  guard.finish();for(const emitter of [window,source,newer,background,renderer])assert.equal(emitter.eventNames().length,0);
 });
 
 test('remembered renderer focus does not override a newer native selection but newer address focus still wins',()=>{
@@ -87,7 +139,7 @@ test('remembered renderer focus does not override a newer native selection but n
   const newer=wc();browser.tabs.set('newer',tab('newer',newer));browser.active='newer';newer.focus();
   background.focus();assert.equal(focused,newer,'old renderer focus predates this new native selection');
   renderer.focus();background.focus();assert.equal(focused,renderer,'address input focused after selection is the latest target');
-  guard.stop();for(const emitter of [window,source,newer,background,renderer])assert.equal(emitter.eventNames().length,0);
+  guard.finish();for(const emitter of [window,source,newer,background,renderer])assert.equal(emitter.eventNames().length,0);
 });
 
 test('background focus snapshots and later focus callbacks use the tab owner window context',()=>{
@@ -99,7 +151,7 @@ test('background focus snapshots and later focus callbacks use the tab owner win
   renderer.focus();const guard=preserveBackgroundFocus(browser,tab,window,renderer);
   background.focus();assert.equal(focused,renderer,'initial renderer snapshot belongs to owner window');
   ownerFocus.focus();renderer.focus();background.focus();assert.equal(focused,renderer,'focus events outside the broker context still belong to owner window');
-  assert.equal(context,'other');guard.stop();
+  assert.equal(context,'other');guard.finish();
   for(const emitter of [window,ownerFocus,background,renderer])assert.equal(emitter.eventNames().length,0);
 });
 

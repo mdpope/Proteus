@@ -6,6 +6,62 @@ Desktop, iPhone and iPad use the authenticated Proteus website API. Only the web
 accesses its database. Native app screens remain native; no website iframe supplies their records.
 Life is independent of the selected execution computer and remains available when that host sleeps.
 
+## Move reminders from Apple Reminders
+
+In Proteus desktop, open **Reminders → Import reminders → Export from Apple Reminders on a Mac**.
+On the Mac that shows the source accounts, let Apple Reminders finish syncing. Download both
+exporter files from the guide and follow the Terminal instructions. macOS prompts for access to
+Reminders. The exporter reads the available lists and saves **Apple Reminders Export.json** in
+Downloads. It includes empty lists and both open and completed items from each account.
+
+Choose that JSON in **Import reminders**, select the source account and lists, and preview the
+counts and destination names. The preview writes no reminder records. A list-name collision
+gets a separate imported list. Review each account on its own, especially when the source Mac
+has both work and personal accounts. Reimporting the same source IDs skips existing records
+without modifying or resurrecting them. An import can contain up to 2,000 items and 800 KB of
+selected data. Larger imports can keep the same source and list identifiers across batches.
+
+Proteus copies titles, notes, list membership, creation and completion timestamps when supplied,
+and either date-only or time-zone-aware due dates. Open timed items follow Proteus’s usual alert
+rules. Keep the export file for Apple-specific information, such as recurrence, priority, links,
+and Apple alert settings. Apple’s EventKit access covers synced regular lists. Smart Lists are
+views over those items, and EventKit does not expose a complete archive of attachments,
+subtasks or all Reminders-specific attributes.
+
+### Import from another export
+
+A chat can prepare a local JSON file in `proteus-reminders-1` format from another export.
+Use stable source, list and item IDs from the original file. Preserve the source list on every
+item. Use an ISO 8601 timestamp with an offset for `createdAt`, `completedAt` and `dueAt`.
+A completed item needs its original `completedAt`. Use `dueKind` of `none`, `date` or
+`datetime`. Date-only items have a `dueDate`; timed items have `dueAt` and an IANA `timeZone`.
+Open the file in the same preview and import path. Multiple source accounts can be wrapped in
+an `accounts` array. A single source can be represented directly.
+
+```json
+{
+  "format": "proteus-reminders-1",
+  "sourceId": "example:stable-account-id",
+  "sourceName": "Example account",
+  "lists": [
+    {
+      "id": "stable-source-list-id",
+      "name": "Errands",
+      "items": [
+        {
+          "id": "stable-source-item-id",
+          "title": "Pick up library books",
+          "notes": "Use the main desk.",
+          "completed": false,
+          "dueKind": "date",
+          "dueDate": "2026-12-03"
+        }
+      ]
+    }
+  ]
+}
+```
+
 ## Connect an account
 
 **Queued auth correction — BF-2026-10-19-14:** use the configured in-app/system browser for this

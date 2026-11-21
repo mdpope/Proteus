@@ -1,0 +1,26 @@
+.openrouter-model-dialog {
+  width: min(44rem, calc(100vw - 2rem));
+  max-height: min(44rem, calc(100dvh - 2rem));
+}
+.openrouter-model-dialog input { width: 100%; }
+.openrouter-model-results {
+  max-height: min(28rem, 56dvh);
+  overflow-y: auto;
+  margin-block: .5rem;
+}
+.openrouter-model-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: .5rem;
+  padding-block: .25rem;
+  border-bottom: 1px solid var(--line);
+}
+.openrouter-model-choice {
+  display: grid;
+  justify-items: start;
+  gap: .2rem;
+  text-align: start;
+  overflow-wrap: anywhere;
+}
+.openrouter-model-star[aria-pressed="true"] { color: var(--accent); }

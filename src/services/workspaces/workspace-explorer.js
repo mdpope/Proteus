@@ -8,6 +8,7 @@ import {readFilePreview,TEXT_PREVIEW_LIMIT} from './workspace-preview.js';
 import {languageForName} from '../../shared/file-kind.js';
 import {atomicRenameAsync} from '../../shared/atomic-rename.cjs';
 import {randomUUID} from 'node:crypto';
+import {writePastedAsset,writeAsset} from '../../shared/pasted-document-assets.js';
 
 const identity=s=>[s.dev,s.ino,s.size,s.mtimeMs].join(':'),identityOf=identity;
 const fileTypes={md:['text/markdown','markdown'],png:['image/png','image'],jpg:['image/jpeg','image'],jpeg:['image/jpeg','image'],gif:['image/gif','image'],webp:['image/webp','image'],pdf:['application/pdf','pdf'],json:['application/json','code'],js:['text/javascript','code'],jsx:['text/jsx','code'],ts:['text/typescript','code'],tsx:['text/tsx','code'],py:['text/x-python','code'],swift:['text/x-swift','code'],sh:['text/x-shellscript','code'],c:['text/x-c','code'],cpp:['text/x-c++','code'],rs:['text/x-rust','code'],go:['text/x-go','code'],php:['text/x-php','code'],rb:['text/x-ruby','code'],java:['text/x-java-source','code'],html:['text/html','code'],css:['text/css','code'],xml:['application/xml','code'],yaml:['application/yaml','code'],yml:['application/yaml','code'],txt:['text/plain','file'],log:['text/plain','file'],csv:['text/csv','file'],mp3:['audio/mpeg','audio'],wav:['audio/wav','audio'],m4a:['audio/mp4','audio'],flac:['audio/flac','audio'],mp4:['video/mp4','video'],mov:['video/quicktime','video'],webm:['video/webm','video']};
@@ -36,10 +37,17 @@ export class WorkspaceExplorer {
   // checks root/link identity under the current device grant before reading.
   return {workspaceId,rootId:root.id,file:path.relative(root.path,file).split(path.sep).join('/')};
  }
- async browse({workspaceId,rootId,directory='',offset=0,query='',sort='name',direction='asc',foldersOnly=false}={}, {signal}={}){
+ async browse({workspaceId,rootId,directory='',offset=0,query='',sort='name',direction='asc',foldersOnly=false,pathSearch=false}={}, {signal}={}){
   if(!Number.isSafeInteger(offset)||offset<0||offset>5000||typeof query!=='string'||query.length>160)throw Error('Invalid file search or page.');
   const files=this.files(workspaceId),base=files.resolve(rootId,directory,true),pending=[{file:base.resolved,relative:base.relative,depth:0}],seen=new Set(),entries=[];
   let scanned=0,limited=false;const needle=query.trim().toLocaleLowerCase();
+  const normalize=value=>value.toLowerCase().normalize('NFKD').replace(/\p{Diacritic}/gu,'');
+  const words=pathSearch?normalize(needle).split(/\s+/).filter(Boolean):[];
+  const matches=(name,relative)=>{
+   if(!needle)return true;
+   if(!pathSearch)return name.toLowerCase().includes(needle);
+   const value=normalize(relative);return words.every(word=>value.includes(word));
+  };
   while(pending.length){
    signal?.throwIfAborted();const current=pending.shift();if(seen.has(current.file))continue;seen.add(current.file);
    // Resolve again immediately before opening, including every search child.
@@ -51,7 +59,7 @@ export class WorkspaceExplorer {
      const actual=await fs.realpath(path.join(current.file,entry.name));if(!within(actual,base.canonicalRoot))continue;
      const stat=await fs.stat(actual);if(!stat.isFile()&&!stat.isDirectory())continue;
      const type=kind(entry.name,stat.isDirectory());
-     if((!foldersOnly||stat.isDirectory())&&(!needle||entry.name.toLocaleLowerCase().includes(needle)))entries.push({name:entry.name,path:relative,kind:type,identity:identity(stat),type:type==='folder'?'folder':mime(entry.name),size:stat.isFile()?stat.size:null,...fileDates(stat),symlink:entry.isSymbolicLink()});
+     if((!foldersOnly||stat.isDirectory())&&matches(entry.name,relative))entries.push({name:entry.name,path:relative,kind:type,identity:identity(stat),type:type==='folder'?'folder':mime(entry.name),size:stat.isFile()?stat.size:null,...fileDates(stat),symlink:entry.isSymbolicLink()});
      if(needle&&stat.isDirectory()){if(current.depth<12)pending.push({file:actual,relative,depth:current.depth+1});else limited=true;}
     }catch(error){if(error.name==='AbortError')throw error;/* Changing/unreadable entries are skipped, never followed elsewhere. */}
    }}finally{await handle.close().catch(()=>{});}
@@ -121,6 +129,25 @@ export class WorkspaceExplorer {
  // Saving a text document is a human edit: it needs the same Edit-files grant as
  // other mutations (enforced by the transport) and the identity returned by preview,
  // so a file that changed on disk is never overwritten silently.
+ async paste({workspaceId,rootId,file,data,mediaType}={}){
+  if(typeof file!=='string'||! /\.(md|markdown)$/i.test(file)||file.split('/').some(part=>['.git','.agents','.codex','.aws'].includes(part)))throw Error('Choose an editable Markdown file first.');
+  const target=this.files(workspaceId).resolve(rootId,file);
+  const stat=await fs.lstat(target.resolved);
+  if(!stat.isFile() || await fs.realpath(path.join(target.canonicalRoot,file))!==path.join(target.canonicalRoot,file))throw Error('Linked paths cannot be modified.');
+  return writePastedAsset({data,mediaType},name=>path.join(path.dirname(target.resolved),name));
+ }
+ imageFolder({workspaceId,rootId,directory=''},mediaType){
+  if(!['image/png','image/jpeg'].includes(mediaType)||typeof directory!=='string'||directory.split('/').some(part=>['.git','.agents','.codex','.aws'].includes(part)))throw Error('Choose an editable workspace folder and a PNG or JPEG image.');
+  const target=this.files(workspaceId).resolve(rootId,directory,true);
+  if(target.resolved!==path.join(target.canonicalRoot,target.relative))throw Error('Linked paths cannot be modified.');
+  return name=>path.join(target.resolved,name);
+ }
+ importImage({data,mediaType,...binding}={}){
+  return writePastedAsset({data,mediaType},this.imageFolder(binding,mediaType),{prefix:'Screenshot'});
+ }
+ importScreenshot(binding,{bytes,type}){
+  return writeAsset({bytes,mediaType:type},this.imageFolder(binding,type),'Screenshot');
+ }
  async save({workspaceId,rootId,file,content,identity}={}){
   if(typeof content!=='string'||Buffer.byteLength(content,'utf8')>TEXT_PREVIEW_LIMIT||content.includes('\0'))throw Error('Saved text must be UTF-8 text no larger than 2 MB.');
   if(typeof identity!=='string'||!identity)throw Error('Reload the file before saving it.');

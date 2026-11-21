@@ -19,7 +19,14 @@ export function revealNewTabs(list,key,selector,getId){
   const record=prior||{ids:new Set(ids),pending:null,frame:null,tracked:null};
   const added=prior?ids.filter(id=>!record.ids.has(id)):[];
   record.ids=new Set(ids);record.list=list;record.selector=selector;record.getId=getId;
-  if(added.length){record.pending=added.at(-1);record.tracked=record.pending;record.expires=Date.now()+10000;}
+  if(added.length){
+    record.pending=added.at(-1);record.tracked=record.pending;record.expires=Date.now()+10000;
+    const addedNode=nodes[ids.indexOf(record.pending)];
+    record.linked=addedNode.hasAttribute('data-linked-insertion');
+    if(record.linked&&!matchMedia('(prefers-reduced-motion: reduce)').matches){
+      addedNode.firstElementChild?.animate([{transform:'translateX(8px)'},{transform:'translateX(0)'}],{duration:160,easing:'ease-out'});
+    }
+  }
   revealedStrips.delete(key);revealedStrips.set(key,record);
   const stopTracking=()=>{record.resize?.disconnect();record.observedList=null;record.observedTab=null;clearTimeout(record.expiry);};
   while(revealedStrips.size>128){const oldest=revealedStrips.keys().next().value,expired=revealedStrips.get(oldest);expired.resize?.disconnect();clearTimeout(expired.expiry);revealedStrips.delete(oldest);}
@@ -34,7 +41,11 @@ export function revealNewTabs(list,key,selector,getId){
     record.frame=null;const current=record.list;if(!current.isConnected)return;
     const tab=[...current.querySelectorAll(record.selector)].find(node=>record.getId(node)===(record.pending||record.tracked));
     if(!tab){stopTracking();return;}
-    revealWholeTab(current,tab);record.pending=null;
+    if(record.linked){
+      const overflow=tab.getBoundingClientRect().right-current.getBoundingClientRect().right;
+      if(overflow>0)current.scrollLeft+=overflow;
+    }else revealWholeTab(current,tab);
+    record.pending=null;
     if(record.observedList!==current||record.observedTab!==tab){
       stopTracking();record.observedList=current;record.observedTab=tab;
       record.resize=new ResizeObserver(schedule);record.resize.observe(current);record.resize.observe(tab);

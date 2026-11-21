@@ -7,6 +7,7 @@ struct LifeHomeWorkspaceView: View {
     @EnvironmentObject private var life: LifeStore
     @EnvironmentObject private var shared: SharedAppStore
     @EnvironmentObject private var destinations: DestinationStore
+    @EnvironmentObject private var chrome: NativePhoneChrome
     @State private var selected = "smart"
     @State private var dashboardID = ""
     @State private var chats: [NativeContentTab] = []
@@ -23,24 +24,30 @@ struct LifeHomeWorkspaceView: View {
     }
     var body: some View {
         VStack(spacing: 0) {
-            NativeTabStrip(ids: ["smart", "assistant"] + children.map(\.id), selection: selected == dashboardID ? "assistant" : selected) {
+            NativeFeatureStrip(sidebar: NativePhonePreview.enabled, add: addBrowser, addIdentifier: "life-home-add-tab", ids: ["smart", "assistant"] + children.map(\.id), selection: selected == dashboardID ? "assistant" : selected) {
                 HStack(spacing: 0) {
-                    tab("smart", title: "Smart Home", symbol: "house") { selected = "smart" }
-                    tab("assistant", title: "Home Assistant", symbol: "globe") { Task { await openAssistant() } }
+                    NativeFeatureTab(title: NativePadPreview.enabled ? "Devices" : "Smart Home", symbol: "house", identifier: "life-home-tab-smart", selected: selected == "smart", action: { selected = "smart" }).id("smart")
+                    NativeFeatureTab(title: "Home Assistant", symbol: "globe", identifier: "life-home-tab-assistant", selected: selected == "assistant" || selected == dashboardID, action: { Task { await openAssistant() } }).id("assistant")
                     ForEach(children) { item in
-                        HStack(spacing: 0) {
-                            tab(item.id, title: item.title, symbol: NativeTabSymbol.name(kind: item.kind)) { select(item.id) }
-                            Button { close(item.id) } label: { Image(systemName: "xmark").frame(width: 36, height: 44) }.buttonStyle(.plain).accessibilityLabel("Close " + item.title)
-                        }
-                        Divider().frame(height: 24)
+                        NativeFeatureTab(title: item.title, symbol: NativeTabSymbol.name(kind: item.kind), icon: item.kind == "browser" ? shared.browserFavicon(item.id) : nil, identifier: "life-home-tab-" + item.id, selected: selected == item.id, action: { select(item.id) }, close: { close(item.id) }).id(item.id)
                     }
-                    Button { addBrowser() } label: { Image(systemName: "plus").frame(width: 44, height: 44) }.buttonStyle(.plain).accessibilityLabel("Add Smart Home tab")
                 }
-            }.nativeTabBar().accessibilityIdentifier("life-home-tabs")
-            Divider()
-            if let failure { Text(failure).font(.callout).foregroundStyle(.secondary).padding(12) }
+            }.accessibilityElement(children: .contain).accessibilityIdentifier("life-home-tabs")
             if selected == "smart" {
                 LifeHomeView(openDashboard: { url in Task { await openAssistant(url) } })
+            } else if selected == "assistant" {
+                if opening {
+                    ProgressView("Opening Home Assistant…").frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    ContentUnavailableView {
+                        Label("Home Assistant setup", systemImage: "house")
+                    } description: {
+                        Text(failure ?? "Connect Home Assistant under Life → Smart Home on the computer paired with Proteus. Sign in to the same Life account on both devices.")
+                    } actions: {
+                        Button("Open Smart Home") { selected = "smart" }
+                        Button("Try again") { Task { await openAssistant() } }
+                    }.accessibilityIdentifier("life-home-assistant-setup")
+                }
             } else if let item = chats.first(where: { $0.id == selected }), let host = item.hostID, let remote = destinations.remote(for: host) {
                 if let setup = item.setup {
                     NewChatView(internet: setup.internet, lockedWorkspaceID: setup.workspaceID, lockedProjectID: setup.projectID, draftKey: setup.draftKey, onCancel: { close(item.id) }) { id in
@@ -52,7 +59,7 @@ struct LifeHomeWorkspaceView: View {
                     ChatView(id: id, onBack: { selected = "smart" }).environment(remote).id(item.id)
                 }
             } else if browsers.contains(where: { $0.id == selected }) {
-                TeamBrowserView(scope: scope, showTabs: false, tabID: selected, onBackToList: { selected = "smart" }, newTabOptions: [
+                TeamBrowserView(scope: scope, showTabs: false, tabID: selected, featureChrome: true, onBackToList: { selected = "smart" }, newTabOptions: [
                     NativeNewTabAction(title: "New chat", symbol: "bubble.left.and.bubble.right", enabled: destinations.selected?.connected == true, replacesBlank: false, run: { addChat(false) }),
                     NativeNewTabAction(title: "Internet Search", symbol: "magnifyingglass", enabled: destinations.selected?.connected == true, replacesBlank: false, run: { addChat(true) })
                 ])
@@ -60,20 +67,38 @@ struct LifeHomeWorkspaceView: View {
                 ContentUnavailableView("Tab unavailable", systemImage: "network.slash", description: Text("Reconnect its computer or choose Smart Home."))
             }
         }.background(NativeTheme.background)
-            .task(id: namespace) { restore() }
+            .task(id: namespace) { restore(); syncOverview() }
+            .onChange(of: selected) { _, _ in syncOverview() }
+            .onChange(of: dashboardID) { _, _ in syncOverview() }
+            .onChange(of: children.map { $0.id + "|" + $0.title }) { _, _ in syncOverview() }
+            .onDisappear { chrome.removeFeatureTabs("feature:life:" + namespace) }
             .onChange(of: shared.selected(in: scope)) { _, id in
                 if let id, selected != "smart", !chats.contains(where: { $0.id == selected }) { selected = id }
             }
+            .onChange(of: browsers.map { $0.id + "|" + String($0.hidden) }) { _, _ in syncOverview() }
             .onChange(of: browsers.map(\.id)) { _, ids in
                 order = order.filter { id in ids.contains(id) || chats.contains(where: { $0.id == id }) }
                 for id in ids where !order.contains(id) { order.append(id) }
                 save()
             }
     }
-    private func tab(_ id: String, title: String, symbol: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) { NativeContentTabLabel(title: title, symbol: symbol).padding(.horizontal, 14).frame(height: 44) }
-            .buttonStyle(.plain).background((selected == id || id == "assistant" && selected == dashboardID) ? NativeTheme.surface : Color.clear)
-            .accessibilityElement(children: .ignore).accessibilityLabel(title).accessibilityIdentifier("life-home-tab-" + id)
+    private func syncOverview() {
+        let group = "feature:life:" + namespace
+        let master = NativePhoneTab(id: group + ":smart", title: "Smart Home", symbol: "house", detail: "Life", section: "Smart Home", sectionID: group, preview: nil, select: { selected = "smart" })
+        let browserByID = Dictionary(uniqueKeysWithValues: browsers.map { ($0.id, $0) })
+        let tabs = browsers.filter { !$0.hidden && $0.id == dashboardID }.map {
+            NativeContentTab(id: $0.id, title: shared.browserLabel($0), kind: "browser", hostID: $0.ownerHostId)
+        } + children
+        let setup = NativePhoneTab(id: group + ":assistant", title: "Home Assistant", symbol: "globe", detail: "Life", section: "Smart Home", sectionID: group, preview: nil, select: { Task { await openAssistant() } })
+        let items = [master] + (dashboardID.isEmpty || browserByID[dashboardID] == nil ? [setup] : []) + tabs.map { tab in
+            let browser = browserByID[tab.id]
+            return NativePhoneTab(id: browser == nil ? group + ":" + tab.id : "browser:" + tab.id,
+                title: tab.title, symbol: browser?.incognito == true ? "eye.slash" : NativeTabSymbol.name(kind: tab.kind),
+                detail: "Life", section: "Smart Home", sectionID: group, preview: nil, select: { select(tab.id) },
+                close: { close(tab.id) }, browserID: browser?.id)
+        }
+        let current = selected == "smart" ? master.id : browserByID[selected] != nil ? "browser:" + selected : group + ":" + selected
+        chrome.replaceFeatureTabs(group, items: items, current: current)
     }
     private func select(_ id: String) { selected = id; if browsers.contains(where: { $0.id == id }) { shared.select(id, in: scope) } }
     private func addBrowser() { if let id = shared.open(nil, scope: scope, afterSourceID: selected) { selected = id } }
@@ -91,7 +116,8 @@ struct LifeHomeWorkspaceView: View {
         chats.removeAll { $0.id == id }; order.removeAll { $0 == id }; if selected == id { selected = "smart" }; save()
     }
     private func openAssistant(_ supplied: URL? = nil) async {
-        guard !opening else { return }; opening = true; defer { opening = false }
+        selected = "assistant"
+        guard !opening else { return }; opening = true; failure = nil; defer { opening = false }
         let account = life.accountIdentity
         do {
             var url = supplied
@@ -101,7 +127,7 @@ struct LifeHomeWorkspaceView: View {
                 guard value["accountId"].string == life.credential?.accountID else { throw RemoteError(message: "This computer is signed in to another Life account.") }
                 url = URL(string: value["origin"].string)
             }
-            guard account == life.accountIdentity else { return }
+            guard account == life.accountIdentity, selected == "assistant" else { return }
             guard let url, ["http", "https"].contains(url.scheme ?? ""), url.host != nil, url.user == nil, url.password == nil else { throw RemoteError(message: "Connect Home Assistant in Smart Home first.") }
             if let existing = browsers.first(where: { $0.id == dashboardID }) {
                 if let old = existing.url.flatMap(URL.init(string:)), old.host != url.host || old.port != url.port || old.scheme != url.scheme { _ = shared.navigate(url, in: existing.id) }

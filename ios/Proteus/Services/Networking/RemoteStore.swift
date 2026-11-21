@@ -106,6 +106,8 @@ struct RemoteHostInfo: Equatable {
     var status = "Not paired"
     var connected = false
     var runtimeClockOffset: TimeInterval?
+    private(set) var operationsVerified = false
+    private(set) var operationsObservedAt: Date?
     var error: String?
     var selectedChat: String?
     @ObservationIgnored private var chatVisibilityManaged = false
@@ -119,6 +121,7 @@ struct RemoteHostInfo: Equatable {
     var onPaired: ((DeviceConnection) throws -> Void)?
     var onConnected: (() -> Void)?
     var onHostName: ((String) -> Void)?
+    var onComputerOrder: (([String]) -> Void)?
     var onChatDeleted: ((String) -> Void)?
     var onAuthenticatedRevocation: (() -> Void)?
     private var cacheRoot: URL?
@@ -167,6 +170,7 @@ struct RemoteHostInfo: Equatable {
         self.connection = connection; paired = connection != nil
         if let connection, let data = try? Data(contentsOf: cacheURL), let cache = try? RemoteCrypto.open(String(decoding: data, as: UTF8.self), key: connection.key, aad: "proteus-cache-v1") {
             state = cache["state"]; chats = cache["chats"].object; allRuns = cache["allRuns"].array; allRunOffset = allRuns.count; cursor = cache["cursor"].string; drafts = cache["drafts"].object; draftRevision &+= 1; status = "Offline · cached history"
+            operationsObservedAt = ProviderAllowance.date(cache["operationsObservedAt"].string)
             providerStatuses = state["providerStatuses"].object; modelStatus = state["providerStatus"]; models = modelStatus["models"].array
         }
     }
@@ -412,7 +416,7 @@ struct RemoteHostInfo: Equatable {
                     let result = value["event"].string == "state" ? await stream.full(value["data"], version: value.object["stateVersion"]?.string) : await stream.patch(value["data"])
                     guard generation == current, wireState === stream else { return }
                     if value["event"].string == "state.patch", case .update = result { appliedStatePatchCount &+= 1 }
-                    acceptWireState(result)
+                    acceptWireState(result, observedAt: value["ownerObservedAt"].string)
                     return
                 }
                 if value["event"].string == "tabs" { onContentTabsChanged?(value["data"]) }
@@ -489,13 +493,29 @@ struct RemoteHostInfo: Equatable {
             try? await transmit(command)
         }
     }
-    private func acceptWireState(_ result: NativeRemoteStateStream.Result) {
+    private func acceptWireState(_ result: NativeRemoteStateStream.Result, observedAt: String, confirmedSync: Bool = false) {
         switch result {
         case .update(let value, let revision):
             guard revision > appliedWireRevision else { return }
-            appliedWireRevision = revision; updateState(value); saveCache()
-        case .ignored: break
+            appliedWireRevision = revision
+            updateState(value)
+            observeOperations(observedAt)
+            saveCache()
+        case .ignored:
+            if confirmedSync {
+                observeOperations(observedAt)
+                saveCache()
+            }
         case .resync: Task { await self.refresh(forceState: true) }
+        }
+    }
+    private func observeOperations(_ timestamp: String) {
+        operationsVerified = connected
+        if let observed = ProviderAllowance.date(timestamp) {
+            operationsObservedAt = observed
+            runtimeClockOffset = observed.timeIntervalSinceNow
+        } else {
+            operationsObservedAt = Date()
         }
     }
     func refresh(forceState: Bool = false) async {
@@ -531,7 +551,7 @@ struct RemoteHostInfo: Equatable {
             let result = await stream.sync(reply)
             guard current == generation, stream === wireState else { return }
             cursor = reply["cursor"].string
-            acceptWireState(result)
+            acceptWireState(result, observedAt: reply["ownerObservedAt"].string, confirmedSync: reply["unchanged"].bool)
         } catch { if current == generation { self.error = error.localizedDescription } }
     }
     func updateState(_ value: JSON) {
@@ -545,8 +565,17 @@ struct RemoteHostInfo: Equatable {
         if !NativeProjectCatalog(raw: value["workspaceProjects"]).isValid, projectCatalog.isValid { object["workspaceProjects"] = state["workspaceProjects"] }
         let next = JSON.object(object)
         if state != next { state = next }
-        if connected { onHostName?(value["hostName"].string) }
-        let statuses = value["providerStatuses"].object
+        if connected {
+            onHostName?(value["hostName"].string)
+            if case .array(let order) = value["computerOrder"] { onComputerOrder?(order.map(\.string)) }
+        }
+        var statuses = value["providerStatuses"].object
+        if var summary = statuses["openrouter"]?.object,
+           let previous = providerStatuses["openrouter"], previous["models"] != .null,
+           summary["available"] == .bool(true), summary["checkedAt"] == previous["checkedAt"] {
+            summary["models"] = previous["models"]
+            statuses["openrouter"] = .object(summary)
+        }
         if providerStatuses != statuses { providerStatuses = statuses }
         if value["providerStatus"] != .null, modelStatus != value["providerStatus"] { modelStatus = value["providerStatus"]; models = modelStatus["models"].array }
     }
@@ -715,24 +744,8 @@ struct RemoteHostInfo: Equatable {
         let incomingAt = ProviderAllowance.date(value["observedAt"].string) ?? ProviderAllowance.date(value["updatedAt"].string) ?? .distantPast
         let previousAt = ProviderAllowance.date(old["observedAt"].string) ?? ProviderAllowance.date(old["updatedAt"].string) ?? .distantPast
         let incomingIsCurrent = incomingAt >= previousAt && value["eventCount"].int >= old["eventCount"].int
-        var events: [Int: JSON] = [:]
-        for page in old["retainedHistory"].array + (incomingIsCurrent ? [old, value] : [value, old]) {
-            for (index, event) in page["events"].array.enumerated() { events[page["eventStart"].int + index] = event }
-        }
-        if incomingIsCurrent {
-            for patch in value["eventPatches"].array {
-                guard case .number(let index) = patch["index"], index.isFinite, index >= 0,
-                      index.rounded(.down) == index, index < Double(value["eventCount"].int),
-                      patch["event"] != .null else { return }
-                events[Int(index)] = patch["event"]
-            }
-        }
-        var pages: [(start: Int, events: [JSON])] = []
-        for key in events.keys.sorted() {
-            if let last = pages.last, last.start + last.events.count == key { pages[pages.count - 1].events.append(events[key]!) }
-            else { pages.append((key, [events[key]!])) }
-        }
-        let latest = pages.popLast() ?? (start: 0, events: [])
+        guard let (latest, retained) = Self.streamingChatPage(value, previous: old, isCurrent: incomingIsCurrent)
+            ?? Self.mergeChatPages(value, previous: old, isCurrent: incomingIsCurrent) else { return }
         var merged = (incomingIsCurrent ? value : old).object
         // A field delta carries only changed metadata; the rest stays what this chat
         // already holds. Removals survive a late older page until a newer value returns.
@@ -748,8 +761,53 @@ struct RemoteHostInfo: Equatable {
         merged.removeValue(forKey: "eventPatches")
         merged["events"] = .array(latest.events)
         merged["eventStart"] = .number(Double(latest.start)); merged["earlier"] = merged["eventStart"]
-        merged["retainedHistory"] = .array(pages.map { .object(["eventStart": .number(Double($0.start)), "events": .array($0.events)]) })
+        merged["retainedHistory"] = retained
         chats[id] = .object(merged); saveCache()
+    }
+
+    private typealias ChatPage = (start: Int, events: [JSON])
+
+    /// Normal streaming patches touch the contiguous latest page. Keep sparse
+    /// history out of this hot path and leave old-page repairs to the general merge.
+    private nonisolated static func streamingChatPage(_ value: JSON, previous: JSON, isCurrent: Bool) -> (ChatPage, JSON)? {
+        let retained = previous["retainedHistory"].array
+        let start = previous["eventStart"].int
+        var events = previous["events"].array
+        guard isCurrent, value["eventPatches"] != .null, value["events"].array.isEmpty, !events.isEmpty,
+              retained.last.map({ $0["eventStart"].int + $0["events"].array.count < start }) != false else { return nil }
+        let count = Double(value["eventCount"].int)
+        for patch in value["eventPatches"].array {
+            guard case .number(let index) = patch["index"], index.isFinite,
+                  index >= Double(start), index < count, index.rounded(.down) == index,
+                  patch["event"] != .null else { return nil }
+            let offset = Int(index) - start
+            if offset < events.count { events[offset] = patch["event"] }
+            else if offset == events.count { events.append(patch["event"]) }
+            else { return nil }
+        }
+        return ((start, events), .array(retained))
+    }
+
+    private nonisolated static func mergeChatPages(_ value: JSON, previous old: JSON, isCurrent incomingIsCurrent: Bool) -> (ChatPage, JSON)? {
+        var events: [Int: JSON] = [:]
+        for page in old["retainedHistory"].array + (incomingIsCurrent ? [old, value] : [value, old]) {
+            for (index, event) in page["events"].array.enumerated() { events[page["eventStart"].int + index] = event }
+        }
+        if incomingIsCurrent {
+            for patch in value["eventPatches"].array {
+                guard case .number(let index) = patch["index"], index.isFinite, index >= 0,
+                      index.rounded(.down) == index, index < Double(value["eventCount"].int),
+                      patch["event"] != .null else { return nil }
+                events[Int(index)] = patch["event"]
+            }
+        }
+        var pages: [(start: Int, events: [JSON])] = []
+        for key in events.keys.sorted() {
+            if let last = pages.last, last.start + last.events.count == key { pages[pages.count - 1].events.append(events[key]!) }
+            else { pages.append((key, [events[key]!])) }
+        }
+        let latest = pages.popLast() ?? (start: 0, events: [])
+        return (latest, .array(pages.map { .object(["eventStart": .number(Double($0.start)), "events": .array($0.events)]) }))
     }
 
     func loadModels(force: Bool = false, provider: String = "copilot") async {
@@ -800,14 +858,15 @@ struct RemoteHostInfo: Equatable {
         }
     }
     private func lost() {
-        socket?.cancel(with: .goingAway, reason: nil); socket = nil; connected = false; status = paired ? "\(displayName) offline · reconnecting" : "Pairing connection lost"
+        socket?.cancel(with: .goingAway, reason: nil); socket = nil; connected = false; operationsVerified = false; status = paired ? "\(displayName) offline · reconnecting" : "Pairing connection lost"
         if active && (paired || invite != nil) { retryTask?.cancel(); retryTask = Task { try? await Task.sleep(for: .seconds(3)); if !Task.isCancelled { connect() } } }
     }
-    func disconnect() { sentRequests = []; capacityWaiter?.resume(); capacityWaiter = nil; generation = UUID(); readTask?.cancel(); retryTask?.cancel(); socket?.cancel(with: .goingAway, reason: nil); socket = nil; connected = false; status = paired ? "Offline · cached history" : "Not paired" }
-    func forget() { active = false; suspend(); if legacyCredentials { DeviceKeychain.clear() }; connection = nil; invite = nil; paired = false; wireState = NativeRemoteStateStream(); appliedWireRevision = 0; state = .null; chats = [:]; allRuns = []; allRunOffset = 0; drafts = [:]; draftRevision &+= 1; selectedChat = nil; visibleChat = nil; chatVisibilityManaged = false; cursor = ""; cacheTimer?.cancel(); removeCache(); for c in waiting.values { c.resume(throwing: RemoteError(message: "Device forgotten.")) }; waiting.removeAll(); pendingCommands.removeAll(); timeouts.values.forEach { $0.cancel() }; timeouts.removeAll() }
+    func disconnect() { sentRequests = []; capacityWaiter?.resume(); capacityWaiter = nil; generation = UUID(); readTask?.cancel(); retryTask?.cancel(); socket?.cancel(with: .goingAway, reason: nil); socket = nil; connected = false; operationsVerified = false; status = paired ? "Offline · cached history" : "Not paired" }
+    func forget() { active = false; suspend(); if legacyCredentials { DeviceKeychain.clear() }; connection = nil; invite = nil; paired = false; wireState = NativeRemoteStateStream(); appliedWireRevision = 0; state = .null; operationsObservedAt = nil; chats = [:]; allRuns = []; allRunOffset = 0; drafts = [:]; draftRevision &+= 1; selectedChat = nil; visibleChat = nil; chatVisibilityManaged = false; cursor = ""; cacheTimer?.cancel(); removeCache(); for c in waiting.values { c.resume(throwing: RemoteError(message: "Device forgotten.")) }; waiting.removeAll(); pendingCommands.removeAll(); timeouts.values.forEach { $0.cancel() }; timeouts.removeAll() }
     // A host switch never leaves a retry behind. Commands already accepted by the host continue there.
     func suspend(reason: String = "Computer selection changed. An unconfirmed action may have reached that computer; refresh its history before retrying.") {
-        flushCache(); active = false; disconnect(); sendTask?.cancel(); sendTask = nil
+        if cacheDirtySince != nil { flushCacheInBackground() }
+        active = false; disconnect(); sendTask?.cancel(); sendTask = nil
         for continuation in waiting.values { continuation.resume(throwing: RemoteError(message: reason)) }
         waiting.removeAll(); pendingCommands.removeAll(); timeouts.values.forEach { $0.cancel() }; timeouts.removeAll()
     }
@@ -833,7 +892,9 @@ struct RemoteHostInfo: Equatable {
         flushCache()
     }
     private func cachePayload() -> JSON {
-        .object(["state": state, "chats": .object(chats), "allRuns": .array(Array(allRuns.prefix(500))), "cursor": .string(cursor), "drafts": .object(drafts)])
+        var payload: [String: JSON] = ["state": state, "chats": .object(chats), "allRuns": .array(Array(allRuns.prefix(500))), "cursor": .string(cursor), "drafts": .object(drafts)]
+        if let operationsObservedAt { payload["operationsObservedAt"] = .string(operationsObservedAt.ISO8601Format()) }
+        return .object(payload)
     }
     private nonisolated static func writeCache(_ payload: JSON, key: String, url: URL) {
         do {
@@ -891,6 +952,7 @@ private struct DestinationIndex: Codable {
     var version = 1
     var selectedID: String?
     var destinations: [HostDestination] = []
+    var computerOrder: [String]?
 }
 
 struct PairingCompletion: Equatable {
@@ -913,6 +975,7 @@ struct PairingCompletion: Equatable {
     private let root: URL
     private let service: String
     private var active = false
+    private var computerOrder: [String]?
     var selectedLabel: String { destinations.first { $0.id == selectedID }?.label ?? "Choose a computer" }
     var indexURL: URL { root.appendingPathComponent("destinations.json") }
     init(root: URL? = nil, keychainService: String = "org.proteusapp.proteus.mobile") {
@@ -922,7 +985,7 @@ struct PairingCompletion: Equatable {
             if FileManager.default.fileExists(atPath: indexURL.path) {
                 let index = try JSONDecoder().decode(DestinationIndex.self, from: Data(contentsOf: indexURL))
                 guard index.version == 1, index.destinations.allSatisfy({ UUID(uuidString: $0.id) != nil }), Set(index.destinations.map(\.id)).count == index.destinations.count else { throw RemoteError(message: "Saved computer destinations could not be read. Your pairing keys have been preserved.") }
-                destinations = index.destinations; selectedID = index.selectedID
+                destinations = index.destinations; selectedID = index.selectedID; computerOrder = index.computerOrder
             } else if let legacy = DeviceKeychain.load(service: service) {
                 guard UUID(uuidString: legacy.hostId) != nil else { throw RemoteError(message: "The existing computer pairing is invalid; its key has been preserved.") }
                 try DeviceKeychain.save(legacy, hostID: legacy.hostId, service: service)
@@ -941,7 +1004,7 @@ struct PairingCompletion: Equatable {
     private func cacheRoot(_ id: String) -> URL { root.appendingPathComponent("hosts").appendingPathComponent(id) }
     private func persist() throws {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        let index = DestinationIndex(selectedID: selectedID, destinations: destinations)
+        let index = DestinationIndex(selectedID: selectedID, destinations: destinations, computerOrder: computerOrder)
         try JSONEncoder().encode(index).write(to: indexURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
         var url = indexURL; var attrs = URLResourceValues(); attrs.isExcludedFromBackup = true; try url.setResourceValues(attrs)
     }
@@ -969,7 +1032,35 @@ struct PairingCompletion: Equatable {
             self.hydrateHostLabel(label, for: id)
         }
         remote.onChatDeleted = { [weak self] chatID in self?.deletedChat = ChatDeletionEvent(hostID: id, chatID: chatID) }
+        remote.onComputerOrder = { [weak self, weak remote] order in
+            guard let self, let remote, self.stores[id] === remote, self.selected === remote,
+                  remote.connected, order.first?.lowercased() == id.lowercased() else { return }
+            self.applyComputerOrder(order)
+        }
         // RemoteStore is @Observable; views track the host values they read directly.
+    }
+    private func applyComputerOrder(_ ids: [String]) {
+        let order = ids.map { $0.lowercased() }
+        guard order.count <= 129, Set(order).count == order.count,
+              order.allSatisfy({ UUID(uuidString: $0) != nil }), order != computerOrder else { return }
+        let oldOrder = computerOrder, oldDestinations = destinations
+        computerOrder = order
+        let updated = sortedDestinations()
+        if updated != destinations { destinations = updated }
+        do { try persist() } catch {
+            computerOrder = oldOrder
+            if destinations != oldDestinations { destinations = oldDestinations }
+        }
+    }
+    private func sortedDestinations() -> [HostDestination] {
+        guard let computerOrder else { return destinations }
+        let ranks = Dictionary(computerOrder.enumerated().map { ($0.element, $0.offset) }, uniquingKeysWith: min)
+        return destinations.sorted { a, b in
+            let aRank = ranks[a.id.lowercased()] ?? Int.max, bRank = ranks[b.id.lowercased()] ?? Int.max
+            if aRank != bRank { return aRank < bRank }
+            let comparison = a.label.localizedStandardCompare(b.label)
+            return comparison == .orderedSame ? a.id < b.id : comparison == .orderedAscending
+        }
     }
     func hydrateHostLabel(_ label: String, for id: String) {
         let name = label.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1000,6 +1091,8 @@ struct PairingCompletion: Equatable {
         let name = label.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty, name.count <= 80, let index = destinations.firstIndex(where: { $0.id == id }) else { throw RemoteError(message: "Give this computer a name of 1–80 characters.") }
         let previous = destinations; destinations[index].label = name
+        let updated = sortedDestinations()
+        if updated != destinations { destinations = updated }
         do { try persist() } catch { destinations = previous; throw error }
     }
     func add(_ code: String, label: String) throws {
@@ -1033,6 +1126,8 @@ struct PairingCompletion: Equatable {
         try DeviceKeychain.save(connection, hostID: id, service: service)
         if let index = destinations.firstIndex(where: { $0.id == id }) { destinations[index].label = label }
         else { destinations.append(HostDestination(id: id, label: label)) }
+        let updated = sortedDestinations()
+        if updated != destinations { destinations = updated }
         selectedID = id
         do { try persist() } catch {
             destinations = previous; selectedID = previousID

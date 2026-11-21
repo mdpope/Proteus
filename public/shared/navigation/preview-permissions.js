@@ -5,6 +5,7 @@ export const previewPermissionLimits='Folder access covers file requests, not pe
 const ruleText=rule=>rule.kind==='shell'?rule.command:rule.kind==='url'?rule.origin:`${rule.server?rule.server+' / ':''}${rule.tool}${rule.action?' / '+rule.action:''}`;
 export function previewChatModeToggle(context){
  const mode=context.chatMode||'inherit';
+ if(context.scopedCommands)return `<p class="note">This run uses the schedule’s scoped command approvals.</p>${mode==='inherit'?'':'<button type="button" data-preview-chat-mode="inherit" aria-pressed="false">Use schedule permissions</button>'}`;
  return `<div class="preview-mode-toggle" role="group" aria-label="Chat approval">${Object.entries({inherit:'Use workspace',ask:'Ask',custom:'Saved permissions',autopilot:'Auto-approve tools'}).map(([value,label])=>`<button type="button" data-preview-chat-mode="${value}" aria-pressed="${mode===value}">${label}</button>`).join('')}</div>`;
 }
 export function previewApprovalDetails(context,{workspaceName}={}){
@@ -47,9 +48,12 @@ export function previewRememberEffect(pending,value){
 export function previewApprovalRequest(pending){
  const d=pending.details||{},kind=d.kind;
  const connection=[d.serverLabel&&d.serverLabel!==d.serverName?d.serverLabel:null,d.serverName].filter(Boolean).join(' · ');
- const action=kind==='mcp-connect'?`Connect ${connection||'server'} for this turn?`:kind==='folder-access'?'Add folder access?':kind==='shell'?'Run command?':kind==='write'?'Edit file?':kind==='read'?'Read files?':kind==='mcp'&&d.toolName==='*'?'Enable all connection tools?':kind==='mcp'?'Use connected tool?':kind==='url'?'Open website?':'Allow app action?';
- const target=kind==='mcp-connect'?(d.managed?'Managed connection':'Selected MCP server')+' · connects for this turn only':d.resolvedPath||d.fileName||d.path||d.url||(kind==='mcp'?[d.serverName,d.toolName==='*'?'All tools':d.toolName].filter(Boolean).join(' · '):kind==='shell'?d.fullCommandText:[d.toolName,d.args?.action].filter(Boolean).join(' · '));
+ const action=kind==='scoped-command'?'Run scoped command?':kind==='mcp-connect'?`Connect ${connection||'server'} for this turn?`:kind==='folder-access'?'Add folder access?':kind==='shell'?'Run command?':kind==='write'?'Edit file?':kind==='read'?'Read files?':kind==='mcp'&&d.toolName==='*'?'Enable all connection tools?':kind==='mcp'?'Use connected tool?':kind==='url'?'Open website?':'Allow app action?';
+ const target=kind==='scoped-command'?pending.question:kind==='mcp-connect'?(d.managed?'Managed connection':'Selected MCP server')+' · connects for this turn only':d.resolvedPath||d.fileName||d.path||d.url||(kind==='mcp'?[d.serverName,d.toolName==='*'?'All tools':d.toolName].filter(Boolean).join(' · '):kind==='shell'?d.fullCommandText:[d.toolName,d.args?.action].filter(Boolean).join(' · '));
  const why=kind==='mcp-connect'?'Connecting does not approve its tools; each tool call keeps its own permission check.':kind==='folder-access'?'New folder access always needs your approval.':d.requestSandboxBypass?'Needs access beyond the current sandbox.':d.managedApprovalRequired?'The provider requires your approval.':pending.permissionReason==='Ask for approval'?'Your approval setting is Ask.':pending.permissionReason==='Outside trusted folders'?'Outside saved folder access.':pending.permissionReason||'No saved permission matches.';
  return `<div class="preview-approval-request"><strong>${esc(action)}</strong><div class="filepath">${esc(target||'Provider request')}</div><p class="note">${esc(why)}</p></div>`;
 }
-export function previewApprovalChoices(pending){return `${previewApprovalRequest(pending)}<div class="actions"><button id="deny">Deny</button><button class="primary" id="approve">${pending.details?.kind==='folder-access'?'Add folder to this chat':'Allow once'}</button>${previewRememberChoices(pending).length?'<button type="button" data-preview-remember>Remember…</button>':''}</div>`;}
+export function previewApprovalChoices(pending){
+ const exact=pending.details?.kind==='scoped-command'&&pending.permissionChoices?.some(choice=>choice.value==='allow-schedule');
+ return `${previewApprovalRequest(pending)}<div class="actions"><button id="deny">Deny</button><button class="primary" id="approve">${pending.details?.kind==='folder-access'?'Add folder to this chat':'Allow once'}</button>${exact?'<button type="button" data-preview-allow-exact-command>Remember exact command for schedule</button>':''}${previewRememberChoices(pending).length?'<button type="button" data-preview-remember>Remember…</button>':''}</div>`;
+}

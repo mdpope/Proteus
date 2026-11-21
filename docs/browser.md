@@ -1,3 +1,20 @@
+## Desktop DNS settings
+
+Browser Preferences on desktop defaults to the machine's resolver, with Chromium's built-in
+resolver and automatic DNS-over-HTTPS upgrades disabled. The machine may apply encryption or VPN
+DNS policies. Encrypted DNS is opt-in and uses an explicitly configured HTTPS POST endpoint.
+Chromium uses secure mode without falling back to machine DNS for browser lookups. The endpoint's
+hostname may still require bootstrap resolution. The setting applies after restarting Proteus and
+covers every Electron browser profile, including Incognito. Separate provider processes and OS
+network settings use their own resolver configuration.
+
+## Website notification settings
+
+Browser Preferences offers an exact-origin notification setting for each profile, including sites
+that have never prompted. Select Allow, Block or Ask. The address-bar privacy menu opens the
+same choices for the currently loaded site. Reload the site if it retains its prior permission
+display. The browser permission and Proteus system notification delivery use separate settings.
+
 ## Fox News Admiral filtering (N11-71)
 
 A bundled publisher-scoped rule blocks the observed Admiral engage loader script on Fox News.
@@ -226,6 +243,14 @@ port. Single-word input remains a search. Non-web schemes, credentials and local
 blocked. Network error documents display host and port and distinguish network-access failures
 from DNS and TLS failures. Mac bundles explain local-network use in their privacy declaration;
 this does not grant permission or bypass a denial.
+For a custom-port TLS protocol error, the page explains how to check the server’s HTTP or HTTPS
+configuration. Retry uses the original scheme and address.
+
+Teams HTTPS destinations on `teams.microsoft.com`, `teams.cloud.microsoft` and their subdomains
+use the regular Chromium user agent in default site mode, including when Microsoft redirects
+between the two hosts after sign-in. The explicit mobile preference stays available per profile.
+Inactive pages can continue navigating. Their popups open in background tabs and input focus
+stays in the current browser or Proteus surface.
 
 Failed main-frame certificates offer **Accept certificate and continue** on the error page.
 An adjacent **View certificate information** disclosure shows subject, issuer, validity dates,
@@ -337,12 +362,67 @@ agents can supply a provisional `title` when opening a tab. Project Tabs combine
 filtering with the existing type filter. Unloaded pages use the new-tab palette.
 
 macOS installed builds declare HTTP/HTTPS handlers and provide Engine Room registration/default
-and scoped repair controls. A green link picker groups all available projects by workspace,
-supports filtering/keyboard selection, and routes to the window displaying that project, then
+and scoped repair controls. The link picker groups projects beneath larger workspace headings,
+with this computer first. The order set in Engine Room → Computer Connections applies to
+other computers in the picker, sidebar and destination controls. Paired iPhone and iPad apps
+receive the order from their connected owner. The picker shows a saved site icon when available
+and supports a fixed or last-used default with an optional countdown. It routes to the window displaying that project, then
 its workspace, then Main. Ordered host/glob/path rules can skip the picker; missing destinations
-return to selection. Preview builds cannot register. Apple's recorded pending browser/passkey
+return to selection. The picker uses macOS Space visibility options without changing the app's
+activation policy, so the main windows retain the application menu. Preview builds cannot register.
+Apple's recorded pending browser/passkey
 entitlement request is separate from LaunchServices registration; no duplicate request was made.
 SafariSelector-derived matcher/picker behavior retains its GPL notice in `docs/licenses/`.
+
+### Conference calls and notification permissions
+
+Open Engine Room → Browser Preferences → Site Permissions. macOS authorizes
+Proteus for the microphone, camera, and screen. Request access there if the OS
+has not asked yet. If macOS has already denied access, the control opens the
+relevant System Settings pane. The development demo may appear there as Electron.
+
+Microphone and camera rules are saved for the exact website origin and browser
+profile on this computer. The X beside an origin removes its rule and restores
+Ask. A website request in the active tab prompts for a decision and saves Allow
+or Block in Site Permissions. Separate microphone and camera requests can arrive
+while a prompt is open and are handled in order. macOS can still require separate
+device access. Stop sharing the tab with agents from the robot button before a call.
+
+Some embedded Chromium media controls, including the one observed in Zoom,
+ask for device permission without identifying the device to Electron. Proteus
+offers explicit microphone and camera choices. Retry the site's device controls
+after choosing. Reload only if the site still shows its previous permission state. Proteus
+answers the device-agnostic callback affirmatively only when both device rules
+and applicable system permissions already allow access. The rule stays local
+to the same origin and profile. In the Zoom preview, the operator selected the
+combined choice and confirmed both devices individually in the same tab.
+
+Approve each screen-share request locally. Chromium's `getDisplayMedia()` uses
+Electron's browser capture handler, which passes the chosen source to the website
+after Proteus shows its screen and window picker. Tall sources can use up to
+twice the usual preview height at the same width. The whole image fits inside
+its card. When the OS provides no preview, the source is still selectable by name.
+Thumbnails are available only in the local picker for that request.
+Secure Zoom pages use the
+Chromium browser identity in default site mode so Zoom selects its web
+screen-sharing path. Proteus keeps the current Chromium version in that identity.
+The approval
+explains that legacy sharing can start capturing the full display immediately.
+Repeat the website's share action after changing macOS authorization.
+
+Website notification requests appear in Needs Attention. Remove a rule with X
+to restore Ask in the open page, or set Allow if the website no longer asks.
+Some sites cache permissions until reload. The local sound
+test checks Proteus system notification delivery. The separate Notifications
+section controls whether Proteus posts system alerts, and macOS controls sound
+and presentation. The Content Filtering tab contains Ghostery and its exceptions.
+Browser DNS is in Security & DNS.
+
+When there is no saved site decision, Proteus reports that the website can ask
+for microphone, camera or notification access. Capture and notification delivery
+still use the actual browser and system decisions. A pasted page URL in
+notification settings applies to its exact origin. Saving a rule also resolves
+pending requests for that profile and origin.
 
 Scheduled agents open their own needed tabs beside their chat rather than adopting unrelated
 application tabs. Required core guidance and the host sign-in launcher honor the configured
@@ -391,6 +471,10 @@ and parent, including Team Tools, while preserving the current selection and foc
 the current page remains available while the new page loads; a later address-bar or tab choice
 keeps its focus when loading finishes. The foreground action still selects
 its tab; **Open Link in Unloaded Tab** still creates a hidden tab without fetching the page.
+
+At the end of the initial load, Proteus checks whether the hidden view still holds native
+keyboard focus. In the foreground window it returns focus to the current page or address bar
+before releasing the temporary focus guard.
 
 `test/browser-background-link.test.js` covers menu and renderer routing; the isolated
 `test/browser-background-link-ui.mjs` exercises native loading, profile/placement, selection,
@@ -510,12 +594,16 @@ Queue only: the operator requires build confirmation and this intake changes no 
 
 ## Native-helper connection notices
 
-If an extension such as iCloud Passwords cannot connect to its desktop app, Proteus shows
+If an extension cannot connect to its desktop app, Proteus shows
 its connection guidance at most once per extension per app launch, shared across profiles
 and windows. Dismissing or expiring the notice does not make background retries show it
 again. Renderer reloads and profile recreation do not reset the limit; quitting and reopening
-Proteus does. This in-memory notice limit does not change native connections, permissions,
-extension popups or profile data.
+Proteus does.
+
+On macOS, Proteus reports that Apple Passwords requires an Apple-approved browser before
+attempting to launch the restricted `com.apple.passwordmanager` helper. Both port and one-shot
+requests fail through the standard native-messaging lifecycle. Other native hosts continue
+through the usual extension permissions, host configuration and origin checks.
 
 ## 0.2.28 — browser menus, refresh, icons and extension recovery
 
@@ -1504,7 +1592,17 @@ active local navigation or loaded page, including before SwiftUI constructs its 
 Keep the local URL, title and history; explicit custom names still apply. Nonempty remote
 navigation, profile changes, explicit unload and close retain their normal behavior.
 
-Desktop main-page navigation failures use the shared fifteen-second notification with Reload and View logs actions. Keep a sanitized `browser.load-failed` warning in Engine Room → Logs after dismissal; retain the failure in internal tab diagnostics without reserving a strip above the website. Each navigation attempt reports once; intentional aborts and embedded-frame failures do not generate whole-page notifications. A new main-page navigation clears the stale error state. Site-authored banners remain controlled by the site.
+On desktop, reopening or refreshing a website can show its last successful viewport
+while Chromium loads the address. If the site is unreachable or returns HTTP
+404, 410 or a server error, the saved image stays visible and Proteus posts a
+notification with Reload and View logs. The saved view is a still image.
+A successful retry restores the interactive page in the same tab. Captures use
+the existing bounded local tab cache and require the same tab, profile and exact
+URL. This fallback excludes private authentication URLs, Incognito and POST
+response captures. Older thumbnails without an address binding are available
+to Tab Overview only.
+
+Desktop main-page navigation failures use the shared transient notice and Notifications entry with Reload and View logs actions. Keep a sanitized `browser.load-failed` warning in Engine Room → Logs after dismissal; retain the failure in internal tab diagnostics without reserving a strip above the website. Each navigation attempt reports once; intentional aborts and embedded-frame failures do not generate whole-page notifications. A new main-page navigation clears the stale error state. Site-authored banners remain controlled by the site.
 
 
 ### Background persistence and polling
@@ -1814,3 +1912,40 @@ local. Incoming owner favicons do not overwrite a different live page's icon. So
 physical device acceptance are recorded separately in the release rollout.
 The phone Team Tools header also retains the shared drawer button while a browser is selected;
 its absence previously trapped navigation between app areas during the reselection regression.
+
+## Nov 17 profile and site controls
+
+Browser Preferences exposes exact-origin notification settings, including origins with no saved
+choice. The current website's privacy menu uses the same Allow, Ask and Block options.
+The local extension library offers available, verified package versions from other profiles.
+Installing a package requests permission for the target profile, copies only package files and
+keeps each profile's settings, storage and enabled version independent. A keyless unpacked
+extension has a path-dependent identity and requires its normal unpacked install workflow.
+
+## Browser history recovery during updates
+
+When a page repeatedly navigates to its current address, those requests reuse the existing history
+entry. Following a different address still creates a visit. An explicit same-address click can
+create a visit once per user interaction.
+
+When local navigation conflicts with the owner's saved history, the update status now names the
+affected tab group. Its browser-history notification offers **Keep saved history** or **Open
+pending page in new tab**. The latter saves a separate tab with the available Back and Forward
+history and uses the same browser profile. The tab loads when selected. The original pending
+request survives until the recovery finishes. Unrelated draft tabs can sync during review, and
+a failed display refresh leaves a completed recovery marked read.
+
+## Engine Room links
+
+Engine Room website links, including Account & Security and provider setup links, follow
+**Browser Preferences → Open clicked links in**. The in-app option opens a top-level tab in
+the window that launched the link. The system option hands it to the computer’s browser.
+
+## Back and Forward across devices
+
+A logical browser tab follows its selected history entry. Older owner reads and completed
+loads cannot reselect a previous entry while a newer Back, Forward or address navigation is
+in progress. iOS verifies that every history page belongs to the same revision and selected
+entry before merging it. A redirect during traversal can resolve locally on the device while
+the logical entry and Forward list remain available. Fresh visits and their redirects still
+update the shared destination.

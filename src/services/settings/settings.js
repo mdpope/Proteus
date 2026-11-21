@@ -1,4 +1,5 @@
 import {validatePalette} from '../../../public/shared/ui/palette.js';
+import {browserResolverOptions} from '../browser/browser-dns.js';
 import {resourceDefaults} from '../../../public/models/view-residency.js';
 import { validateModelOptionShape } from '../../models/model-catalog.js';
 import fs from 'node:fs';
@@ -24,8 +25,11 @@ export function validateSettings(value) {
   }
   if(value.preferences!==undefined&&(!value.preferences||typeof value.preferences!=='object'||Array.isArray(value.preferences)||value.preferences.clickedLinks!==undefined&&!['in-app','system'].includes(value.preferences.clickedLinks)))throw new Error('Choose in-app or system browser for clicked links.');
   if(value.preferences?.keepScreenAwake!==undefined&&typeof value.preferences.keepScreenAwake!=='boolean')throw new Error('Keep Screen Awake must be a boolean.');
+  const computerOrder=value.preferences?.computerOrder;
+  if(computerOrder!==undefined&&(!Array.isArray(computerOrder)||computerOrder.length>128||computerOrder.some(id=>typeof id!=='string'||!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id))||new Set(computerOrder.map(id=>id.toLowerCase())).size!==computerOrder.length))throw Error('Choose a unique order of paired computer IDs.');
   if(value.browser!==undefined&&(!value.browser||typeof value.browser!=='object'||Array.isArray(value.browser)))throw new Error('Browser preferences must be an object.');
   if(value.browser?.loadedTabLimit!==undefined&&(!Number.isInteger(value.browser.loadedTabLimit)||value.browser.loadedTabLimit<1||value.browser.loadedTabLimit>256))throw new Error('Loaded tab limit must be an integer from 1 to 256.');
+  browserResolverOptions(value.browser?.dns);
   if(value.resources!==undefined){
     if(!value.resources||typeof value.resources!=='object'||Array.isArray(value.resources)||Object.keys(value.resources).some(key=>!Object.hasOwn(resourceDefaults,key)))throw Error('Choose valid resource preferences.');
     for(const key of Object.keys(resourceDefaults)){const limit=value.resources[key],max=key==='inactiveMinutes'?120:32;if(limit!==undefined&&(!Number.isInteger(limit)||limit<1||limit>max))throw Error(`${key} must be an integer from 1 to ${max}.`);}
@@ -33,7 +37,7 @@ export function validateSettings(value) {
   if(value.appearance!==undefined&&(!value.appearance||typeof value.appearance!=='object'||Array.isArray(value.appearance)||(['showProviderUsage','providerUsageCollapsed','sidebarCollapsed'].some(key=>value.appearance[key]!==undefined&&typeof value.appearance[key]!=='boolean'))))throw new Error('Appearance settings must contain boolean usage preferences.');
   if(value.appearance?.palette!==undefined)validatePalette(value.appearance.palette);
   if(value.appearance?.sidebarWidth!==undefined&&(!Number.isInteger(value.appearance.sidebarWidth)||value.appearance.sidebarWidth<220||value.appearance.sidebarWidth>520))throw new Error('Sidebar width must be an integer between 220 and 520 pixels.');
-  if (!['copilot','codex','claude','llama-cpp','shared-llm','rehearsal'].includes(value.provider)) throw new Error('Choose a supported default provider.');
+  if (!['copilot','codex','claude','llama-cpp','shared-llm','openrouter','rehearsal'].includes(value.provider)) throw new Error('Choose a supported default provider.');
   if (value.provider !== 'rehearsal' && (!value.model?.trim() || value.model === 'auto')) throw new Error('Choose an explicit default model.');
   if (value.copilotDataDirectory && (!path.isAbsolute(value.copilotDataDirectory) || !fs.statSync(value.copilotDataDirectory).isDirectory())) throw new Error('Choose an existing Copilot data folder.');
   new Intl.DateTimeFormat('en', { timeZone: value.timezone }).format();

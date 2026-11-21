@@ -47,3 +47,30 @@ test('saving text is identity-checked, atomic, confined and never touches symlin
  assert.equal(fs.readFileSync(path.join(f.b,'outside.txt'),'utf8'),'secret');assert.deepEqual(fs.readdirSync(f.a).filter(n=>n.endsWith('.proteus-save')),[]);
  await assert.rejects(f.explorer.save({...args,file:'doc.md',content:'a\0b',identity:saved.identity}),/UTF-8 text/);
 });
+
+test('pasted PDFs stay beside the selected Markdown file and repeated bytes resolve to one attachment',async t=>{
+ const f=fixture(t),folder=path.join(f.a,'nested');fs.mkdirSync(folder);fs.writeFileSync(path.join(folder,'note.md'),'# Note');
+ const bytes=Buffer.from('%PDF-1.7\n%%EOF'),input={workspaceId:'a',rootId:f.rootId,file:'nested/note.md',mediaType:'application/pdf',data:bytes.toString('base64')};
+ const results=await Promise.all([f.explorer.paste(input),f.explorer.paste(input)]);
+ assert.deepEqual(results[0],results[1]);
+ assert.equal(fs.readdirSync(folder).length,2);
+ assert.deepEqual(fs.readFileSync(path.join(folder,results[0].name)),bytes);
+ assert.equal((await f.explorer.resolveLink({...input,source:results[0].name})).type,'application/pdf');
+ await assert.rejects(f.explorer.paste({...input,mediaType:'image/png'}),/declared format/);
+ await assert.rejects(f.explorer.paste({...input,workspaceId:'b'}),/unavailable/);
+});
+test('screenshot drops preserve exact bytes and stay in the selected workspace folder',async t=>{
+ const {a,b,rootId,explorer}=fixture(t),input=fs.readFileSync(new URL('../desktop/icon.png',import.meta.url));
+ fs.mkdirSync(path.join(a,'dest'));
+ fs.mkdirSync(path.join(a,'.git'));
+ fs.symlinkSync(b,path.join(a,'outside'),'dir');
+ const binding={workspaceId:'a',rootId,directory:'dest'},image={bytes:input,type:'image/png'};
+ const created=await explorer.importScreenshot(binding,image);
+ assert.match(created.name,/^Screenshot-[a-f0-9]{64}\.png$/);
+ assert.deepEqual(fs.readFileSync(path.join(a,'dest',created.name)),input);
+ assert.deepEqual(await explorer.importImage({...binding,data:input.toString('base64'),mediaType:image.type}),created);
+ assert.deepEqual(fs.readdirSync(path.join(a,'dest')),[created.name]);
+ for(const directory of ['.git','outside','../b'])assert.throws(()=>explorer.importScreenshot({...binding,directory},image));
+ assert.throws(()=>explorer.importScreenshot({...binding,workspaceId:'b'},image));
+ assert.deepEqual(fs.readdirSync(b),[]);
+});

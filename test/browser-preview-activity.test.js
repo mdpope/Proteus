@@ -20,10 +20,10 @@ function fixture(preview=true){
  }
  class View {constructor(){views++;this.webContents=new Contents();}setBounds(value){this.bounds=value;}getBounds(){return this.bounds;}setVisible(value){this.visible=value;}getVisible(){return this.visible;}}
  const module={exports:{}},source=fs.readFileSync(new URL('../desktop/browser/browser.cjs',import.meta.url),'utf8');
- const dependency=name=>name==='electron'?{WebContentsView:View}:name.startsWith('node:')||['./agent-viewport.cjs','./browser-history.cjs','./browser-page-preferences.cjs','./browser-navigation.cjs','./browser-background-focus.cjs','./browser-address.cjs','../windows/navigation.cjs'].includes(name)?desktopRequire(name):{};
- vm.runInNewContext(source,{module,exports:module.exports,require:dependency,__dirname:new URL('../desktop/browser/',import.meta.url).pathname,Date:Clock,URL,Buffer,structuredClone,setTimeout,clearTimeout,setInterval,clearInterval});
+ const dependency=name=>name==='electron'?{WebContentsView:View}:name.startsWith('node:')||['./agent-viewport.cjs','./browser-history.cjs','./browser-page-preferences.cjs','./browser-navigation.cjs','./browser-background-focus.cjs','./browser-address.cjs','./browser-retained-page.cjs','./browser-external-protocols.cjs','../windows/navigation.cjs'].includes(name)?desktopRequire(name):{};
+ vm.runInNewContext(source,{module,exports:module.exports,require:dependency,__dirname:new URL('../desktop/browser/',import.meta.url).pathname,process:{env:{}},Date:Clock,URL,Buffer,structuredClone,setTimeout,clearTimeout,setInterval,clearInterval});
  const browser=Object.create(module.exports.BrowserTabs.prototype),partition={};
- Object.assign(browser,{incognito:new (desktopRequire('./incognito-sessions.cjs').IncognitoSessions)(),videoPopout:{bind(){},close(){}},options:{projects:preview},appOrigin:'http://app.test',tabs:new Map(),reloading:new Map(),cookieStores:new Map(),overlays:new Set(),window:{contentView:{addChildView(){},removeChildView(){}},getContentBounds:()=>({width:800,height:600}),isFocused:()=>false,isDestroyed:()=>false,webContents:{send(){}}},actions:{send(){}},profile:()=>({settings:{blockingEnabled:false}}),sessionFor:()=>partition,profileAvailable:()=>true,changed(){},disconnect:async()=>{}});
+ Object.assign(browser,{incognito:new (desktopRequire('./incognito-sessions.cjs').IncognitoSessions)(),videoPopout:{bind(){},close(){}},options:{projects:preview},appOrigin:'http://app.test',tabs:new Map(),reloading:new Map(),navigationRequests:new Map(),cookieStores:new Map(),overlays:new Set(),window:{contentView:{addChildView(){},removeChildView(){}},getContentBounds:()=>({width:800,height:600}),isFocused:()=>false,isDestroyed:()=>false,webContents:{send(){}}},actions:{send(){}},profile:()=>({settings:{blockingEnabled:false}}),sessionFor:()=>partition,profileAvailable:()=>true,changed(){},disconnect:async()=>{}});
  browser.certificateReview=new (desktopRequire('./browser-certificate-review.cjs').BrowserCertificateReview)(browser);
  return {browser,tick(){now+=1000;},views:()=>views};
 }
@@ -37,6 +37,21 @@ test('preview browser selection, reading and restore do not advance meaningful a
  f.tick();const refreshed=await b.command({action:'reload',id});assert.ok(refreshed.lastActivityAt>navigated.lastActivityAt);
  f.tick();await b.unload(id);await b.command({action:'activate',id});assert.equal(b.state(b.get(id)).lastActivityAt,refreshed.lastActivityAt);
  f.tick();await b.command({action:'back',id});assert.ok(b.state(b.get(id)).lastActivityAt>refreshed.lastActivityAt);
+});
+
+test('same-address page navigation reuses its history entry unless it consumes a new human intent',async()=>{
+ const {browser}=fixture(),url='https://example.test/loop';
+ const {id}=await browser.create(url),tab=browser.get(id),contents=tab.view.webContents;
+ const initial=tab.logicalHistory.currentEntryId;
+ const navigate=()=>contents.emit('will-navigate',{url,preventDefault:()=>assert.fail('The page may reload')});
+ for(let i=0;i<114;i++)navigate();
+ assert.deepEqual(tab.logicalHistory.entries.map(entry=>entry.id),[initial]);
+ tab.navigationIntentUntil=Infinity;
+ navigate();
+ const explicit=tab.logicalHistory.currentEntryId;
+ assert.notEqual(explicit,initial);
+ for(let i=0;i<114;i++)navigate();
+ assert.deepEqual(tab.logicalHistory.entries.map(entry=>entry.id),[initial,explicit]);
 });
 
 test('Hide retains Persisted pages but unloads ordinary shared pages, preserving identity and history',async()=>{

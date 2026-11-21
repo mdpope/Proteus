@@ -41,3 +41,5 @@
 .scratchpad-editor .file-browser-compact .file-browser-panes{flex:1;min-height:0;height:auto;}
 .scratchpad-editor .file-browser-compact .file-browser-list{height:100%;min-height:0;overflow:auto;}
 .scratchpad-editor>.scratchpad-document{height:100%;overflow:auto;min-height:0;}
+.scratch-file-pane{display:flex;flex:1;min-height:0;margin-top:8px;}
+.scratchpad-document .document-size-control input{min-height:0;}

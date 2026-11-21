@@ -48,7 +48,7 @@ try{
  if(device.state!=='Booted')run('xcrun',['simctl','boot',device.udid]);
  run('xcrun',['simctl','bootstatus',device.udid,'-b']);
  run('xcrun',['simctl','install',device.udid,app]);
- run('xcrun',['simctl','launch',device.udid,bundle,'--native-design-preview','--phone-preview-fixture','--synthetic-browser-workspace','--native-app-fixture','--synthetic-life','--reset-pairing']);
+ run('xcrun',['simctl','launch',device.udid,bundle,'--native-design-preview','--phone-preview-fixture','--synthetic-browser-workspace','--native-app-fixture','--synthetic-life',...(reuseFixture?[]:['--reset-pairing'])]);
  const simulatorApp=path.join(env.DEVELOPER_DIR,'Applications/Simulator.app');
  if(fs.existsSync(simulatorApp))run('open',[simulatorApp,'--args','-CurrentDeviceUDID',device.udid]);
  else {

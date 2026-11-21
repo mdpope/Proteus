@@ -213,6 +213,93 @@ func modelContextLabel(_ tier: JSON) -> String {
     let id = tier["id"].string
     return "\(modelTokenSize(tier["promptTokens"])) · \(id == "default" ? "Default" : id == "long_context" ? "Long context" : id)"
 }
+private struct OpenRouterModelPicker: View {
+    @Environment(RemoteStore.self) var store
+    @Binding var model: String
+    let models: [JSON]
+    @AppStorage("proteus.openrouter.favorites") private var saved = ""
+    @State private var browsing = false
+    @State private var query = ""
+
+    private var favorites: Set<String> { Set(saved.split(separator: ",").map(String.init)) }
+    private var selected: JSON? { models.first { $0["id"].string == model } }
+    private func title(_ item: JSON) -> String { item["name"].string.isEmpty ? item["id"].string : item["name"].string }
+    private var results: [JSON] {
+        let words = query.lowercased().split(whereSeparator: \.isWhitespace)
+        let pinned = favorites
+        return models.filter { item in
+            let text = (title(item) + " " + item["id"].string).lowercased()
+            return words.allSatisfy { text.contains($0) }
+        }.sorted { a, b in
+            let left = pinned.contains(a["id"].string), right = pinned.contains(b["id"].string)
+            if left != right { return left }
+            return title(a).localizedCaseInsensitiveCompare(title(b)) == .orderedAscending
+        }
+    }
+    var body: some View {
+        Menu {
+            ForEach(models.filter { favorites.contains($0["id"].string) || $0["id"].string == model }, id: \.self) { item in
+                Button(title(item)) { model = item["id"].string }
+            }
+            Button("Browse models…", systemImage: "magnifyingglass") { query = ""; browsing = true }
+        } label: {
+            Label(selected.map(title) ?? (model.isEmpty ? "Choose model" : model), systemImage: "chevron.up.chevron.down")
+                .lineLimit(1)
+        }
+        .disabled(models.isEmpty)
+        .task(id: store.providerStatuses["openrouter"]?["checkedAt"]) {
+            if models.isEmpty && store.providerStatuses["openrouter"]?["available"] == .bool(true) {
+                await store.loadModels(provider: "openrouter")
+            }
+        }
+        .sheet(isPresented: $browsing) {
+            let results = self.results
+            NavigationStack {
+                List {
+                    if results.isEmpty { Text("No matching models.").foregroundStyle(.secondary) }
+                    ForEach(Array(results.prefix(60)), id: \.self) { item in
+                        row(item)
+                    }
+                    if results.count > 60 { Text("Showing 60 of \(results.count) models. Search to narrow the list.").font(.caption).foregroundStyle(.secondary) }
+                }
+                .navigationTitle("OpenRouter models")
+                .searchable(text: $query, prompt: "Name or model ID")
+                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { browsing = false } } }
+            }
+        }
+    }
+    private func row(_ item: JSON) -> some View {
+        let id = item["id"].string, pinned = favorites.contains(id)
+        return HStack {
+            Button {
+                model = id
+                browsing = false
+            } label: {
+                VStack(alignment: .leading) {
+                    Text(title(item)).font(.subheadline.weight(.semibold))
+                    Text(id).font(.caption).foregroundStyle(.secondary)
+                    if case .number(let input) = item["pricing"]["input"], case .number(let output) = item["pricing"]["output"] {
+                        Text("\(openRouterUSD(input * 1_000_000)) input · \(openRouterUSD(output * 1_000_000)) output per 1M tokens")
+                            .font(.caption2).foregroundStyle(.secondary)
+                    }
+                }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+            }.buttonStyle(.plain)
+            Button {
+                var next = favorites
+                if pinned { next.remove(id) } else { next.insert(id) }
+                saved = next.sorted().joined(separator: ",")
+            } label: { Image(systemName: pinned ? "star.fill" : "star") }
+            .buttonStyle(.borderless)
+            .accessibilityLabel((pinned ? "Remove favorite " : "Favorite ") + title(item))
+        }
+    }
+}
+
+private func openRouterUSD(_ amount: Double) -> String {
+    let currency = FloatingPointFormatStyle<Double>.Currency(code: "USD").precision(.fractionLength(2...8))
+    return amount > 0 && amount < 0.00000001 ? "<" + currency.format(0.00000001) : currency.format(amount)
+}
+
 struct ProviderModelPicker: View {
     @Environment(RemoteStore.self) var store
     @Binding var model: String
@@ -233,26 +320,34 @@ struct ProviderModelPicker: View {
     private var effortTitle: String { controls["reasoningEffortTitle"].string.isEmpty ? "Thinking effort" : controls["reasoningEffortTitle"].string }
     private var tiers: [JSON] { controls["contextTiers"].array }
     var body: some View {
+        if provider == "openrouter" {
+            OpenRouterModelPicker(model: $model, models: models).disabled(disabled).accessibilityIdentifier("model-picker")
+        } else {
         Picker("Model", selection: $model) {
             Text("Choose model").tag("")
             if !model.isEmpty && !models.contains(where: { $0["id"].string == model }) { Text("\(model) · \(models.isEmpty ? "catalog not loaded" : "unavailable")").tag(model) }
             ForEach(models, id: \.self) { Text($0["name"].string.isEmpty ? $0["id"].string : "\($0["name"].string) · \($0["id"].string)").tag($0["id"].string) }
         }.disabled(disabled).accessibilityIdentifier("model-picker")
-        Picker(effortTitle, selection: $effort) {
-            Text("Provider default" + (controls["defaultReasoningEffort"].string.isEmpty ? "" : " · " + effortLabel(controls["defaultReasoningEffort"].string))).tag("")
-            ForEach(efforts, id: \.self) { Text(effortLabel($0)).tag($0) }
-            if !effort.isEmpty && !efforts.contains(effort) { Text("\(effort) · unavailable (saved)").tag(effort) }
-        }.disabled(disabled).accessibilityIdentifier("effort-picker")
+        }
+        if provider != "openrouter" || !efforts.isEmpty || !effort.isEmpty {
+            Picker(effortTitle, selection: $effort) {
+                Text("Provider default" + (controls["defaultReasoningEffort"].string.isEmpty ? "" : " · " + effortLabel(controls["defaultReasoningEffort"].string))).tag("")
+                ForEach(efforts, id: \.self) { Text(effortLabel($0)).tag($0) }
+                if !effort.isEmpty && !efforts.contains(effort) { Text("\(effort) · unavailable (saved)").tag(effort) }
+            }.disabled(disabled).accessibilityIdentifier("effort-picker")
+        }
         Picker("Context size", selection: $contextTier) {
             if tiers.isEmpty { Text("Default · capacity not reported").tag("default") }
             ForEach(tiers, id: \.self) { Text(modelContextLabel($0)).tag($0["id"].string) }
             if contextTier != "default" && !tiers.contains(where: { $0["id"].string == contextTier }) { Text("\(contextTier) · unavailable (saved)").tag(contextTier) }
         }.disabled(disabled).accessibilityIdentifier("context-tier-picker")
-        Picker("Speed / service tier", selection: $serviceTier) {
-            Text("Provider default").tag("")
-            ForEach(controls["serviceTiers"].array, id: \.self) { Text($0["name"].string).tag($0["id"].string) }
-            if !serviceTier.isEmpty && !controls["serviceTiers"].array.contains(where: { $0["id"].string == serviceTier }) { Text("\(serviceTier) · unavailable (saved)").tag(serviceTier) }
-        }.disabled(disabled)
+        if provider != "openrouter" || !controls["serviceTiers"].array.isEmpty || !serviceTier.isEmpty {
+            Picker("Speed / service tier", selection: $serviceTier) {
+                Text("Provider default").tag("")
+                ForEach(controls["serviceTiers"].array, id: \.self) { Text($0["name"].string).tag($0["id"].string) }
+                if !serviceTier.isEmpty && !controls["serviceTiers"].array.contains(where: { $0["id"].string == serviceTier }) { Text("\(serviceTier) · unavailable (saved)").tag(serviceTier) }
+            }.disabled(disabled)
+        }
         if provider == "codex" { Text("Uses \(hostName)’s Codex sign-in. Context capacity may be unreported. Editor-specific agent tool filters are not supported; MCP access is granted per server.").font(.caption).foregroundStyle(.secondary) }
         if provider == "copilot" && !catalog["fusion"]["note"].string.isEmpty { Text(catalog["fusion"]["note"].string).font(.caption).foregroundStyle(.secondary) }
         if efforts.isEmpty { Text(controls["reasoningSupported"] == .bool(false) ? "This model does not support thinking effort." : "Thinking effort choices are not reported.").font(.caption).foregroundStyle(.secondary) }
@@ -271,7 +366,7 @@ struct PendingChatApprovalView: View {
     let run: JSON
     @State private var busy = false
     var body: some View {
-        if run["permissionContext"] != .null && store.state["capabilities"].array.contains(.string("chat.permissions.pending.v1")) {
+        if run["permissionContext"] != .null && !run["permissionContext"]["scopedCommands"].bool && store.state["capabilities"].array.contains(.string("chat.permissions.pending.v1")) {
             Button("Auto-approve this chat and future continuations") {
                 let context = run["permissionContext"], requestID = run["pending"]["id"], runID = run["id"]
                 busy = true
@@ -315,6 +410,15 @@ struct ChatPermissionsView: View {
                     })).disabled(busy || !store.connected).accessibilityIdentifier("active-time-auto")
                     Text("Uses the same provider session, up to three consecutive continuations. Human waiting does not count. Stop, pending questions and other errors stop automatic continuation.").font(.caption).foregroundStyle(.secondary)
                 }
+                if run["schedule"]["provider"].string != "local-process" && run["context"]["entries"] != .null && store.state["capabilities"].array.contains(.string("context.auto-refresh.v1")) {
+                    Toggle("Refresh instruction and skill edits automatically", isOn: Binding(get: { run["schedule"]["autoRefreshSources"].bool }, set: { enabled in
+                        busy = true
+                        Task { defer { busy = false }; do {
+                            _ = try await store.request("chat.context", ["id": run["id"], "action": .string("set-auto-refresh"), "enabled": .bool(enabled), "expectedUpdatedAt": run["updatedAt"]])
+                            await store.openChat(run["id"].string)
+                        } catch { store.error = error.localizedDescription } }
+                    })).disabled(busy || !store.connected || ["queued", "running", "awaiting_input"].contains(run["status"].string))
+                }
                 if run["chatControls"]["allowanceContinuation"].bool {
                     Toggle("Automatically continue when allowance resets", isOn: Binding(get: { run["allowanceContinuation"]["enabled"].bool }, set: { value in
                         busy = true
@@ -325,7 +429,12 @@ struct ChatPermissionsView: View {
                     })).disabled(busy || !store.connected).accessibilityIdentifier("allowance-auto")
                     Text("The executing computer checks fresh provider allowance before continuing. Unknown reset times remain paused.").font(.caption).foregroundStyle(.secondary)
                 }
-                if chatScopeAvailable {
+                if chatScopeAvailable && context["scopedCommands"].bool {
+                    Text("This run uses the schedule’s scoped command approvals.").font(.caption).foregroundStyle(.secondary)
+                    if context["source"].string == "chat" {
+                        Button("Use schedule permissions") { applyChat("inherit") }.buttonStyle(.bordered).disabled(busy || !store.connected)
+                    }
+                } else if chatScopeAvailable {
                     if context["source"].string == "chat" {
                         Button("Revoke chat-only auto-approval") { applyChat("inherit") }.buttonStyle(.bordered).disabled(busy || !store.connected).accessibilityIdentifier("revoke-chat-auto-approval")
                     } else {
@@ -483,13 +592,18 @@ struct ComposerModelPicker: View {
         Button { showingOptions.toggle() } label: {
             VStack(alignment: .leading, spacing: 3) {
                 Text(selected["name"].string.isEmpty ? (model.isEmpty ? "Model options" : model) : selected["name"].string).font(.subheadline).lineLimit(1)
-                Text([effort.isEmpty ? "Default level" : effort.capitalized, serviceTier.isEmpty ? "Standard" : serviceTier.capitalized].joined(separator: " · ")).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                if !efforts.isEmpty || !effort.isEmpty || !speeds.isEmpty || !serviceTier.isEmpty {
+                    let level = efforts.isEmpty && effort.isEmpty ? nil : (effort.isEmpty ? "Default level" : effortLabel(effort))
+                    let speed = speeds.isEmpty && serviceTier.isEmpty ? nil : (serviceTier.isEmpty ? "Standard" : serviceTier.capitalized)
+                    Text([level, speed].compactMap { $0 }.joined(separator: " · ")).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                }
             }.frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
         }.buttonStyle(.plain).accessibilityLabel("Model and turn options").accessibilityIdentifier("composer-options")
         .popover(isPresented: $showingOptions) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
-                    compactSection("Model", selected: model, choices: [("", "Provider default")] + models.map { ($0["id"].string, $0["name"].string.isEmpty ? $0["id"].string : $0["name"].string) }) { model = $0 }
+                    if provider == "openrouter" { OpenRouterModelPicker(model: $model, models: models) }
+                    else { compactSection("Model", selected: model, choices: [("", "Provider default")] + models.map { ($0["id"].string, $0["name"].string.isEmpty ? $0["id"].string : $0["name"].string) }) { model = $0 } }
                     if !efforts.isEmpty || !effort.isEmpty { compactSection("Level", selected: effort, choices: [("", "Provider default")] + efforts.map { ($0, controls["reasoningEffortLabels"][$0].string.isEmpty ? $0.capitalized : effortLabel($0)) }) { effort = $0 } }
                     if !speeds.isEmpty || !serviceTier.isEmpty { compactSection("Speed", selected: serviceTier, choices: [("", "Provider default")] + speeds.map { ($0["id"].string, $0["name"].string) }) { serviceTier = $0 } }
                     if tiers.count > 1 || contextTier != "default" { compactSection("Context", selected: contextTier, choices: tiers.map { ($0["id"].string, modelContextLabel($0)) }) { contextTier = $0 } }
@@ -512,6 +626,8 @@ struct ComposerModelPicker: View {
     }
     private var optionMenus: some View {
             Group {
+                if provider == "openrouter" { OpenRouterModelPicker(model: $model, models: models).accessibilityIdentifier("composer-model") }
+                else {
                 Menu {
                     Picker("Model", selection: $model) {
                         if !models.contains(where: { $0["id"].string == model }) { Text(model.isEmpty ? "Choose model" : model + " · unavailable").tag(model) }
@@ -520,6 +636,7 @@ struct ComposerModelPicker: View {
                     Text("Changes apply to your next turn. Steering keeps the running model. Earlier history remains; the provider may compact it to fit.")
                     Button("Refresh models") { Task { await store.loadModels(force: true, provider: provider) } }
                 } label: { label(selected["name"].string.isEmpty ? (model.isEmpty ? "Model" : model) : selected["name"].string, name: "Model") }.accessibilityIdentifier("composer-model")
+                }
                 if !efforts.isEmpty || !effort.isEmpty {
                     Menu {
                         Picker(effortTitle, selection: $effort) {
@@ -583,6 +700,120 @@ func runtimeLabel(_ seconds: Double?) -> String {
 func runtimeClockRunning(turns: [JSON], tools: [JSON], verified: Bool) -> Bool {
     verified && (turns.contains { !$0["activeSince"].string.isEmpty } || tools.contains { $0["status"].string == "running" && $0["finishedAt"].string.isEmpty })
 }
+/// Completed intervals are sorted and merged once. A verified running interval
+/// adds time only where completed intervals have not already counted it.
+struct NativeRuntimeIntervals: Sendable {
+    private var intervals: [(start: Date, end: Date, prefix: Double)] = []
+    let hasCompleted: Bool
+    let liveStart: Date?
+    private var total = 0.0
+
+    init(completed: [(Date, Date)], running: [Date]) {
+        hasCompleted = !completed.isEmpty
+        liveStart = running.min()
+        var merged: [(Date, Date)] = []
+        for span in completed.filter({ $0.1 >= $0.0 }).sorted(by: { $0.0 < $1.0 }) {
+            if let last = merged.last, span.0 <= last.1 { merged[merged.count - 1].1 = max(last.1, span.1) }
+            else { merged.append(span) }
+        }
+        for (start, end) in merged {
+            intervals.append((start, end, total))
+            total += end.timeIntervalSince(start)
+        }
+    }
+
+    init(turn: JSON) {
+        self.init(completed: Self.completed(turn), running: [ProviderAllowance.date(turn["activeSince"].string)].compactMap { $0 })
+    }
+
+    static func completed(_ turn: JSON) -> [(Date, Date)] {
+        turn["intervals"].array.compactMap { row in
+            let values = row.array
+            guard values.count == 2, let start = ProviderAllowance.date(values[0].string), let end = ProviderAllowance.date(values[1].string) else { return nil }
+            return (start, end)
+        }
+    }
+
+    private func completedBefore(_ date: Date) -> Double {
+        var lower = 0, upper = intervals.count
+        while lower < upper {
+            let middle = lower + (upper - lower) / 2
+            if intervals[middle].end <= date { lower = middle + 1 }
+            else { upper = middle }
+        }
+        guard lower < intervals.count else { return total }
+        let next = intervals[lower]
+        return next.prefix + max(0, date.timeIntervalSince(next.start))
+    }
+
+    func seconds(at now: Date, verified: Bool) -> Double {
+        guard verified, let start = liveStart, now > start else { return total }
+        return total + now.timeIntervalSince(start) - (completedBefore(now) - completedBefore(start))
+    }
+}
+
+struct NativeRuntimeInput: Equatable, Sendable {
+    let turns: [JSON]
+    let tools: [JSON]
+    let activityTurns: [JSON]
+
+    init(turns: [JSON], tools: [JSON], activityTurns: [JSON]) {
+        func timing(_ turn: JSON) -> JSON {
+            .object(["intervals": turn["intervals"], "activeSince": turn["activeSince"]])
+        }
+        self.turns = turns.map(timing)
+        self.activityTurns = activityTurns.map(timing)
+        self.tools = tools.map { tool in
+            .object(["startedAt": tool["startedAt"], "finishedAt": tool["finishedAt"],
+                     "status": tool["status"], "durationMs": tool["durationMs"]])
+        }
+    }
+}
+
+struct NativeRuntimeProjection: Sendable {
+    private let turns: [NativeRuntimeIntervals]
+    private let tools: NativeRuntimeIntervals?
+    private let activity: NativeRuntimeIntervals?
+    private let combined: NativeRuntimeIntervals?
+    private let fallback: Double?
+    private let hasRunning: Bool
+
+    init(_ input: NativeRuntimeInput) {
+        turns = input.turns.filter { $0["intervals"] != .null }.map(NativeRuntimeIntervals.init(turn:))
+        hasRunning = runtimeClockRunning(turns: input.turns, tools: input.tools, verified: true)
+        if input.tools.count == 1, input.tools[0]["durationMs"] != .null { fallback = Double(input.tools[0]["durationMs"].int) / 1000 }
+        else { fallback = nil }
+        guard !input.tools.isEmpty else { tools = nil; activity = nil; combined = nil; return }
+        var finished: [(Date, Date)] = [], running: [Date] = []
+        for tool in input.tools {
+            guard let start = ProviderAllowance.date(tool["startedAt"].string) else { continue }
+            if let end = ProviderAllowance.date(tool["finishedAt"].string) { finished.append((start, end)) }
+            else if tool["status"].string == "running" { running.append(start) }
+        }
+        tools = NativeRuntimeIntervals(completed: finished, running: running)
+        if input.activityTurns.isEmpty { activity = nil; combined = nil }
+        else {
+            let activeFinished = input.activityTurns.flatMap(NativeRuntimeIntervals.completed)
+            let activeRunning = input.activityTurns.compactMap { ProviderAllowance.date($0["activeSince"].string) }
+            activity = NativeRuntimeIntervals(completed: activeFinished, running: activeRunning)
+            combined = NativeRuntimeIntervals(completed: finished + activeFinished, running: running + activeRunning)
+        }
+    }
+    func clockRunning(verified: Bool) -> Bool { hasRunning && verified }
+
+    func seconds(at now: Date, verified: Bool) -> Double? {
+        guard let tools else {
+            return turns.isEmpty ? nil : turns.reduce(0) { $0 + $1.seconds(at: now, verified: verified) }
+        }
+        guard tools.hasCompleted || verified && tools.liveStart != nil else { return fallback }
+        let duration = tools.seconds(at: now, verified: verified)
+        guard let activity, let combined else { return duration }
+        // Intersection duration = both durations minus their union. This avoids
+        // rebuilding a product of all tool and orchestration intervals each tick.
+        return max(0, duration + activity.seconds(at: now, verified: verified) - combined.seconds(at: now, verified: verified))
+    }
+}
+
 struct RuntimeTimerView: View {
     @Environment(RemoteStore.self) var store
     var turns: [JSON] = []
@@ -591,37 +822,48 @@ struct RuntimeTimerView: View {
     var showTitle: Bool = true
     var prominent: Bool = false
     var partial: Bool = false
-    var clockRunning: Bool {
-        runtimeClockRunning(turns: turns, tools: tools, verified: store.connected && store.runtimeClockOffset != nil)
-    }
+    @State private var projection: NativeRuntimeProjection?
+
     var body: some View {
-        if clockRunning { TimelineView(.periodic(from: .now, by: 1)) { context in runtime(at: context.date) } }
-        else { runtime(at: Date()) }
+        let input = NativeRuntimeInput(turns: turns, tools: tools, activityTurns: tools.isEmpty ? [] : store.chats[store.selectedChat ?? ""]?["turns"].array ?? [])
+        let offset = store.runtimeClockOffset, connected = store.connected
+        let verified = connected && offset != nil
+        Group {
+            if let projection, projection.clockRunning(verified: verified) {
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    label(projection.seconds(at: context.date.addingTimeInterval(offset ?? 0), verified: verified), connected: connected)
+                }
+            } else {
+                label(projection?.seconds(at: Date().addingTimeInterval(offset ?? 0), verified: verified), connected: connected)
+            }
+        }
+        .task(id: input) {
+            let updated = await Task.detached(priority: .userInitiated) { NativeRuntimeProjection(input) }.value
+            guard !Task.isCancelled else { return }
+            projection = updated
+        }
     }
-    private func runtime(at now: Date) -> some View {
-            let verified = store.connected && store.runtimeClockOffset != nil
-            let hostNow = now.addingTimeInterval(store.runtimeClockOffset ?? 0)
-            let intervals = tools.compactMap { tool -> (Date,Date)? in
-                guard let start = ProviderAllowance.date(tool["startedAt"].string) else { return nil }
-                if let finish = ProviderAllowance.date(tool["finishedAt"].string) { return (start,finish) }
-                return verified && tool["status"].string == "running" ? (start,max(start,hostNow)) : nil
-            }
-            let activityTurns = tools.isEmpty ? [] : store.chats[store.selectedChat ?? ""]?["turns"].array ?? []
-            let active = activityTurns.flatMap { turn -> [(Date,Date)] in
-                var result = turn["intervals"].array.compactMap { row -> (Date,Date)? in let values=row.array; guard values.count==2, let start=ProviderAllowance.date(values[0].string), let end=ProviderAllowance.date(values[1].string) else { return nil }; return (start,end) }
-                if verified, let start=ProviderAllowance.date(turn["activeSince"].string) { result.append((start,hostNow)) }; return result
-            }
-            let clipped = activityTurns.isEmpty ? intervals : intervals.flatMap { interval in active.map { (max(interval.0,$0.0),min(interval.1,$0.1)) } }
-            let durations = turns.compactMap { runtimeSeconds($0,now:hostNow,verified:verified) }
-            let fallback: Double? = tools.count == 1 && tools[0]["durationMs"] != .null ? Double(tools[0]["durationMs"].int) / 1000 : nil
-            let seconds: Double? = !tools.isEmpty ? (intervals.isEmpty ? fallback : runtimeUnion(clipped)) : durations.isEmpty ? nil : durations.reduce(0,+)
-            return Text((total && showTitle ? "Total AI runtime · " : "") + runtimeLabel(seconds) + (partial || turns.contains { $0["incomplete"].bool } ? " · partial" : "") + (store.connected ? "" : " · offline, unverified"))
-                .font(prominent ? .system(size: 28, weight: .semibold) : .caption).monospacedDigit().foregroundStyle(prominent ? .primary : .secondary).accessibilityLabel((total ? "Total AI runtime " : "Runtime ") + runtimeLabel(seconds))
+    private func label(_ seconds: Double?, connected: Bool) -> some View {
+        let duration = runtimeLabel(seconds)
+        return Text((total && showTitle ? "Total AI runtime · " : "") + duration
+                    + (partial || turns.contains { $0["incomplete"].bool } ? " · partial" : "")
+                    + (connected ? "" : " · offline, unverified"))
+            .font(prominent ? .system(size: 28, weight: .semibold) : .caption)
+            .monospacedDigit().foregroundStyle(prominent ? .primary : .secondary)
+            .accessibilityLabel((total ? "Total AI runtime " : "Runtime ") + duration)
     }
 }
 
 struct NativeChatUsageView: View {
     let run: JSON
+    private var openRouterCostLabel: String {
+        let charge = run["openRouterCost"]
+        if charge["reportedRequests"].int > 0, case .number(let usd) = charge["usd"] {
+            return openRouterUSD(usd) + " USD" + (charge["reportedRequests"].int < charge["requests"].int ? " · partial" : "")
+        }
+        if charge["requests"].int == 0 { return "—" }
+        return ["running", "awaiting_input"].contains(run["status"].string) ? "Awaiting reported cost" : "Cost unavailable"
+    }
     private var partialClaudeInput: Bool { run["schedule"]["provider"].string == "claude" && run["usage"]["observed"].bool && !run["usage"]["inputComplete"].bool }
     private func tokenValue(_ key: String) -> String {
         let usage = run["usage"]
@@ -635,6 +877,9 @@ struct NativeChatUsageView: View {
     }
     var body: some View {
         VStack(spacing: 12) {
+            if run["schedule"]["provider"].string == "openrouter" {
+                metric("OpenRouter cost · this run") { Text(openRouterCostLabel) }
+            }
             metric("Total AI runtime") { RuntimeTimerView(turns: run["turns"].array, total: true, showTitle: false, prominent: false, partial: run["timingPartial"].bool) }
             metric("Input tokens" + (partialClaudeInput ? " · partial" : "")) { Text(tokenValue("inputTokens")).font(.system(size: 18, weight: .medium)) }
             metric("Output tokens") { Text(tokenValue("outputTokens")).font(.system(size: 18, weight: .medium)) }

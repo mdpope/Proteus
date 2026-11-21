@@ -3,6 +3,7 @@ import {mountDatePicker} from '../../shared/ui/date-picker.js';
 import {reminderListStyle} from './reminder-list-style.js';
 import {createFeatureWorkspaceTabs} from '../../shared/navigation/feature-workspace-tabs.js';
 import {reminderDue,reminderWallTime} from './reminder-dates.js';
+import {mountReminderImport} from './reminder-import.js';
 export const reminderIcon='<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 6 2 2 3-4M11 6h10M3 13h4M11 13h10M3 20h4M11 20h10"/></svg>';
 // Shared desktop/website controller. Draft and retry identity stay in memory, bound to one account.
 const escape=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -12,9 +13,11 @@ export function mountReminders(host,options){
  const body=document.createElement('section'),master=document.createElement('section');host.classList.add('reminders-workspace');
  const tabs=new Map();let selected='master',sequence=0,disposed=false;
  const valid=()=>!disposed&&(options.isCurrent?.()??true);
- const masterView=mountReminderOverview(master,{...options,isCurrent:valid,onOpen:id=>void open(id),onBrowse:listId=>void open(null,listId)});
+ let importer;
+ const masterView=mountReminderOverview(master,{...options,isCurrent:valid,onOpen:id=>void open(id),onBrowse:listId=>void open(null,listId),onImport:options.write?()=>importer.open():null});
  const navigation=createFeatureWorkspaceTabs({title:'Reminders',label:'Reminder tabs',tabs:()=>[{id:'master',title:'Reminders'},...[...tabs].map(([id,tab])=>({id,title:tab.view?.title()||'Reminders',closable:true,reminderId:tab.reminderId||id}))],selected:()=>selected,select:show,close:id=>{const tab=tabs.get(id);if(!tab.view.canClose())return;tab.view.destroy();tabs.delete(id);if(selected===id)show('master');},resources:options.contentTabs});
  const nav=navigation.bar;host.replaceChildren(nav,body);
+ if(options.write)importer=mountReminderImport(host,{write:options.write,refresh:()=>masterView.refresh(),isCurrent:valid});
  function drawTabs(){navigation.render();}
  function show(id){if(!valid())return;selected=id;body.replaceChildren(id==='master'?master:tabs.get(id).host);drawTabs();void(id==='master'?masterView:tabs.get(id).view).refresh();}
  async function open(id,listId){
@@ -24,7 +27,7 @@ export function mountReminders(host,options){
   tab.view=mountReminderWorkbench(tab.host,{...options,isCurrent:valid,selectedId:id,initialListId:listId,detailOnly:true,onTitle:drawTabs,onSelected:record=>{tab.reminderId=record.id;drawTabs();},onSaved:drawTabs});drawTabs();
  }
  body.append(master);drawTabs();void masterView.refresh();if(options.selectedId)void open(options.selectedId);
- return {bar:nav,open,refresh:()=>selected==='master'?masterView.refresh():tabs.get(selected)?.view.refresh(),destroy(){disposed=true;navigation.destroy();masterView.destroy();for(const tab of tabs.values())tab.view.destroy();}};
+ return {bar:nav,open,refresh:()=>selected==='master'?masterView.refresh():tabs.get(selected)?.view.refresh(),destroy(){disposed=true;importer?.destroy();navigation.destroy();masterView.destroy();for(const tab of tabs.values())tab.view.destroy();}};
 }
 export function mountReminderWorkbench(host,{read:readBase,write,linkFor=id=>'/life/reminders?id='+id,scopes=()=>({workspaces:[],projects:[]}),scope=null,isCurrent=()=>true,selectedId=null,detailOnly=true,newReminder=false,initialListId,onOpen,onNew,onTitle=()=>{},onSelected=()=>{},onSaved=()=>{},storageKey}){
  // A hard scope (a workspace or project page) is enforced here, so no filter can reveal items outside it.
@@ -165,7 +168,7 @@ export function mountReminderWorkbench(host,{read:readBase,write,linkFor=id=>'/l
 
 // The persistent master is a bounded dashboard, not another item editor. Counts
 // come from canonical query totals; due highlights describe this loaded page.
-export function mountReminderOverview(host,{read,isCurrent=()=>true,onOpen,onBrowse}){
+export function mountReminderOverview(host,{read,isCurrent=()=>true,onOpen,onBrowse,onImport}){
  let disposed=false,loading=false,generation=0,refreshAgain=false;
  const valid=()=>!disposed&&host.isConnected&&isCurrent();
  async function refresh(){
@@ -180,6 +183,7 @@ export function mountReminderOverview(host,{read,isCurrent=()=>true,onOpen,onBro
    const cards=(rows,empty)=>rows.slice(0,6).map(row=>'<button class="reminder-overview-item" data-open="'+escape(row.id)+'"><strong>'+escape(row.title)+'</strong><span>'+escape((open.lists.find(list=>list.id===row.listId)?.name||'Inbox')+' · '+(date(row)||'No due date'))+'</span></button>').join('')||'<p class="note">'+empty+'</p>';
    host.className='reminder-overview';
    host.innerHTML='<header class="heading"><div><h1>Reminders</h1><p class="muted">A clear view of what comes next.</p></div><div class="actions"><button data-browse>All Items</button><button data-refresh aria-label="Refresh reminders">↻</button></div></header><div class="reminder-summary"><button data-browse><span>Open</span><strong>'+escape(open.total)+'</strong></button><button data-browse><span>Lists</span><strong>'+open.lists.length+'</strong></button><button data-browse><span>Completed</span><strong>'+escape(done.total)+'</strong></button></div><div class="reminder-overview-grid"><section><h2>'+(overdue.length?'Needs attention':'Today')+'</h2>'+cards(overdue.length?overdue:todayItems,'Nothing due today in this view. Make space for your next step.')+'</section><section><h2>Upcoming</h2>'+cards(upcoming,'No upcoming dates in this view.')+'</section><section><h2>Lists</h2><div class="reminder-overview-lists">'+open.lists.map(list=>{const style=reminderListStyle(list);return '<button class="reminder-list-choice tone-'+style.tone+'" data-list="'+escape(list.id)+'"><span class="reminder-list-icon">'+style.icon+'</span>'+escape(list.name)+'</button>';}).join('')+'</div></section><section><h2>Next steps</h2>'+cards(open.items,'No open reminders. Add one in All Items.')+'</section></div>';
+   if(onImport&&!open.readOnly){const button=document.createElement('button');button.textContent='Import reminders';button.onclick=onImport;host.querySelector('.heading .actions').prepend(button);}
    host.querySelector('[data-refresh]').onclick=refresh;host.querySelectorAll('[data-browse]').forEach(button=>button.onclick=()=>onBrowse?.());host.querySelectorAll('[data-open]').forEach(button=>button.onclick=()=>onOpen?.(button.dataset.open));host.querySelectorAll('[data-list]').forEach(button=>button.onclick=()=>onBrowse?.(button.dataset.list));
   }catch(error){if(valid()){host.innerHTML='<h1>Reminders</h1><p role="alert"></p><button>Retry</button>';host.querySelector('p').textContent=error.message;host.querySelector('button').onclick=refresh;}}
   finally{loading=false;if(refreshAgain){refreshAgain=false;void refresh();}}

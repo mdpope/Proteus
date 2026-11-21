@@ -1,4 +1,5 @@
-// Sandboxed, isolated-world preload. No API or Node capability is exposed to pages.
+// Sandboxed, isolated-world preload. The permission query exposes only whether
+// the current website can ask. Only the host can grant permissions.
 const { ipcRenderer, contextBridge } = require('electron');
 // Only bounded notification text and numeric scroll metadata cross these bridges.
 // The main process verifies the exact sender and origin; notifications additionally
@@ -46,13 +47,80 @@ if(process.isMainFrame){
   for(const type of ['click','keydown','submit'])window.addEventListener(type,event=>{if(event.isTrusted)ipcRenderer.send('proteus:navigation-intent');},true);
   window.addEventListener('message',event=>{if(event.source!==window)return;if(event.data?.type==='proteus-site-notification-close'){if(typeof event.data.id==='string'&&event.data.id.length<=64)ipcRenderer.send('proteus:site-notification',{close:event.data.id});return;}if(event.data?.type!=='proteus-site-notification')return;const value=event.data.value;if(!value||typeof value.title!=='string'||value.title.length>200||typeof value.body!=='string'||value.body.length>2000||typeof value.id!=='string'||value.id.length>64||value.silent!==undefined&&typeof value.silent!=='boolean'||value.renotify!==undefined&&typeof value.renotify!=='boolean')return;ipcRenderer.send('proteus:site-notification',value);});
   ipcRenderer.on('proteus:site-notification-event',(_event,value)=>window.postMessage({type:'proteus-site-notification-event',...value},location.origin));
+  // Chromium may retain its last notification grant after a rule is removed.
+  // The exact-origin profile rule is the authority for tab notifications.
+  const notificationStates={allow:'granted',block:'denied',ask:'default'};
+  let notificationState='default',notificationUpdate=0;
+  const updateNotificationState=permission=>{
+    if(Object.hasOwn(notificationStates,permission))notificationState=notificationStates[permission];
+  };
+  ipcRenderer.on('proteus:notification-permission-changed',(_event,permission)=>{notificationUpdate++;updateNotificationState(permission);});
+  if(window.isSecureContext)void ipcRenderer.invoke('proteus:notification-permission-state').then(permission=>{if(!notificationUpdate)updateNotificationState(permission);}).catch(()=>{});
+  contextBridge.exposeInMainWorld('__proteusNotificationPermission',()=>window.isSecureContext?notificationState:'denied');
+  contextBridge.exposeInMainWorld('__proteusRequestNotification',()=>{
+    if(!window.isSecureContext||notificationState!=='default'||!navigator.userActivation.isActive)return Promise.resolve(window.isSecureContext?notificationState:'denied');
+    return ipcRenderer.invoke('proteus:notification-permission-request').catch(()=> 'default');
+  });
+  const queryCache=new Map();
+  ipcRenderer.on('proteus:media-permission-changed',()=>queryCache.clear());
+  if(process.argv.includes('--proteus-conference-trace')&&/(^|\.)zoom\.us$/i.test(location.hostname)){
+    contextBridge.exposeInMainWorld('__proteusMediaTrace',phase=>ipcRenderer.send('proteus:conference-trace',phase));
+    contextBridge.executeInMainWorld({func:()=>{
+      const prototype=window.MediaDevices?.prototype;
+      if(!prototype?.getUserMedia)return;
+      const request=prototype.getUserMedia,trace=window.__proteusMediaTrace;
+      prototype.getUserMedia=function(...args){
+        trace('Web page requested devices');
+        return request.apply(this,args).then(stream=>{trace('Web page received devices');return stream;},error=>{
+          const known=['NotAllowedError','NotFoundError','NotReadableError','OverconstrainedError','SecurityError','AbortError'];
+          trace(known.includes(error?.name)?error.name:'Other media error');
+          throw error;
+        });
+      };
+    }});
+  }
+  contextBridge.exposeInMainWorld('__proteusCanAskPermission',kind=>{
+    if(!['microphone','camera'].includes(kind))return Promise.resolve(false);
+    const now=Date.now(),cached=queryCache.get(kind);
+    if(cached&&now-cached.at<1000)return cached.answer;
+    const answer=ipcRenderer.invoke('proteus:site-can-request-permission',kind).catch(()=>false);
+    queryCache.set(kind,{at:now,answer});
+    return answer;
+  });
   contextBridge.executeInMainWorld({func:()=>{
+    const canAsk=window.__proteusCanAskPermission;
+    const currentNotification=window.__proteusNotificationPermission;
+    const requestNotification=window.__proteusRequestNotification;
+    const originalQuery=window.Permissions?.prototype.query;
+    if(originalQuery)window.Permissions.prototype.query=async function(descriptor){
+      const status=await originalQuery.call(this,descriptor);
+      const name=descriptor?.name;
+      if(name!=='notifications'&&!await canAsk(name))return status;
+      // Electron's boolean check cannot return "prompt". Keep the native
+      // status object behind a proxy and leave the capture request untouched.
+      return new Proxy(status,{
+        get(target,key){
+          const value=Reflect.get(target,key,target);
+          if(key==='state'){
+            if(name==='notifications'){const state=currentNotification();return state==='default'?'prompt':state;}
+            return 'prompt';
+          }
+          return typeof value==='function'&&key!=='constructor'?value.bind(target):value;
+        },
+        set(target,key,value){return Reflect.set(target,key,value,target);},
+      });
+    };
     const Original=window.Notification;if(!Original)return;const active=new Map();
     window.addEventListener('message',event=>{if(event.source!==window||event.data?.type!=='proteus-site-notification-event')return;const item=active.get(event.data.id);if(!item||!['click','close'].includes(event.data.kind))return;const signal=new Event(event.data.kind);item.dispatchEvent(signal);item['on'+event.data.kind]?.(signal);if(event.data.kind==='close')active.delete(event.data.id);});
     class SiteNotification extends EventTarget {
-      static get permission(){return Original.permission;}
-      static requestPermission(callback){return Original.requestPermission(callback);}
-      constructor(title,options={}){super();if(Original.permission!=='granted')throw new DOMException('Notification permission is not granted.','NotAllowedError');this.title=String(title).slice(0,200);this.body=String(options.body||'').slice(0,2000);this.tag=String(options.tag||'').slice(0,100);this.data=options.data;this.id=crypto.randomUUID();active.set(this.id,this);if(active.size>200)active.delete(active.keys().next().value);window.postMessage({type:'proteus-site-notification',value:{id:this.id,title:this.title,body:this.body,tag:this.tag,silent:options.silent===true,renotify:options.renotify===true}},location.origin);queueMicrotask(()=>{this.dispatchEvent(new Event('show'));this.onshow?.(new Event('show'));});}
+      static get permission(){return currentNotification();}
+      static requestPermission(callback){
+        return requestNotification().then(state=>{
+          if(typeof callback==='function')callback(state);
+          return state;
+        });
+      }
+      constructor(title,options={}){super();if(currentNotification()!=='granted')throw new DOMException('Notification permission is not granted.','NotAllowedError');this.title=String(title).slice(0,200);this.body=String(options.body||'').slice(0,2000);this.tag=String(options.tag||'').slice(0,100);this.data=options.data;this.id=crypto.randomUUID();active.set(this.id,this);if(active.size>200)active.delete(active.keys().next().value);window.postMessage({type:'proteus-site-notification',value:{id:this.id,title:this.title,body:this.body,tag:this.tag,silent:options.silent===true,renotify:options.renotify===true}},location.origin);queueMicrotask(()=>{this.dispatchEvent(new Event('show'));this.onshow?.(new Event('show'));});}
       close(){active.delete(this.id);window.postMessage({type:'proteus-site-notification-close',id:this.id},location.origin);this.dispatchEvent(new Event('close'));this.onclose?.(new Event('close'));}
     }
     window.Notification=SiteNotification;

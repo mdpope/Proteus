@@ -15,6 +15,22 @@ export function browserAddress(prefix, label) {
   return `<div class="browser-address"><span data-browser-profile-label class="browser-profile-label" hidden></span><input id="${prefix}-url" aria-label="${label}" placeholder="Enter a website address" autocomplete="off" spellcheck="false"><button type="button" id="${prefix}-share" class="browser-agent-toggle" aria-label="Share this tab with agents" aria-pressed="false" title="Share this tab with agents">${robot}</button><button type="button" data-browser-shield class="browser-shield" aria-label="Browser privacy"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6z"/></svg><span>0</span></button></div>`;
 }
 
+async function openSiteNotifications(info, rect) {
+  const command = args => window.desktop.browser({action:'site-notification-setting',id:info.id,...args});
+  const current = await command({});
+  const choices = [['allow','Allow'],['ask','Ask'],['block','Block']];
+  const items = choices.map(([id,label]) => ({
+    id,label:label + (id === current.permission ? ' · Current' : ''),enabled:id !== current.permission,
+  }));
+  items.push({id:'preferences',label:'Browser Preferences…'});
+  const permission = await window.desktop.browser({action:'popup-menu',items,x:rect.left,y:rect.bottom});
+  if (permission === 'preferences') document.dispatchEvent(new CustomEvent('proteus-browser-preferences',{detail:'permissions'}));
+  else if (choices.some(([id]) => id === permission)) {
+    await command({origin:current.origin,permission});
+    document.dispatchEvent(new CustomEvent('proteus-notice',{detail:'Notification permission saved. Reload the site if it still shows the old setting.'}));
+  }
+}
+
 export function updateAgentAccess(button, info = {}) {
   if (!button) return;
   button.hidden=info.incognito===true;
@@ -26,7 +42,7 @@ export function updateAgentAccess(button, info = {}) {
   button.classList.toggle('controlling',info.agentControlling===true);
   const label=button.parentElement?.querySelector('[data-browser-profile-label]');if(label){label.hidden=!info.profileId||info.profileId==='default';label.textContent=info.profileName||'Profile';}
   mountBrowserExtensions(button.closest('.browserbar'),info);
-  const shield=button.parentElement?.querySelector('[data-browser-shield]');if(shield){const protection=info.protection||{};shield.querySelector('span').textContent=String(protection.count||0);shield.classList.toggle('paused',!protection.enabled||protection.paused);shield.title=!protection.ready?'Ghostery filters need downloading':protection.paused?'Protection paused for this website':protection.enabled?'Ghostery · '+(protection.count||0)+' requests blocked':'Protection disabled for this profile';shield.setAttribute('aria-label',shield.title);shield.onclick=async()=>{try{const rect=shield.getBoundingClientRect(),choice=await window.desktop.browser({action:'popup-menu',items:[{id:'toggle',label:protection.paused?'Resume protection for this site':'Pause protection for this site',enabled:!!info.url},{id:'filters',label:protection.ready?'Update Ghostery filters':'Download Ghostery filters'},{id:'preferences',label:'Browser Preferences'}],x:rect.left,y:rect.bottom});if(choice==='toggle')await window.desktop.browser({action:'protection-toggle',id:info.id});else if(choice==='filters'){document.dispatchEvent(new CustomEvent('proteus-notice',{detail:'Updating Ghostery filters…'}));const status=await window.desktop.browser({action:'filters-update'});document.dispatchEvent(new CustomEvent('proteus-notice',{detail:'Ghostery filters updated '+new Date(status.updatedAt).toLocaleString()+'.'}));}else if(choice==='preferences')document.dispatchEvent(new CustomEvent('proteus-browser-preferences'));}catch(error){document.dispatchEvent(new CustomEvent('proteus-notice',{detail:error.message}));}};}
+  const shield=button.parentElement?.querySelector('[data-browser-shield]');if(shield){const protection=info.protection||{};shield.querySelector('span').textContent=String(protection.count||0);shield.classList.toggle('paused',!protection.enabled||protection.paused);shield.title=!protection.ready?'Ghostery filters need downloading':protection.paused?'Protection paused for this website':protection.enabled?'Ghostery · '+(protection.count||0)+' requests blocked':'Protection disabled for this profile';shield.setAttribute('aria-label',shield.title);shield.onclick=async()=>{try{const rect=shield.getBoundingClientRect(),choice=await window.desktop.browser({action:'popup-menu',items:[{id:'toggle',label:protection.paused?'Resume protection for this site':'Pause protection for this site',enabled:!!info.url},{id:'filters',label:protection.ready?'Update Ghostery filters':'Download Ghostery filters'},{id:'site-notifications',label:'Site notification settings…',enabled:!!info.url&&!info.incognito},{id:'preferences',label:'Browser Preferences'}],x:rect.left,y:rect.bottom});if(choice==='site-notifications')await openSiteNotifications(info,rect);else if(choice==='toggle')await window.desktop.browser({action:'protection-toggle',id:info.id});else if(choice==='filters'){document.dispatchEvent(new CustomEvent('proteus-notice',{detail:'Updating Ghostery filters…'}));const status=await window.desktop.browser({action:'filters-update'});document.dispatchEvent(new CustomEvent('proteus-notice',{detail:'Ghostery filters updated '+new Date(status.updatedAt).toLocaleString()+'.'}));}else if(choice==='preferences')document.dispatchEvent(new CustomEvent('proteus-browser-preferences'));}catch(error){document.dispatchEvent(new CustomEvent('proteus-notice',{detail:error.message}));}};}
 
 }
 

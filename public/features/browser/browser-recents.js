@@ -12,7 +12,7 @@ export function recentBrowserVisits(items, limit = 20, query = '') {
     seen.add(url.href);return true;
   }).filter(item=>!term||(String(item.title||'')+' '+item.url).toLocaleLowerCase().includes(term)).slice(0,limit);
 }
-export function bindBrowserRecents(input, {load, navigate, overlay, timeZone, inline=false, native,completion}) {
+export function bindBrowserRecents(input, {load, navigate, overlay, timeZone, inline=false, native,completion,layout}) {
   if (!input) return;
   const controller = new AbortController(), signal = controller.signal;
   const panel = document.createElement('div');panel.className='browser-recents';panel.hidden=true;
@@ -59,17 +59,27 @@ export function bindBrowserRecents(input, {load, navigate, overlay, timeZone, in
   window.addEventListener('resize',position,{signal});
   window.addEventListener('blur',close,{signal});
   // Renderers replace entire toolbars. Release native-page suppression and listeners with them.
-  const observer=new MutationObserver(()=>{if(!input.isConnected){close();controller.abort();observer.disconnect();panel.remove();}});
+  const resize=layout?new ResizeObserver(layout):null;
+  resize?.observe(panel);
+  const observer=new MutationObserver(()=>{if(!input.isConnected){close();controller.abort();observer.disconnect();resize?.disconnect();panel.remove();}});
   observer.observe(document.body,{childList:true,subtree:true});
 }
-export function bindDesktopBrowserRecents(input, {api, navigate, toast, profileId='default'}) {
-  const token='address-recents-'+crypto.randomUUID();
-  const unsubscribe=window.desktop.onBrowserAction(value=>{if(value.type==='address-choice'&&value.token===token&&input.isConnected){input.value=value.url;input.blur();void Promise.resolve(navigate(value.url)).catch(error=>toast(error.message));}});
-  const cleanup=new MutationObserver(()=>{if(!input.isConnected){unsubscribe();cleanup.disconnect();}});cleanup.observe(document.body,{childList:true,subtree:true});
-  bindBrowserRecents(input,{
+export function bindDesktopBrowserRecents(input, {api, navigate, toast, profileId='default',layout}) {
+  const bind = presentation => bindBrowserRecents(input,{
     completion:async query=>{const profile=typeof profileId==='function'?profileId():profileId;return (await api('/api/browser-history',{action:'suggest',query,profileId:profile,limit:100})).items||[];},
     load:async query=>{const profile=typeof profileId==='function'?profileId():profileId;const result=await api('/api/browser-history',{action:'query',query,profileId:profile,limit:100});return result.items||[];},
     navigate:url=>void Promise.resolve(navigate(url)).catch(error=>toast(error.message)),
-    native:value=>void window.desktop.browser({action:'address-suggestions',token,...value}).catch(error=>toast(error.message))
+    ...presentation,
   });
+  // Keep the editor and list in the same Linux window. Some window managers
+  // transfer activation to non-focusable auxiliary windows during popup show.
+  if(window.desktop.platform==='linux'){
+    input.form?.classList.add('linux-address-bar');
+    bind({inline:true,layout:()=>requestAnimationFrame(layout||(()=>{}))});
+    return;
+  }
+  const token='address-recents-'+crypto.randomUUID();
+  const unsubscribe=window.desktop.onBrowserAction(value=>{if(value.type==='address-choice'&&value.token===token&&input.isConnected){input.value=value.url;input.blur();void Promise.resolve(navigate(value.url)).catch(error=>toast(error.message));}});
+  const cleanup=new MutationObserver(()=>{if(!input.isConnected){unsubscribe();cleanup.disconnect();}});cleanup.observe(document.body,{childList:true,subtree:true});
+  bind({native:value=>void window.desktop.browser({action:'address-suggestions',token,...value}).catch(error=>toast(error.message))});
 }

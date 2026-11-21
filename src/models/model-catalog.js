@@ -26,7 +26,7 @@ export function validateModelOptions(schedule, model) {
   if (schedule.contextTier && schedule.contextTier !== 'default' && !model.controls?.contextTiers?.some(t => t.id === schedule.contextTier)) throw new Error(`Context tier ${schedule.contextTier} is unavailable for ${model.id}. Refresh models and choose a supported context size.`);
 }
 export class ModelCatalog {
-  constructor(load, { ttl = 5 * 60_000, now = () => Date.now() } = {}) { this.load = load; this.ttl = ttl; this.now = now; this.value = null; this.lastAttempt = null; this.pending = null; }
+  constructor(load, { ttl = 5 * 60_000, now = () => Date.now(), reportConnection = false } = {}) { this.load = load; this.ttl = ttl; this.now = now; this.value = null; this.lastAttempt = null; this.pending = null; this.reportConnection = reportConnection; }
   async get(force = false) {
     if (this.pending) return this.pending;
     if (!force && this.lastAttempt !== null && this.now() - this.lastAttempt < this.ttl) return this.value;
@@ -35,7 +35,7 @@ export class ModelCatalog {
       let reported;
       try {
         const result = reported = await this.load();
-        if (result.error || result.available === false) throw new Error(result.error || 'Provider unavailable.');
+        if (!this.reportConnection && (result.error || result.available === false)) throw new Error(result.error || 'Provider unavailable.');
         this.value = { ...result, models: uniqueModels(result.models), stale: false, attemptedAt: null, checkedAt: new Date(this.now()).toISOString(), refreshIntervalMs: this.ttl, error: null };
       } catch (error) {
         this.value = { ...(this.value || { available: false, models: [], checkedAt: null }), ...(Array.isArray(reported?.sources)?{sources:reported.sources}:{}), ...(reported?.authenticationCommand ? { authenticationCommand: reported.authenticationCommand } : {}), stale: true, error: error.message, attemptedAt: new Date(this.now()).toISOString(), refreshIntervalMs: this.ttl };
@@ -44,6 +44,15 @@ export class ModelCatalog {
     })().finally(() => { this.pending = null; });
     return this.pending;
   }
+}
+
+// Large, on-demand catalogs stay out of ordinary owner state and chat deltas.
+export function providerCatalogSummaries(catalogs) {
+  return Object.fromEntries(Object.entries(catalogs).map(([id, catalog]) => {
+    if (id !== 'openrouter' || !catalog.value) return [id, catalog.value];
+    const {models = [], ...summary} = catalog.value;
+    return [id, {...summary, modelCount: models.length}];
+  }));
 }
 
 // A message captures its next-turn settings; provider identity never changes here.

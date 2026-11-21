@@ -1,8 +1,11 @@
+import {documentAssetPaste,insertDocumentAsset} from '../../shared/ui/document-paste.js';
+import {bindScreenshotDrop} from '../../shared/ui/screenshot-drop.js';
 import {fitViewportColumns} from '../../shared/ui/viewport-columns.js';
 import {mountFileBrowser,mountFileDocument} from '../workspaces/file-browser.js';
 import {ScratchEditor} from '../../models/scratch-editor.js';
 import {ScratchAction} from '../../models/scratch-action.js';
 import {createFeatureWorkspaceTabs} from '../../shared/navigation/feature-workspace-tabs.js';
+import {bindDocumentZoom,imageZoomView} from '../../shared/ui/content-zoom.js';
 
 export const scratchIcon='<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M14 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-9M9 15l1-4 9-9 3 3-9 9-4 1Z"/></svg>';
 const node=(tag,text,className)=>{const value=document.createElement(tag);if(text!==undefined)value.textContent=text;if(className)value.className=className;return value;};
@@ -11,34 +14,66 @@ const label=(text,control)=>{const value=node('label',text);value.append(control
 
 // A retained feature view preserves editor selection and drafts across shell
 // refreshes. Bodies load only when opened, never as part of the index list.
-export function createScratchpadView({request:transport,settings,configure,pick,projects=()=>[],projectId,workspaceId,workspaces=()=>[],initialId,onSelect,onOpenRecord,single=false,storageKey,markdown,notify=()=>{},contentTabs,owners=()=>[],ownerId,onOwner}) {
+export function createScratchpadView({request:transport,settings,configure,pick,projects=()=>[],projectId,workspaceId,workspaces=()=>[],initialId,onSelect,onOpenRecord,single=false,storageKey,markdown,notify=()=>{},contentTabs,owners=()=>[],ownerId,onOwner,relatedEditors=()=>[]}) {
  const host=node('section',undefined,'scratchpad-page'),content=node('div',undefined,'scratchpad-content');
- let ownerGroup,navigationVersion=0;let indexTimer,settingsOpen=false,refreshSuggestions=async()=>{};
- const editors=new Map();let rootId=null,draftKey=storageKey+':drafts',selected=null,filter={search:'',category:'',sort:'created',offset:0,workspace:'',project:''},listing,loadVersion=0,active=false,storageTimer,mutations,savedDrafts={};
+ let ownerGroup,navigationVersion=0,mountVersion=0,startingId=initialId;let indexTimer,settingsOpen=false,refreshSuggestions=async()=>{};
+ const editors=new Map(),positions=new Map();let rootId=null,draftKey=storageKey+':drafts',selected=null,resumeId=null,filter={search:'',category:'',sort:'created',offset:0,workspace:'',project:''},listing,loadVersion=0,active=false,storageTimer,mutations,savedDrafts={};
  const request=args=>transport({...args,...(rootId?{rootId}: {})});
- function bind(status){if(status.rootId===rootId)return;persist();for(const item of editors.values()){item.disposed=true;item.model.stopTimers();item.markdownEditor?.destroy();item.disposeFiles?.();}editors.clear();selected=null;filter={...filter,search:'',category:'',offset:0};rootId=status.rootId;draftKey=storageKey+':'+rootId+':drafts';mutations=new ScratchAction({request:args=>transport({...args,rootId:status.rootId}),load:()=>JSON.parse(localStorage.getItem(draftKey+':action')||'null'),save:value=>{if(value)localStorage.setItem(draftKey+':action',JSON.stringify(value));else localStorage.removeItem(draftKey+':action');}});savedDrafts={};try{savedDrafts=JSON.parse(localStorage.getItem(draftKey)||'{}');}catch{}}
+ function bind(status){if(status.rootId===rootId)return;persist();releaseEditors();positions.clear();selected=resumeId=null;filter={...filter,search:'',category:'',offset:0};rootId=status.rootId;draftKey=storageKey+':'+rootId+':drafts';mutations=new ScratchAction({request:args=>transport({...args,rootId:status.rootId}),load:()=>JSON.parse(localStorage.getItem(draftKey+':action')||'null'),save:value=>{if(value)localStorage.setItem(draftKey+':action',JSON.stringify(value));else localStorage.removeItem(draftKey+':action');}});savedDrafts={};try{savedDrafts=JSON.parse(localStorage.getItem(draftKey)||'{}');}catch{}}
  const scoped=args=>({...args,...(projectId?{projectId}:workspaceId?{workspaceId}:{} )});
  // A workspace page lists every scratch in that workspace, including all its projects; a project page lists only its own.
  const listScoped=args=>projectId?{...args,projectId}:workspaceId?{...args,workspaceFilter:workspaceId}:args,embedded=!!(projectId||workspaceId);
  const act=fn=>async()=>{try{await fn();}catch(error){notify(error.message);showError(error.message);}};
- function showError(message){let area=host.querySelector('[data-scratch-error]');if(!area){area=node('p',undefined,'banner');area.dataset.scratchError='';area.setAttribute('role','alert');content.prepend(area);}area.replaceChildren(node('span',message));if(mutations?.pending)area.append(button('Retry unconfirmed action',act(async()=>{const command=mutations.pending;const result=await mutations.retry();if(command.action==='delete'){editors.get(command.id)?.model.stopTimers();editors.delete(command.id);delete savedDrafts[command.id];selected=null;persist();await drawList();}else{const id=result.id||command.id,item=editors.get(id);if(item){item.model.record={...item.model.record,...result};if(item.association)item.association.value=item.model.record.projectId||'';lock(item,false);}await openEditor(id);}})));}
+ function showError(message){let area=host.querySelector('[data-scratch-error]');if(!area){area=node('p',undefined,'banner');area.dataset.scratchError='';area.setAttribute('role','alert');content.prepend(area);}area.replaceChildren(node('span',message));if(mutations?.pending)area.append(button('Retry unconfirmed action',act(async()=>{const command=mutations.pending;const result=await mutations.retry();if(command.action==='delete'){editors.get(command.id)?.model.stopTimers();editors.delete(command.id);delete savedDrafts[command.id];selected=null;persist();await drawList();}else if(['move','rename'].includes(command.action)){for(const handle of moveEditors(command.id,rootId)){handle.receive(result);handle.lock(false);}if(selected!==command.id)await openEditor(command.id);}else await openEditor(result.id||command.id);})));}
  function persist(){clearTimeout(storageTimer);for(const [id,item] of editors){if(item.model.dirty)savedDrafts[id]=item.model.snapshot();else delete savedDrafts[id];}try{localStorage.setItem(draftKey,JSON.stringify(savedDrafts));}catch{notify('Scratchpad could not preserve the local draft. Keep this page open until it saves.');}}
  function lock(item,value){item.locked=value;item.host.querySelectorAll('input,select,textarea,button').forEach(el=>el.disabled=value);}
  async function mutate(item,args){lock(item,true);try{return await mutations.perform(args);}finally{lock(item,!!mutations.pending);}}
+ function editorForMove(id,root){return rootId===root?editors.get(id)?.moveHandle:null;}
+ const moveEditors=(id,root)=>new Set([editorForMove(id,root),...relatedEditors(id,root)].filter(Boolean));
+ async function moveAssociation(id,scope){
+  return changeFile(id,{action:'move',...scope});
+ }
+ async function changeFile(id,change){
+  const root=rootId;
+  const handles=moveEditors(id,root);
+  const original=await request({action:'read',id});
+  if(change.action==='move'&&original.workspaceId===change.workspaceId&&original.projectId===change.projectId)return original;
+  let expectedRevision=original.revision;
+  try{
+   for(const editor of handles){
+    editor.lock(true);expectedRevision=await editor.flush();
+   }
+   for(const editor of handles)if(editor.revision()!==expectedRevision)throw Error('Another editor has a different saved revision. Reload it before changing this scratch’s file.');
+   if(root!==rootId)throw Error('Scratchpad storage changed. Reopen the scratch before changing its file.');
+   const moved=await mutations.perform({...change,id,expectedRevision});
+   for(const editor of handles)editor.receive(moved);
+   return moved;
+  }finally{for(const editor of handles)editor.lock(!!mutations.pending);}
+ }
  function changed(item){
   if(item.disposed)return;
-  const navKey=JSON.stringify([item.model.record.relative,item.model.record.title]);if(item.navKey!==navKey){item.navKey=navKey;void item.disposeTree?.reveal?.(item.model.record.relative);}
+  const navKey=JSON.stringify([item.model.record.relative,item.model.record.title]);if(item.navKey!==navKey){item.navKey=navKey;if(!item.fileOpen)void item.disposeTree?.reveal?.(item.model.record.relative);}
   item.status.textContent=item.model.error?'Not saved · '+item.model.error:item.model.pending?'Saving…':item.model.dirty?'Unsaved changes':'Saved';
   item.retry.hidden=!item.model.error||item.model.conflict;item.copy.hidden=!item.model.error;
+  item.renameFile.hidden=!item.model.record.relative?.endsWith('--'+item.model.record.id+'.md');
   item.previewButton.textContent=item.preview.hidden?'Preview':'Edit';if(item.locked)lock(item,true);
   if(!item.preview.hidden)renderPreview(item);
   clearTimeout(storageTimer);storageTimer=setTimeout(persist,750);
-  if(single&&selected===item.model.record.id)onSelect?.(item.model.record);navigation.render();
+  if(single&&selected===item.model.record.id&&!item.fileOpen)onSelect?.(item.model.record);navigation.render();
  }
- function renderMarkdown(item,target,text){target.dataset.linkFile='/Scratchpad/'+item.model.record.relative;if(!markdown){target.replaceChildren(node('pre',text));return;}let bytes=0;const relative=source=>decodeURIComponent(new URL(source,'https://scratch.local/'+item.model.record.relative).pathname.slice(1));markdown(target,text,{link:source=>item.openFile?.(relative(source)),image:async source=>{const value=await request({action:'asset',path:relative(source)});if(!value.mediaType.startsWith('image/'))throw Error('Choose an image.');bytes+=value.data.length;if(bytes>8_000_000)throw Error('Document image memory limit reached.');return 'data:'+value.mediaType+';base64,'+value.data;}});}
+ function renderMarkdown(item,target,text){target.dataset.linkFile='/Scratchpad/'+item.model.record.relative;if(!markdown){target.replaceChildren(node('pre',text));return;}let bytes=0;const relative=source=>{const path=decodeURIComponent(source);return /^Scratch Attachments\/pasted-[a-f0-9]{64}\.(?:png|jpg|gif|webp|pdf)$/.test(path)?path:decodeURIComponent(new URL(source,'https://scratch.local/'+item.model.record.relative).pathname.slice(1));};markdown(target,text,{zoomImage:imageZoomView,link:source=>item.openFile?.(relative(source)),pdf:async source=>{const asset=await request({action:'asset',path:relative(source)});if(asset.mediaType!=='application/pdf')throw Error('Choose a PDF.');return 'data:application/pdf;base64,'+asset.data;},image:async source=>{const value=await request({action:'asset',path:relative(source)});if(!value.mediaType.startsWith('image/'))throw Error('Choose an image.');bytes+=value.data.length;if(bytes>8_000_000)throw Error('Document image memory limit reached.');return 'data:'+value.mediaType+';base64,'+value.data;}});}
  function renderPreview(item){renderMarkdown(item,item.preview,item.model.value.body);}
 
- async function leaveEditor(){if(selected){const item=editors.get(selected);try{await item?.model.flush();}finally{persist();}}}
+ function capture(){if(host.isConnected)editors.get(selected)?.capture();}
+ async function leaveEditor(){if(selected){capture();const item=editors.get(selected);try{await item?.model.flush();}finally{persist();}}}
+ function releaseEditors(){
+  for (const item of editors.values()){
+   item.disposed=true;item.model.stopTimers();item.markdownEditor?.destroy();item.disposeFiles?.();
+   for(const url of item.assetURLs||[])URL.revokeObjectURL(url);
+  }
+  editors.clear(); selected=null; delete host.dataset.loaded; content.replaceChildren();
+ }
+
  function tabs(){navigation.render();}
  async function setup(changing=false){settingsOpen=true;content.replaceChildren(node('h1',changing?'Scratchpad settings':'Scratchpad'),node('p','Choose a storage folder. Proteus creates a Scratchpad directory inside it, organized by workspace and project. Markdown files remain usable in Obsidian and other editors.'));
   ownerPicker();if(!settings||!configure){content.append(node('p','Choose the storage folder on the owning computer, then enable Read and edit Scratchpad for this device in Connections.','note'));return;}
@@ -56,7 +91,7 @@ export function createScratchpadView({request:transport,settings,configure,pick,
   content.append(label('Configured folders',choices),label('Storage folder',folder),node('p','Changing storage leaves existing files untouched. The new location is indexed on a background worker. Large folders may take time; items appear progressively.','note'),actions);await refreshChoices();if(changing&&current?.root)content.prepend(node('p','Current storage: '+current.root,'note'));tabs();
  }
  async function drawList(){
-  settingsOpen=false;clearTimeout(indexTimer);const version=++loadVersion;selected=null;tabs();content.replaceChildren(node('p','Loading scratches…','note'));
+  settingsOpen=false;clearTimeout(indexTimer);const version=++loadVersion;resumeId=selected=null;tabs();content.replaceChildren(node('p','Loading scratches…','note'));
   try {
    const status=await transport({action:'status'});if(version!==loadVersion)return;bind(status);if(!status.configured){await setup();return;}
    listing=await request(listScoped({...(filter.workspace?{workspaceFilter:filter.workspace}:{}),...(filter.project?{projectId:filter.project}:{}),action:'list',search:filter.search,sort:filter.sort,offset:filter.offset,...(filter.category?{category:filter.category}: {})}));if(version!==loadVersion)return;
@@ -84,17 +119,21 @@ export function createScratchpadView({request:transport,settings,configure,pick,
   if(editors.size>=20)throw Error('Close a saved scratch tab before opening more.');
   const record=await mutations.perform(scoped({action:'create',...(filter.project?{projectId:filter.project}:filter.workspace?{workspaceId:filter.workspace}:{}),title:'Untitled',body:'',format:'markdown',category:filter.category}));await openEditor(record.id);
  }
- async function openEditor(id){
+ async function openEditor(id,{restore=false}={}){
   if(onOpenRecord&&!single)return onOpenRecord(id);
   const version=++navigationVersion;if(selected!==id)await leaveEditor();if(version!==navigationVersion)return;++loadVersion;
   let item=editors.get(id);if(!item){
    if(editors.size>=20)throw Error('Close a saved scratch tab before opening more.');
    const record=await request({action:'read',id});if(version!==navigationVersion)return;item=editor(record);editors.set(id,item);
   }
-  if(version!==navigationVersion)return;selected=id;item.showScratch?.();content.replaceChildren(item.host);void item.disposeTree?.reveal?.(item.model.record.relative);onSelect?.(item.model.record);tabs();changed(item);
+  if(version!==navigationVersion||!active||!host.isConnected)return;
+  selected=resumeId=id;content.replaceChildren(item.host);tabs();
+  if(restore)await item.restore(version);else item.showScratch();
+  if(version===navigationVersion)changed(item);
  }
  function editor(record){
   const page=node('article',undefined,'scratchpad-editor'),title=node('input'),category=node('input'),workspace=node('select'),association=node('select'),body=node('textarea'),preview=node('div',undefined,'rich-text'),status=node('p',undefined,'note'),actions=node('div',undefined,'actions');
+  const position=positions.get(record.id)||{};positions.set(record.id,position);
   const item={host:page,status,body,preview,association,locked:mutations.pending?.id===record.id};
   const editorRoot=rootId,model=item.model=new ScratchEditor(record,{request:args=>transport({...args,rootId:editorRoot}),saved:savedDrafts[record.id],changed:()=>changed(item)});
   title.value=model.value.title;title.setAttribute('aria-label','Scratch title');category.value=model.value.category;category.placeholder='Inbox, Ideas, Snippets…';category.setAttribute('aria-label','Scratch category');
@@ -102,19 +141,44 @@ export function createScratchpadView({request:transport,settings,configure,pick,
   const projectChoices=()=>{association.replaceChildren(new Option('No project',''));for(const project of projects().filter(row=>row.workspaceId===workspace.value))association.append(new Option(project.name,project.id));association.value=model.record.projectId||'';};projectChoices();association.setAttribute('aria-label','Scratch project');
   body.value=model.value.body;body.setAttribute('aria-label','Scratch content');body.spellcheck=model.value.format!=='code';preview.hidden=true;
   title.oninput=()=>model.edit({title:title.value});category.oninput=()=>model.edit({category:category.value});body.oninput=()=>model.edit({body:body.value});
-  const move=act(async()=>{try{await model.flush();const moved=await mutate(item,{action:'move',id:record.id,projectId:association.value||null,workspaceId:workspace.value||null,expectedRevision:model.record.revision});model.record={...model.record,...moved};workspace.value=model.record.workspaceId||'';projectChoices();changed(item);}finally{association.value=model.record.projectId||'';lock(item,!!mutations.pending);}});
+  item.moveHandle={
+   lock:value=>lock(item,value),revision:()=>model.record.revision,
+   flush:async()=>{await model.flush();return model.record.revision;},
+   receive:moved=>{model.record={...model.record,...moved};workspace.value=model.record.workspaceId||'';projectChoices();changed(item);}
+  };
+  const move=act(async()=>{
+   try{await moveAssociation(record.id,{projectId:association.value||null,workspaceId:workspace.value||null});}
+   finally{workspace.value=model.record.workspaceId||'';projectChoices();}
+  });
   association.onchange=move;workspace.onchange=()=>{association.value='';void move();};
   const rich=node('div',undefined,'scratch-code-editor');
-  void import('./editor-runtime.js').then(module=>{if(item.disposed)return;item.markdownEditor=module.mount(rich,{value:body.value,onChange:text=>{body.value=text;model.edit({body:text,format:'markdown'});},render:(target,text)=>renderMarkdown(item,target,text)});item.markdownEditor.source(source);body.hidden=true;}).catch(error=>{notify('Rich editor unavailable; Markdown source remains editable. '+error.message);rich.hidden=true;});
+  const assetTarget={
+   save:fields=>transport({action:'paste',rootId:editorRoot,id:record.id,...fields}),
+   insert:markup=>{
+    if(item.disposed||!page.isConnected)return;
+    const text=markup+'\n';
+    if(item.markdownEditor)item.markdownEditor.replaceSelection(text);
+    else{body.setRangeText(text,body.selectionStart,body.selectionEnd,'end');body.dispatchEvent(new Event('input'));}
+   },
+   report:error=>{notify(error.message);showError(error.message);},
+  };
+  const paste=event=>{if(!item.locked)documentAssetPaste(event,assetTarget);};
+  body.addEventListener('paste',paste,{capture:true});
+  rich.addEventListener('paste',paste,{capture:true});
+  for(const editor of [body,rich])bindScreenshotDrop(editor,()=>!item.locked&&!item.disposed&&preview.hidden?async read=>insertDocumentAsset(await read(),assetTarget):null,message=>assetTarget.report(Error(message)));
+  void import('./editor-runtime.js').then(module=>{if(item.disposed)return;item.markdownEditor=module.mount(rich,{value:body.value,onChange:text=>{body.value=text;model.edit({body:text,format:'markdown'});},render:(target,text)=>renderMarkdown(item,target,text)});item.markdownEditor.source(source);zoom.refresh();body.hidden=true;item.markdownEditor.restore(position.editor);}).catch(error=>{notify('Rich editor unavailable; Markdown source remains editable. '+error.message);rich.hidden=true;});
   const toolbar=node('div',undefined,'actions');toolbar.setAttribute('role','toolbar');toolbar.setAttribute('aria-label','Markdown formatting');
   for(const [text,before,after] of [['Bold','**','**'],['Italic','_','_'],['Heading','## ',''],['Bullet','- ',''],['Task','- [ ] ',''],['Code','`','`'],['Code block','\n```\n','\n```\n'],['Link','[','](https://)'],['Image','![','](image.png)'],['Quote','> ',''],['Numbered list','1. ',''],['Strike','~~','~~'],['Divider','\n---\n',''],['Table','\n| Column | Column |\n| --- | --- |\n| ',' | |\n']])toolbar.append(button(({Bold:'B',Italic:'I',Heading:'H₂',Bullet:'•',Task:'☑',Code:'</>',Link:'↗',Image:'▧',Quote:'❝'})[text]||text,()=>{if(item.markdownEditor){item.markdownEditor.insert(before,after);return;}const start=body.selectionStart,end=body.selectionEnd;body.setRangeText(before+body.value.slice(start,end)+after,start,end,'select');body.dispatchEvent(new Event('input',{bubbles:true}));body.focus();},text));
   item.previewButton=button('Preview',()=>{preview.hidden=!preview.hidden;body.hidden=!preview.hidden;toolbar.hidden=!preview.hidden;rich.hidden=!preview.hidden;if(item.markdownEditor)body.hidden=true;for(const control of [title,category,workspace,association])control.disabled=!preview.hidden;sourceButton.disabled=!preview.hidden;if(!preview.hidden)renderPreview(item);changed(item);});
   item.retry=button('Retry save',act(()=>model.flush({retry:true})));item.retry.hidden=true;
   item.copy=button('Copy unsaved text',act(async()=>{await navigator.clipboard.writeText(model.value.body);notify('Unsaved text copied.');}));item.copy.hidden=true;
-  let source=false;const sourceButton=button('Source',()=>{source=!source;item.markdownEditor?.source(source);sourceButton.textContent=source?'Live Preview':'Source';});
+  item.renameFile=button('Use title as filename',act(()=>changeFile(record.id,{action:'rename'})));
+  actions.append(item.renameFile);
+  let source=position.source===true;const sourceButton=button(source?'Live Preview':'Source',()=>{source=!source;item.markdownEditor?.source(source);sourceButton.textContent=source?'Live Preview':'Source';});
   actions.append(sourceButton,item.previewButton,item.retry,item.copy,button('Reload saved version',act(async()=>{if(model.dirty&&!confirm('Discard this unsaved draft and reload the saved file?'))return;model.stopTimers();editors.delete(record.id);delete savedDrafts[record.id];persist();selected=null;await openEditor(record.id);})),button('Delete scratch',act(async()=>{if(!confirm('Move this scratch to Scratchpad’s .Trash folder?'))return;await model.flush();await mutate(item,{action:'delete',id:record.id,expectedRevision:model.record.revision});editors.delete(record.id);delete savedDrafts[record.id];persist();selected=null;await drawList();})));
   const properties=node('div',undefined,'scratchpad-properties');properties.append(label('Category',category),label('Workspace',workspace),label('Project',association));const document=node('section',undefined,'scratchpad-document');document.append(label('Title',title),properties,actions,status,toolbar,body,rich,preview);const tree=node('aside',undefined,'scratchpad-tree');tree.setAttribute('aria-label','Scratch folder browser');page.append(tree,document);const disposeViewport=fitViewportColumns(page);
-  let fileView;
+  const zoom=bindDocumentZoom(document,{targets:[body,rich,preview],controls:actions,onWrap:wrapped=>{body.wrap=wrapped?'soft':'off';item.markdownEditor?.setWrap(wrapped);}});
+  let fileView;const legacyNames=new Map();
   const files=async(action,args={})=>{
    if(action==='resolve-link'){
     if(/^https?:/i.test(args.source)){const url=new URL(args.source);if(url.username||url.password)throw Error('Credential links are not supported.');if(args.image)throw Error('External images are not loaded.');return {external:url.href};}
@@ -124,17 +188,58 @@ export function createScratchpadView({request:transport,settings,configure,pick,
    }
    if(action==='roots')return {canWrite:false,roots:[{id:'scratchpad',name:'Scratchpad',path:'',available:true}]};
    const tree=(await request({action:'tree'})).items;
+   for(const row of tree){
+    const component=row.path.split('/').pop(),id=row.association?.projectId||row.association?.workspaceId;
+    if(id&&component.endsWith('--'+id))legacyNames.set(row.path,component.slice(0,-id.length-2));
+   }
    const entry=tree.find(row=>row.path===args.file);
-   if(action==='browse'){const directory=args.directory||'',prefix=directory?directory+'/':'',entries=tree.filter(row=>row.path.startsWith(prefix)&&!row.path.slice(prefix.length).includes('/')).filter(row=>!args.query||row.path.toLowerCase().includes(args.query.toLowerCase())).map(row=>({path:row.path,name:row.scratchTitle||row.path.split('/').pop().replace(/--[a-zA-Z0-9_-]+$/,''),kind:row.kind==='directory'?'folder':'file',type:row.scratchId?'Markdown':row.path.split('.').pop(),identity:row.path}));entries.sort((a,b)=>(a.kind==='folder'?0:1)-(b.kind==='folder'?0:1)||(args.direction==='desc'?-1:1)*a.name.localeCompare(b.name,undefined,{numeric:true,sensitivity:'base'})||a.path.localeCompare(b.path));return {entries,nextOffset:null,root:{name:'Scratchpad'}};}
+   if(action==='browse'){const directory=args.directory||'',prefix=directory?directory+'/':'',entries=tree.filter(row=>row.path.startsWith(prefix)&&!row.path.slice(prefix.length).includes('/')).filter(row=>!args.query||row.path.toLowerCase().includes(args.query.toLowerCase())).map(row=>({path:row.path,name:row.scratchTitle||legacyNames.get(row.path)||row.path.split('/').pop(),kind:row.kind==='directory'?'folder':'file',type:row.scratchId?'Markdown':row.path.split('.').pop(),identity:row.path,scratchId:row.scratchId,association:row.association}));entries.sort((a,b)=>(a.kind==='folder'?0:1)-(b.kind==='folder'?0:1)||(args.direction==='desc'?-1:1)*a.name.localeCompare(b.name,undefined,{numeric:true,sensitivity:'base'})||a.path.localeCompare(b.path));return {entries,nextOffset:null,root:{name:'Scratchpad'}};}
    if(action==='preview'&&entry?.scratchId){const value=await request({action:'read',id:entry.scratchId});return {...value,scratchId:value.id,mediaType:'text/markdown',content:value.body,relativePath:entry.path};}
-   if(action==='preview'||action==='pdf'){const value=await request({action:'asset',path:args.file});return {...value,dataURL:value.data?'data:'+value.mediaType+';base64,'+value.data:undefined,relativePath:args.file,title:args.file.split('/').pop()};}
+   if(action==='preview'||action==='pdf'){const value=await request({action:'asset',path:args.file}),file=value.path||args.file;return {...value,dataURL:value.data?'data:'+value.mediaType+';base64,'+value.data:undefined,relativePath:file,title:file.split('/').pop()};}
    throw Error('Use Scratchpad controls to manage Markdown notes.');
   };
-  item.showScratch=()=>{fileView?.dispose();fileView=null;if(!document.contains(title))document.replaceChildren(label('Title',title),properties,actions,status,toolbar,body,rich,preview);};
-  const openFile=async value=>{if(value.scratchId)return openEditor(value.scratchId);const version=++navigationVersion;await model.flush();if(version!==navigationVersion||selected!==record.id)return;fileView?.dispose();void item.disposeTree?.reveal?.(value.relativePath);onSelect?.({title:value.title||value.relativePath.split('/').pop()});document.replaceChildren();const back=button('Back to scratch',act(()=>openEditor(record.id)));const area=node('section');document.append(back,area);fileView=mountFileDocument(area,{value,request:files,open:openFile,onError:error=>notify(error.message)});};
+  item.capture=()=>{
+   if(!page.isConnected)return;
+   if(item.fileOpen){position.fileState=fileView?.position();return;}
+   Object.assign(position,{top:document.scrollTop,left:document.scrollLeft,bodyTop:body.scrollTop,source,preview:!preview.hidden,editor:item.markdownEditor?.position()});
+  };
+  const restorePosition=()=>requestAnimationFrame(()=>{
+   if(!page.isConnected||item.fileOpen)return;
+   document.scrollTo(position.left||0,position.top||0);body.scrollTop=position.bodyTop||0;
+   item.markdownEditor?.restore(position.editor);
+  });
+  item.showScratch=()=>{
+   fileView?.dispose();fileView=null;item.fileOpen=false;delete position.file;delete position.fileState;
+   if(!document.contains(title))document.replaceChildren(label('Title',title),properties,actions,status,toolbar,body,rich,preview);
+   if(position.preview===true&&preview.hidden)item.previewButton.click();
+   void item.disposeTree?.reveal?.(model.record.relative);onSelect?.(model.record);restorePosition();
+  };
+  const showFile=(value,state)=>{
+   fileView?.dispose();position.file=value.relativePath;item.fileOpen=true;
+   void item.disposeTree?.reveal?.(value.relativePath);onSelect?.({title:value.title||value.relativePath.split('/').pop()});
+   const back=button('Back to scratch',()=>item.showScratch()),area=node('section',undefined,'scratch-file-pane');document.replaceChildren(back,area);
+   fileView=mountFileDocument(area,{value,request:files,open:openFile,state,onError:error=>{area.append(node('p',error.message,'banner'));notify(error.message);}});
+  };
+  const openFile=async value=>{
+   if(value.scratchId)return openEditor(value.scratchId);
+   const version=++navigationVersion;item.capture();await model.flush();
+   if(version!==navigationVersion||selected!==record.id||!host.isConnected)return;
+   delete position.fileState;showFile(value);
+  };
+  item.restore=async version=>{
+   if(!position.file){item.showScratch();return;}
+   const file=position.file;
+   try{const value=await files('preview',{file});if(version===navigationVersion&&page.isConnected)showFile(value,position.fileState);}
+   catch(error){if(version===navigationVersion&&page.isConnected){item.showScratch();showError(error.message);}}
+  };
   item.openFile=async file=>openFile(await files('preview',{file}));
-  item.disposeFiles=()=>{disposeViewport();item.disposeTree?.();fileView?.dispose();};
-  item.disposeTree=mountFileBrowser(tree,{workspaceId:'scratchpad',remote:true,compact:true,selectOpens:true,state:{selectedFile:record.relative},escape:text=>String(text).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),request:files,open:openFile});
+  item.disposeFiles=()=>{zoom.dispose();disposeViewport();item.disposeTree?.();fileView?.dispose();};
+  item.disposeTree=mountFileBrowser(tree,{workspaceId:'scratchpad',remote:true,compact:true,selectOpens:true,breadcrumbLabel:(component,path)=>legacyNames.get(path)||component,state:{selectedFile:record.relative},escape:text=>String(text).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),request:files,open:openFile,associationDrop:async(source,scope)=>{
+   try{
+    await moveAssociation(source.scratchId,scope);
+    if(source.scratchId!==record.id)await item.disposeTree?.reveal?.(model.record.relative);
+   }catch(error){showError(error.message);throw error;}
+  }});
   return item;
  }
  const navigation=createFeatureWorkspaceTabs({title:'Scratchpad',tabs:()=>[{id:'master',title:'Scratchpad'},...[...editors].map(([id,item])=>({id,title:item.model.value.title||'Untitled',closable:true,scratchId:id}))],selected:()=>selected||'master',select:id=>{if(id==='master')void act(async()=>{await leaveEditor();selected=null;await drawList();})();else void act(()=>openEditor(id))();},close:async id=>{const item=editors.get(id);await item.model.flush();item.model.stopTimers();item.disposed=true;item.markdownEditor?.destroy();item.disposeFiles?.();editors.delete(id);delete savedDrafts[id];persist();if(selected===id){selected=null;await drawList();}},resources:contentTabs});
@@ -142,5 +247,16 @@ export function createScratchpadView({request:transport,settings,configure,pick,
  const bar=navigation.bar;if(!single&&!(embedded&&onOpenRecord))host.append(bar);host.append(content);
  const refreshFolders=()=>active&&settingsOpen?refreshSuggestions():Promise.resolve();
  const onFocus=()=>void refreshFolders().catch(error=>notify(error.message));window.addEventListener('focus',onFocus);
- return {host,bar,refreshFolders,refreshOwners(){if(!selected)ownerPicker();},async mount(container){if(active&&host.isConnected)return;active=true;container.replaceChildren(host);host.hidden=true;try{const status=await transport({action:'status'});bind(status);host.hidden=false;if(!host.dataset.loaded||!selected){host.dataset.loaded='true';if(initialId){await openEditor(initialId);}else await drawList();}else{content.replaceChildren(editors.get(selected).host);onSelect?.(editors.get(selected).model.record);}}catch(error){host.hidden=false;content.replaceChildren(node('h1','Scratchpad'));ownerPicker();showError(error.message);}},async leave(){if(!active)return;active=false;clearTimeout(indexTimer);for(const item of editors.values())try{await item.model.flush();}catch(error){notify(error.message);}persist();},async destroy(){await this.leave();window.removeEventListener('focus',onFocus);for(const item of editors.values()){item.disposed=true;item.model.stopTimers();item.markdownEditor?.destroy();item.disposeFiles?.();for(const url of item.assetURLs||[])URL.revokeObjectURL(url);}editors.clear();bar.remove();host.remove();},async open(id){await openEditor(id);},persist};
+ return {host,bar,capture,editorForMove,refreshFolders,refreshOwners(){if(!selected)ownerPicker();},
+  async mount(container){
+   if(active&&host.isConnected)return;
+   const version=++mountVersion;active=true;container.replaceChildren(host);host.hidden=true;
+   try{
+    const status=await transport({action:'status'});if(version!==mountVersion||!host.isConnected)return;
+    bind(status);host.hidden=false;
+    const id=resumeId||startingId;if(id){await openEditor(id,{restore:true});if(resumeId)startingId=null;}else await drawList();
+   }catch(error){if(version===mountVersion&&host.isConnected){host.hidden=false;content.replaceChildren(node('h1','Scratchpad'));ownerPicker();showError(error.message);}}
+  },
+  async leave(){if(!active)return;capture();active=false;++mountVersion;++navigationVersion;++loadVersion;clearTimeout(indexTimer);persist();for(const item of editors.values())try{await item.model.flush();}catch(error){notify(error.message);}persist();if(!active&&!host.isConnected){releaseEditors();listing=null;}},
+  async destroy(){await this.leave();window.removeEventListener('focus',onFocus);releaseEditors();bar.remove();host.remove();},async open(id){await openEditor(id);},persist};
 }

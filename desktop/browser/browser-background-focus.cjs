@@ -1,7 +1,7 @@
 // Initial native page loading may focus an invisible WebContentsView. Keep the
 // latest legitimate local input focused until loading ends or this tab is shown.
 function preserveBackgroundFocus(browser,tab,window,initialFocus) {
-  if(!window||!initialFocus)return {restore(){},stop(){}};
+  if(!window||!initialFocus)return {restore(){},finish(){}};
   const contents=tab.view.webContents,listeners=[];let target=initialFocus,targetActive,targetSelection,stopped=false;
   const listen=(emitter,event,handler)=>{emitter.on(event,handler);listeners.push(()=>emitter.removeListener(event,handler));};
   const stop=()=>{if(stopped)return;stopped=true;for(const remove of listeners)remove();listeners.length=0;};
@@ -26,6 +26,26 @@ function preserveBackgroundFocus(browser,tab,window,initialFocus) {
   candidates.delete(contents);
   for(const candidate of candidates)listen(candidate,'focus',()=>inWindow(()=>{target=candidate;targetActive=browser.active;targetSelection=browser.tabs.get(browser.active);}));
   listen(contents,'focus',restore);listen(contents,'destroyed',stop);listen(window,'blur',stop);
-  return {restore,stop};
+  return {
+    restore,
+    finish(){
+      // Native focus can still belong to the hidden view after its first load.
+      try{restore();}finally{stop();}
+    }
+  };
 }
-module.exports={preserveBackgroundFocus};
+// Future page navigations can focus the same hidden view after its initial load.
+// Resolve the user's current surface in the owning window, including its address bar.
+function restoreInactivePageFocus(browser,tab){
+  const window=browser.window,view=tab.view,contents=view?.webContents;
+  if(!window.isFocused()||!contents?.isFocused()||tab.videoPopout||tab.websiteFullscreen)return;
+  if(view.getVisible()){
+    if(browser.active===tab.id)browser.rendererFocusSelection=undefined;
+    return;
+  }
+  const active=browser.tabs.get(browser.active);
+  const next=browser.rendererFocusSelection===browser.active||!active?.view?.getVisible()
+    ?window.webContents:active.view.webContents;
+  if(!next.isDestroyed())next.focus();
+}
+module.exports={preserveBackgroundFocus,restoreInactivePageFocus};

@@ -63,6 +63,19 @@ import CryptoKit
         self.cacheRoot = cacheRoot ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Proteus/scratchpad")
         self.keyProvider = cacheKey; self.cacheWriter = cacheWriter
     }
+    func sidebarRecents(_ owner: RemoteStore) async -> [JSON] {
+        guard let host = owner.connection?.hostId, let key = keyProvider(),
+              let status = try? await owner.request("scratchpad.command", ["action": .string("status")]),
+              status["configured"].bool, !status["rootId"].string.isEmpty else { return [] }
+        if ready && host == hostID && status["rootId"].string == rootID { return recents }
+        let digest = SHA256.hash(data: Data((host + "|" + status["rootId"].string).utf8)).map { String(format: "%02x", $0) }.joined()
+        let url = cacheRoot.appendingPathComponent(digest + ".enc")
+        return await Task.detached(priority: .utility) {
+            guard let data = try? Data(contentsOf: url),
+                  let payload = try? RemoteCrypto.open(String(decoding: data, as: UTF8.self), key: key, aad: "proteus-scratchpad:" + digest) else { return [JSON]() }
+            return payload["recents"].array
+        }.value
+    }
 
     func connect(_ remote: RemoteStore) async {
         let token = UUID(); generation = token; ready = false; error = ""
@@ -124,7 +137,7 @@ import CryptoKit
             if drafts[id]?.dirty != true { let row = try await request(["action": .string("read"), "id": .string(id)]); drafts[id] = ScratchpadDraft(row, saved: saved[id] ?? .null) }
             if !tabs.contains(id) { guard tabs.count < 20 else { throw RemoteError(message: "Close a saved scratch tab before opening more.") }; tabs.append(id) }
             selected = id; error = ""
-            if let draft = drafts[id] { recents = Array(([JSON.object(["id": .string(id), "title": .string(draft.title)])] + recents.filter { $0["id"].string != id }).prefix(100)); try await persist() }
+            if let draft = drafts[id] { recents = Array(([JSON.object(["id": .string(id), "title": .string(draft.title), "visitedAt": .string(Date().ISO8601Format())])] + recents.filter { $0["id"].string != id }).prefix(100)); try await persist() }
         } catch { self.error = error.localizedDescription }
     }
     func persist(completedAction: Bool = false) async throws {

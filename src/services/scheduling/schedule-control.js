@@ -3,6 +3,7 @@ import {qualifyScopedCommandRuntime} from './host-scoped-executor.js';
 import {managedWorkspace} from '../integrations/managed-requirements.js';
 import {reconciliationPlan} from './source-reconciliation.js';
 import {inspectSchedule,scheduleSources,refreshScheduleCatalog} from './schedule-inspection.js';
+import {refreshRunSources} from './schedule-context.js';
 import {scheduleAccessScope} from '../settings/schedule-access-rule.js';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -14,7 +15,7 @@ const active=new Set(['queued','running','awaiting_input']),uuid=/^[a-f0-9]{8}-[
 const canonical=value=>Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,canonical(value[key])])):value;
 const digest=value=>createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex');
 const pick=(value,keys)=>Object.fromEntries(keys.filter(key=>value[key]!==undefined).map(key=>[key,value[key]]));
-const editable=['name','cron','timezone','provider','model','reasoningMode','reasoningEffort','contextTier','serviceTier','prompt','misfire','contextSelection','workspaceSources','executionPermissions','managedConnections','managedConnectionWorkspaceId','notifications'];
+const editable=['name','cron','timezone','provider','model','reasoningMode','reasoningEffort','contextTier','serviceTier','prompt','misfire','autoRefreshSources','contextSelection','workspaceSources','executionPermissions','managedConnections','managedConnectionWorkspaceId','notifications'];
 
 // This tool owns schedule/test intents only. Native services and their takeover
 // gates remain with their existing owners. No operation resolves tool approvals.
@@ -35,7 +36,7 @@ export class ScheduleControl {
   this.service.chatControl.assertCaller();const grant={id:randomUUID(),actor,contextId,scope,createdAt:new Date().toISOString()};this.access.grants.push(grant);atomicJSON(this.accessFile,this.access);return {granted:true,grant};
  }
  current(args){const schedule=this.service.engine.schedules.get(args.scheduleId);if(!args.expectedRevision||revision(schedule)!==args.expectedRevision)throw Error('Schedule changed. Read the current revision before proceeding.');return schedule;}
- view(schedule){return {executionPermissions:schedule.executionPermissions||null,...pick(schedule,['id','name','enabled','cron','timezone','provider','model','reasoningMode','reasoningEffort','contextTier','serviceTier','prompt','misfire','contextSelection','workspace','workspaceSources','executionPermissions','managedConnections','managedConnectionWorkspaceId','notifications','source','accessOverlay','ownerSelectionOverride','error']),prompt:String(schedule.prompt||'').slice(0,24000),promptTruncated:String(schedule.prompt||'').length>24000,revision:schedule.revision||revision(schedule),mcpServerNames:Object.keys(schedule.mcpServers||{}),capturedSources:(schedule.context?.entries||[]).map(entry=>pick(entry,['id','name','kind','hash'])),availableMcpServerNames:[...new Set([...Object.keys(this.service.settings.get().mcpServers||{}),...Object.keys(schedule.mcpServers||{})])]};}
+ view(schedule){return {executionPermissions:schedule.executionPermissions||null,...pick(schedule,['id','name','enabled','cron','timezone','provider','model','reasoningMode','reasoningEffort','contextTier','serviceTier','prompt','misfire','autoRefreshSources','contextSelection','workspace','workspaceSources','executionPermissions','managedConnections','managedConnectionWorkspaceId','notifications','source','accessOverlay','ownerSelectionOverride','error']),prompt:String(schedule.prompt||'').slice(0,24000),promptTruncated:String(schedule.prompt||'').length>24000,revision:schedule.revision||revision(schedule),mcpServerNames:Object.keys(schedule.mcpServers||{}),capturedSources:(schedule.context?.entries||[]).map(entry=>pick(entry,['id','name','kind','hash'])),availableMcpServerNames:[...new Set([...Object.keys(this.service.settings.get().mcpServers||{}),...Object.keys(schedule.mcpServers||{})])]};}
  validateChanges(actor,args){
      if(!args.changes||typeof args.changes!=='object'||Array.isArray(args.changes)||Object.keys(args.changes).some(key=>![...editable,'mcpServerNames'].includes(key)))throw Error('Choose supported schedule settings.');
      if(args.changes.executionPermissions!==undefined||args.changes.workspaceSources?.some(ref=>ref.categories?.includes('permissions')))this.check(actor,args,'schedule-configure-permissions');
@@ -46,7 +47,6 @@ export class ScheduleControl {
  save(){atomicJSON(this.file,this.records);}
  runView(run,{results=true}={}){let budget=24000;const events=results?run.events.slice(-20).reverse().map(event=>{const text=String(event.text||'').slice(0,Math.max(0,Math.min(6000,budget)));budget-=text.length;return {role:event.role,at:event.at,text};}).reverse():undefined;return {runId:run.id,scheduleId:run.schedule.id,scheduleRevision:run.scheduleTest?.scheduleRevision||run.scheduleRevision,futureScheduleRevision:run.scheduleTest?.futureScheduleRevision||null,runRevision:revision(run.schedule),operationId:run.scheduleTest?.operationId||null,status:run.status,pending:run.pending?{id:run.pending.id,type:run.pending.type,question:String(run.pending.question||'').slice(0,2000),humanApprovalRequired:run.pending.type==='permission'}:null,createdAt:run.createdAt,updatedAt:run.updatedAt,capturedConfiguration:run.scheduleTest?.configuration||null,captured:pick(run.schedule,['provider','model','reasoningMode','reasoningEffort','contextTier','serviceTier']),...(results?{sourceHashes:(run.schedule.context?.entries||[]).slice(0,200).map(entry=>pick(entry,['id','hash','kind'])),usage:pick(run.usage||{},['inputTokens','outputTokens','cachedInputTokens','totalTokens','observed']),events}:{}),outcome:run.status==='completed'?'model-turn-completed':'not-completed',externalOutcomeVerified:false};}
  targetRun(args){const run=this.service.engine.getRun(args.runId);if(run.schedule.id!==args.scheduleId||!['manual','scheduled'].includes(run.trigger))throw Error('Choose an exact run of this schedule.');if(run.schedule.provider==='local-process')throw Error('Native service runs keep their existing control boundary.');return run;}
- idle(run){if(active.has(run.status)||this.service.engine.running.has(run.id))throw Error('Wait for the captured run to finish before changing its sources.');}
  async preflight(schedule,{captured=false}={}){
   if(schedule.provider==='local-process')throw Error('Native service replacements cannot be started by this tool. Observe/control their existing owner.');
   validateSchedule(schedule);const engine=this.service.engine,prepared=structuredClone(captured?schedule:engine.prepareSchedule(schedule,'manual'));if(prepared.context)prepared.context.followsWorkspace=false;engine.beforeRun?.(prepared);
@@ -185,13 +185,22 @@ export class ScheduleControl {
    if(args.action==='refresh-sources'){
     if(schedule.provider==='local-process')throw Error('Native services keep their existing owner controls.');
     if(!['future-runs','existing-run'].includes(args.settingsScope))throw Error('Choose future-runs or existing-run source refresh.');
-    let run,before;
-    if(args.settingsScope==='existing-run'){run=this.targetRun(args);this.idle(run);before=revision(run.schedule);if(args.expectedRunRevision!==before)throw Error('Captured run settings changed.');}
-    await refreshScheduleCatalog(this.service,run?.schedule||schedule);this.check(actor,args,permission);this.current(args);
-    if(run){this.idle(run);if(revision(run.schedule)!==before)throw Error('Captured settings changed during refresh.');}
-    const base=run?.schedule||schedule,selection=base.contextSelection||{selectedIds:base.context?.selectedIds||[],agentId:base.context?.agentId,includeDefaults:base.context?.includeDefaults??false};
-    const prepared=this.service.engine.prepareSchedule({...base,contextSelection:selection},'manual');
-    if(run){run.initialSchedule??=structuredClone(run.schedule);run.contextHistory??=[];if(run.schedule.context)run.contextHistory.push(run.schedule.context);run.schedule={...run.schedule,context:prepared.context,workspace:prepared.workspace};this.service.engine.event(run,'system','Captured sources explicitly refreshed by the owner for a future turn; history and model settings are retained.');return this.runView(run);}
+    if(args.settingsScope==='existing-run'){
+     const run=this.targetRun(args);
+     if(args.expectedRunRevision!==revision(run.schedule))throw Error('Captured run settings changed.');
+     return refreshRunSources(this.service,run,{
+      beforeApply:()=>{this.check(actor,args,permission);this.current(args);},
+      apply:(snapshot,old)=>{
+       run.initialSchedule??=structuredClone(run.schedule);run.contextHistory??=[];if(old)run.contextHistory.push(old);
+       run.schedule={...run.schedule,context:snapshot,workspace:snapshot.workspace};
+       this.service.engine.event(run,'system','Captured sources explicitly refreshed by the owner for a future turn; history and model settings are retained.');
+       return this.runView(run);
+      }
+     });
+    }
+    await refreshScheduleCatalog(this.service,schedule);this.check(actor,args,permission);this.current(args);
+    const selection=schedule.contextSelection||{selectedIds:schedule.context?.selectedIds||[],agentId:schedule.context?.agentId,includeDefaults:schedule.context?.includeDefaults??false};
+    this.service.engine.prepareSchedule({...schedule,contextSelection:selection},'manual');
     const saved=this.service.engine.schedules.save({...schedule,contextSelection:selection},args.expectedRevision);this.service.engine.emit('change');return this.view(saved);
    }
   });

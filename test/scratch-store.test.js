@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {ScratchStore} from '../src/services/scratchpad/scratch-store.js';
+import {recoverScratchPath} from '../src/services/scratchpad/scratch-path-migration.js';
 
 function fixture(t) {
  const directory=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-scratch-test-')),root=path.join(directory,'Scratchpad'),home=path.join(directory,'index');fs.mkdirSync(root);
@@ -18,13 +19,67 @@ test('workspace filtering includes its projects and searches filename and custom
  f.store.sync();assert.equal(f.store.list({workspaceFilter:'workspace-a',search:'telescope'}).items[0].id,a.id);assert.equal(f.store.list({workspaceFilter:'elsewhere',search:'telescope'}).items.length,0);
  assert.equal(f.store.list({search:a.id}).items[0].id,a.id);
 });
+test('readable Scratchpad paths keep stable IDs and do not claim an existing name',t=>{
+ const f=fixture(t),first=f.create({title:'Untitled'});
+ const renamed=f.store.mutate({action:'update',id:first.id,title:'Orchards & Weather',expectedRevision:first.revision,operationId:randomUUID()});
+ assert.equal(renamed.relative,'Personal/Project A/Orchards & Weather.md');
+ assert.equal(f.store.list({search:'Orchards & Weather'}).items[0].id,first.id);
+ const second=f.create({title:'orchards & weather'});
+ assert.equal(second.relative,'Personal/Project A/orchards & weather (2).md');
+ assert.equal(f.store.read({id:first.id}).body,'# Notes\n');
+ const separate=f.create({association:{workspaceId:'workspace-b',workspaceName:'personal',projectId:'project-b',projectName:'Project A'}});
+ assert.equal(separate.relative,'personal (2)/Project A/Draft.md');
+ const legacyPath='Personal/Project A/Untitled--'+first.id+'.md';
+ fs.renameSync(path.join(f.root,renamed.relative),path.join(f.root,legacyPath));
+ assert.deepEqual(f.store.sync().errors,[]);
+ const old=f.store.read({id:first.id});
+ assert.equal(old.relative,legacyPath);
+ const migrated=f.store.mutate({action:'rename',id:old.id,title:old.title,expectedRevision:old.revision,operationId:randomUUID()});
+ assert.equal(migrated.relative,renamed.relative);
+ assert.equal(migrated.id,first.id);
+});
+test('legacy path migration preserves bytes, IDs, relative links and existing destinations',t=>{
+ const f=fixture(t),note=f.create({association:{workspaceId:'old-ws',workspaceName:'Studio 📁',projectId:'old-project',projectName:'Design'}});
+ const bytes=fs.readFileSync(path.join(f.root,note.relative));
+ const fromWorkspace='Studio 📁--old-ws',fromProject=fromWorkspace+'/Design--old-project',fromNote=fromProject+'/Draft--'+note.id+'.md';
+ fs.renameSync(path.join(f.root,'Studio 📁'),path.join(f.root,fromWorkspace));
+ fs.renameSync(path.join(f.root,fromWorkspace,'Design'),path.join(f.root,fromProject));
+ fs.renameSync(path.join(f.root,fromProject,'Draft.md'),path.join(f.root,fromNote));
+ f.store.db.prepare('UPDATE directories SET relative=? WHERE scope=?').run(fromWorkspace,'workspace:old-ws');
+ f.store.db.prepare('UPDATE directories SET relative=? WHERE scope=?').run(fromProject,note.scope);
+ f.store.db.prepare('UPDATE scratches SET relative=? WHERE id=?').run(fromNote,note.id);
+ fs.mkdirSync(path.join(f.root,'Studio 📁'));
+ fs.writeFileSync(path.join(f.root,'Studio 📁','Keep.md'),'Existing content.');
+ const plan=f.store.planPaths();assert.equal(plan.folders,2);assert.equal(plan.files,1);
+ assert.deepEqual(fs.readFileSync(path.join(f.root,fromNote)),bytes);
+ assert.throws(()=>f.store.migratePaths('different'),/Preview/);
+ assert.deepEqual(f.store.migratePaths(plan.digest),{folders:2,files:1,missing:0});
+ const migrated=f.store.read({id:note.id});assert.equal(migrated.relative,'Studio 📁 (2)/Design/Draft.md');
+ assert.equal(migrated.revision,note.revision);assert.deepEqual(fs.readFileSync(path.join(f.root,migrated.relative)),bytes);
+ assert.equal(f.store.asset({path:fromNote}).content,migrated.text);
+ assert.equal(f.store.asset({path:'Studio 📁 (2)/Design/Draft--'+note.id+'.md'}).content,migrated.text);
+ assert.equal(fs.readFileSync(path.join(f.root,'Studio 📁','Keep.md'),'utf8'),'Existing content.');
+ assert.equal(f.store.planPaths().changes.length,0);
+});
+test('an interrupted legacy path rename reconciles the same filesystem object',t=>{
+ const f=fixture(t),note=f.create(),from='Personal/Project A/Draft--'+note.id+'.md';
+ fs.renameSync(path.join(f.root,note.relative),path.join(f.root,from));
+ f.store.db.prepare('UPDATE scratches SET relative=? WHERE id=?').run(from,note.id);
+ const [intent]=f.store.planPaths().changes;
+ f.store.db.prepare('INSERT INTO scratch_path_migration VALUES(1,?)').run(JSON.stringify(intent));
+ fs.renameSync(path.join(f.root,intent.from),path.join(f.root,intent.to));
+ recoverScratchPath(f.store);
+ assert.equal(f.store.read({id:note.id}).relative,note.relative);
+ assert.equal(f.store.read({id:note.id}).revision,note.revision);
+ assert.equal(f.store.planPaths().changes.length,0);
+});
 test('attachment tree and reads reject traversal, links and unsupported active content',t=>{
  const f=fixture(t);fs.writeFileSync(path.join(f.root,'image.png'),Buffer.from([1,2,3]));
  assert.ok(f.store.tree().items.some(row=>row.path==='image.png'));assert.equal(f.store.asset({path:'image.png'}).mediaType,'image/png');fs.writeFileSync(path.join(f.root,'External.md'),'# External note\n\n![Image](image.png)');assert.equal(f.store.asset({path:'External.md'}).content,'# External note\n\n![Image](image.png)');
  assert.throws(()=>f.store.asset({path:'../image.png'}),/Invalid/);fs.symlinkSync('/etc/passwd',path.join(f.root,'escape.png'));assert.throws(()=>f.store.asset({path:'escape.png'}),/links/);assert.throws(()=>f.store.asset({path:'page.html'}),/supported/);
 });
 test('scratch files and SQLite index preserve stable identity through rename and project moves',t=>{
- const f=fixture(t),row=f.create();assert.match(row.relative,/Personal--workspace-a\/Project A--project-a\/Draft--/);assert.equal(f.store.read({id:row.id}).body,'# Notes\n');
+ const f=fixture(t),row=f.create();assert.equal(row.relative,'Personal/Project A/Draft.md');assert.equal(f.store.read({id:row.id}).body,'# Notes\n');
  const rename=f.store.mutate({action:'rename',operationId:randomUUID(),id:row.id,expectedRevision:row.revision,title:'Renamed'});assert.equal(rename.id,row.id);assert.equal(fs.existsSync(path.join(f.root,row.relative)),false);
  const moved=f.store.mutate({action:'move',operationId:randomUUID(),id:row.id,expectedRevision:rename.revision,association:{workspaceId:'workspace-b',projectId:'project-b',workspaceName:'Work',projectName:'Other'}});
  assert.equal(moved.projectId,'project-b');assert.equal(f.store.list({scope:'project:project-a'}).items.length,0);assert.equal(f.store.list({scope:'project:project-b'}).items[0].id,row.id);assert.match(f.store.read({id:row.id}).text,/project_id: project-b/);
@@ -76,13 +131,24 @@ test('virtual destinations stay visible without making empty folders; saves use 
  const f=fixture(t),association={workspaceId:'virtual-workspace',workspaceName:'Personal',projectId:'virtual-project',projectName:'Ideas'};
  const destination=f.store.directory(association);
  assert.equal(fs.existsSync(path.join(f.root,destination.relative)),false);
- assert.ok(f.store.tree().items.some(row=>row.path===destination.relative&&row.virtual));
+ const movable=f.store.tree({associations:[association]}).items.find(row=>row.path===destination.relative);
+ assert.equal(movable.virtual,true);
+ assert.deepEqual(movable.association,{workspaceId:association.workspaceId,projectId:association.projectId});
  fs.mkdirSync(path.join(f.root,'User folder'));
- assert.ok(f.store.tree().items.some(row=>row.path==='User folder'));
+ assert.equal(f.store.tree({associations:[association]}).items.find(row=>row.path==='User folder').association,undefined);
  assert.deepEqual(f.store.sync().errors,[]);
  const row=f.create({association:{workspaceId:'virtual-workspace',workspaceName:'Personal'}});
- assert.match(row.relative,/^Personal--virtual-workspace\/Draft--/);
- assert.equal(fs.existsSync(path.join(f.root,'Personal--virtual-workspace','Unassigned')),false);
+ assert.equal(row.relative,'Personal/Draft.md');
+ assert.equal(fs.existsSync(path.join(f.root,'Personal','Unassigned')),false);
  assert.equal(fs.existsSync(path.join(f.root,destination.relative)),false);
  assert.ok(fs.existsSync(path.join(f.root,row.relative)));
+});
+
+test('a pasted Scratchpad image remains addressable when the note moves between projects',async t=>{
+ const f=fixture(t),row=f.create(),data='iVBORw0KGgo=';
+ const asset=await f.store.paste({id:row.id,data,mediaType:'image/png'});
+ assert.equal(f.store.asset({path:asset.name}).data,data);
+ f.store.mutate({action:'move',operationId:randomUUID(),id:row.id,expectedRevision:row.revision,association:{workspaceId:'workspace-b',projectId:'project-b'}});
+ assert.equal(f.store.asset({path:asset.name}).data,data);
+ assert.deepEqual(await f.store.paste({id:row.id,data,mediaType:'image/png'}),asset);
 });

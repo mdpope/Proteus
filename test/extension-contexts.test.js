@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 const {installExtensionContexts,filterContexts}=createRequire(import.meta.url)('../desktop/browser/extension-contexts.cjs');
 test('MV3 contexts follow exact extension/session, document navigation, filters and window lifetime',()=>{
  let callback;const session={isPersistent:()=>true},other={},listeners=new Map();
@@ -15,4 +18,26 @@ test('MV3 contexts follow exact extension/session, document navigation, filters 
  listeners.get('2did-start-navigation')({},'new',false,true);assert.notEqual(callback(event,{})[0].contextId,first[0].contextId);
  popup.isDestroyed=()=>true;assert.deepEqual(callback(event,{}),[]);
  assert.throws(()=>filterContexts([],{contextTypes:'POPUP'}),/Invalid/);assert.throws(()=>filterContexts([],{unknown:[]}),/Invalid/);
+});
+
+test('cached extension identity depends on package files and rejects symlinks', async t => {
+ const {packageDigest,reusablePackage}=createRequire(import.meta.url)('../desktop/browser/extension-package-library.cjs');
+ const root=await fs.mkdtemp(path.join(os.tmpdir(),'proteus-extension-library-'));
+ t.after(()=>fs.rm(root,{recursive:true,force:true}));
+ const source=path.join(root,'source'),copy=path.join(root,'copy');
+ const manifest=path.join(source,'manifest.json');
+ await fs.mkdir(source);
+ await fs.writeFile(manifest,JSON.stringify({name:'Fixture',version:'1.2.3',manifest_version:3}));
+ assert.equal(await reusablePackage(source,{version:'1.2.3'}),null);
+ assert.equal(await reusablePackage(source,{version:'1.2.2',store:true}),null);
+ const pack=await reusablePackage(source,{version:'1.2.3',store:true});
+ await fs.cp(source,copy,{recursive:true});
+ assert.equal(await packageDigest(copy),pack.digest);
+ await fs.writeFile(path.join(copy,'background.js'),'// Different package bytes');
+ assert.notEqual(await packageDigest(copy),pack.digest);
+ await fs.symlink(manifest,path.join(copy,'foreign-file'));
+ await assert.rejects(packageDigest(copy),/unsupported files/);
+ const alias=path.join(root,'alias');
+ await fs.symlink(source,alias);
+ assert.equal(await reusablePackage(alias,{version:'1.2.3',store:true}),null);
 });

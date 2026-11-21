@@ -108,9 +108,73 @@ struct NativeMainTabAdd: View {
     @EnvironmentObject private var shared: SharedAppStore
     @EnvironmentObject private var chrome: NativePhoneChrome
     var body: some View {
-        Button { shared.open(nil, scope: "main") } label: { Image(systemName: "plus").frame(width: 44, height: 44) }.accessibilityLabel("New main tab").accessibilityIdentifier("phone-new-tab")
+        Button { shared.open(nil, scope: "main") } label: { Image(systemName: "plus").frame(width: 44, height: 44).nativeTabHover() }.accessibilityLabel("New main tab").accessibilityIdentifier("phone-new-tab")
     }
 }
+/// Shared project-style strip with fixed navigation controls.
+struct NativeFeatureStrip<Content: View>: View {
+    @EnvironmentObject private var chrome: NativePhoneChrome
+    var sidebar = true
+    var add: (() -> Void)? = nil
+    var addIdentifier = "feature-new-tab"
+    let ids: [String]
+    let selection: String?
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        HStack(spacing: 0) {
+            if sidebar { NativeSidebarButton() }
+            NativeTabStrip(ids: ids, selection: selection, content: content).scrollIndicators(.hidden)
+            Button { chrome.showTabs?() } label: {
+                NativeTabOverviewIcon().frame(width: 44, height: 44).nativeTabHover()
+            }.accessibilityLabel("Tab overview")
+            if let add {
+                Button(action: add) { Image(systemName: "plus").frame(width: 44, height: 44).nativeTabHover() }
+                    .accessibilityLabel("New tab").accessibilityIdentifier(addIdentifier)
+            } else {
+                NativeMainTabAdd()
+            }
+        }.buttonStyle(.plain).nativeTabBar().overlay(alignment: .bottom) { Divider() }
+    }
+}
+
+private struct NativeTabHover: ViewModifier {
+    @State private var hovered = false
+    func body(content: Content) -> some View {
+        content.contentShape(Rectangle()).background(hovered ? NativeTheme.line : .clear)
+            .onHover { hovered = NativePadPreview.enabled && $0 }
+    }
+}
+
+extension View {
+    func nativeTabHover() -> some View { modifier(NativeTabHover()) }
+
+    func nativeFeatureTabs(_ title: String, symbol: String, search: Binding<String>? = nil, showsStrip: Bool = true) -> some View {
+        toolbar(.hidden, for: .navigationBar)
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if showsStrip {
+                    NativeFeatureStrip(ids: ["master"], selection: "master") {
+                        NativeFeatureTab(title: title, symbol: symbol, selected: true, action: {}).id("master")
+                    }
+                }
+            }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if let search {
+                    HStack {
+                        Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                        TextField("Search", text: search).textInputAutocapitalization(.never).autocorrectionDisabled()
+                        if !search.wrappedValue.isEmpty {
+                            Button { search.wrappedValue = "" } label: { Image(systemName: "xmark.circle.fill") }
+                                .accessibilityLabel("Clear search")
+                        }
+                    }.font(.subheadline).padding(10).background(NativeTheme.surface, in: Capsule())
+                        .padding(.horizontal, 16).padding(.vertical, 6).background(NativeTheme.background)
+                        .accessibilityIdentifier("feature-search")
+                }
+            }
+    }
+}
+
 private struct NativeFeaturePage: ViewModifier {
     @EnvironmentObject private var chrome: NativePhoneChrome
     let title: String
@@ -194,8 +258,18 @@ struct NativePhoneTab: Identifiable {
     @Published var currentID = ""
     @Published var visited: [NativePhoneTab] = []
     @Published var featureTabs: [String: [NativePhoneTab]] = [:]
-    var featureOverviewItems: [NativePhoneTab] {
-        featureTabs.keys.filter { $0.hasPrefix("feature:") }.sorted().flatMap { overviewItems(in: $0) }
+    func featureOverviewItems(for feature: String) -> [NativePhoneTab] {
+        let prefix = "feature:" + feature
+        return featureTabs.keys.filter { $0 == prefix || $0.hasPrefix(prefix + ":") }.sorted().flatMap { overviewItems(in: $0) }
+    }
+    func removeFeatureTabs(_ group: String) {
+        guard let items = featureTabs.removeValue(forKey: group) else { return }
+        let ids = Set(items.map(\.id))
+        let retained = visited.filter { !ids.contains($0.id) }
+        if retained.count != visited.count { visited = retained }
+        let retainedRecents = recent.filter { !ids.contains($0.id) }
+        if retainedRecents.count != recent.count { recent = retainedRecents }
+        if ids.contains(currentID) { currentID = "" }
     }
     func overviewItems(in group: String) -> [NativePhoneTab] {
         (featureTabs[group] ?? []).map { row in
@@ -448,6 +522,20 @@ struct NativePhoneOverview: View {
         for item in items { let id = item.sectionID.isEmpty ? item.section : item.sectionID; if let index = result.indices.last, result[index].id == id { result[index].items.append(item) } else { result.append((id, item.section, [item])) } }
         return result
     }
+    private struct OverviewRow: Identifiable {
+        let id: String
+        var heading: String?
+        var items: [NativePhoneTab] = []
+    }
+    private func overviewRows(columns: Int) -> [OverviewRow] {
+        sections.flatMap { section in
+            let header = section.title.isEmpty ? [] : [OverviewRow(id: "header:" + section.id, heading: section.title)]
+            let cards = stride(from: 0, to: section.items.count, by: columns).map { start in
+                OverviewRow(id: "row:" + section.items[start].id, items: Array(section.items[start..<min(start + columns, section.items.count)]))
+            }
+            return header + cards
+        }
+    }
     private var activeID: String { selectedID ?? chrome.currentID }
     private var current: NativePhoneTab? { items.first { $0.id == activeID } }
     var body: some View {
@@ -457,6 +545,7 @@ struct NativePhoneOverview: View {
             // contribute its intrinsic width to a flexible grid column.
             let columns = NativePadPreview.enabled ? 3 : 2
             let tileWidth = max(1, (geometry.size.width - 36 - CGFloat(columns - 1) * 18) / CGFloat(columns))
+            let rows = overviewRows(columns: columns)
             ZStack(alignment: .topLeading) {
                 VStack(spacing: 0) {
                     HStack {
@@ -469,11 +558,14 @@ struct NativePhoneOverview: View {
                     }.padding(.horizontal, 20)
                     ScrollViewReader { proxy in
                     ScrollView {
-                        VStack(alignment: .leading, spacing: 16) {
-                        ForEach(Array(sections.enumerated()), id: \.offset) { _, section in
-                        if !section.title.isEmpty { Text(section.title).font(.headline).padding(.horizontal, 18) }
-                        LazyVGrid(columns: Array(repeating: GridItem(.fixed(tileWidth), alignment: .top), count: columns), spacing: 18) {
-                            ForEach(section.items) { item in
+                        LazyVStack(alignment: .leading, spacing: 16) {
+                        ForEach(rows) { row in
+                        Group {
+                        if let heading = row.heading {
+                            Text(heading).font(.headline).padding(.horizontal, 18)
+                        } else {
+                        HStack(alignment: .top, spacing: 18) {
+                            ForEach(row.items) { item in
                                 Button { chrome.closeOverview(select: item) } label: {
                                     VStack(alignment: .leading, spacing: 7) {
                                         Group {
@@ -509,19 +601,21 @@ struct NativePhoneOverview: View {
                                     else if let close = item.close { Button("Close tab", systemImage: "xmark", role: .destructive, action: close) }
                                 }
                             }
-                        }.padding(18)
+                        }.padding(.horizontal, 18)
+                        }
+                        }.id(row.id)
                         }
                         }.background(NativeScrollProbe(onSnapshot: { _ in }, onInteraction: { active in if active { readerInteracted = true } }).frame(width: 1, height: 1).opacity(0))
                     }
                     // Open on the current tab, centred (the last tab naturally rests at the bottom), as on desktop.
-                    .task(id: items.map(\.id)) {
-                        guard !readerInteracted, items.contains(where: { $0.id == activeID }) else { return }
+                    .task(id: current?.id) {
+                        guard !readerInteracted, let current, let row = rows.first(where: { $0.items.contains(where: { $0.id == current.id }) }) else { return }
                         await Task.yield()
                         guard !Task.isCancelled, !readerInteracted else { return }
-                        proxy.scrollTo(activeID, anchor: .center)
+                        proxy.scrollTo(row.id, anchor: .center)
                         try? await Task.sleep(for: .milliseconds(120))
                         guard !Task.isCancelled, !readerInteracted else { return }
-                        proxy.scrollTo(activeID, anchor: .center)
+                        proxy.scrollTo(row.id, anchor: .center)
                     }
                     }
                 // N11-29: cover the bottom safe area too, so the page's toolbar never shows through.

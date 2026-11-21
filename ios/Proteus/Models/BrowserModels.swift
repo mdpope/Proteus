@@ -43,25 +43,25 @@ struct BrowserNavigationState: Equatable {
     var canGoForward = false
     var isLoading = false
 }
-struct BrowserHistoryEntry: Codable, Equatable {
+struct BrowserHistoryEntry: Codable, Equatable, Sendable {
     var id: String = UUID().uuidString; var url: String; var title: String; var requestedURL: String? = nil
     enum CodingKeys: String, CodingKey { case id, url, title, requestedURL }
     init(id: String = UUID().uuidString, url: String, title: String, requestedURL: String? = nil) { self.id = id; self.url = url; self.title = title; self.requestedURL = requestedURL }
     init(from decoder: Decoder) throws { let c = try decoder.container(keyedBy: CodingKeys.self); id = try c.decodeIfPresent(String.self, forKey: .id) ?? UUID().uuidString; url = try c.decode(String.self, forKey: .url); title = try c.decode(String.self, forKey: .title); requestedURL = try c.decodeIfPresent(String.self, forKey: .requestedURL) }
 }
-struct BrowserTabHistory: Codable, Equatable {
+struct BrowserTabHistory: Codable, Equatable, Sendable {
     var entries: [BrowserHistoryEntry]; var index: Int; var currentEntryId: String? = nil; var revision: Int = 0
     enum CodingKeys: String, CodingKey { case entries, index, currentEntryId, revision }
     init(entries: [BrowserHistoryEntry], index: Int, currentEntryId: String? = nil, revision: Int = 0) { self.entries = entries; self.index = index; self.currentEntryId = currentEntryId; self.revision = revision }
     init(from decoder: Decoder) throws { let c = try decoder.container(keyedBy: CodingKeys.self); entries = try c.decode([BrowserHistoryEntry].self, forKey: .entries); currentEntryId = try c.decodeIfPresent(String.self, forKey: .currentEntryId); index = try c.decodeIfPresent(Int.self, forKey: .index) ?? 0; revision = try c.decodeIfPresent(Int.self, forKey: .revision) ?? 0; if let currentEntryId, let selected = entries.firstIndex(where: { $0.id == currentEntryId }) { index = selected } }
 }
 struct BrowserHistoryItem: Hashable { var index: Int; var url: URL; var title: String?; var entryId: String? = nil }
-struct BrowserReadingPosition: Codable, Equatable {
+struct BrowserReadingPosition: Codable, Equatable, Sendable {
     let url: String
     let x: Double
     let y: Double
 }
-struct BrowserDescriptor: Identifiable, Codable, Equatable {
+struct BrowserDescriptor: Identifiable, Codable, Equatable, Sendable {
     // Runtime-only: private tabs are excluded from every persisted descriptor list.
     var incognito = false
     var id: String; var title: String; var url: String?; var scope: String; var customTitle: String?; var contentTabId: String?; var history: BrowserTabHistory?; var profileId: String; var ownerHostId: String? = nil
@@ -71,7 +71,7 @@ struct BrowserDescriptor: Identifiable, Codable, Equatable {
     enum CodingKeys: String, CodingKey { case id, title, url, scope, customTitle, contentTabId, history, profileId, ownerHostId, hidden, persist, openedAt, lastTouchedAt, lastActivityAt, readingPosition }
     init(from decoder: Decoder) throws { let values = try decoder.container(keyedBy: CodingKeys.self); id = try values.decode(String.self, forKey: .id); title = try values.decode(String.self, forKey: .title); url = try values.decodeIfPresent(String.self, forKey: .url); scope = try values.decodeIfPresent(String.self, forKey: .scope) ?? "team"; customTitle = try values.decodeIfPresent(String.self, forKey: .customTitle); contentTabId = try values.decodeIfPresent(String.self, forKey: .contentTabId); history = try values.decodeIfPresent(BrowserTabHistory.self, forKey: .history); profileId = try values.decodeIfPresent(String.self, forKey: .profileId) ?? "default"; ownerHostId = try values.decodeIfPresent(String.self, forKey: .ownerHostId); hidden = try values.decodeIfPresent(Bool.self, forKey: .hidden) ?? false; persist = try values.decodeIfPresent(Bool.self, forKey: .persist) ?? false; openedAt = try values.decodeIfPresent(String.self, forKey: .openedAt); lastTouchedAt = try values.decodeIfPresent(String.self, forKey: .lastTouchedAt); lastActivityAt = try values.decodeIfPresent(String.self, forKey: .lastActivityAt); readingPosition = try values.decodeIfPresent(BrowserReadingPosition.self, forKey: .readingPosition) }
 }
-struct NativeDocumentDescriptor: Identifiable, Codable, Equatable {
+struct NativeDocumentDescriptor: Identifiable, Codable, Equatable, Sendable {
     let id: String
     var chatKey: String
     let title: String
@@ -122,7 +122,7 @@ struct BrowserExportFile: Identifiable {
     func cleanup() { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
 }
 
-struct NativeBrowserNavigationConflict: Identifiable, Codable, Equatable {
+struct NativeBrowserNavigationConflict: Identifiable, Codable, Equatable, Sendable {
     var id: String
     var scope: String
     var tabID: String

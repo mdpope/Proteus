@@ -6,21 +6,28 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
+import {publicAssets} from '../src/shared/public-assets.js';
 const root=path.resolve(import.meta.dirname,'..'),home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-reminders-ui-'));
 const html=`<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/life.css"><main id="main"></main><script type="module">
 import {mountReminders} from '/features/tools/life-reminders.js';
-window.rows=[];window.calls=[];window.current=true;window.fail=true;const results=new Map();
+window.rows=[];window.calls=[];window.current=true;window.fail=true;let importFail=true;const results=new Map();
 window.view=mountReminders(document.querySelector('main'),{
  isCurrent:()=>current,
  read:async query=>({record:query.id?rows.find(row=>row.id===query.id):undefined,inboxId:'inbox',timeZone:'America/Denver',lists:[{id:'inbox',name:'Inbox'}],items:rows.filter(x=>!!x.deletedAt===!!query.deleted).filter(x=>query.completed==='all'||(query.completed==='completed'?x.completedAt:!x.completedAt)),page:1,total:rows.filter(x=>!!x.deletedAt===!!query.deleted&&(query.completed==='all'||(query.completed==='completed'?x.completedAt:!x.completedAt))).length}),
- write:async(action,input,id)=>{calls.push({action,input,id});if(!results.has(id)){let row;if(action==='create'){row={...input,id:crypto.randomUUID(),revision:1,completedAt:null,deletedAt:null};rows.push(row);}else{row=rows.find(x=>x.id===input.id);Object.assign(row,input,{revision:row.revision+1});if(action==='complete')row.completedAt=new Date().toISOString();}results.set(id,{record:row});}if(fail){fail=false;throw Error('Synthetic lost response.');}return results.get(id);}
+ write:async(action,input,id)=>{
+   calls.push({action,input,id});
+   if(action==='import.preview')return {digest:'fixture',createdLists:1,createdItems:1,lists:[{source:'Work',destination:'Work',open:0,completed:1,skipped:0,withExtras:0,timed:0}]};
+   if(action==='import.apply'){if(importFail){importFail=false;throw Error('Synthetic lost import response.');}return {createdLists:1,createdItems:1};}
+   if(!results.has(id)){let row;if(action==='create'){row={...input,id:crypto.randomUUID(),revision:1,completedAt:null,deletedAt:null};rows.push(row);}else{row=rows.find(x=>x.id===input.id);Object.assign(row,input,{revision:row.revision+1});if(action==='complete')row.completedAt=new Date().toISOString();}results.set(id,{record:row});}if(fail){fail=false;throw Error('Synthetic lost response.');}return results.get(id);
+ }
 });
 </script>`;
+const assets=publicAssets(path.join(root,'public'));
 const server=http.createServer((req,res)=>{
  if(req.url==='/'){res.setHeader('Content-Type','text/html');res.end(html);return;}
- const allowed=['/shared/ui/viewport-columns.js','/shared/ui/date-picker.js','/shared/ui/date-picker.css','/shared/ui/palette.js','/shared/navigation/tab-interactions.js','/shared/navigation/add-tab-menu.js','/shared/navigation/feature-workspace-tabs.js','/features/tools/reminder-list-style.js','/features/tools/reminders.css','/features/scratchpad/scratchpad.css','/features/settings/connections.css','/features/chats/user-questions.css','/shared/navigation/feature-tabs.css','/style.css','/life.css','/proteus-theme.css','/features/tools/life-reminders.js','/features/tools/reminder-dates.js'];
- if(!allowed.includes(req.url)){res.writeHead(404);res.end();return;}
- res.setHeader('Content-Type',req.url.endsWith('.js')?'text/javascript':'text/css');res.end(fs.readFileSync(path.join(root,'public',req.url)));
+ const asset=assets[req.url];
+ if(!asset){res.writeHead(404);res.end();return;}
+ res.setHeader('Content-Type',asset[1]);res.end(fs.readFileSync(path.join(root,'public',asset[0])));
 });
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 const url='http://127.0.0.1:'+server.address().port;
@@ -29,6 +36,23 @@ let app;
 try{
  app=await electron.launch({args:[path.join(home,'main.cjs'),'--user-data-dir='+path.join(home,'data')],cwd:root});
  const page=await app.firstWindow(),errors=[];page.on('pageerror',error=>errors.push(error.message));page.setDefaultTimeout(10000);page.on('dialog',dialog=>dialog.accept().catch(()=>{}));
+ await page.getByRole('button',{name:'Import reminders',exact:true}).click();
+ const importer=page.locator('dialog.reminder-import'),file=importer.locator('[data-file]');
+ const account=(sourceName,lists)=>({format:'proteus-reminders-1',sourceId:sourceName,sourceName,lists});
+ const exportData={accounts:[account('Personal',[{id:'home',name:'Home',items:[]}]),account('Work account',[{id:'work',name:'Work',items:[{id:'done'}]},{id:'other',name:'Other',items:[]}])]};
+ await file.setInputFiles({name:'synthetic-reminders.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(exportData))});
+ await importer.getByLabel('Source account').selectOption({label:'Work account'});
+ await importer.getByRole('checkbox',{name:'Other (0)'}).uncheck();
+ assert.deepEqual(await page.evaluate(()=>calls),[]);
+ await importer.getByRole('button',{name:'Preview import'}).click();
+ await importer.getByText(/1 completed/).waitFor();
+ await importer.getByRole('button',{name:'Import reminders',exact:true}).click();
+ await importer.getByRole('button',{name:'Retry same import'}).click();
+ await importer.getByText('Imported 1 reminder. Created 1 list.').waitFor();
+ const importCalls=await page.evaluate(()=>calls.splice(0,calls.length));
+ assert.deepEqual(JSON.parse(importCalls[0].input.source).lists.map(list=>list.id),['work']);
+ assert.deepEqual(importCalls[1],importCalls[2]);
+ await importer.getByRole('button',{name:'Close',exact:true}).click();
  await page.getByRole('button',{name:'All Items',exact:true}).click();await page.getByRole('button',{name:'New reminder',exact:true}).click();
  await page.getByLabel('Title',{exact:true}).fill('Water plants');await page.locator('[name=dueKind]').selectOption('date');await page.getByLabel('Date',{exact:true}).fill('2026-11-14');
  await page.getByRole('button',{name:'Save',exact:true}).click();await page.getByRole('button',{name:'Retry save',exact:true}).click();
@@ -61,5 +85,5 @@ try{
  const beforeClose=await page.evaluate(()=>calls.length);await page.getByRole('button',{name:'Close Water plants',exact:true}).click();assert.equal(await page.evaluate(()=>calls.length),beforeClose,'Closing a reminder tab does not mutate the reminder');
  await page.getByRole('navigation',{name:'Reminder tabs'}).getByRole('button',{name:'Draft remains',exact:true}).click();
  await page.evaluate(()=>{current=false;});await page.getByRole('button',{name:'Save',exact:true}).click();assert.equal(await page.evaluate(()=>rows.length),2);
- assert.deepEqual(errors,[]);console.log(JSON.stringify({passed:true,checks:['lost response same operation','date-only','timed timezone','revision edit','complete/filter','draft refresh','account switch stops save']}));
+ assert.deepEqual(errors,[]);console.log(JSON.stringify({passed:true,checks:['selected account and lists only','preview before import','lost import response retries same operation','lost save response retries same operation','date-only','timed timezone','revision edit','complete/filter','draft refresh','account switch stops save']}));
 }finally{await closeTestElectron(app);server.closeAllConnections();await new Promise(resolve=>server.close(resolve));fs.rmSync(home,{recursive:true,force:true});}

@@ -15,6 +15,19 @@ try{
  await page.locator('#browser-home-url').waitFor();await until(()=>app.evaluate(({app})=>process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser().window.webContents.isFocused()),'new-tab shell owns native keyboard focus');
  assert.equal(await page.locator('#browser-home-url').evaluate(e=>document.activeElement===e),true);
  await app.evaluate(({app})=>{const b=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser();b.window.webContents.sendInputEvent({type:'char',keyCode:'f'});});await until(async()=>await page.locator('#browser-home-url').inputValue()==='f','typed character reaches address field');
+ await app.evaluate(async({app})=>{
+   const browser=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser();
+   const original=[...browser.tabs.values()].find(tab=>tab.view?.webContents.getURL().endsWith('/focus'));
+   await browser.navigate(original.id, new URL('/next-focus',original.view.webContents.getURL()).href);
+   original.view.webContents.focus();
+   assertNativeFocus(browser);
+   await original.view.webContents.executeJavaScript("Boolean(window.open('/background-popup','_blank'))",true);
+   function assertNativeFocus(browser){if(!browser.window.webContents.isFocused())throw Error('The previously loaded background page took native focus');}
+ });
+ await until(()=>app.evaluate(({app})=>[...process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser().tabs.values()].some(tab=>tab.view?.webContents.getURL().endsWith('/background-popup'))),'background popup loaded');
+ assert.equal(await page.locator('#browser-home-url').inputValue(),'f');
+ assert.equal(await page.locator('#browser-home-url').evaluate(e=>document.activeElement===e),true);
+ assert.equal(await app.evaluate(({app})=>process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser().window.webContents.isFocused()),true);
  await page.locator('#browser-home-url').fill('http://127.0.0.1:'+site.address().port+'/focus-again');await page.locator('#browser-home-url').press('Enter');
  await until(()=>app.evaluate(({app})=>{const b=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser();return !!b.active&&!!b.tabs.get(b.active)?.view?.webContents.getURL();}),'native page selected again');
  await app.evaluate(({app})=>{const b=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser();b.window.focus();b.get(b.active).view.webContents.focus();});

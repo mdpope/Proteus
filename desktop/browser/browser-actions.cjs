@@ -68,11 +68,11 @@ class BrowserActions {
     return Menu.buildFromTemplate([
       // One entry per configured profile, Default first; the former generic
       // "New Tab" duplicated whichever profile the source tab used.
-      ...this.profileItems().slice(0,1).map(profile=>({label:`Open Link in New ${String(profile.name||'Default').replace(/[\r\n]/g,' ').replace(/&/g,'&&')} Browser Tab`,...this.icon('NSAddTemplate'),click:run(async()=>{const info=await this.browser.create(url,null,null,{...source,profileId:profile.id});this.send({type:'select-tab',info,afterId:tab.id});})})),
-      {label:'Open Link in Background Tab',...this.icon('NSAddTemplate'),click:run(async()=>{const info=await this.browser.create(url,null,null,{...source,hidden:false,unloaded:false,background:true});this.send({type:'background-tab',info,afterId:tab.id});})},
-      {label:'Open Link in Incognito Tab',...this.icon('NSUserAccountsTemplate'),click:run(async()=>{const info=await this.browser.create(url,null,null,{...source,incognito:true});this.send({type:'select-tab',info,afterId:tab.id});})},
-      ...this.profileItems().slice(1).map(profile=>({label:`Open Link in New ${String(profile.name||'Default').replace(/[\r\n]/g,' ').replace(/&/g,'&&')} Browser Tab`,...this.icon('NSAddTemplate'),click:run(async()=>{const info=await this.browser.create(url,null,null,{...source,profileId:profile.id});this.send({type:'select-tab',info,afterId:tab.id});})})),
-      {label:'Open Link in Unloaded Tab',...this.icon('NSAddTemplate'),click:run(async()=>{const info=await this.browser.create(url,null,null,{...source,hidden:true,unloaded:true,title:String(params.linkText||'').trim().slice(0,200)});this.send({type:'unloaded-tab',info,afterId:tab.id});})},
+      ...this.profileItems().slice(0,1).map(profile=>({label:`Open Link in New ${String(profile.name||'Default').replace(/[\r\n]/g,' ').replace(/&/g,'&&')} Browser Tab`,...this.icon('NSAddTemplate'),click:run(()=>this.browser.createLinkedTab(tab,url,{...source,profileId:profile.id},'select-tab'))})),
+      {label:'Open Link in Background Tab',...this.icon('NSAddTemplate'),click:run(()=>this.browser.createLinkedTab(tab,url,{...source,hidden:false,unloaded:false,background:true},'background-tab'))},
+      {label:'Open Link in Incognito Tab',...this.icon('NSUserAccountsTemplate'),click:run(()=>this.browser.createLinkedTab(tab,url,{...source,incognito:true},'select-tab'))},
+      ...this.profileItems().slice(1).map(profile=>({label:`Open Link in New ${String(profile.name||'Default').replace(/[\r\n]/g,' ').replace(/&/g,'&&')} Browser Tab`,...this.icon('NSAddTemplate'),click:run(()=>this.browser.createLinkedTab(tab,url,{...source,profileId:profile.id},'select-tab'))})),
+      {label:'Open Link in Unloaded Tab',...this.icon('NSAddTemplate'),click:run(()=>this.browser.createLinkedTab(tab,url,{...source,hidden:true,unloaded:true,title:String(params.linkText||'').trim().slice(0,200)},'unloaded-tab'))},
       {label:`Open Link in ${browserName.replace(/[\r\n]/g,' ').replace(/&/g,'&&')}`, ...this.icon('NSFollowLinkFreestandingTemplate'), click:run(() => shell.openExternal(url))},
       {type:'separator'},
       {label:'Copy Link',...this.icon('NSLinkTemplate'),click:run(() => clipboard.writeText(url))},

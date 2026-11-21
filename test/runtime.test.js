@@ -1,8 +1,26 @@
 import test from 'node:test';import assert from 'node:assert/strict';
-import {startTurn,pauseTurn,resumeTurn,finishTurn,interruptTiming} from '../src/services/chats/run-timing.js';
+import {startTurn,pauseTurn,resumeTurn,finishTurn,interruptTiming,operationTiming,recordTurnUsage} from '../src/services/chats/run-timing.js';
 import {unionDuration,turnDuration,runtimeTotal,groupDuration} from '../public/features/chats/runtime.js';
 test('runtime excludes human waits and gaps between continuations',()=>{const run={};startTurn(run,1000);pauseTurn(run,4000,'question');assert.equal(runtimeTotal(run.turns,9000),3000);resumeTurn(run,10000);finishTurn(run,12000,'completed');startTurn(run,20000);assert.equal(runtimeTotal(run.turns,22000),7000);finishTurn(run,24000,'failed');assert.equal(runtimeTotal(run.turns,30000),9000);assert.equal(run.turns[0].waits[0].finishedAt,10000);});
 test('interval union counts concurrent and nested tool work once and rejects invalid intervals',()=>{assert.equal(unionDuration([[0,10],[4,8],[7,20],[30,40],[90,10],['unknown',20]]),30);assert.equal(groupDuration([{startedAt:1000,finishedAt:4000},{startedAt:2000,finishedAt:6000}]),5000);assert.equal(runtimeTotal(undefined),null);});
 test('offline time does not advance; crash tail is partial, never invented',()=>{const run={};const turn=startTurn(run,1000);pauseTurn(run,3000,'approval');resumeTurn(run,4000);assert.equal(turnDuration(turn,10000,false),2000);run.updatedAt=4500;interruptTiming(run);assert.equal(turnDuration(turn,10000),2000);assert.equal(turn.incomplete,true);assert.equal(turn.status,'interrupted');});
 
 test('tool group active runtime excludes approvals while merging overlapping children',()=>{const turns=[{intervals:[[1000,3000],[8000,10000]]}];assert.equal(groupDuration([{startedAt:1000,finishedAt:9000},{startedAt:2000,finishedAt:10000}],12000,true,turns),4000);});
+
+test('operations rows expose current turn usage, frozen waiting time and no metrics for a newly queued turn',()=>{
+ const run={status:'running',schedule:{provider:'codex',model:'fixture'},providerSessionId:'existing',
+  usage:{observed:true,inputTokens:120,outputTokens:50}};
+ startTurn(run,1000);
+ assert.equal(operationTiming(run).inputTokens,null);
+ run.usage={observed:true,inputTokens:150,outputTokens:50};
+ recordTurnUsage(run,run.usage);
+ assert.equal(operationTiming(run).inputTokens,30);
+ assert.equal(operationTiming(run).outputTokens,0);
+ pauseTurn(run,3000,'test-question');run.status='awaiting_input';
+ assert.equal(operationTiming(run).activeMs,2000);
+ assert.equal(operationTiming(run).activeSince,null);
+ resumeTurn(run,9000);finishTurn(run,10000,'completed');run.status='completed';
+ assert.equal(operationTiming(run).activeMs,3000);
+ run.status='queued';
+ assert.ok(!Object.hasOwn(operationTiming(run),'inputTokens'));
+});

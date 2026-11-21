@@ -15,6 +15,7 @@ struct NativeFeatureWorkspace<Master: View, Detail: View>: View {
     var scopeOverride: String? = nil
     var pinnedRecordIDs: Set<String> = []
     var registersFeatureOverview = true
+    var scratchOwnerID: String? = nil
     let records: [NativeContentTab]
     @Binding var selected: String
     let selectRecord: (String) -> Void
@@ -22,8 +23,6 @@ struct NativeFeatureWorkspace<Master: View, Detail: View>: View {
     var addRecord: (() -> Void)? = nil
     @ViewBuilder let master: () -> Master
     @ViewBuilder let detail: (String) -> Detail
-    @State private var overview = false
-    @StateObject private var overviewChrome = NativePhoneChrome()
     @State private var files = false
     @State private var documents: [JSON] = []
     @State private var order: [String] = []
@@ -44,12 +43,12 @@ struct NativeFeatureWorkspace<Master: View, Detail: View>: View {
         VStack(spacing: 0) {
             if !resourceError.isEmpty { Text(resourceError).font(.callout).foregroundStyle(.secondary).padding(8) }
             if areaActive {
-            HStack(spacing: 0) {
-                NativeTabStrip(ids: ["master"] + children.map(\.id), selection: selected) {
+            NativeFeatureStrip(sidebar: registersFeatureOverview, add: { addBrowser() }, addIdentifier: title == "Team Tools" ? "team-new-browser-tab" : "feature-new-tab-" + digest, ids: ["master"] + children.map(\.id), selection: selected) {
                     HStack(spacing: 0) {
-                        NativeFeatureTab(title: title, symbol: symbol, identifier: title == "Team Tools" ? "team-section-overview" : nil, selected: selected == "master", action: { choose("master") })
+                        NativeFeatureTab(title: title, symbol: symbol, identifier: title == "Team Tools" ? "team-section-overview" : nil, selected: selected == "master", action: { choose("master") }).id("master")
                         ForEach(children) { tab in
                             NativeFeatureTab(title: tab.title, symbol: tab.kind == "scratch" ? "note.text" : tab.kind == "reminder" ? "checklist" : NativeTabSymbol.name(kind: tab.kind), icon: tab.kind == "browser" ? shared.browserFavicon(tab.id) : nil, identifier: title == "Team Tools" ? tab.kind == "browser" ? "browser-tab-select-" + tab.id : tab.id == "Standup" ? "team-section-standup" : nil : nil, selected: selected == tab.id, action: { choose(tab.id) }, close: pinnedRecordIDs.contains(tab.id) ? nil : { close(tab.id) })
+                                .id(tab.id)
                                 .contextMenu {
                                     if tab.kind == "browser" {
                                         NativeBrowserDuplicateActions(id: tab.id)
@@ -65,12 +64,10 @@ struct NativeFeatureWorkspace<Master: View, Detail: View>: View {
                         }
                     }
                 }
-                Button { phoneChrome.captureCurrent(); overview = true } label: { NativeTabOverviewIcon().frame(width: 44, height: 44) }.accessibilityLabel(title + " tab overview")
-                Button { addBrowser() } label: { Image(systemName: "plus").frame(width: 44, height: 44) }.accessibilityLabel("Add " + title + " tab").accessibilityIdentifier(title == "Team Tools" ? "team-new-browser-tab" : "feature-new-tab-" + digest)
-            }.buttonStyle(.plain).nativeTabBar().overlay(alignment: .bottom) { Divider() }.accessibilityElement(children: .contain).accessibilityIdentifier(title.lowercased() + "-navigation-tabs")
+                .accessibilityElement(children: .contain).accessibilityIdentifier(title.lowercased() + "-navigation-tabs")
             }
             if areaActive, let browser = browsers.first(where: { $0.id == selected }) {
-                TeamBrowserView(scope: scope, showTabs: false, tabID: browser.id, onBackToList: { choose("master") }, newTabOptions: [NativeNewTabAction(title: "Reminders", symbol: "checklist", run: addReminder), NativeNewTabAction(title: "Scratch", symbol: "note.text", replacesBlank: false, run: addScratch), NativeNewTabAction(title: "Workspace files", symbol: "folder", replacesBlank: false, run: openWorkspaceFiles), NativeNewTabAction(title: "Markdown or other file", symbol: "doc.text", replacesBlank: false, run: { files = true })])
+                TeamBrowserView(scope: scope, showTabs: false, tabID: browser.id, featureChrome: true, onBackToList: { choose("master") }, newTabOptions: [NativeNewTabAction(title: "Reminders", symbol: "checklist", run: addReminder), NativeNewTabAction(title: "Scratch", symbol: "note.text", replacesBlank: false, run: addScratch), NativeNewTabAction(title: "Workspace files", symbol: "folder", replacesBlank: false, run: openWorkspaceFiles), NativeNewTabAction(title: "Markdown or other file", symbol: "doc.text", replacesBlank: false, run: { files = true })])
             } else if areaActive, let resource = documents.first(where: { $0["tabID"].string == selected }), resource["kind"].string == "reminder", resource["accountID"].string == life.accountIdentity {
                 LifeReminderWorkbenchView(workspace: reminderWorkspace(selected), selectedRecord: { row in updateResource(selected, title: row["title"].string) }).id(selected)
             } else if areaActive, let resource = documents.first(where: { $0["tabID"].string == selected }), resource["kind"].string == "scratch" {
@@ -90,11 +87,6 @@ struct NativeFeatureWorkspace<Master: View, Detail: View>: View {
             Button("Save") { if let id = renameBrowserID { shared.renameBrowser(id, title: renameTitle) }; renameBrowserID = nil }
             Button("Cancel", role: .cancel) { renameBrowserID = nil }
         }
-        .sheet(isPresented: $overview) {
-            NativePhoneOverview(chrome: overviewChrome, items: phoneChrome.overviewItems(in: overviewGroup), title: title + " tabs", accessibilityID: "feature-overview-" + digest)
-                .onAppear { overviewChrome.openOverview() }
-                .onChange(of: overviewChrome.overview) { _, visible in if !visible { overview = false } }
-        }
         .sheet(isPresented: $files) { NavigationStack {
             if let remote = destinations.selected {
                 NativeFeatureFilePicker { reference in openFile(reference); files = false }.environment(remote)
@@ -105,6 +97,7 @@ struct NativeFeatureWorkspace<Master: View, Detail: View>: View {
         .onChange(of: selected) { old, next in if areaActive { reconcileOrder(children.map(\.id), after: old); previousSelection = next; save() }; syncOverview() }
         .onChange(of: areaActive) { _, active in if active { reconcileOrder(children.map(\.id), after: selected); syncOverview() } }
         .onChange(of: life.accountIdentity) { _, _ in syncOverview() }
+        .onDisappear { phoneChrome.removeFeatureTabs(overviewGroup) }
         // Browser close/profile callbacks can arrive after a New Tab tile has
         // selected a record. A stale browser selection must not steal that view.
         .onChange(of: shared.selected(in: scope)) { _, id in
@@ -138,7 +131,7 @@ struct NativeFeatureWorkspace<Master: View, Detail: View>: View {
     }
     private func addScratch() {
         if title == "Scratchpad", let addRecord { addRecord(); return }
-        guard let host = destinations.selectedID, let remote = destinations.selected else { resourceError = "Connect the Scratchpad owner first."; return }
+        guard let host = scratchOwnerID ?? destinations.selectedID, let remote = destinations.remote(for: host) else { resourceError = "Connect the Scratchpad owner first."; return }
         Task { @MainActor in
             do {
                 let status = try await remote.request("scratchpad.command", ["action": .string("status")])
@@ -210,8 +203,8 @@ struct NativeFeatureTab: View {
     var close: (() -> Void)? = nil
     var body: some View {
         HStack(spacing: 0) {
-            Button(action: action) { NativeContentTabLabel(title: title, symbol: symbol, icon: icon).accessibilityHidden(true).frame(maxWidth: 220).padding(.leading, 12).padding(.trailing, close == nil ? 12 : 4).frame(height: 44).contentShape(Rectangle()) }.accessibilityElement(children: .ignore).accessibilityAddTraits(.isButton).accessibilityLabel(title).accessibilityValue(selected ? "Selected" : "").accessibilityIdentifier(identifier ?? "")
-            if let close { Button(action: close) { Image(systemName: "xmark").font(.caption2).frame(width: 32, height: 44).contentShape(Rectangle()) }.accessibilityLabel("Close " + title) }
+            Button(action: action) { NativeContentTabLabel(title: title, symbol: symbol, icon: icon).accessibilityHidden(true).frame(maxWidth: 220).padding(.leading, 12).padding(.trailing, close == nil ? 12 : 4).frame(height: 44).nativeTabHover() }.accessibilityElement(children: .ignore).accessibilityAddTraits(.isButton).accessibilityLabel(title).accessibilityValue(selected ? "Selected" : "").accessibilityIdentifier(identifier ?? "")
+            if let close { Button(action: close) { Image(systemName: "xmark").font(.caption2).frame(width: 32, height: 44).nativeTabHover() }.accessibilityLabel("Close " + title) }
             Rectangle().fill(NativeTheme.line).frame(width: 1, height: 24)
         }.buttonStyle(.plain).background(selected ? NativeTheme.surface : .clear).overlay(alignment: .bottom) { Rectangle().fill(selected ? NativeTheme.accent : .clear).frame(height: 2) }
     }

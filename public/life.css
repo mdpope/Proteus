@@ -3,7 +3,7 @@
 #life-page { max-width: 1440px; margin: 0 auto; }
 .life-subtabs,.life-choice { display:flex; flex-wrap:wrap; gap:6px; margin:18px 0; }
 .life-subtabs button { background:transparent; border:1px solid transparent; color:inherit; }
-.life-subtabs .active,.life-choice .active { background:var(--accent,#c9e8d7); color:var(--text,#173d2c); border-color:var(--line,#b7d0c4); }
+.life-subtabs .active,.life-choice .active { background:var(--proteus-accent); color:var(--proteus-accent-ink); border-color:var(--proteus-accent); }
 #life-content>.card,#life-content>.life-columns,#life-content>.life-metrics { margin:16px 0; }
 .life-columns { display:grid; grid-template-columns:minmax(0,1.35fr) minmax(300px,1fr); gap:18px; align-items:start; }
 .life-columns>.card,.life-columns>aside>.card { margin-bottom:16px; min-width:0; }

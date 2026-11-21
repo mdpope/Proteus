@@ -22,15 +22,17 @@ final class NativeProjectionTests: XCTestCase {
         let reminder = NativePhoneTab(id: "resource:reminder", title: "Reminder", symbol: "checklist", detail: "", section: "Reminders", sectionID: "feature:reminders", preview: image, select: {})
         chrome.replaceFeatureTabs("feature:scratchpad", items: [scratch], current: scratch.id)
         chrome.replaceFeatureTabs("feature:reminders", items: [reminder], current: reminder.id)
-        XCTAssertEqual(Set(chrome.featureOverviewItems.map(\.sectionID)), ["feature:scratchpad", "feature:reminders"])
-        XCTAssertTrue(chrome.featureOverviewItems.allSatisfy { $0.preview != nil })
+        XCTAssertEqual(chrome.featureOverviewItems(for: "scratchpad").map(\.id), [scratch.id])
+        XCTAssertEqual(chrome.featureOverviewItems(for: "reminders").map(\.id), [reminder.id])
+        XCTAssertNotNil(chrome.featureOverviewItems(for: "scratchpad").first?.preview)
         var privateTab = scratch; privateTab.symbol = "eye.slash"
         chrome.replaceFeatureTabs("feature:scratchpad", items: [privateTab], current: privateTab.id)
-        XCTAssertNil(chrome.featureOverviewItems.first { $0.id == privateTab.id }?.preview)
+        XCTAssertNil(chrome.featureOverviewItems(for: "scratchpad").first { $0.id == privateTab.id }?.preview)
         XCTAssertFalse(chrome.visited.contains { $0.id == privateTab.id })
         XCTAssertEqual(chrome.currentID, "")
-        chrome.replaceFeatureTabs("feature:scratchpad", items: [], current: nil)
-        XCTAssertEqual(chrome.featureOverviewItems.map(\.id), [reminder.id])
+        chrome.removeFeatureTabs("feature:scratchpad")
+        XCTAssertTrue(chrome.featureOverviewItems(for: "scratchpad").isEmpty)
+        XCTAssertEqual(chrome.featureOverviewItems(for: "reminders").map(\.id), [reminder.id])
     }
     func testBrowserMetadataDoesNotChangeShellMembership() {
         var tab = BrowserDescriptor(id: "page", title: "Before", url: "https://example.test/a", scope: "main")

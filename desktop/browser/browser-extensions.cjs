@@ -6,6 +6,7 @@ const {extensionName}=require('./extension-metadata.cjs');
 const {pageWebPreferences}=require('./browser-page-preferences.cjs');
 const {ElectronChromeExtensions}=require('electron-chrome-extensions');
 const {downloadExtension}=require('electron-chrome-web-store');
+const {packageDigest,reusablePackage}=require('./extension-package-library.cjs');
 // Native helpers may retry from several profiles/windows. Warn once per extension
 // for this app process; renderer reloads and profile recreation must not reset it.
 const nativeFailureNotices=new Set();
@@ -39,9 +40,12 @@ class BrowserExtensions {
    createWindow:(details,extension,parent)=>this.openExtensionWindow(host,details,extension,parent),
    openPopup:(extension,parent)=>{const action=host.adapter.api.browserAction.getAction(extension.id),page=action.popup||extension.manifest.action?.default_popup||extension.manifest.browser_action?.default_popup;if(page)this.openPage(host,new URL(page,'chrome-extension://'+extension.id+'/').href,{parentWindow:parent,toggle:false});}
   });
-  require('./extension-permissions.cjs').installExtensionPermissions(host,()=>this.save(host),(extension)=>{
+  require('./extension-permissions.cjs').installExtensionPermissions(host,()=>this.save(host),(extension,error)=>{
    if(nativeFailureNotices.has(extension.id))return;nativeFailureNotices.add(extension.id);
-   this.browser.actions.send({type:'notice',message:extension.name+' could not connect to its desktop app. Open and unlock that app, check browser integration, then retry in this profile.'});
+   const message=error?.code==='APPLE_PASSWORDS_BROWSER_UNSUPPORTED'
+    ? 'Apple Passwords requires a browser approved by Apple. This version of Proteus cannot connect to it.'
+    : extension.name+' could not connect to its desktop app. Open and unlock that app, check browser integration, then retry in this profile.';
+   this.browser.actions.send({type:'notice',message});
   });
   host.ready=(async()=>{for(const row of rows)if(row.enabled){try{await session.extensions.loadExtension(path.join(folder,row.directory),{allowFileAccess:false});}catch(error){row.error=error.message;}}})();return host.ready;
  }
@@ -82,6 +86,62 @@ class BrowserExtensions {
  hasEnabled(profileId){return this.profiles.get(profileId)?.rows.some(row=>row.enabled)===true;}
  list(profileId){const host=this.host(profileId);if(host.listCache)return host.listCache;
   return host.listCache=host.rows.map(row=>{let icon='';try{const base=fs.realpathSync(path.join(host.folder,row.directory)),manifest=JSON.parse(fs.readFileSync(path.join(base,'manifest.json'),'utf8')),icons=manifest.action?.default_icon||manifest.browser_action?.default_icon||manifest.icons||{},relative=typeof icons==='string'?icons:Object.entries(icons).sort((a,b)=>Math.abs(Number(a[0])-20)-Math.abs(Number(b[0])-20))[0]?.[1];if(typeof relative==='string'){const file=fs.realpathSync(path.resolve(base,relative));if(file.startsWith(base+path.sep)&&fs.statSync(file).size<250000){const image=nativeImage.createFromPath(file);if(!image.isEmpty())icon=image.resize({width:20,height:20}).toDataURL();}}}catch{}return {id:row.id,name:row.name,version:row.version,enabled:row.enabled,toolbar:row.toolbar===true,store:row.store===true,icon,error:row.error||null};});
+ }
+ async library(targetProfile,extensionId=null){
+  const candidates=[];
+  for(const profile of this.browser.options.profiles?.list().items||[]){
+   if(profile.id===targetProfile)continue;
+   const storage=this.browser.sessionFor(profile.id).storagePath;
+   if(!storage)continue;
+   const folder=path.join(this.home,createHash('sha256').update(storage).digest('hex'));
+   let rows;
+   try{rows=JSON.parse(await fs.promises.readFile(path.join(folder,'installed.json'),'utf8'));}
+   catch(error){if(error.code==='ENOENT')continue;throw error;}
+   if(!Array.isArray(rows)||rows.length>50)continue;
+   for(const row of rows){
+    if(!/^[a-p]{32}$/.test(row?.id)||!/^[a-f0-9-]{36}$/.test(row.directory||'')||extensionId&&row.id!==extensionId)continue;
+    const root=path.join(folder,row.directory);
+    let value;
+    try{value=await reusablePackage(root,row);}
+    catch(error){if(error.code==='ENOENT')continue;throw error;}
+    if(value)candidates.push({id:row.id,name:row.name,version:row.version,store:row.store===true,
+     sourceProfile:profile.id,sourceName:profile.name,storage,root,...value});
+   }
+  }
+  return candidates;
+ }
+ async installFromLibrary(host,value){
+  const {profileId}=host;
+  if(host.rows.length>=50)throw Error('Remove an extension before installing another (50 per profile).');
+  if(host.rows.some(row=>row.id===value.extensionId))throw Error('This extension is already installed in this profile.');
+  const candidate=(await this.library(profileId,value.extensionId)).find(row=>row.digest===value.digest);
+  if(!candidate)throw Error('The selected package changed or is unavailable. Refresh the extension library.');
+  const permissions=[...(candidate.manifest.permissions||[]),...(candidate.manifest.host_permissions||[])];
+  const response=await dialog.showMessageBox(this.browser.window,{type:'question',message:`Install ${candidate.name} in ${this.browser.profile(profileId).name}?`,
+   detail:`Version ${candidate.version} from the local package library. Review this profile’s permissions.\n\n${permissions.join('\n')}`,
+   buttons:['Cancel','Install'],defaultId:0,cancelId:0});
+  if(response.response!==1)return;
+  const checkSource=()=>{
+   if(this.browser.sessionFor(candidate.sourceProfile).storagePath!==candidate.storage)throw Error('The source profile changed.');
+  };
+  this.host(profileId);checkSource();
+  const directory=randomUUID(),destination=path.join(host.folder,directory);
+  await fs.promises.mkdir(host.folder,{recursive:true});
+  let installed;
+  try{
+   await fs.promises.cp(candidate.root,destination,{recursive:true,errorOnExist:true,force:false});
+   if(await packageDigest(destination)!==candidate.digest)throw Error('The extension package changed during installation.');
+   this.host(profileId);checkSource();host.installing=true;
+   installed=await host.session.extensions.loadExtension(destination,{allowFileAccess:false});
+   if(installed.id!==candidate.id||installed.version!==candidate.version)throw Error('The package identity changed.');
+   host.rows.push({id:installed.id,name:installed.name,version:installed.version,directory,enabled:true,store:candidate.store});
+   this.save(host);
+  }catch(error){
+   if(installed)host.session.extensions.removeExtension(installed.id);
+   host.rows=host.rows.filter(row=>row.directory!==directory);
+   await fs.promises.rm(destination,{recursive:true,force:true});
+   throw error;
+  }finally{host.installing=false;}
  }
 
  // The adapter calls selectTab for both host bookkeeping and extension requests.
@@ -195,6 +255,14 @@ class BrowserExtensions {
  command(value){const key=value.profileId||'default',previous=this.commands.get(key)||Promise.resolve();const task=previous.catch(()=>{}).then(()=>this.perform(value));this.commands.set(key,task);void task.finally(()=>{if(this.commands.get(key)===task)this.commands.delete(key);}).catch(()=>{});return task;}
  async perform(value){const profileId=value.profileId||'default';await this.initialize(profileId,this.browser.sessionFor(profileId));const host=this.host(profileId);
   if(value.action==='extensions-list')return this.list(profileId);
+  if(value.action==='extensions-library'){
+   const installed=new Set(host.rows.map(row=>row.id));
+   const unique=new Map((await this.library(profileId)).map(row=>[row.id+':'+row.digest,row]));
+   return [...unique.values()].map(({id,name,version,sourceName,digest})=>({id,name,version,sourceName,digest,installed:installed.has(id)}));
+  }
+  if(value.action==='extensions-library-install'){
+   await this.installFromLibrary(host,value);this.browser.changed();return this.list(profileId);
+  }
   if(value.action==='extensions-order'){
    const ids=value.ids;if(!Array.isArray(ids)||ids.length!==host.rows.length||new Set(ids).size!==ids.length||ids.some(id=>!host.rows.some(row=>row.id===id)))throw Error('Refresh the extension list before reordering.');
    const before=host.rows;host.rows=ids.map(id=>before.find(row=>row.id===id));try{this.save(host);}catch(error){host.rows=before;throw error;}return this.list(profileId);

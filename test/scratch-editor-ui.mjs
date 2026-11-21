@@ -14,9 +14,39 @@ try{
  await page.locator('.scratchpad-document .note').filter({hasText:/^Saved$/}).waitFor();
  const savedBody=await app.evaluate(async({app})=>{const owner=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getService().scratchpad;const row=(await owner.handle({action:'list'})).items.find(r=>r.title==='Markdown tab test');return (await owner.handle({action:'read',id:row.id})).body;});
  assert.equal(savedBody,'# Source heading\n\n**Bold content**','Formatting and undo preserve the complete Markdown');
- await page.getByLabel('Scratch workspace',{exact:true}).selectOption(fixture.studio.id);await page.getByLabel('Scratch project',{exact:true}).selectOption(fixture.project.id);
+ await page.getByRole('button',{name:'Source',exact:true}).click();
+ await editor.evaluate(node=>{
+  const pixels=Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jC1YAAAAASUVORK5CYII='),c=>c.charCodeAt(0));
+  const transfer=new DataTransfer();transfer.items.add(new File([pixels],'paste.png',{type:'image/png'}));
+  node.dispatchEvent(new ClipboardEvent('paste',{clipboardData:transfer,bubbles:true,cancelable:true}));
+ });
+ await page.waitForFunction(()=>document.querySelector('.cm-content')?.textContent.includes('Scratch Attachments/pasted-'));
+ await page.locator('.scratchpad-document .note').filter({hasText:/^Saved$/}).waitFor();
+
+ await page.getByLabel('Scratch workspace',{exact:true}).selectOption(fixture.studio.id);
+ await page.waitForFunction(workspaceId=>{const picker=document.querySelector('[aria-label="Scratch workspace"]');return picker?.value===workspaceId&&!picker.disabled;},fixture.studio.id);
+ await page.getByLabel('Scratch project',{exact:true}).selectOption(fixture.project.id);
+ await page.waitForFunction(projectId=>{const picker=document.querySelector('[aria-label="Scratch project"]');return picker?.value===projectId&&!picker.disabled;},fixture.project.id);
  await page.getByRole('button',{name:'Preview',exact:true}).click();await page.locator('.scratchpad-document>.rich-text h1').filter({hasText:'Source heading'}).waitFor();
  assert.ok(await page.getByRole('complementary',{name:'Scratch folder browser'}).locator('.workspace-file-browser,.file-browser-list').count());
+ const folders=page.getByRole('complementary',{name:'Scratch folder browser'});
+ const scratch=folders.locator('tr[draggable="true"]').filter({hasText:'Markdown tab test'});
+ await scratch.waitFor();
+ const workspace=folders.locator('tr[data-row]').filter({has:page.getByRole('button',{name:/^(Expand|Collapse) Studio$/})});
+ await scratch.dragTo(workspace);
+ await page.waitForFunction(()=>{
+  const picker=document.querySelector('[aria-label="Scratch project"]');
+  return picker?.value===''&&!picker.disabled;
+ });
+ const moved=await app.evaluate(async({app})=>{
+  const owner=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getService().scratchpad;
+  const row=(await owner.handle({action:'list'})).items.find(value=>value.title==='Markdown tab test');
+  return owner.handle({action:'read',id:row.id});
+ });
+ assert.equal(moved.workspaceId,fixture.studio.id);
+ assert.equal(moved.projectId,null);
+ assert.match(moved.body,/!\[\[Scratch Attachments\/pasted-[a-f0-9]{64}\.png\]\]/);
+ assert.ok(moved.body.includes('# Source heading')&&moved.body.includes('**Bold content**'));
  await page.screenshot({path:process.cwd()+'/.runtime-tests/scratch-code-editor.png'});
  await page.evaluate(async project=>{const {openPreviewProject}=await import('/shared/navigation/desktop-preview.js');openPreviewProject(project);},fixture.project);
  await page.locator('[data-chat-subtab="'+fixture.parentId+':chat:'+fixture.user[0].id+'"]').click();const selected=await page.locator('#chat-subtabs .chat-subtab.selected [data-chat-subtab]').first().getAttribute('data-chat-subtab');

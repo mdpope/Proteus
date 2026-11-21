@@ -1,70 +1,148 @@
+import {createOperationControls,createOperationList,operationCategory,operationToolbar,clearOperationFilters} from '../../../public/features/chats/operations-list.js';
 import {chatLink} from '../../../public/features/chats/chat-links.js';
-import {chatTypes,chatType,chatRunOptions} from '../../../public/features/chats/chat-types.js';
+import {chatType} from '../../../public/features/chats/chat-types.js';
 export const selectChatType=type=>saved.type=type;
 export const selectedChatType=()=>saved.type;
-export function selectScheduleChats(name,host){Object.assign(saved,{type:'scheduled',query:'',schedule:name,host,provider:'',status:'',workspace:'',after:'',before:'',showArchived:false,filtersOpen:true,scroll:0,limit:100});activeFilter=saved;}
+export function selectScheduleChats(name,host){Object.assign(saved,{type:'scheduled',query:'',schedule:name,computers:host?[host]:[],provider:'',categories:[],workspace:'',after:'',before:'',showArchived:false,filtersOpen:true,scroll:0,limit:100});activeFilter=saved;}
 // The website mirrors the desktop Chats index while retaining host-scoped routing.
-const saved={type:'user',query:'',host:'',provider:'',status:'',workspace:'',schedule:'',after:'',before:'',showArchived:false,filtersOpen:true,scroll:0,limit:100};
+const saved={type:'all',query:'',computers:[],provider:'',categories:[],layout:'cards',project:'',workspace:'',schedule:'',after:'',before:'',showArchived:false,filtersOpen:true,scroll:0,limit:100};
 const scopes=new Map();
-const listeners=new WeakMap();
+const mounted=new WeakMap();
 const pageLoads=new WeakMap();
 let activeFilter=saved;
 export const chatIndexShowsArchived=()=>activeFilter.showArchived;
 export function renderChatIndex(container,{rows,hosts,escape:e,time,timezone,open,refresh,loadMore,archive,remove,rename,onShowArchived,onError,hasMore=false,attention=false,workspaceScope=null,sendWorkspace,move}){
  const scopeKey=workspaceScope?workspaceScope.hostId+':'+workspaceScope.workspaceId+':'+(workspaceScope.projectId||''):'main';
- if(scopeKey!=='main'&&!scopes.has(scopeKey))scopes.set(scopeKey,{...saved,type:'all',host:'',workspace:'',query:'',provider:'',status:'',schedule:'',after:'',before:''});
+ if(scopeKey!=='main'&&!scopes.has(scopeKey))scopes.set(scopeKey,{...saved,type:'all',computers:[],categories:[],workspace:'',project:'',query:'',provider:'',schedule:'',after:'',before:''});
  const filterState=scopeKey==='main'?saved:scopes.get(scopeKey);activeFilter=filterState;
  return renderScopedChatIndex(container,{rows,hosts,escape:e,time,timezone,open,refresh,loadMore,archive,remove,rename,onShowArchived,onError,hasMore,attention,workspaceScope,sendWorkspace,move},filterState);
 }
-function renderScopedChatIndex(container,{rows,hosts,escape:e,time,timezone,open,refresh,loadMore,archive,remove,rename,onShowArchived,onError,hasMore,attention,workspaceScope,sendWorkspace,move},saved){
- if(workspaceScope)rows=rows.filter(row=>row.workspaceId===workspaceScope.workspaceId&&row.hostId===workspaceScope.hostId&&(!workspaceScope.projectId||row.projectId===workspaceScope.projectId));
- const priorArea=container.querySelector('#chat-index-rows');if(priorArea)saved.scroll=priorArea.scrollTop;
- const priorMenu=container.querySelector('#chat-index-menu:not([hidden])');
- const priorSelection=priorMenu?{id:priorMenu.dataset.run,hostId:priorMenu.dataset.host,x:parseFloat(priorMenu.style.left),y:parseFloat(priorMenu.style.top),action:container.ownerDocument.activeElement?.dataset.chatAction}:null;
- listeners.get(container)?.abort();const lifecycle=new AbortController();listeners.set(container,lifecycle);
- const choices=(pairs,current)=>pairs.map(([id,label])=>`<option value="${e(id)}" ${id===current?'selected':''}>${e(label)}</option>`).join('');
- const workspaceKey=row=>row.workspaceId?row.hostId+':'+row.workspaceId:row.workspaceName;
- const selects=[['host','computer','All computers',hosts.map(h=>[h.hostId,h.label])],...['provider','status','workspace','schedule'].map(key=>[key,key[0].toUpperCase()+key.slice(1),'All '+(key==='status'?'statuses':key+'s'),key==='workspace'?[...new Map(rows.filter(r=>r.workspaceName).map(r=>[workspaceKey(r),[workspaceKey(r),r.workspaceName+(r.workspaceId?' · '+r.hostLabel:'')]])).values()]:[...new Set(rows.map(r=>r[{schedule:'scheduleName'}[key]||key]).filter(Boolean))].map(v=>[v,v.replaceAll('_',' ')])])];
- container.innerHTML=`<section class="card chat-index-page"><header class="remote-chat-title"><div><div class="eyebrow">${workspaceScope?e(workspaceScope.name||'Workspace'):attention?'Needs attention':'All paired computers'}</div><h2>${attention?'Ready for your input.':'Chats'}</h2></div><button id="chat-index-refresh" type="button">Refresh</button></header>${!attention?`<div class="chat-type-tabs" role="tablist" aria-label="Chat types">${(workspaceScope?[['all','All chats'],...chatTypes]:chatTypes).map(([id,label])=>`<button role="tab" aria-selected="${saved.type===id}" data-chat-type="${id}">${label}</button>`).join('')}</div>`:''}${rows.some(r=>r.cached)?'<p>Some connections are unavailable. Cached statuses are unverified and excluded from Needs attention. Inspect them in Chats.</p>':''}<details class="chat-index-filter-panel" ${saved.filtersOpen?'open':''}><summary>Filters</summary><div class="chat-index-filters"><label>Search<input id="chat-index-query" type="search" value="${e(saved.query)}" placeholder="Search chat titles"></label>${workspaceScope?.projectId?`<label>Project<input value="${e(workspaceScope.projectName||'Project')}" readonly aria-label="Project filter locked"></label>`:''}${selects.map(([key,label,all,pairs])=>workspaceScope&&key==='workspace'?`<label>Workspace<input value="${e(workspaceScope.name)}" readonly aria-label="Workspace filter locked"></label>`:`<label>${label}<select id="chat-index-${key}"><option value="">${all}</option>${choices(pairs,saved[key])}</select></label>`).join('')}<label>From date<input id="chat-index-after" type="date" value="${e(saved.after)}"></label><label>Through date<input id="chat-index-before" type="date" value="${e(saved.before)}"></label><label class="chat-index-show-archived"><input id="chat-index-show-archived" type="checkbox" role="switch" ${saved.showArchived?'checked':''}><span class="chat-index-switch-track" aria-hidden="true"></span><span>Show Archived</span></label></div></details><div id="chat-index-rows" class="chat-index-rows" tabindex="0" aria-label="Chats"></div><div id="chat-index-menu" class="chat-index-menu" role="menu" aria-label="Chat actions" hidden><button type="button" role="menuitem" data-chat-action="open">Open chat</button><button type="button" role="menuitem" data-chat-action="copy-link">Copy chat link</button><button type="button" role="menuitem" data-chat-action="workspace">Send tab to workspace</button><button type="button" role="menuitem" data-chat-action="rename">Rename chat…</button><button type="button" role="menuitem" data-chat-action="move">Move chat…</button><button type="button" role="menuitem" data-chat-action="archive"></button><button type="button" role="menuitem" data-chat-action="delete">Delete chat…</button></div></section>`;
- container.querySelectorAll('[data-chat-type]').forEach(button=>button.onclick=()=>{saved.type=button.dataset.chatType;container.querySelectorAll('[data-chat-type]').forEach(b=>b.setAttribute('aria-selected',String(b===button)));paint();});
- const menu=container.querySelector('#chat-index-menu');let menuRow=null,menuButton=null;
+
+function renderScopedChatIndex(container,options,saved){
+ const {workspaceScope,attention,escape:e}=options;
+ const scope=JSON.stringify([workspaceScope?.hostId,workspaceScope?.workspaceId,workspaceScope?.projectId,attention]);
+ const previous=mounted.get(container);
+ if(previous?.scope===scope&&previous.root.isConnected){
+  previous.options=options;previous.paint();return;
+ }
+ previous?.dispose();
+ container.innerHTML=`<section class="card chat-index-page">${operationToolbar(saved,{attention,workspace:workspaceScope,project:workspaceScope?.projectId,escape:e})}
+ <div id="chat-index-rows" class="chat-index-rows" tabindex="0" aria-label="Chats"></div>
+ <div id="chat-index-menu" class="chat-index-menu" role="menu" aria-label="Chat actions" hidden>
+ <button type="button" role="menuitem" data-chat-action="open">Open chat</button><button type="button" role="menuitem" data-chat-action="copy-link">Copy chat link</button>
+ <button type="button" role="menuitem" data-chat-action="workspace">Send tab to workspace</button><button type="button" role="menuitem" data-chat-action="rename">Rename chat…</button>
+ <button type="button" role="menuitem" data-chat-action="move">Move chat…</button><button type="button" role="menuitem" data-chat-action="archive"></button>
+ <button type="button" role="menuitem" data-chat-action="delete">Delete chat…</button></div></section>`;
+ const find=selector=>container.querySelector(selector),root=find('.chat-index-page'),area=find('#chat-index-rows'),menu=find('#chat-index-menu');
+ const lifecycle=new AbortController();
+ const instance={scope,root,options,paint,dispose:()=>{lifecycle.abort();controls.dispose();list.dispose();}};
+ mounted.set(container,instance);
+ let menuRow,menuButton;
  const closeMenu=(restore=false)=>{menu.hidden=true;if(restore)menuButton?.focus({preventScroll:true});menuRow=null;menuButton=null;};
- const openMenu=(event,row,button)=>{
-  event.preventDefault();menuRow=row;menuButton=button;menu.dataset.run=row.id;menu.dataset.host=row.hostId;
-  const archiveButton=menu.querySelector('[data-chat-action=archive]'),deleteButton=menu.querySelector('[data-chat-action=delete]');
-  menu.querySelector('[data-chat-action=move]').hidden=!move;
-  archiveButton.hidden=!archive;archiveButton.textContent=row.archivedAt||row.archived?'Unarchive chat':'Archive chat';deleteButton.hidden=!remove;
-  menu.querySelector('[data-chat-action=workspace]').hidden=!sendWorkspace||!row.workspaceId;
-  menu.querySelector('[data-chat-action=rename]').hidden=!rename||!row.renameSupported;
-  const unavailable=['queued','running','awaiting_input'].includes(row.status)||Number(row.queuedMessageCount||0)>0;archiveButton.disabled=unavailable;deleteButton.disabled=unavailable;
+ const openMenu=(row,button,event)=>{
+  menuRow=row;menuButton=button;menu.dataset.run=row.id;menu.dataset.host=row.hostId;
+  const archiveButton=find('[data-chat-action=archive]'),deleteButton=find('[data-chat-action=delete]');
+  find('[data-chat-action=move]').hidden=!instance.options.move;
+  archiveButton.hidden=!instance.options.archive;archiveButton.textContent=row.archivedAt||row.archived?'Unarchive chat':'Archive chat';
+  deleteButton.hidden=!instance.options.remove;
+  find('[data-chat-action=workspace]').hidden=!instance.options.sendWorkspace||!row.workspaceId;
+  find('[data-chat-action=rename]').hidden=!instance.options.rename||!row.renameSupported;
+  const unavailable=['queued','running','awaiting_input'].includes(row.status)||Number(row.queuedMessageCount||0)>0;
+  archiveButton.disabled=unavailable;deleteButton.disabled=unavailable;
   archiveButton.title=deleteButton.title=unavailable?'Finish or cancel this chat before managing it.':'';
-  menu.hidden=false;const width=menu.offsetWidth,height=menu.offsetHeight,view=container.ownerDocument.defaultView;
-  menu.style.left=Math.max(8,Math.min(event.clientX||button.getBoundingClientRect().left,view.innerWidth-width-8))+'px';
-  menu.style.top=Math.max(8,Math.min(event.clientY||button.getBoundingClientRect().bottom,view.innerHeight-height-8))+'px';
+  menu.hidden=false;
+  menu.style.left=Math.max(8,Math.min(event.clientX||button.getBoundingClientRect().left,innerWidth-menu.offsetWidth-8))+'px';
+  menu.style.top=Math.max(8,Math.min(event.clientY||button.getBoundingClientRect().bottom,innerHeight-menu.offsetHeight-8))+'px';
   menu.querySelector('button:not([hidden])')?.focus({preventScroll:true});
  };
- const paint=()=>{
-  closeMenu();const date=value=>{try{return new Intl.DateTimeFormat('en-CA',{timeZone:timezone,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(value));}catch{return '';}};
-  const query=saved.query.toLocaleLowerCase();const visible=rows.filter(r=>(attention||saved.type==='all'||chatType(r)===saved.type)&&(saved.showArchived||!(r.archivedAt||r.archived))&&(!attention||(!r.cached&&(typeof r.attentionRequired==='boolean'?r.attentionRequired:['awaiting_input','failed','interrupted'].includes(r.status))))&&(!saved.after||date(r.updatedAt||r.createdAt)>=saved.after)&&(!saved.before||date(r.updatedAt||r.createdAt)<=saved.before)&&(!query||[r.title,r.provider,r.hostLabel,r.workspaceName,r.scheduleName].some(v=>String(v||'').toLocaleLowerCase().includes(query)))&&(!saved.host||r.hostId===saved.host)&&(!saved.provider||r.provider===saved.provider)&&(!saved.status||r.status===saved.status)&&(!saved.workspace||workspaceKey(r)===saved.workspace)&&(!saved.schedule||r.scheduleName===saved.schedule));
-  const area=container.querySelector('#chat-index-rows');area.innerHTML=visible.slice(0,saved.limit).map(r=>`<button class="chat-index-row" data-run="${e(r.id)}" data-run-host="${e(r.hostId)}" data-lifecycle="${r.lifecycleSupported===true}"><strong>${r.status==='running'?'<span class="spinner" role="status" aria-label="Running"></span>':''}${e(r.title||'Chat')}</strong><span class="chat-run-options"><span>${e(chatRunOptions(r).provider)} · ${e(chatRunOptions(r).model)}</span><small>${e(chatRunOptions(r).detail)}</small></span><span class="chat-computer"><span>${e(r.hostLabel)}</span><small>${e((r.status||'').replaceAll('_',' '))}${r.archivedAt||r.archived?' · Archived':''}</small></span><time>${e(time(r.updatedAt||r.createdAt))}</time>${r.cached?`<small>Cached · last synced ${e(time(r.lastSyncAt))}</small>`:''}</button>`).join('')||'<p>No chats match these filters.</p>';
-  area.querySelectorAll('[data-run]').forEach((button,index)=>{const row=visible[index];button.onclick=()=>open(button.dataset.run,button.dataset.runHost);button.oncontextmenu=event=>openMenu(event,row,button);button.onkeydown=event=>{if(event.key==='ContextMenu'||(event.shiftKey&&event.key==='F10'))openMenu(event,row,button);};});area.dataset.more=String(hasMore||visible.length>saved.limit);area.dataset.localMore=String(visible.length>saved.limit);queueMicrotask(()=>{if(area.isConnected)area.dispatchEvent(new Event('scroll'));});
+ const identity=row=>row.hostId+':'+row.id;
+ const list=createOperationList(area,{key:identity,time:when=>instance.options.time(when),onOpen:row=>instance.options.open(row.id,row.hostId),
+  onMenu:openMenu,decorate:(node,row)=>{node.dataset.run=row.id;node.dataset.runHost=row.hostId;node.dataset.lifecycle=String(row.lifecycleSupported===true);}});
+ const controls=createOperationControls(root,saved,paint);
+ const optionSignatures=new Map();
+ function setChoices(name,label,values){
+  const node=find('#chat-index-'+name),entries=[['',label],...values],signature=JSON.stringify(entries);
+  if(optionSignatures.get(name)!==signature){
+   node.replaceChildren(...entries.map(([value,label])=>new Option(label,value)));optionSignatures.set(name,signature);
+  }
+  const desired=saved[name]||'';
+  if(node.value!==desired)node.value=desired;
+ }
+ function paint(){
+  const {rows,hosts,timezone,hasMore,workspaceScope}=instance.options;
+  const scoped=workspaceScope?rows.filter(row=>row.workspaceId===workspaceScope.workspaceId&&row.hostId===workspaceScope.hostId&&(!workspaceScope.projectId||row.projectId===workspaceScope.projectId)):rows;
+  const workspaceKey=row=>row.workspaceId?row.hostId+':'+row.workspaceId:row.workspaceName;
+  const distinct=key=>[...new Set(scoped.map(row=>row[key]).filter(Boolean))].sort().map(value=>[value,value]);
+  setChoices('provider','All providers',distinct('provider'));
+  setChoices('workspace',workspaceScope?.name||'All workspaces',[...new Map(scoped.filter(row=>row.workspaceName).map(row=>[workspaceKey(row),row.workspaceName+' · '+row.hostLabel]))]);
+  setChoices('project',workspaceScope?.projectName||'All projects',[...new Map(scoped.filter(row=>row.projectId).map(row=>[row.projectId,row.projectName||row.projectId]))]);
+  setChoices('schedule','All schedules',distinct('scheduleName'));
+  const query=saved.query.toLocaleLowerCase();
+  const formatter=saved.after||saved.before?new Intl.DateTimeFormat('en-CA',{timeZone:timezone,year:'numeric',month:'2-digit',day:'2-digit'}):null;
+  const pool=scoped.filter(row=>{
+   if(!saved.showArchived&&(row.archivedAt||row.archived))return false;
+   if(attention&&(row.cached||!(row.attentionRequired??['awaiting_input','failed','interrupted'].includes(row.status))))return false;
+   if(!attention&&saved.type!=='all'&&chatType(row)!==saved.type)return false;
+   if(saved.computers.length&&!saved.computers.includes(row.hostId))return false;
+   if(saved.provider&&row.provider!==saved.provider||saved.workspace&&workspaceKey(row)!==saved.workspace||
+      saved.project&&row.projectId!==saved.project||saved.schedule&&row.scheduleName!==saved.schedule)return false;
+   if(query&&![row.title,row.provider,row.model,row.hostLabel,row.workspaceName,row.projectName,row.scheduleName,row.operation?.action].some(value=>String(value||'').toLocaleLowerCase().includes(query)))return false;
+   if(formatter){
+    const stamp=Date.parse(row.updatedAt||row.createdAt);
+    if(!Number.isFinite(stamp))return false;
+    const date=formatter.format(stamp);
+    if(saved.after&&date<saved.after||saved.before&&date>saved.before)return false;
+   }
+   return true;
+  });
+  const online=new Set(scoped.filter(row=>!row.cached).map(row=>row.hostId));
+  const now=Date.now();
+  controls.paint(hosts.map(host=>({id:host.hostId,label:host.label,online:host.online??online.has(host.hostId)})),pool,now);
+  root.querySelectorAll('[data-chat-type]').forEach(button=>button.setAttribute('aria-selected',String(button.dataset.chatType===saved.type)));
+  const visible=pool.filter(row=>!saved.categories.length||saved.categories.includes(operationCategory(row,now)));
+  list.paint(visible,{...saved,hasMore,now});
+  area.dataset.localMore=String(visible.length>saved.limit);
+  if(menuButton&&!menuButton.isConnected)closeMenu();
+ }
+ for(const key of ['query','provider','workspace','project','schedule','after','before']){
+  find('#chat-index-'+key).addEventListener(key==='query'?'input':'change',event=>{saved[key]=event.target.value;paint();});
+ }
+ find('#chat-index-show-archived').onchange=event=>{
+  saved.showArchived=event.target.checked;paint();
+  void Promise.resolve(instance.options.onShowArchived?.(saved.showArchived)).catch(error=>instance.options.onError?.(error));
  };
- for(const key of Object.keys(saved).filter(k=>!['type','limit','showArchived','filtersOpen','scroll'].includes(k)))container.querySelector('#chat-index-'+key)?.addEventListener(key==='query'?'input':'change',event=>{saved[key]=event.target.value;paint();});
- container.querySelector('#chat-index-show-archived').onchange=event=>{saved.showArchived=event.target.checked;paint();void Promise.resolve(onShowArchived?.(saved.showArchived)).catch(error=>onError?.(error));};
- menu.querySelectorAll('[data-chat-action]').forEach(button=>button.onclick=async()=>{const row=menuRow,action=button.dataset.chatAction;closeMenu();if(!row)return;try{if(action==='open')open(row.id,row.hostId);else if(action==='copy-link')await navigator.clipboard.writeText(chatLink(row,{origin:location.origin}));else if(action==='workspace')await sendWorkspace?.(row);else if(action==='rename')await rename?.(row);else if(action==='move')await move?.(row);else if(action==='archive')await archive?.(row,!(row.archivedAt||row.archived));else if(action==='delete'&&container.ownerDocument.defaultView.confirm(`Delete “${row.title||'Chat'}” from ${row.hostLabel}? This permanently removes the Proteus chat record on that computer. Generated files and provider originals are not deleted. This cannot be undone.`))await remove?.(row);}catch(error){onError?.(error);}});
+ menu.querySelectorAll('[data-chat-action]').forEach(button=>button.onclick=async()=>{
+  const row=menuRow,action=button.dataset.chatAction;closeMenu();if(!row)return;
+  const {open,sendWorkspace,rename,move,archive,remove,onError}=instance.options;
+  try{
+   if(action==='open')open(row.id,row.hostId);
+   else if(action==='copy-link')await navigator.clipboard.writeText(chatLink(row,{origin:location.origin}));
+   else if(action==='workspace')await sendWorkspace?.(row);
+   else if(action==='rename')await rename?.(row);
+   else if(action==='move')await move?.(row);
+   else if(action==='archive')await archive?.(row,!(row.archivedAt||row.archived));
+   else if(action==='delete'&&window.confirm(`Delete “${row.title||'Chat'}” from ${row.hostLabel}? This permanently removes the Proteus chat record on that computer. Generated files and provider originals are not deleted. This cannot be undone.`))await remove?.(row);
+  }catch(error){onError?.(error);}
+ });
  container.ownerDocument.addEventListener('keydown',event=>{if(event.key==='Escape'&&!menu.hidden){event.preventDefault();closeMenu(true);}}, {signal:lifecycle.signal});
  container.ownerDocument.addEventListener('pointerdown',event=>{if(!menu.hidden&&!menu.contains(event.target))closeMenu();},{signal:lifecycle.signal});
- container.querySelector('#chat-index-refresh').onclick=refresh;container.querySelector('.chat-index-filter-panel').ontoggle=event=>{saved.filtersOpen=event.target.open;};
+ find('#chat-index-clear').onclick=()=>{
+  const archived=clearOperationFilters(root,saved);paint();
+  if(archived)void Promise.resolve(instance.options.onShowArchived?.(false)).catch(error=>instance.options.onError?.(error));
+ };
+ find('#chat-index-refresh').onclick=()=>instance.options.refresh();
+ find('.chat-index-filter-panel').ontoggle=event=>{saved.filtersOpen=event.target.open;};
+ root.querySelectorAll('[data-chat-type]').forEach(button=>button.onclick=()=>{saved.type=button.dataset.chatType;paint();});
  if(!pageLoads.has(container))pageLoads.set(container,{pending:false,lastAttempt:''});const paging=pageLoads.get(container);
- const area=container.querySelector('#chat-index-rows');area.onscroll=async()=>{saved.scroll=area.scrollTop;if(!area.isConnected||paging.pending||area.dataset.more!=='true'||area.scrollHeight-area.scrollTop-area.clientHeight>=240)return;
+ area.onscroll=async()=>{
+  saved.scroll=area.scrollTop;
+  if(!area.isConnected||paging.pending||area.dataset.more!=='true'||area.scrollHeight-area.scrollTop-area.clientHeight>=240)return;
   if(area.dataset.localMore==='true'){saved.limit+=100;paint();area.scrollTop=saved.scroll;return;}
-  const attempt=JSON.stringify([scopeKeyForPaging(),rows.length,saved.type,workspaceScope?.projectId,saved.query,saved.host,saved.provider,saved.status,saved.workspace,saved.schedule,saved.after,saved.before,saved.showArchived]);if(!hasMore||paging.lastAttempt===attempt)return;paging.pending=true;paging.lastAttempt=attempt;saved.limit+=100;
-  try{await loadMore();}catch(error){onError?.(error);}finally{paging.pending=false;const current=container.querySelector('#chat-index-rows');if(current&&current!==area)current.dispatchEvent(new Event('scroll'));}
- };function scopeKeyForPaging(){return workspaceScope?.workspaceId||'main';}paint();area.scrollTop=saved.scroll;
- if(priorSelection){
-  const row=rows.find(item=>item.id===priorSelection.id&&item.hostId===priorSelection.hostId);
-  const button=[...container.querySelectorAll('#chat-index-rows [data-run]')].find(item=>item.dataset.run===priorSelection.id&&item.dataset.runHost===priorSelection.hostId);
-  if(row&&button){openMenu({preventDefault(){},clientX:priorSelection.x,clientY:priorSelection.y},row,button);const action=[...menu.querySelectorAll('[data-chat-action]')].find(item=>item.dataset.chatAction===priorSelection.action);if(action&&!action.hidden&&!action.disabled)action.focus({preventScroll:true});}
- }
-
+  const {rows,hasMore,loadMore,onError}=instance.options;
+  const attempt=JSON.stringify([scope,rows.length,saved.type,saved.query,saved.computers,saved.categories,saved.provider,saved.workspace,saved.project,saved.schedule,saved.after,saved.before,saved.showArchived]);
+  if(!hasMore||paging.lastAttempt===attempt||!loadMore)return;
+  paging.pending=true;paging.lastAttempt=attempt;saved.limit+=100;
+  try{await loadMore();}catch(error){onError?.(error);}finally{paging.pending=false;}
+ };
+ paint();area.scrollTop=saved.scroll;
 }

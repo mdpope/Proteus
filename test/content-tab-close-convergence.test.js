@@ -39,3 +39,41 @@ test('a quarantined browser action does not discard or hide a new unrelated loca
  assert.ok(remote.tabs.some(tab=>tab.id==='browser:new'),'unrelated membership reaches the owner even when its prior revision has not changed');
  assert.ok(local.some(tab=>tab.id==='browser:new'),'new local intent is not removed by conflict hydration');
 });
+
+test('a browser conflict leaves new chat setup descriptors in the same batch eligible to synchronize',async()=>{
+ const original=tab('one'),draft={id:'setup',type:'browser',title:'New chat',url:'',setup:{kind:'chat'},navigationPending:true};
+ const next={id:'entry-next',url:'https://example.test/next',title:'Next'};
+ let local=[original],remote={revision:1,tabs:[original]},navigationAttempts=0;
+ const store=new Map(),storage={getItem:key=>store.get(key)||null,setItem:(key,value)=>store.set(key,value),removeItem:key=>store.delete(key)};
+ const sync=createTabSynchronizer({navigation:true,explicitCloseOnly:true,pendingStorage:storage,scopes:()=>[scope],scopeLabel:()=> 'the Social project',
+  readLocal:async()=>structuredClone(local),apply:async(_scope,tabs)=>{local=structuredClone(tabs);},request:async(_scope,action,args)=>{
+   if(action==='get')return structuredClone(remote);
+   if(args.operations.some(op=>op.action.startsWith('browser-'))){navigationAttempts++;throw Object.assign(Error('Owner history changed'),{code:'NAVIGATION_CONFLICT'});}
+   const added=args.operations.filter(op=>op.action==='open').map(op=>op.tab);
+   assert.deepEqual(added.map(tab=>tab.id),[draft.id]);
+   remote={revision:2,tabs:[original,...added]};return structuredClone(remote);
+  }});
+ await sync.sync(scope);
+ local=[{...original,url:next.url,navigationPending:true,history:{...original.history,entries:[...original.history.entries,next],index:1,currentEntryId:next.id,total:2}},draft];
+ await sync.sync(scope);
+ const requestKey=[...store.keys()].find(key=>key.startsWith('proteus.navigation.request:'));
+ const retainedRequest=store.get(requestKey);
+ assert.ok(retainedRequest);
+ await assert.rejects(sync.settle(),/the Social project.*browser-history notification/);
+ assert.equal(navigationAttempts,1);
+ assert.equal(store.get(requestKey),retainedRequest);
+ assert.equal(remote.tabs[1].setup.kind,'chat');
+ assert.equal(local[0].history.currentEntryId,next.id);
+ let openCopy;
+ const waiting=new Promise(resolve=>{openCopy=resolve;});
+ let copies=0;
+ const first=sync.resolve(scope,{preserve:async tabs=>{
+  copies++;assert.equal(tabs[0].history.currentEntryId,next.id);await waiting;
+ }});
+ const second=sync.resolve(scope,{preserve:async()=>{assert.fail('An in-progress copy must be reused');}});
+ await sync.sync(scope);
+ openCopy();await Promise.all([first,second]);
+ assert.equal(copies,1);
+ assert.equal(sync.hasConflict(scope),false);
+ assert.equal(local[1].setup.kind,'chat');
+});

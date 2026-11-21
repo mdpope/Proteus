@@ -17,11 +17,14 @@ use Illuminate\Support\Str;
 /** Adapter: preserve the website domain validators and native retry transaction. */
 class LifeActions
 {
-    public function __construct(private TenantAccess $access, private NutritionLedger $nutrition, private CaptureIngestor $captures, private LifeReadModel $read, private LifeReminders $reminders) {}
+    public function __construct(private TenantAccess $access, private NutritionLedger $nutrition, private CaptureIngestor $captures, private LifeReadModel $read, private LifeReminders $reminders, private LifeReminderImport $reminderImport) {}
 
     public function run(User $user, string $action, array $input, string $key): array
     {
         abort_if($this->read->profile($user)['readOnly'], 403, 'This account connection is read-only.');
+        if (in_array($action, ['reminders.import.preview', 'reminders.import.apply'], true)) {
+            return $this->reminderImport->run($user, $action === 'reminders.import.apply', $input, $key);
+        }
         if (str_starts_with($action, 'reminders.')) {
             return $this->reminders->run($user, substr($action, 10), $input, $key);
         }

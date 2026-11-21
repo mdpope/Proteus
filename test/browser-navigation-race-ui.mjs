@@ -1,14 +1,41 @@
 // Actual navigation completes after the user selects another browser tab.
 import {_electron as electron} from 'playwright';import http from 'node:http';import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import assert from 'node:assert/strict';
 const home=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'proteus-navigation-race-')));fs.writeFileSync(path.join(home,'settings.json'),JSON.stringify({schemaVersion:1,provider:'rehearsal',timezone:'UTC',workspace:{cwd:home,additionalDirectories:[]},skillDirectories:[],mcpServers:{}}));let slowStarted=false;
-const server=http.createServer((req,res)=>{res.setHeader('Content-Type','text/html');const finish=()=>res.end('<title>Fixture '+req.url+'</title><h1>Fixture '+req.url+'</h1>');if(req.url==='/slow'){slowStarted=true;setTimeout(finish,500);}else finish();});await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const origin='http://127.0.0.1:'+server.address().port;let app;
+let redirectRevisit=false;
+const server=http.createServer((req,res)=>{if(req.url==='/revisit'&&redirectRevisit){res.writeHead(302,{Location:'/local-landing','Cache-Control':'no-store'});res.end();return;}res.setHeader('Cache-Control','no-store');res.setHeader('Content-Type','text/html');const finish=()=>res.end('<title>Fixture '+req.url+'</title><h1>Fixture '+req.url+'</h1>');if(req.url==='/slow'){slowStarted=true;setTimeout(finish,500);}else finish();});await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const origin='http://127.0.0.1:'+server.address().port;let app;
 const until=async fn=>{for(let n=0;n<160;n++){if(await fn())return;await new Promise(resolve=>setTimeout(resolve,50));}throw Error('Navigation did not settle');};
 try{
- app=await electron.launch({...(process.env.PROTEUS_TEST_APP_PATH?{executablePath:process.env.PROTEUS_TEST_APP_PATH,args:[]}:{args:['.']}),env:{...process.env,PROTEUS_HOME:home,PORT:'0'},args:process.env.PROTEUS_TEST_APP_PATH?['--use-mock-keychain','--user-data-dir='+path.join(home,'electron')]:['.','--use-mock-keychain','--user-data-dir='+path.join(home,'electron')]});const page=await app.firstWindow();page.setDefaultTimeout(15000);await page.route('**/app.js',async route=>{const response=await route.fetch();await route.fulfill({response,body:(await response.text())+'\nwindow.navigationRace={state,openTab};clearInterval(refreshInterval);'});});await page.reload();await page.locator('#home-screen').waitFor();
+ app=await electron.launch({...(process.env.PROTEUS_TEST_APP_PATH?{executablePath:process.env.PROTEUS_TEST_APP_PATH,args:[]}:{args:['.']}),env:{...process.env,PROTEUS_HOME:home,PORT:'0'},args:process.env.PROTEUS_TEST_APP_PATH?['--use-mock-keychain','--user-data-dir='+path.join(home,'electron')]:['.','--use-mock-keychain','--user-data-dir='+path.join(home,'electron')]});const page=await app.firstWindow();page.setDefaultTimeout(15000);await page.locator('[data-page=runs]').first().waitFor();await page.route('**/app.js',async route=>{const response=await route.fetch();await route.fulfill({response,body:(await response.text())+'\nwindow.navigationRace={state,openTab};clearInterval(refreshInterval);'});});await page.reload();await page.locator('#home-screen').waitFor();
  const a=await page.evaluate(url=>window.desktop.browser({action:'create',url}),origin+'/a'),b=await page.evaluate(url=>window.desktop.browser({action:'create',url}),origin+'/b');await page.evaluate(info=>window.navigationRace.openTab({id:info.id,type:'browser',info,label:info.title}),a);await page.locator('#browser-url').waitFor();
  // Delay only the IPC reply; the real page completes and emits all native events first.
  await app.evaluate(({app})=>{const browser=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser(),original=browser.command.bind(browser);browser.command=async value=>{const result=await original(value);if(value.action==='navigate')await new Promise(resolve=>setTimeout(resolve,750));return result;};});
  await page.locator('#browser-url').fill(origin+'/slow');await page.locator('#browser-url').press('Enter');await until(()=>slowStarted);await page.evaluate(info=>window.navigationRace.openTab({id:info.id,type:'browser',info,label:info.title}),b);await page.waitForTimeout(1700);
  const actual=await page.evaluate(id=>({selected:window.navigationRace.state.tab,url:window.navigationRace.state.tabs.find(tab=>tab.id===id)?.info?.url,address:document.querySelector('#browser-url')?.value}),b.id);assert.equal(actual.selected,b.id);assert.equal(actual.url,origin+'/b','Late reply must update its captured tab, never the newly selected one');assert.equal(actual.address,origin+'/b');
- console.log(JSON.stringify({passed:true,lateNavigationCannotOverwriteOtherTab:true}));
+ const historyTab=await page.evaluate(url=>window.desktop.browser({action:'create',url}),origin+'/revisit');
+ await page.evaluate(({id,url})=>window.desktop.browser({action:'navigate',id,url}),{id:historyTab.id,url:origin+'/later'});
+ redirectRevisit=true;
+ const back=await page.evaluate(id=>window.desktop.browser({action:'back',id}),historyTab.id);
+ assert.equal(back.sharedURL,origin+'/revisit');
+ assert.equal(back.canGoForward,true);
+ assert.deepEqual(back.history.entries.map(entry=>entry.url),[origin+'/revisit',origin+'/later']);
+ const forward=await page.evaluate(id=>window.desktop.browser({action:'forward',id}),historyTab.id);
+ assert.equal(forward.history.currentEntryId,back.history.entries[1].id);
+ assert.equal(forward.url,origin+'/later');
+ const latest=await app.evaluate(async({app},{id,origin})=>{
+  const browser=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser(),apply=browser.applySiteMode.bind(browser);
+  let enter,release;
+  const entered=new Promise(resolve=>{enter=resolve;}),held=new Promise(resolve=>{release=resolve;});
+  browser.applySiteMode=async(tab,url,...rest)=>{if(url===origin+'/older'){enter();await held;}return apply(tab,url,...rest);};
+  try{
+   const earlier=browser.navigate(id,origin+'/older');
+   await entered;
+   await browser.navigate(id,origin+'/newest');
+   release();
+   await earlier;
+   return browser.state(browser.get(id),true);
+  }finally{release();browser.applySiteMode=apply;}
+ },{id:historyTab.id,origin});
+ assert.equal(latest.url,origin+'/newest');
+ assert.ok(!latest.history.entries.some(entry=>entry.url===origin+'/older'));
+ console.log(JSON.stringify({passed:true,lateNavigationCannotOverwriteOtherTab:true,redirectKeepsForwardHistory:true,latestCommandWins:true}));
 }finally{if(app){const timer=setTimeout(()=>app.process().kill('SIGKILL'),8000);try{await app.close();}finally{clearTimeout(timer);}}server.closeAllConnections();await new Promise(resolve=>server.close(resolve));fs.rmSync(home,{recursive:true,force:true});}

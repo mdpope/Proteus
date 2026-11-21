@@ -4,7 +4,7 @@ export function reminderTools(handle,runId){
  if(!handle)return [];
  return [{
   name:'proteus_reminders',defer:'never',
-  description:'Manage server-backed Life reminders and lists. List first for accountId, lists, timezone and revisions. Writes require observed accountId, stable UUID operationId and expectedRevision for existing records. Preserve operationId and exact input after uncertain delivery. Delete is recoverable; deleting a list moves items to Inbox. Date-only dueDate has no time/alert. Timed dueAt is ISO8601 with offset and IANA timeZone. Clarify ambiguous dates. Ordinary tool permissions apply.',
+  description:'Built-in tool for Life Reminders. Call list first for accountId, list IDs, timezone and revisions. Use list.create with input.name for a list, or create with input.title and an observed input.listId for a reminder. For existing records use the observed id and current expectedRevision. Writes require the current accountId and a stable UUID operationId. After uncertain delivery, reconcile and preserve the original operationId and input if retrying. Verify the returned record or read it back before reporting success. Deleting a list moves its items to Inbox. Date-only dueDate has no time or alert. Timed dueAt is ISO8601 with offset and IANA timeZone. Clarify ambiguous dates. Ordinary tool permissions apply.',
   parameters:{
    type:'object',
    properties:{

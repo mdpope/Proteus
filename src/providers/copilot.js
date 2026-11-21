@@ -1,3 +1,4 @@
+import {recordTurnUsage} from '../services/chats/run-timing.js';
 import {mergeManagedServers} from '../services/integrations/managed-run.js';
 import {fusionJournal,fusionAvailability,fusionModel,fusionSessionOptions,fusionMessageData,FUSION_MODEL_ID} from './copilot-fusion.js';
 import {subagentJournal} from '../services/chats/subagents.js';
@@ -278,7 +279,7 @@ export class CopilotProvider {
       if (event.type === 'session.task_complete' && event.data.summary?.trim() && !run.events?.some(e => e.role === 'assistant' && e.text === event.data.summary)) emit('assistant', event.data.summary);
       if (event.type === 'assistant.usage') {
         run.usage.inputTokens += event.data.inputTokens || 0; run.usage.outputTokens += event.data.outputTokens || 0;
-        run.usage.observed = true; update();
+        run.usage.observed = true; recordTurnUsage(run,event.data); update();
       }
       if (event.type === 'session.usage_info') { run.contextUsage = event.data; update(); }
       if (event.type === 'session.error') { providerError = Object.assign(new Error(event.data.message || 'Provider reported an error'),{code:event.data.errorCode||event.data.errorType}); emit('system', providerError.message); }

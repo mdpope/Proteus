@@ -43,5 +43,5 @@ func nativeProviderIDs(_ statuses: [String: JSON], selected: String = "") -> [St
 }
 
 func nativeProviderName(_ id: String) -> String {
-    ["copilot": "GitHub Copilot", "codex": "Codex", "claude": "Claude", "mtplx": "MTPLX", "llama-cpp": "llama.cpp", "shared-llm": "Shared local models", "rehearsal": "Local rehearsal", "local-process": "Omi native worker"][id] ?? id
+    ["copilot": "GitHub Copilot", "codex": "Codex", "claude": "Claude", "openrouter": "OpenRouter", "mtplx": "MTPLX", "llama-cpp": "llama.cpp", "shared-llm": "Shared local models", "rehearsal": "Local rehearsal", "local-process": "Omi native worker"][id] ?? id
 }

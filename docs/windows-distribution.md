@@ -21,8 +21,11 @@ restart. Model completion alone is not an installed update.
 The operator designates one Windows computer as the first Windows build and
 acceptance target. That designation and its actual paths live in the private
 installation-bound `windows-builder.json`, never in repository instructions.
-Other Windows installations consume the signed WTB release and do not need
-Node, npm, Git or the publisher key.
+Publish the accepted Windows installer, signed update archive and manifest to
+downloads.proteus.example for the authorized rollout. Windows consumers find the exact release
+through the signed target catalog in Engine Room → Updates. Stable Windows
+x64 uses `/downloads/proteus/stable/win32-x64.json`. This route requires
+neither access to the builder's private draft nor developer tools on the consumer.
 
 The candidate helper verifies its accepted package and full Windows installation
 hash before acknowledging readiness, keeping the old owner open on a mismatch.
@@ -68,20 +71,23 @@ failure before an installer or process-lifetime cause is asserted.
    receipt only after the process has exited, permitting a different operation
    without editing application files. It fetches through the existing
    repository-local account route, builds in private updater folders, runs source
-   and exact-package acceptance, verifies official archive extraction and signs
-   using the configured protected key. No key is copied or trust replaced.
+   and exact-package acceptance, and verifies official archive extraction.
+   The publisher signs the accepted payload with the protected publisher key.
    A recorded launcher PID that has exited is attention even before the worker's
    first progress write. A missing PID is still an uncertain launch, and a live
    PID stays protected. Inspection never rewrites the original launch evidence.
-4. Import/stage the exact signed release, checkpoint completed and remaining
+4. Publish the exact accepted Windows artifacts through the authorized
+   [WTB deployment workflow](release-process.md#publish-one-current-generation-on-wtbcc).
+   Verify the HTTPS downloads and the signed catalog before dispatching Windows
+   consumers. Keep the source companion and private receipts in private storage.
+5. Select the exact release ID and manifest digest from the receiving owner's
+   catalog. Stage the signed release, checkpoint completed and remaining
    work, hand off, then finish the turn. The existing independent supervisor
    waits for chats, terminals and builds, captures consistent current data,
    installs per-user and restarts. The same chat resumes once.
-5. Verify installed hashes/registration, health, preserved histories/configuration,
-   native control and two-generation recovery retention. Publish the exact
-   accepted Windows artifacts to WTB through the authorized deployment workflow;
-   source and private receipts stay private. Verify the public full download
-   through the actual installed consumer. Publication is a distinct outcome.
+6. Verify installed hashes/registration, health, preserved histories/configuration,
+   native control and two-generation recovery retention. Record the actual
+   consumer download and verified installation separately from publication.
 
 Maintenance accepts no deletion path or shell command from the model. Its plan
 binds canonical installation, data and browser homes, known recovery roots,

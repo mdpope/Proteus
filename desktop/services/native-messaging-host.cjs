@@ -1,7 +1,7 @@
 // Replacement for the pinned adapter's native pipe lifecycle. No vault payloads
 // are logged. The extension receives one disconnect and one-shot calls settle.
 const fs=require('node:fs');
-function createNativeMessagingHost({readConfig,spawn,timeoutMs=30000}) {
+function createNativeMessagingHost({readConfig,spawn,timeoutMs=30000,platform=process.platform}) {
  return class NativeMessagingHost {
   constructor(extensionId,sender,connectionId,application,keepAlive=true){
    Object.assign(this,{extensionId,sender,connectionId,keepAlive,connected:false,closed:false,pending:[],pendingBytes:0,buffer:Buffer.alloc(0)});
@@ -21,6 +21,11 @@ function createNativeMessagingHost({readConfig,spawn,timeoutMs=30000}) {
    try{this.onClosed?.(error);}catch{}this.rejectResponse?.(this.failure);this.rejectResponse=null;this.resolveResponse=null;
   }
   async launch(application,extensionId){
+   // Apple's helper restricts launches to approved browser identities. Starting it
+   // from the current Proteus distribution produces a macOS crash report on each retry.
+   if(platform==='darwin'&&application==='com.apple.passwordmanager'){
+    return this.destroy(Object.assign(new Error('Apple Passwords requires a browser approved by Apple.'),{code:'APPLE_PASSWORDS_BROWSER_UNSUPPORTED'}));
+   }
    const config=await readConfig(application);if(this.closed)return;
    if(!config?.allowed_origins?.includes(`chrome-extension://${extensionId}/`)||!config.path||!fs.statSync(config.path).isFile())return this.destroy(new Error('Native host unavailable or extension origin denied.'));
    const child=spawn(config.path,[`chrome-extension://${extensionId}/`],{shell:false});this.process=child;

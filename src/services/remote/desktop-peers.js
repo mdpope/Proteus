@@ -1,6 +1,7 @@
 import {workspaceSnapshot} from './workspace-snapshot.js';
 import {atomicRename} from '../../shared/atomic-rename.cjs';
 import {hostRunningChatCount} from '../../../public/services/remote/computer-identity.js';
+import {orderedComputers} from '../../../public/services/remote/computer-order.js';
 import { readHostPlatformMetadata } from '../../shared/host-platform.js';
 import { requireProtectedStorage } from '../integrations/credential-storage.js';
 import fs from 'node:fs';
@@ -12,7 +13,7 @@ import { BrowserRemoteClient, parsePairing, pairingRelayOrigin, importKey } from
 const recordsFrom=records=>[...records.values()].filter(record=>!record.paused);
 const uuid=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 // Human desktop composers use the same owner revision/conflict checks as mobile and web.
-const methods=new Set(['desktop.setup.status','desktop.setup.start','draft.text.get','draft.text.save','mnemosyne.control','inference.catalog','inference.trim','inference.start','inference.poll','inference.cancel','attention.snapshot','attention.clear','updates.releases','computer.access.get','computer.access.update','integrations.list','projects.get','projects.update','sources.get','sources.update','chat.move','context.update','workspace.delete','tabs.manage',"chat.paths","chat.export","chat.previews.list","chat.previews.read","chat.documents.asset",'browser.live.list','browser.live.frame','browser.live.instruct','tabs.follow','tabs.get','tabs.mutate','tabs.history','browser.history.suggest','browser.history.query','browser.history.record','browser.history.delete','browser.history.settings','browser.history.sync','browser.history.status','sync','runs.page','runs.list','chat.get','chat.watch','chat.review','chat.archive','chat.delete','chat.rename','chat.promote','chat.documents.request','chat.documents.status','chat.documents.read','chat.image','chat.start','chat.attachments.begin','chat.attachments.chunk','chat.attachments.finish','chat.attachments.authorize','chat.reply','chat.answer-question','chat.clear-question','chat.resume','chat.recover','chat.cancel','chat.send','chat.steer-queued','chat.edit-queued','chat.remove-queued','context.refresh','context.get','context.preview','provider.status','provider.usage','schedule.run','schedule.save','schedule.preview','chat.permissions','chat.context','mcp.status','mcp.login','context.mode','context.favorite','context.addFolders','notifications.list','notifications.read','notifications.open','logs.list','logs.get','resources.list','resources.action']);
+const methods=new Set(['desktop.setup.status','desktop.setup.start','draft.text.get','draft.text.save','mnemosyne.control','inference.catalog','inference.trim','inference.start','inference.poll','inference.cancel','attention.snapshot','attention.clear','updates.releases','computer.access.get','computer.access.update','integrations.list','projects.get','projects.update','sources.get','sources.update','chat.move','context.update','workspace.delete','tabs.manage',"chat.paths","chat.export","chat.previews.list","chat.previews.read","chat.documents.asset",'browser.live.list','browser.live.frame','browser.live.instruct','tabs.follow','tabs.get','tabs.mutate','tabs.history','browser.history.suggest','browser.history.query','browser.history.record','browser.history.delete','browser.history.settings','browser.history.sync','browser.history.status','sync','runs.page','runs.list','chat.get','chat.watch','chat.review','chat.archive','chat.delete','chat.rename','chat.promote','chat.documents.request','chat.documents.status','chat.documents.read','chat.image','chat.start','chat.attachments.begin','chat.attachments.chunk','chat.attachments.finish','chat.attachments.authorize','chat.reply','chat.answer-question','chat.clear-question','chat.resume','chat.recover','chat.cancel','chat.send','chat.steer-queued','chat.edit-queued','chat.remove-queued','context.refresh','context.get','context.preview','provider.status','provider.usage','schedule.run','schedule.save','schedule.delete','schedule.access.review','schedule.preview','chat.permissions','chat.context','mcp.status','mcp.login','context.mode','context.favorite','context.addFolders','notifications.list','notifications.read','notifications.open','logs.list','logs.get','resources.list','resources.action','scratchpad.command']);
 function valid(record) {
   pairingRelayOrigin(record.relay,{allowLocalNetwork:true});
   if(!uuid.test(record.hostId)||!uuid.test(record.deviceId)||!/^[a-f0-9]{64}$/i.test(record.key))throw new Error('Invalid protected desktop pairing.');
@@ -61,7 +62,7 @@ export class DesktopPeers extends EventEmitter {
     this.loaded=true;
   }
   save(){this.protectedStorage();const temp=this.file+'.tmp';fs.mkdirSync(path.dirname(this.file),{recursive:true});try{fs.writeFileSync(temp,this.safeStorage.encryptString(JSON.stringify([...this.records.values()])),{mode:0o600});fs.chmodSync(temp,0o600);atomicRename(temp,this.file);}finally{try{fs.unlinkSync(temp);}catch{}}}
-  list(){if(this.blocked())return [];this.load();return [...this.records.values()].map(({hostId,label,pairedAt,paused})=>({hostId,label,pairedAt,paused,...readHostPlatformMetadata(this.sessions.get(hostId)?.metadata),status:paused?'paused':this.sessions.get(hostId)?.ready&&this.sessions.get(hostId)?.client.status==='online'?'online':this.recovery.get(hostId)?.blocked?'needs-action':(this.recovery.get(hostId)?.timer||this.sessions.get(hostId)?.connecting)?'reconnecting':'offline',unread:this.sessions.get(hostId)?.unread||false}));}
+  list(){if(this.blocked())return [];this.load();return orderedComputers(this.records.values(),this.computerOrder?.()).map(({hostId,label,pairedAt,paused})=>({hostId,label,pairedAt,paused,...readHostPlatformMetadata(this.sessions.get(hostId)?.metadata),status:paused?'paused':this.sessions.get(hostId)?.ready&&this.sessions.get(hostId)?.client.status==='online'?'online':this.recovery.get(hostId)?.blocked?'needs-action':(this.recovery.get(hostId)?.timer||this.sessions.get(hostId)?.connecting)?'reconnecting':'offline',unread:this.sessions.get(hostId)?.unread||false}));}
   adoptHostState(hostId,session,state){
     if(this.blocked()||this.closed||this.sessions.get(hostId)!==session||session.client.status!=='online'||!this.records.has(hostId))return;
     session.metadata=readHostPlatformMetadata(state);
@@ -118,7 +119,7 @@ export class DesktopPeers extends EventEmitter {
     const client=session.client=this.clientFactory({...record,key:null},{name:this.deviceName});
     client.addEventListener('status',event=>{if(this.sessions.get(hostId)!==session)return;if(event.detail==='offline'){session.ready=false;this.scheduleRecovery(hostId,session);}else if(event.detail!=='online')this.emitState(hostId,{status:event.detail});});
     client.addEventListener('recovery-blocked',()=>{if(this.sessions.get(hostId)!==session)return;recovery.blocked=true;this.cancelRecovery(hostId);this.emitState(hostId,{status:'needs-action'});});
-    client.addEventListener('change',event=>{if(this.sessions.get(hostId)!==session)return;const value=event.detail;if(value.event==='browser.history.changed')void this.syncHistory(hostId).catch(()=>{});if(value.event==='chat.lifecycle'&&value.data?.id)this.reconcileChat(hostId,value.data);if(value.event==='run'||value.event==='run.changed')session.unread=true;if(value.event==='state'){this.adoptHostState(hostId,session,value.data);this.reconcileProjects(hostId,value.data?.workspaceProjects);session.runningChatCount=hostRunningChatCount(value.data);this.indexAt=0;this.lastIndex=null;const signature=JSON.stringify(value.data?.runs||[]);if(session.runsSignature&&signature!==session.runsSignature)session.unread=true;session.runsSignature=signature;}this.emitState(hostId,{changed:value.event!=='project-follow',unread:session.unread,event:value.event,runId:value.runId,...(['project-follow','tabs'].includes(value.event)?{data:value.data}:{})});});
+    client.addEventListener('change',event=>{if(this.sessions.get(hostId)!==session)return;const value=event.detail;if(value.event==='browser.history.changed')void this.syncHistory(hostId).catch(()=>{});if(value.event==='chat.lifecycle'&&value.data?.id)this.reconcileChat(hostId,value.data);if(value.event==='run'||value.event==='run.changed')session.unread=true;if(value.event==='state'){this.adoptHostState(hostId,session,value.data);this.reconcileProjects(hostId,value.data?.workspaceProjects);session.runningChatCount=hostRunningChatCount(value.data);this.applyIndexState(hostId,session,value);const signature=JSON.stringify(value.data?.runs||[]);if(session.runsSignature&&signature!==session.runsSignature)session.unread=true;session.runsSignature=signature;}this.emitState(hostId,{changed:value.event!=='project-follow',unread:session.unread,event:value.event,runId:value.runId,...(['project-follow','tabs'].includes(value.event)?{data:value.data}:{})});});
     client.addEventListener('revoked',event=>{if(!event.detail?.authenticated||this.sessions.get(hostId)!==session)return;this.cancelRecovery(hostId);this.recovery.delete(hostId);this.records.delete(hostId);this.cache.delete(hostId);this.lastIndex=null;this.indexAt=0;try{this.save();this.saveCache();}catch{}this.sessions.delete(hostId);this.emitState(hostId,{revoked:true,status:'offline'});});
     session.connecting=(async()=>{try{client.host.key=await importKey(record.key);if(this.closed||this.sessions.get(hostId)!==session||!this.records.has(hostId))throw new Error('Desktop connection changed.');await client.connect();this.assertOutgoing(accessGeneration);const snapshot=await client.request('sync',{});this.assertOutgoing(accessGeneration);if(this.closed||this.sessions.get(hostId)!==session||!this.records.has(hostId))throw new Error('Desktop connection changed.');this.adoptHostState(hostId,session,snapshot.state);this.reconcileProjects(hostId,snapshot.state?.workspaceProjects);session.runningChatCount=hostRunningChatCount(snapshot.state);session.runsSignature=JSON.stringify(snapshot.state?.runs||[]);session.ready=true;recovery.attempt=0;this.cancelRecovery(hostId);this.heartbeat(hostId,session);this.indexAt=0;this.lastIndex=null;this.emitState(hostId,{status:'online',recovered:true,changed:true});void this.syncHistory(hostId).catch(()=>{});return {hostId,status:'online'};}catch(error){if(this.sessions.get(hostId)===session){session.ready=false;client.close();this.scheduleRecovery(hostId,session);}throw error;}finally{session.connecting=null;}})();return session.connecting;
   }
@@ -156,7 +157,82 @@ export class DesktopPeers extends EventEmitter {
     return {supported:true,results};
   }
   saveCache(){this.protectedStorage();const temp=this.cacheFile+'.tmp';try{const serialized=this.timedSync('peer.cache.serialize',()=>JSON.stringify(Object.fromEntries(this.cache)));const encrypted=this.timedSync('peer.cache.encrypt',()=>this.safeStorage.encryptString(serialized));this.timedSync('peer.cache.disk',()=>{fs.writeFileSync(temp,encrypted,{mode:0o600});fs.chmodSync(temp,0o600);atomicRename(temp,this.cacheFile);});}finally{try{fs.unlinkSync(temp);}catch{}}}
-  async index(){if(this.blocked())return {items:[],hosts:[],partial:false,managed:true};const accessGeneration=this.accessGeneration;this.load();if(!this.records.size)return {items:[],hosts:[],partial:false};if(this.indexPending)return this.lastIndex||{items:recordsFrom(this.records).flatMap(r=>this.cache.get(r.hostId)?.items||[]),hosts:recordsFrom(this.records).map(r=>({id:r.hostId,name:r.label,...readHostPlatformMetadata(this.sessions.get(r.hostId)?.metadata),runningChatCount:this.sessions.get(r.hostId)?.runningChatCount,online:this.sessions.get(r.hostId)?.client?.status==='online',lastSyncAt:this.cache.get(r.hostId)?.lastSyncAt||null,loading:true})),partial:true};if(Date.now()-this.indexAt<5000&&this.lastIndex)return this.lastIndex;this.indexPending=(async()=>{const records=recordsFrom(this.records).slice(0,32);const hosts=[];for(let i=0;i<records.length;i+=4)await Promise.all(records.slice(i,i+4).map(async record=>{let error;try{await this.connect(record.hostId,{automatic:true});const rows=[];for(let offset=0;offset<100000;offset+=100){const page=await this.request(record.hostId,'runs.list',{offset,includeArchived:true});rows.push(...page.slice(0,100));if(page.length!==100)break;if(offset===99900)throw new Error('Chat inventory exceeds the complete index budget.');}const items=rows.filter(r=>!this.lifecycleOverrides.get(record.hostId+':'+r.id)?.deleted).map(r=>this.membershipStatus(record.hostId,this.reviewStatus(record.hostId,r))).map(r=>({id:r.id,chatId:r.id,hostId:record.hostId,local:false,title:String(r.title||'Chat').slice(0,200),titleRevision:r.titleRevision||null,provider:r.provider||'',model:r.model||'',reasoningEffort:r.reasoningEffort||'',serviceTier:r.serviceTier||'',status:r.status,createdAt:r.createdAt,updatedAt:r.updatedAt,lastActivityAt:r.lastActivityAt,archivedAt:(this.lifecycleOverrides.has(record.hostId+':'+r.id)?this.lifecycleOverrides.get(record.hostId+':'+r.id).archivedAt:r.archivedAt)||null,archived:!!(this.lifecycleOverrides.has(record.hostId+':'+r.id)?this.lifecycleOverrides.get(record.hostId+':'+r.id).archivedAt:r.archivedAt),attentionRequired:r.attentionRequired&&!((this.lifecycleOverrides.has(record.hostId+':'+r.id)?this.lifecycleOverrides.get(record.hostId+':'+r.id).archivedAt:r.archivedAt)),failureEventAt:r.failureEventAt||null,failureReviewedAt:r.failureReviewedAt||null,workspaceId:r.workspaceId||null,workspaceName:r.workspaceName||'',projectId:r.projectId||null,projectName:r.projectName||'',scheduleName:r.scheduleName||'',destinationName:record.label}));if(!this.blocked()&&accessGeneration===this.accessGeneration&&!this.closed&&this.records.has(record.hostId))this.cache.set(record.hostId,{items,lastSyncAt:new Date().toISOString()});}catch{error='This computer is offline or its connection needs attention.';}hosts.push({id:record.hostId,name:record.label,...readHostPlatformMetadata(this.sessions.get(record.hostId)?.metadata),online:!error,runningChatCount:error?0:this.sessions.get(record.hostId)?.runningChatCount,lastSyncAt:this.cache.get(record.hostId)?.lastSyncAt||null,...(error?{error}:{})});}));if(this.blocked()||accessGeneration!==this.accessGeneration)return {items:[],hosts:[],partial:false,managed:this.blocked()};if(!this.closed&&this.records.size)this.saveCache();this.indexAt=Date.now();const currentHosts=hosts.filter(h=>this.records.has(h.id)&&!this.records.get(h.id).paused);return this.lastIndex={items:records.filter(r=>this.records.has(r.hostId)&&!this.records.get(r.hostId).paused).flatMap(r=>this.cache.get(r.hostId)?.items||[]),hosts:currentHosts,partial:currentHosts.some(h=>!h.online)};})();void this.indexPending.then(()=>this.emitState('',{indexChanged:true})).catch(()=>{}).finally(()=>{this.indexPending=null;});return this.lastIndex||{items:recordsFrom(this.records).flatMap(r=>this.cache.get(r.hostId)?.items||[]),hosts:recordsFrom(this.records).map(r=>({id:r.hostId,name:r.label,...readHostPlatformMetadata(this.sessions.get(r.hostId)?.metadata),runningChatCount:this.sessions.get(r.hostId)?.runningChatCount,online:this.sessions.get(r.hostId)?.client?.status==='online',lastSyncAt:this.cache.get(r.hostId)?.lastSyncAt||null,loading:true})),partial:true};}
+  indexRow(record, row) {
+    const r=this.membershipStatus(record.hostId,this.reviewStatus(record.hostId,row));
+    return {id:r.id,chatId:r.id,hostId:record.hostId,local:false,title:String(r.title||'Chat').slice(0,200),titleRevision:r.titleRevision||null,trigger:r.trigger,chatType:r.chatType,provider:r.provider||'',model:r.model||'',reasoningEffort:r.reasoningEffort||'',serviceTier:r.serviceTier||'',status:r.status,createdAt:r.createdAt,updatedAt:r.updatedAt,lastActivityAt:r.lastActivityAt,operation:r.operation,archivedAt:(this.lifecycleOverrides.has(record.hostId+':'+r.id)?this.lifecycleOverrides.get(record.hostId+':'+r.id).archivedAt:r.archivedAt)||null,archived:!!(this.lifecycleOverrides.has(record.hostId+':'+r.id)?this.lifecycleOverrides.get(record.hostId+':'+r.id).archivedAt:r.archivedAt),attentionRequired:r.attentionRequired&&!((this.lifecycleOverrides.has(record.hostId+':'+r.id)?this.lifecycleOverrides.get(record.hostId+':'+r.id).archivedAt:r.archivedAt)),failureEventAt:r.failureEventAt||null,failureReviewedAt:r.failureReviewedAt||null,workspaceId:r.workspaceId||null,workspaceName:r.workspaceName||'',projectId:r.projectId||null,projectName:r.projectName||'',scheduleName:r.scheduleName||'',destinationName:record.label};
+  }
+  applyIndexState(hostId, session, value) {
+    if(!session.ready || session.client.status!=='online' || !Array.isArray(value.data?.runs))return;
+    const record=this.records.get(hostId), cached=this.cache.get(hostId);
+    if(!record || !cached)return;
+    const changes=new Map(value.data.runs
+      .filter(row=>!this.lifecycleOverrides.get(hostId+':'+row.id)?.deleted)
+      .map(row=>[row.id,this.indexRow(record,row)]));
+    const items=cached.items.map(row=>{
+      const fresh=changes.get(row.id);
+      changes.delete(row.id);
+      return fresh||row;
+    });
+    items.push(...changes.values());
+    const lastSyncAt=new Date().toISOString();
+    const ownerObservedAt=value.ownerObservedAt||null;
+    const timestamp=Date.parse(ownerObservedAt);
+    const clockOffset=Number.isFinite(timestamp)?timestamp-Date.parse(lastSyncAt):null;
+    this.cache.set(hostId,{items,lastSyncAt,ownerObservedAt,clockOffset});
+    if(this.lastIndex)this.lastIndex={
+      ...this.lastIndex,
+      items:[...this.lastIndex.items.filter(row=>row.hostId!==hostId),...items],
+      hosts:this.lastIndex.hosts.map(host=>host.id===hostId?{...host,...readHostPlatformMetadata(session.metadata),lastSyncAt,ownerObservedAt,clockOffset,runningChatCount:session.runningChatCount}:host),
+    };
+  }
+  indexSnapshot(errors=new Map()) {
+    const records=recordsFrom(this.records);
+    const hosts=records.map(({hostId:id,label:name})=>{
+      const session=this.sessions.get(id), cached=this.cache.get(id), error=errors.get(id);
+      const online=session?.ready===true&&session.client?.status==='online';
+      // A refresh can reuse rows verified by this same live session. A new or
+      // disconnected session must verify its disk cache before promoting it.
+      const loading=online&&!session.indexVerified;
+      return {id,name,...readHostPlatformMetadata(session?.metadata),online,loading,
+        runningChatCount:online?session.runningChatCount:0,lastSyncAt:cached?.lastSyncAt||null,
+        ownerObservedAt:cached?.ownerObservedAt,clockOffset:cached?.clockOffset,...(error?{error}:{})};
+    });
+    return {items:records.flatMap(record=>this.cache.get(record.hostId)?.items||[]),hosts,
+      partial:hosts.some(host=>!host.online||host.loading||host.error)};
+  }
+  async index({force=false}={}) {
+    if(this.blocked())return {items:[],hosts:[],partial:false,managed:true};
+    const accessGeneration=this.accessGeneration;this.load();
+    if(!this.records.size)return {items:[],hosts:[],partial:false};
+    if(this.indexPending)return force?await this.indexPending:this.lastIndex||this.indexSnapshot();
+    if(!force&&Date.now()-this.indexAt<60000&&this.lastIndex)return this.lastIndex;
+    this.indexPending=(async()=>{
+      const records=recordsFrom(this.records).slice(0,32), errors=new Map();
+      for(let i=0;i<records.length;i+=4)await Promise.all(records.slice(i,i+4).map(async record=>{
+        try{
+          await this.connect(record.hostId,{automatic:true});
+          const session=this.sessions.get(record.hostId), rows=[];
+          for(let offset=0;offset<100000;offset+=100){
+            const page=await this.request(record.hostId,'runs.list',{offset,includeArchived:true});
+            rows.push(...page.slice(0,100));
+            if(page.length!==100)break;
+            if(offset===99900)throw Error('Chat inventory exceeds the complete index budget.');
+          }
+          if(this.blocked()||accessGeneration!==this.accessGeneration||this.closed||session!==this.sessions.get(record.hostId))return;
+          const items=rows.filter(r=>!this.lifecycleOverrides.get(record.hostId+':'+r.id)?.deleted).map(r=>this.indexRow(this.records.get(record.hostId),r));
+          const cached=this.cache.get(record.hostId);
+          this.cache.set(record.hostId,{...cached,items,lastSyncAt:new Date().toISOString()});
+          session.indexVerified=true;
+        }catch{errors.set(record.hostId,'This computer is offline or its connection needs attention.');}
+      }));
+      if(this.blocked()||accessGeneration!==this.accessGeneration)return {items:[],hosts:[],partial:false,managed:this.blocked()};
+      if(!this.closed&&this.records.size)this.saveCache();
+      this.indexAt=Date.now();
+      return this.lastIndex=this.indexSnapshot(errors);
+    })();
+    void this.indexPending.then(()=>this.emitState('',{indexChanged:true})).catch(()=>{}).finally(()=>{this.indexPending=null;});
+    return force?await this.indexPending:this.lastIndex||this.indexSnapshot();
+  }
   reviewStatus(hostId,row){const key=hostId+':'+row.id,reviewed=this.reviewOverrides.get(key);if(!reviewed)return row;if(!['failed','interrupted'].includes(row.status)||row.failureEventAt&&reviewed.failureEventAt&&row.failureEventAt!==reviewed.failureEventAt&&Date.parse(row.failureEventAt)>Date.parse(reviewed.failureEventAt)){this.reviewOverrides.delete(key);return row;}return {...row,failureReviewedAt:reviewed.failureReviewedAt,attentionRequired:false};}
   reconcileProjects(hostId,catalog){
     if(!catalog?.memberships||!Array.isArray(catalog.projects)||!this.records.has(hostId))return;
@@ -167,7 +243,7 @@ export class DesktopPeers extends EventEmitter {
     }
     const cached=this.cache.get(hostId);let changed=false;
     if(cached){cached.items=cached.items.map(item=>{const member=this.membershipOverrides.get(hostId+':'+(item.chatId||item.id));if(!member||fields.every(key=>item[key]===member[key]))return item;changed=true;return {...item,...member};});if(changed)try{this.saveCache();}catch{this.emitState(hostId,{metadataError:'Project membership could not be cached securely. Reconnect to refresh it.'});}}
-    this.lastIndex=null;this.indexAt=0;if(changed)this.emitState(hostId,{indexChanged:true});
+    if(changed){this.lastIndex=null;this.indexAt=0;this.emitState(hostId,{indexChanged:true});}
   }
   membershipStatus(hostId,row){const key=hostId+':'+(row.id||row.chatId),moved=this.membershipOverrides.get(key);if(!moved)return row;const fields=Object.hasOwn(moved,'projectId')?['workspaceId','workspaceName','projectId','projectName']:['workspaceId'];if(fields.every(name=>row[name]===moved[name])||moved.updatedAt&&Date.parse(row.updatedAt)>Date.parse(moved.updatedAt)){this.membershipOverrides.delete(key);return row;}return {...row,...Object.fromEntries(['workspaceId','workspaceName','projectId','projectName','updatedAt'].filter(name=>Object.hasOwn(moved,name)).map(name=>[name,moved[name]]))};}
   reconcileChat(hostId,result){if(result.moved===true&&Object.hasOwn(result,'workspaceId')){this.membershipOverrides.set(hostId+':'+result.id,result);const cached=this.cache.get(hostId);if(cached){cached.items=cached.items.map(item=>item.chatId===result.id?{...item,workspaceId:result.workspaceId,workspaceName:result.workspaceName,updatedAt:result.updatedAt}:item);this.saveCache();}this.lastIndex=null;this.indexAt=0;this.emitState(hostId,{indexChanged:true,runId:result.id});return;}if(Object.hasOwn(result,'failureReviewedAt')){this.reviewOverrides.set(hostId+':'+result.id,result);const cached=this.cache.get(hostId);if(cached){cached.items=cached.items.map(item=>item.chatId===result.id?this.reviewStatus(hostId,item):item);this.saveCache();}this.lastIndex=null;this.indexAt=0;this.emitState(hostId,{indexChanged:true,runId:result.id});return;}this.lifecycleOverrides.set(hostId+':'+result.id,result);const cached=this.cache.get(hostId);if(cached){cached.items=result.deleted?cached.items.filter(item=>item.chatId!==result.id):cached.items.map(item=>item.chatId===result.id?{...item,archivedAt:result.archivedAt||null,archived:!!result.archivedAt,attentionRequired:!!result.archivedAt?false:(item.status==='awaiting_input'||(['failed','interrupted'].includes(item.status)&&!item.failureReviewedAt))}:item);this.saveCache();}this.lastIndex=null;this.indexAt=0;this.emitState(hostId,{indexChanged:true,runId:result.id});}

@@ -237,6 +237,49 @@ final class RemoteTests: XCTestCase {
         XCTAssertEqual(next["contentRequests"]["synthetic-chat"], retry, "Account changes cannot discard retry identities while retaining their pending operations")
         XCTAssertEqual(next["contentPending"]["synthetic-chat"], retained["contentPending"]["synthetic-chat"])
     }
+    @MainActor func testTabJournalReusesSnapshotAndKeepsPreviousCommitWhenWriteFails() throws {
+        final class Writes {
+            var snapshots = 0
+            var rejectJournal = false
+        }
+        let writes = Writes()
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let key = RemoteCrypto.random(), scope = "project:test:scope"
+        let url = root.appendingPathComponent("document-tabs.enc")
+        let original: JSON = .object(["revision": .number(3), "tabs": .array([]), "padding": .string(String(repeating: "x", count: 100_000))])
+        let pending: JSON = .object(["pending": .array([.object(["action": .string("pin"), "id": .string("tab")])])])
+        let legacy: JSON = .object(["contentSnapshots": .object([scope: original]), "contentPending": pending])
+        try NativeSharedCacheWriter.writeFile(Data(RemoteCrypto.seal(legacy, key: key, aad: "proteus-mobile-document-tabs-v1").utf8), url)
+        let writer = NativeSharedCacheWriter(writeFile: { data, path in
+            if path == url, writes.rejectJournal { throw RemoteError(message: "Synthetic journal failure") }
+            if path.lastPathComponent.hasPrefix("document-tab-snapshots-") { writes.snapshots += 1 }
+            try NativeSharedCacheWriter.writeFile(data, path)
+        })
+        let shared = SharedAppStore(cacheWriter: writer, cacheRoot: root, cacheKey: { key })
+        XCTAssertEqual(shared.contentTabSnapshot(in: scope), original)
+        shared.selectChatChild("first", for: "local")
+        try writer.flush()
+        let firstJournal = try Data(contentsOf: url)
+        XCTAssertLessThan(firstJournal.count, 4_096)
+        XCTAssertEqual(writes.snapshots, 1)
+        shared.selectChatChild("latest", for: "local")
+        try writer.flush()
+        let lastJournal = try Data(contentsOf: url)
+        XCTAssertNotEqual(firstJournal, lastJournal)
+        XCTAssertEqual(writes.snapshots, 1, "Local journal changes reuse the exact committed snapshot")
+
+        writes.rejectJournal = true
+        let newer: JSON = .object(["revision": .number(4), "tabs": .array([])])
+        shared.applyContentTabs(newer, scope: scope)
+        XCTAssertThrowsError(try writer.flush())
+        XCTAssertEqual(try Data(contentsOf: url), lastJournal)
+        let restarted = SharedAppStore(cacheWriter: writer, cacheRoot: root, cacheKey: { key })
+        XCTAssertEqual(restarted.contentTabSnapshot(in: scope), original)
+        XCTAssertEqual(restarted.chatSelectedChildren["local"], "latest")
+        XCTAssertEqual(restarted.contentPending["pending"], pending["pending"].array)
+    }
+
     @MainActor func testSharedCacheUnavailableKeySurvivesLifetimeFlushAsVisibleFailure() {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let shared = SharedAppStore(cacheWriter: NativeSharedCacheWriter(), cacheRoot: root, cacheKey: { nil })
@@ -946,6 +989,49 @@ final class RemoteTests: XCTestCase {
         XCTAssertEqual(restarted.historyOutbox.first(where: { $0["eventId"] == visit["eventId"] }), visit)
         restarted.assignBrowserOwner(id, host: UUID().uuidString)
         XCTAssertEqual(restarted.historyOutbox.first(where: { $0["eventId"] == visit["eventId"] })?["ownerHostId"].string, host)
+    }
+    @MainActor func testHistoryVisitMigratesOutboxWithoutRewritingOfflineCoverage() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let cache = directory.appendingPathComponent("browser-history.enc")
+        let journal = directory.appendingPathComponent("browser-history-outbox.enc")
+        let key = RemoteCrypto.random(), host = UUID().uuidString
+        let visit: JSON = .object(["eventId": .string("legacy"), "ownerHostId": .string(host)])
+        let cached: JSON = .object(["id": .string("cached"), "visitedAt": .string(Date().ISO8601Format())])
+        let original = try Data(RemoteCrypto.seal(.object(["outbox": .array([visit]), "cache": .object([host + "|default": .array([cached])])]), key: key, aad: "proteus-mobile-history-v1").utf8)
+        try original.write(to: cache)
+        let writer = NativeSharedCacheWriter()
+        let descriptors = try JSON.decode(JSONEncoder().encode([NativeDocumentDescriptor(id: "doc", chatKey: "scope", title: "Saved note", mediaType: "text/markdown")]))
+        let documents = try RemoteCrypto.seal(.object(["tabs": descriptors]), key: key, aad: "proteus-mobile-document-tabs-v1")
+        try Data(documents.utf8).write(to: directory.appendingPathComponent("document-tabs.enc"))
+        let shared = SharedAppStore(cacheWriter: writer, cacheRoot: directory, cacheKey: { key }, deferStartupRead: true)
+        XCTAssertFalse(shared.startupCachesReady)
+        async let otherCaller: Void = shared.restoreStartupCaches()
+        await shared.restoreStartupCaches()
+        await otherCaller
+        XCTAssertTrue(shared.startupCachesReady)
+        XCTAssertEqual(shared.documents(in: "scope").map(\.id), ["doc"])
+        XCTAssertEqual(shared.historyOutbox, [visit])
+        XCTAssertEqual(shared.historyCache[host + "|default"], [cached])
+        let newURL = URL(string: "https://example.test/new-visit")!
+        shared.browserTabs = [BrowserDescriptor(id: "browser", title: "New", url: nil, scope: "main")]
+        shared.assignBrowserOwner("browser", host: host)
+        XCTAssertTrue(shared.navigate(newURL, in: "browser"))
+        shared.completeBrowserNavigation(newURL, title: "New", in: "browser")
+        try writer.flush()
+        let recorded = try XCTUnwrap(shared.historyOutbox.last)
+        XCTAssertEqual(recorded["url"].string, newURL.absoluteString)
+        XCTAssertEqual(try Data(contentsOf: cache), original)
+        let snapshot = try RemoteCrypto.open(String(contentsOf: journal, encoding: .utf8), key: key, aad: "proteus-mobile-history-outbox-v1")
+        XCTAssertEqual(snapshot.array, [visit, recorded])
+
+        // The journal takes precedence even when all visits have been acknowledged.
+        let empty = try RemoteCrypto.seal(.array([]), key: key, aad: "proteus-mobile-history-outbox-v1")
+        try Data(empty.utf8).write(to: journal)
+        let restarted = SharedAppStore(cacheWriter: writer, cacheRoot: directory, cacheKey: { key })
+        XCTAssertTrue(restarted.historyOutbox.isEmpty)
+        XCTAssertEqual(restarted.historyCache[host + "|default"], [cached])
     }
     @MainActor func testInvalidAndFailedNavigationNeverEraseSharedForwardEntries() {
         let shared = SharedAppStore()
@@ -1795,6 +1881,23 @@ final class RemoteTests: XCTestCase {
         XCTAssertNotNil(ProviderAllowance.date("2026-10-10T15:00:00.123Z"))
         XCTAssertNotNil(ProviderAllowance.date("2026-10-10T15:00:00Z"))
     }
+    func testPreparedRuntimeClipsOverlappingToolsAndKeepsOfflineTotals() throws {
+        let origin = try XCTUnwrap(ProviderAllowance.date("2026-11-19T00:00:00Z"))
+        func date(_ seconds: Int) -> JSON { .string(origin.addingTimeInterval(Double(seconds)).ISO8601Format()) }
+        let activity: JSON = .object(["intervals": .array([.array([date(0), date(4)]), .array([date(6), date(7)])]), "activeSince": date(10)])
+        let closed: JSON = .object(["startedAt": date(1), "finishedAt": date(9)])
+        let live: JSON = .object(["startedAt": date(8), "status": .string("running")])
+        let toolClock = NativeRuntimeProjection(NativeRuntimeInput(turns: [], tools: [closed, live], activityTurns: [activity]))
+        XCTAssertEqual(toolClock.seconds(at: origin.addingTimeInterval(12), verified: true), 6)
+        XCTAssertEqual(toolClock.seconds(at: origin.addingTimeInterval(8), verified: true), 4)
+        XCTAssertEqual(toolClock.seconds(at: origin.addingTimeInterval(12), verified: false), 4)
+        let turnClock = NativeRuntimeProjection(NativeRuntimeInput(turns: [activity], tools: [], activityTurns: []))
+        XCTAssertEqual(turnClock.seconds(at: origin.addingTimeInterval(12), verified: true), runtimeSeconds(activity, now: origin.addingTimeInterval(12), verified: true))
+        XCTAssertEqual(turnClock.seconds(at: origin.addingTimeInterval(12), verified: false), 5)
+        let fallback = NativeRuntimeProjection(NativeRuntimeInput(turns: [], tools: [.object(["durationMs": .number(1_250)])], activityTurns: []))
+        XCTAssertEqual(fallback.seconds(at: origin, verified: true), 1.25)
+    }
+
     @MainActor func testIncrementalChatPatchesPreserveHistoryAndRejectStaleUpdates() {
         let store = RemoteStore(); store.forget()
         func page(_ at: String, patches: [JSON]? = nil) -> JSON {

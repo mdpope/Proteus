@@ -18,23 +18,6 @@ struct ScratchpadView: View {
 }
 /// One scratch in a list. The feature page opens it as a tab (from any computer); a workspace or
 /// project page opens it as one of that page's own tabs.
-private struct NewScratchButton: View {
-    let hostID: String
-    let rootID: String
-    let projectID: String?
-    let workspaceID: String?
-    let embedded: Bool
-    @Environment(\.nativeOpenFeatureResource) private var openFeature
-    @Environment(\.nativeOpenScratchTab) private var openScratch
-    var body: some View {
-        Button("New scratch", systemImage: "plus") {
-            let operation = UUID().uuidString
-            var fields: [String: JSON] = ["tabID": .string("scratch:" + operation), "kind": .string("scratch"), "title": .string("Scratch"), "hostID": .string(hostID), "rootID": .string(rootID), "operationID": .string(operation)]
-            if let projectID { fields["projectId"] = .string(projectID) } else if let workspaceID { fields["workspaceId"] = .string(workspaceID) }
-            if embedded { openScratch?(.object(fields)) } else { openFeature?(.object(fields)) }
-        }
-    }
-}
 private struct ScratchRow: View {
     let row: JSON
     let hostID: String
@@ -64,13 +47,59 @@ struct ScratchpadOwnerPicker: View {
         }
     }
 }
-struct ScratchpadSidebarRecents: View {
-    @ObservedObject var workspace: ScratchpadWorkspace
+struct ScratchpadSidebarRecents<Row: View>: View {
+    @EnvironmentObject private var destinations: DestinationStore
+    let row: Row
     var onOpen: () -> Void
     @State private var limit = 7
+    @State private var recentByOwner: [String: [JSON]] = [:]
+    private struct Recent: Identifiable {
+        let host: HostDestination
+        let row: JSON
+        var id: String { host.id + ":" + row["id"].string }
+    }
+    private var owners: [HostDestination] {
+        destinations.destinations.filter { destinations.remote(for: $0.id)?.connected == true }
+    }
+    private var recents: [Recent] {
+        owners.flatMap { host in (recentByOwner[host.id] ?? []).map { Recent(host: host, row: $0) } }
+            .enumerated().sorted {
+                let left = $0.element.row["visitedAt"].string, right = $1.element.row["visitedAt"].string
+                return left == right ? $0.offset < $1.offset : left > right
+            }.map(\.element)
+    }
     var body: some View {
-        ForEach(Array(workspace.recents.prefix(limit)), id: \.self) { row in Button { Task { await workspace.open(row["id"].string); onOpen() } } label: { Label(row["title"].string, systemImage: "note.text").font(.caption).lineLimit(2) }.padding(.leading).listRowBackground(Color.clear) }
-        if workspace.recents.count > limit { Button("More…") { limit += 4 }.font(.caption).padding(.leading).listRowBackground(Color.clear) }
+        row.background {
+            ZStack {
+                ForEach(owners) { owner in
+                    if let remote = destinations.remote(for: owner.id) {
+                        Color.clear
+                            .task { recentByOwner[owner.id] = await remote.scratchpad.sidebarRecents(remote) }
+                            .onReceive(remote.scratchpad.$recents) { rows in
+                                if !rows.isEmpty || recentByOwner[owner.id] == nil { recentByOwner[owner.id] = rows }
+                            }
+                    }
+                }
+            }.allowsHitTesting(false).accessibilityHidden(true)
+        }
+        ForEach(Array(recents.prefix(limit))) { item in
+            Button {
+                guard let remote = destinations.remote(for: item.host.id), remote.connected else { return }
+                destinations.scratchpadOwnerID = item.host.id
+                destinations.activateVisibleOwner(item.host.id)
+                Task {
+                    if !remote.scratchpad.ready { await remote.scratchpad.connect(remote) }
+                    await remote.scratchpad.open(item.row["id"].string)
+                    onOpen()
+                }
+            } label: {
+                VStack(alignment: .leading, spacing: 3) {
+                    Label(item.row["title"].string, systemImage: "note.text").lineLimit(2)
+                    Text(item.host.label).foregroundStyle(.secondary)
+                }.font(.caption)
+            }.padding(.leading).listRowBackground(Color.clear)
+        }
+        if recents.count > limit { Button("More…") { limit += 4 }.font(.caption).padding(.leading).listRowBackground(Color.clear) }
     }
 }
 struct LifeReminderSidebarRecents: View {
@@ -107,7 +136,7 @@ private struct ScratchpadContent: View {
         .onDisappear { if workspaceID != nil { workspace.workspaceFilter = ""; workspace.projectFilter = "" }; Task { await workspace.leave() } }
     }
     private var featureBody: some View {
-        NativeFeatureWorkspace(title: "Scratchpad", symbol: "note.text", namespace: "scratchpad:" + (remote.connection?.hostId ?? "") + ":" + workspace.rootID + ":" + (projectID ?? workspaceID ?? "all"), registersFeatureOverview: projectID == nil && workspaceID == nil,
+        NativeFeatureWorkspace(title: "Scratchpad", symbol: "note.text", namespace: "scratchpad:" + (remote.connection?.hostId ?? "") + ":" + workspace.rootID + ":" + (projectID ?? workspaceID ?? "all"), registersFeatureOverview: projectID == nil && workspaceID == nil, scratchOwnerID: remote.connection?.hostId,
             records: workspace.tabs.map { NativeContentTab(id: $0, title: workspace.drafts[$0]?.title ?? "Scratch", kind: "scratch", hostID: nil) },
             selected: $workspace.selected, selectRecord: { id in if id == "master" { Task { await workspace.refresh(projectID: projectID) } } else { Task { await workspace.open(id) } } }, closeRecord: { id in Task { await workspace.close(id) } }) {
             VStack(spacing: 0) {
@@ -139,17 +168,10 @@ private struct ScratchpadContent: View {
     private var master: some View {
         List {
             if showComputers && projectID == nil && workspaceID == nil {
-                Section("Computer") { ScratchpadOwnerPicker(menu: true) }.listRowBackground(NativeTheme.surface)
+                Section { ScratchpadOwnerPicker(menu: true) }.listRowBackground(NativeTheme.surface)
             }
             Section {
                 if workspace.indexing["running"].bool { ProgressView("Indexing in background · \(workspace.indexing["added"].int) added") }
-                NewScratchButton(hostID: remote.connection?.hostId ?? "", rootID: workspace.rootID, projectID: projectID, workspaceID: workspaceID, embedded: embedded)
-                Button("Synchronize files", systemImage: "arrow.triangle.2.circlepath") { Task {
-                    await workspace.leave()
-                    guard workspace.pendingAction == nil, !workspace.drafts.values.contains(where: { $0.saving || $0.pending != nil }) else { workspace.error = "Confirm pending saves before synchronizing files. Unsaved drafts remain available for review."; return }
-                    do { var args: [String: JSON] = ["action": .string("sync")]; if let projectID { args["projectId"] = .string(projectID) }; let result = try await workspace.request(args); await workspace.refresh(projectID: projectID); if !result["errors"].array.isEmpty { workspace.error = result["errors"].array.map { $0["error"].string }.joined(separator: "\n") } }
-                    catch { workspace.error = error.localizedDescription }
-                } }
                 TextField("Find scratches", text: $workspace.search).onSubmit { refresh() }
                 DisclosureGroup("Filters") {
                 if projectID == nil && workspaceID == nil {
@@ -168,7 +190,20 @@ private struct ScratchpadContent: View {
             }
             if workspace.offset > 0 { Button("Previous") { workspace.offset = max(0, workspace.offset - 100); Task { await workspace.refresh(projectID: projectID) } } }
             if workspace.hasMore { Button("Next") { workspace.offset += 100; Task { await workspace.refresh(projectID: projectID) } } }
-        }.scrollContentBackground(.hidden).refreshable { await workspace.refresh(projectID: projectID) }
+        }.scrollContentBackground(.hidden).refreshable { await synchronizeFiles() }
+    }
+    private func synchronizeFiles() async {
+        await workspace.leave()
+        guard workspace.pendingAction == nil, !workspace.drafts.values.contains(where: { $0.saving || $0.pending != nil }) else {
+            workspace.error = "Confirm pending saves before synchronizing files."; return
+        }
+        do {
+            var args: [String: JSON] = ["action": .string("sync")]
+            if let projectID { args["projectId"] = .string(projectID) }
+            let result = try await workspace.request(args)
+            await workspace.refresh(projectID: projectID)
+            if !result["errors"].array.isEmpty { workspace.error = result["errors"].array.map { $0["error"].string }.joined(separator: "\n") }
+        } catch { workspace.error = error.localizedDescription }
     }
     private func refresh() { workspace.offset = 0; Task { await workspace.refresh(projectID: projectID) } }
 }
@@ -219,7 +254,16 @@ private struct ScratchpadEditorView: View {
                     Button("Reload saved version") { confirmReload = true }.buttonStyle(.borderless).disabled(draft.pending != nil)
                 }
                 if preview {
-                    MarkdownView(text: draft.body, runID: "scratch:" + draft.record["id"].string, store: remote, height: $previewHeight, onDocumentLink: { _ in draft.error = "Open linked files through the authorized Files view." }).frame(height: previewHeight)
+                    MarkdownView(text: draft.body, runID: "scratch:" + draft.record["id"].string, store: remote, height: $previewHeight, onDocumentLink: { _ in draft.error = "Open linked files through the authorized Files view." }, resolveDocumentAsset: { source, pdf in
+                        let path = source.removingPercentEncoding ?? source
+                        guard path.range(of: #"^Scratch Attachments/pasted-[a-f0-9]{64}\.(png|jpg|gif|webp|pdf)$"#, options: .regularExpression) != nil else {
+                            throw RemoteError(message: "Open linked files through the authorized Files view.")
+                        }
+                        let asset = try await workspace.request(["action": .string("asset"), "path": .string(path)])
+                        let mediaType = asset["mediaType"].string
+                        guard pdf ? mediaType == "application/pdf" : mediaType.hasPrefix("image/") else { throw RemoteError(message: "Attachment type changed.") }
+                        return "data:" + mediaType + ";base64," + asset["data"].string
+                    }).frame(height: previewHeight)
                 }
                 else {
                     VStack(spacing: 0) {
@@ -232,6 +276,7 @@ private struct ScratchpadEditorView: View {
                             format("Code block", "chevron.left.forwardslash.chevron.right", "```\n", "\n```")
                             format("Link", "link", "[", "](https://)")
                             format("Quote", "text.quote", "> ", "")
+                            Button { pasteAsset() } label: { Image(systemName: "clipboard").frame(width: 44, height: 44) }.accessibilityLabel("Paste image or PDF")
                         }.padding(4).buttonStyle(.plain) }.background(NativeTheme.surface)
                         Divider()
                         NativeScratchMarkdownEditor(text: $draft.body, source: sourceMode, command: editCommand).frame(minHeight: 420).accessibilityLabel("Scratch content")
@@ -243,6 +288,18 @@ private struct ScratchpadEditorView: View {
             .onChange(of: draft.value) { _, _ in workspace.edited(draft) }
             .confirmationDialog("Move this scratch to its .Trash folder?", isPresented: $confirmDelete) { Button("Delete scratch", role: .destructive) { Task { await remove() } } }
             .confirmationDialog("Discard this unsaved draft and reload the saved file?", isPresented: $confirmReload) { Button("Reload saved version", role: .destructive) { Task { await workspace.reload(draft.record["id"].string) } } }
+    }
+    private func pasteAsset() {
+        NativeAttachmentPaste.read(limit: 1) { item in
+            Task {
+                do {
+                    var fields = try await NativeAttachmentPaste.markdownAsset(item.get())
+                    fields["action"] = .string("paste"); fields["id"] = draft.record["id"]
+                    let asset = try await workspace.request(fields)
+                    editCommand = ScratchEditCommand(before: "![[" + asset["name"].string + "]]\n", after: "", replace: true)
+                } catch { draft.error = error.localizedDescription }
+            }
+        }
     }
     private func format(_ label: String, _ symbol: String, _ before: String, _ after: String) -> some View {
         Button { editCommand = ScratchEditCommand(before: before, after: after) } label: { Image(systemName: symbol).frame(width: 44, height: 44) }.accessibilityLabel(label)
@@ -304,8 +361,8 @@ struct ScratchpadResourceTab: View {
 
 /// The same offline CodeMirror runtime as desktop/web. Only Markdown text crosses
 /// this bridge; the editor has no network, credential or filesystem authority.
-private struct ScratchEditCommand { let id = UUID(); let before: String; let after: String }
-private struct NativeScratchMarkdownEditor: UIViewRepresentable {
+struct ScratchEditCommand { let id = UUID(); let before: String; let after: String; var replace = false }
+struct NativeScratchMarkdownEditor: UIViewRepresentable {
     @Binding var text: String
     let source: Bool
     var command: ScratchEditCommand?
@@ -342,7 +399,7 @@ private struct NativeScratchMarkdownEditor: UIViewRepresentable {
             let value: Any = delivered != parent.text ? parent.text as Any : NSNull()
             delivered = parent.text; deliveredSource = parent.source; deliveredColors = colors
             if let command { deliveredCommand = command.id }
-            web.callAsyncJavaScript("window.configureScratch(value,source,colors); if (format) window.insertScratch(before,after)", arguments: ["value": value, "source": parent.source, "colors": colors, "format": command != nil, "before": command?.before ?? "", "after": command?.after ?? ""], in: nil, in: .page) { _ in }
+            web.callAsyncJavaScript("window.configureScratch(value,source,colors); if (format) window.insertScratch(before,after,replace)", arguments: ["value": value, "source": parent.source, "colors": colors, "format": command != nil, "replace": command?.replace ?? false, "before": command?.before ?? "", "after": command?.after ?? ""], in: nil, in: .page) { _ in }
         }
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) { guard message.name == "scratchEdit", let value = message.body as? String, value.utf8.count <= 2 * 1024 * 1024 else { return }; delivered = value; parent.text = value }
     }

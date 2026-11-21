@@ -11,6 +11,7 @@ import {reconciliationPlan} from '../src/services/scheduling/source-reconciliati
 import {createHash} from 'node:crypto';
 import {ownerSelectionUpdate,clearOwnerSelection} from '../src/services/scheduling/source-selection-overrides.js';
 import {startServer} from '../src/server.js';
+import {until} from './remote-client.mjs';
 const base=cwd=>({schemaVersion:1,id:'workflow-fixture',name:'Fixture',provider:'codex',model:'fixture',workspace:{cwd,additionalDirectories:[]},cron:'0 9 * * *',timezone:'UTC',misfire:'skip',prompt:'Synthetic',enabled:false});
 function home(t,cleanup=true){const dir=fs.realpathSync(privateTemporaryDirectory(path.join(os.tmpdir(),'schedule-access-')));if(cleanup)t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));return dir;}
 test('capability resolution distinguishes command approval from native sandbox enforcement',()=>{
@@ -26,6 +27,31 @@ test('explicit schedule grants survive restart/provider switch; revocation and A
  assert.throws(()=>effectiveScheduleAccess({...reloaded,workspace:{cwd:dir,additionalDirectories:['/changed']}}),/resources changed/);
  assert.throws(()=>addScheduleAccess(original,{rule:{kind:'shell',command:'python script.py'}}),/command identity|request payloads/);
 });
+test('saved-access review is revision-bound, preserves the capture, and can revoke consent',async t=>{
+ const dir=home(t,false),provider={
+  status:async()=>({available:true,models:[{id:'fixture'}]}),
+  run:async()=>{throw Error('Synthetic interrupted workflow');},
+ };
+ const app=await startServer({home:dir,port:0,timers:false,withSeed:false,providers:{codex:provider}});
+ t.after(async()=>{await app.close();fs.rmSync(dir,{recursive:true,force:true});});
+ const schedule=addScheduleAccess(base(dir),{folder:{path:dir,access:'read'}});
+ app.engine.schedules.save(schedule);
+ const run=app.engine.createRun(schedule,'manual');
+ await until(()=>run.status==='failed'&&!app.engine.running.has(run.id));
+ const capture=structuredClone(run.schedule);
+ const review=app.engine.scheduleAccessReview({id:run.id,action:'view'});
+ assert.equal(review.canKeep,true);
+ assert.equal(review.grants.length,1);
+ assert.throws(()=>app.engine.scheduleAccessReview({id:run.id,action:'revoke',expectedRevision:'stale',expectedUpdatedAt:review.expectedUpdatedAt}),/changed/);
+ const args={id:run.id,expectedRevision:review.expectedRevision,expectedUpdatedAt:review.expectedUpdatedAt};
+ assert.equal(app.engine.scheduleAccessReview({...args,action:'keep-captured'}).accepted,true);
+ assert.equal(app.engine.scheduleAccessReview({...args,action:'keep-captured'}).accepted,true);
+ assert.equal(app.engine.scheduleAccessReview({...args,action:'revoke'}).accepted,true);
+ assert.ok(app.engine.schedules.get(schedule.id).accessOverlay.grants[0].revokedAt);
+ assert.deepEqual(run.schedule,capture);
+ assert.throws(()=>app.engine.scheduleAccessReview({...args,action:'keep-captured'}),/changed/);
+});
+
 test('source reconciliation retains owner consent, enabled state and unknown fields',t=>{
  const dir=home(t),manifest=path.join(dir,'workflow.json'),exportPath=path.join(dir,'export.json');fs.writeFileSync(manifest,'{}');
  const current=addScheduleAccess({...base(dir),enabled:true,source:{system:'fixture',manifest},unknown:{keep:true}},{rule:{kind:'mcp',server:'selected',tool:'lookup',action:'read'}});
