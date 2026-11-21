@@ -3,28 +3,114 @@ const {atomicRename}=require('../../src/shared/atomic-rename.cjs');
 const {randomUUID}=require('node:crypto');
 const fs=require('node:fs'),path=require('node:path');
 const {safeStorage}=require('electron');
+const {ConferencePermissions,secureSite}=require('./conference-permissions.cjs');
+const conferenceTypes=new Set(['media','display-capture','speaker-selection']);
 class BrowserPermissions {
- constructor(browser){this.browser=browser;this.network=new NetworkPermissions(browser);this.pending=new Map();this.alerts=[];this.lastAlert=new Map();this.file=browser.options.home?path.join(browser.options.home,'browser-notifications.enc'):null;if(this.file&&safeStorage.isEncryptionAvailable())try{if(fs.statSync(this.file).size<2000000){const rows=JSON.parse(safeStorage.decryptString(fs.readFileSync(this.file)));if(Array.isArray(rows))this.alerts=rows.slice(-200);}}catch{}}
+ constructor(browser){this.browser=browser;this.network=new NetworkPermissions(browser);this.conference=new ConferencePermissions(browser);this.pending=new Map();this.alerts=[];this.lastAlert=new Map();this.file=browser.options.home?path.join(browser.options.home,'browser-notifications.enc'):null;if(this.file&&safeStorage.isEncryptionAvailable())try{if(fs.statSync(this.file).size<2000000){const rows=JSON.parse(safeStorage.decryptString(fs.readFileSync(this.file)));if(Array.isArray(rows))this.alerts=rows.slice(-200);}}catch{}}
  permission(profileId,origin){if(this.browser.incognito?.has(profileId))return 'block';try{origin=new URL(origin).origin;return this.browser.profile(profileId).settings?.notifications?.find(item=>item.origin===origin)?.permission||'ask';}catch{return 'block';}}
+ notificationFrame(event){
+  const wc=event.sender;
+  if(wc.isDestroyed()||event.senderFrame!==wc.mainFrame)return null;
+  const origin=secureSite(event.senderFrame.url);
+  const tab=[...this.browser.tabs.values()].find(item=>item.view?.webContents===wc);
+  return tab&&origin&&origin!==this.browser.appOrigin&&this.browser.profileAvailable(tab)?{wc,tab,origin}:null;
+ }
+ notificationState(event){
+  const site=this.notificationFrame(event);
+  return site?this.permission(site.tab.profileId,site.origin):'block';
+ }
+ requestNotification(event){
+  const site=this.notificationFrame(event);
+  if(!site)return 'denied';
+  const {wc,tab,origin}=site,saved=this.permission(tab.profileId,origin);
+  if(saved!=='ask')return saved==='allow'?'granted':'denied';
+  if(!this.browser.withTabWindow(tab,()=>this.browser.active===tab.id))return 'default';
+  return new Promise(resolve=>this.queueNotification(wc,tab.profileId,origin,allowed=>{
+   resolve(allowed?'granted':this.permission(tab.profileId,origin)==='block'?'denied':'default');
+  }));
+ }
+ queueNotification(wc,profileId,origin,callback){
+  let entry=[...this.pending.values()].find(item=>item.profileId===profileId&&item.origin===origin&&!item.permissionType);
+  if(!entry){
+   const id=randomUUID();
+   entry={id,profileId,origin,at:new Date().toISOString(),callbacks:[],timer:setTimeout(()=>this.finish(id,false),600000)};
+   entry.timer.unref?.();this.pending.set(id,entry);
+   this.browser.actions.send({type:'site-permission',id:[...this.browser.tabs.values()].find(tab=>tab.view?.webContents===wc)?.id,item:this.list().find(item=>item.id===id)});
+  }
+  if(entry.callbacks.length>=64){callback(false);return;}
+  entry.callbacks.push({wc,callback});
+ }
+ canAsk(event,kind){
+  const wc=event.sender;
+  if(wc.isDestroyed()||event.senderFrame!==wc.mainFrame)return false;
+  const tab=[...this.browser.tabs.values()].find(tab=>tab.view?.webContents===wc);
+  const origin=secureSite(event.senderFrame.url);
+  if(!tab||!origin||origin===this.browser.appOrigin||!this.browser.profileAvailable(tab))return false;
+  if(!['microphone','camera'].includes(kind))return false;
+  // Ask reflects the saved site decision. Hardware and agent access are
+  // checked when the site requests capture, so the user can see the next step.
+  return !!this.conference.site(wc,tab.profileId,origin)&&this.conference.rule(tab.profileId,kind,origin)==='ask';
+ }
  list(){return [...this.pending.values()].map(({id,profileId,origin,at,permissionType})=>({id,profileId,origin,at,permissionType,...(networkPermissionTypes.has(permissionType)?{body:'Allow only if you trust this website to reach '+(permissionType==='loopback-network'?'services on this computer':'devices on your local network')+'. This permission stays on this computer and browser profile. Reload the page afterward if its previous connection failed.'}:{}),kind:'site-permission',title:origin+(permissionType==='loopback-network'?' wants to connect to services on this computer':networkPermissionTypes.has(permissionType)?' wants to connect to your local network':' wants to send notifications')})).concat(this.alerts.filter(item=>!item.readAt&&this.browser.profileAvailable({profileId:item.profileId})));}
  save(){if(!this.file||!safeStorage.isEncryptionAvailable())return;fs.mkdirSync(path.dirname(this.file),{recursive:true});fs.writeFileSync(this.file+'.tmp',safeStorage.encryptString(JSON.stringify(this.alerts)),{mode:0o600});atomicRename(this.file+'.tmp',this.file);}
  receive(event,value){const tab=[...this.browser.tabs.values()].find(tab=>tab.view?.webContents===event.sender);if(!tab||event.senderFrame!==event.sender.mainFrame||!this.browser.profileAvailable(tab))return;let origin;try{origin=new URL(event.sender.getURL()).origin;}catch{return;}if(typeof value?.close==='string'){for(const item of this.alerts)if(item.tabId===tab.id&&item.origin===origin&&item.pageId===value.close)item.readAt=new Date().toISOString();try{this.save();}catch{}this.browser.changed();return;}if(this.permission(tab.profileId,origin)!=='allow'||typeof value?.title!=='string'||value.title.length>200||typeof value.body!=='string'||value.body.length>2000)return;const key=tab.profileId+'\0'+origin;if(typeof value.id==='string'&&this.alerts.some(item=>item.profileId===tab.profileId&&item.origin===origin&&item.pageId===value.id))return;this.lastAlert.set(key,Date.now());if(this.lastAlert.size>1000)this.lastAlert.delete(this.lastAlert.keys().next().value);const item={id:randomUUID(),pageId:typeof value.id==='string'?value.id.slice(0,64):null,kind:'site-notification',profileId:tab.profileId,origin,title:origin+' · '+value.title,body:value.body,silent:value.silent===true||tab.audioMuted===true,tag:typeof value.tag==='string'?value.tag.slice(0,100):'',at:new Date().toISOString(),tabId:tab.id};this.alerts.push(item);this.alerts=this.alerts.slice(-200);try{this.save();}catch{}this.browser.options.onSiteNotification?.(item,tab);this.browser.actions.send({type:'site-notification',item});this.browser.changed();}
  read(id,activate=false){const item=this.alerts.find(item=>item.id===id);if(!item)throw new Error('Notification is unavailable.');item.readAt=new Date().toISOString();const tab=this.browser.tabs.get(item.tabId);if(activate&&tab?.view?.webContents&&!tab.view.webContents.isDestroyed()&&this.browser.profileAvailable(tab)&&new URL(tab.view.webContents.getURL()).origin===item.origin)tab.view.webContents.send('proteus:site-notification-event',{id:item.pageId,kind:'click'});this.save();this.browser.changed();return item;}
  fullscreen(wc,profileId){const tab=[...this.browser.tabs.values()].find(tab=>tab.view?.webContents===wc&&tab.profileId===profileId);return !!tab&&this.browser.profileAvailable(tab)&&(!!tab.videoPopout||this.browser.withTabWindow(tab,()=>this.browser.active===tab.id));}
- install(session,profileId){session.setPermissionCheckHandler((wc,permission,origin,details)=>{if(networkPermissionTypes.has(permission)){const tab=[...this.browser.tabs.values()].find(t=>t.view?.webContents===wc&&t.profileId===profileId);if(!tab||!this.browser.profileAvailable(tab))return false;const source=websiteOrigin(details?.requestingUrl)||websiteOrigin(origin);if(!source)return false;const saved=this.network.permission(profileId,permission,source);if(saved==='ask')this.requestNetwork(wc,profileId,permission,source);return saved==='allow';}return permission==='fullscreen'?this.fullscreen(wc,profileId):permission==='notifications'&&this.permission(profileId,origin)==='allow';});session.setPermissionRequestHandler((wc,permission,callback,details)=>{
+ install(session,profileId){
+  session.setDisplayMediaRequestHandler((request,callback)=>{
+   void this.conference.display(profileId,request).catch(()=>null).then(streams=>{try{callback(streams||{});}catch{}});
+  });
+  session.setPermissionCheckHandler((wc,permission,origin,details)=>{
+   if(conferenceTypes.has(permission))return this.conference.check(wc,profileId,permission,origin,details);
+   if(networkPermissionTypes.has(permission)){const tab=[...this.browser.tabs.values()].find(t=>t.view?.webContents===wc&&t.profileId===profileId);if(!tab||!this.browser.profileAvailable(tab))return false;const source=websiteOrigin(details?.requestingUrl)||websiteOrigin(origin);if(!source)return false;const saved=this.network.permission(profileId,permission,source);if(saved==='ask')this.requestNetwork(wc,profileId,permission,source);return saved==='allow';}return permission==='fullscreen'?this.fullscreen(wc,profileId):permission==='notifications'&&this.permission(profileId,origin)==='allow';});session.setPermissionRequestHandler((wc,permission,callback,details)=>{
+  if(permission==='media'||permission==='display-capture'){
+   // Electron 45 separates ordinary device requests from display capture,
+   // including requests that combine a microphone and a legacy screen source.
+   const decision=permission==='display-capture'?this.conference.approveCapture(wc,profileId,details):
+    this.conference.request(wc,profileId,details);
+   void decision.catch(()=>false).then(allowed=>{try{callback(allowed);}catch{}});
+   return;
+  }
+  if(conferenceTypes.has(permission))return callback(this.conference.check(wc,profileId,permission,details?.requestingUrl,details));
   if(networkPermissionTypes.has(permission)){const tab=[...this.browser.tabs.values()].find(t=>t.view?.webContents===wc&&t.profileId===profileId),origin=websiteOrigin(details?.requestingUrl||wc?.getURL());if(!tab||!this.browser.profileAvailable(tab)||!origin)return callback(false);const saved=this.network.permission(profileId,permission,origin);if(saved!=='ask')return callback(saved==='allow');this.requestNetwork(wc,profileId,permission,origin,callback);return;}
   if(permission==='fullscreen')return callback(this.fullscreen(wc,profileId));
   // Chromium asks before launching another application (for example from an iframe).
   // Proteus shows its own prompt and opens the link itself, so deny the default path.
   if(permission==='openExternal'){callback(false);const tab=[...this.browser.tabs.values()].find(tab=>tab.view?.webContents===wc);if(tab&&details?.externalURL)void this.browser.externalProtocols?.request(tab,details.externalURL,details.requestingUrl).catch(()=>{});return;}
-  if(permission!=='notifications')return callback(false);let origin;try{origin=new URL(details.requestingUrl||wc.getURL()).origin;if(!origin.startsWith('https://')&&!/^http:\/\/(localhost|127\.0\.0\.1)(:|$)/.test(origin))return callback(false);}catch{return callback(false);}
+  if(permission!=='notifications'||!wc||wc.isDestroyed())return callback(false);
+  const origin=secureSite(details?.requestingUrl||wc.getURL());
+  const tab=[...this.browser.tabs.values()].find(tab=>tab.view?.webContents===wc&&tab.profileId===profileId);
+  if(!origin||origin===this.browser.appOrigin||secureSite(wc.getURL())!==origin||!tab||!this.browser.profileAvailable(tab))return callback(false);
   const saved=this.permission(profileId,origin);if(saved!=='ask')return callback(saved==='allow');
-  let entry=[...this.pending.values()].find(item=>item.profileId===profileId&&item.origin===origin&&!networkPermissionTypes.has(item.permissionType));if(!entry){const id=randomUUID();entry={id,profileId,origin,at:new Date().toISOString(),callbacks:[],timer:setTimeout(()=>this.finish(id,false),600000)};entry.timer.unref?.();this.pending.set(id,entry);}
-  entry.callbacks.push({wc,callback});this.browser.actions.send({type:'site-permission',item:this.list().find(item=>item.id===entry.id)});
+  this.queueNotification(wc,profileId,origin,callback);
  });}
+ settleNotifications(profileId){
+  for(const tab of this.browser.tabs.values()){
+   const wc=tab.view?.webContents;
+   if(tab.profileId!==profileId||!wc||wc.isDestroyed())continue;
+   const origin=secureSite(wc.getURL());
+   if(origin)try{wc.send('proteus:notification-permission-changed',this.permission(profileId,origin));}catch{}
+  }
+  for(const entry of this.pending.values()){
+   if(entry.permissionType||entry.profileId!==profileId)continue;
+   const saved=this.permission(profileId,entry.origin);
+   if(saved!=='ask')this.finish(entry.id,saved==='allow');
+  }
+ }
  requestNetwork(wc,profileId,permissionType,origin,callback){let entry=[...this.pending.values()].find(e=>e.profileId===profileId&&e.permissionType===permissionType&&e.origin===origin);if(!entry){const id=randomUUID();entry={id,profileId,permissionType,origin,at:new Date().toISOString(),callbacks:[],timer:setTimeout(()=>this.finish(id,false),600000)};entry.timer.unref?.();this.pending.set(id,entry);this.browser.actions.send({type:'site-permission',item:this.list().find(e=>e.id===id)});}if(callback)entry.callbacks.push({wc,callback});}
- finish(id,allowed){const entry=this.pending.get(id);if(!entry)return;clearTimeout(entry.timer);this.pending.delete(id);for(const {wc,callback} of entry.callbacks){let same=false;try{same=!wc.isDestroyed()&&new URL(wc.getURL()).origin===entry.origin;}catch{}callback(allowed&&same&&(networkPermissionTypes.has(entry.permissionType)?this.network.permission(entry.profileId,entry.permissionType,entry.origin):this.permission(entry.profileId,entry.origin))==='allow');}this.browser.changed();}
- async review(id,permission){if(!['allow','block'].includes(permission))throw new Error('Choose Allow or Block.');const entry=this.pending.get(id);if(!entry)throw new Error('This website permission request expired.');if(networkPermissionTypes.has(entry.permissionType)){this.network.save(entry.profileId,entry.permissionType,entry.origin,permission);this.finish(id,permission==='allow');return;}const profile=this.browser.profile(entry.profileId),settings=profile.settings||{};await this.browser.options.profiles.handle({action:'settings',id:profile.id,settings:{...settings,notifications:[...(settings.notifications||[]).filter(item=>item.origin!==entry.origin),{origin:entry.origin,permission}]}});this.finish(id,permission==='allow');}
+ finish(id,allowed){
+  const entry=this.pending.get(id);if(!entry)return;
+  clearTimeout(entry.timer);this.pending.delete(id);
+  const saved=networkPermissionTypes.has(entry.permissionType)?this.network.permission(entry.profileId,entry.permissionType,entry.origin):this.permission(entry.profileId,entry.origin);
+  for(const {wc,callback} of entry.callbacks){
+   try{
+    if(wc.isDestroyed())continue;
+    callback(allowed&&saved==='allow'&&new URL(wc.getURL()).origin===entry.origin);
+   }catch{/* A navigating page's reply cannot undo the saved choice or block subsequent replies. */}
+  }
+  this.browser.changed();
+ }
+ async review(id,permission){if(!['allow','block'].includes(permission))throw new Error('Choose Allow or Block.');const entry=this.pending.get(id);if(!entry)throw new Error('This website permission request expired.');if(networkPermissionTypes.has(entry.permissionType)){this.network.save(entry.profileId,entry.permissionType,entry.origin,permission);this.finish(id,permission==='allow');return;}await this.browser.options.profiles.handle({action:'notification-permission',id:entry.profileId,origin:entry.origin,permission});this.finish(id,permission==='allow');}
  forget(profileId){for(const entry of [...this.pending.values()])if(entry.profileId===profileId)this.finish(entry.id,false);const partition=this.network.partition(profileId);this.network.rules=this.network.rules.filter(rule=>rule.partition!==partition);for(const key of this.lastAlert.keys())if(key.startsWith(profileId+'\0'))this.lastAlert.delete(key);}
  close(){for(const id of this.pending.keys())this.finish(id,false);}
 }

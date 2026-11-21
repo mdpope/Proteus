@@ -1,0 +1,25 @@
+dialog.universal-search{
+  width:min(720px,calc(100vw - 32px));max-height:min(78vh,760px);margin:clamp(24px,11vh,105px) auto auto;
+  padding:0;border:1px solid var(--proteus-line);border-radius:14px;
+  background:var(--proteus-panel);color:var(--proteus-ink);box-shadow:0 20px 64px #0006;overflow:hidden;
+}
+.universal-search::backdrop{background:#07110bb3}
+.universal-search>section{display:flex;flex-direction:column;max-height:inherit;min-height:0;padding:14px;gap:9px}
+.universal-search header{display:flex;align-items:center;justify-content:space-between;padding:0 5px;color:var(--proteus-muted)}
+.universal-search h2,.universal-search h3{margin:0;font-size:12px;font-weight:600;color:var(--proteus-muted)}
+.universal-search kbd{border:1px solid var(--proteus-line);border-radius:4px;padding:2px 5px;font-size:11px}
+.universal-search-input{display:flex;align-items:center;gap:10px;flex:none;background:var(--proteus-input);border:1px solid var(--proteus-line);border-radius:8px;padding:0 11px}
+.universal-search-input:focus-within{border-color:var(--proteus-accent)}
+.universal-search-input svg{flex:none;color:var(--proteus-muted)}
+.universal-search-input input{flex:1;min-width:0;height:45px;padding:0;border:0;background:transparent;color:var(--proteus-ink);font:inherit;font-size:15px;outline:none}
+.universal-search-input button{border:0;background:transparent;color:var(--proteus-muted);padding:0;min-width:28px;min-height:28px;font-size:19px}
+.universal-search-status{color:var(--proteus-muted);font-size:12px;padding:2px 5px}
+#universal-search-results{min-height:0;overflow:auto;overscroll-behavior:contain}
+.universal-search-group{padding:3px 0 7px}
+.universal-search-group h3{padding:6px 8px}
+.universal-search-group button{display:flex;align-items:center;gap:12px;text-align:left;width:100%;min-height:36px;padding:7px 8px;margin:0;border:1px solid transparent;border-radius:6px;background:transparent;color:inherit}
+.universal-search-group button:hover,.universal-search-group button[aria-selected=true]{background:var(--proteus-control-hover)}
+.universal-search-group button[aria-selected=true]{border-color:var(--proteus-line)}
+.universal-search-group button span,.universal-search-group small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.universal-search-group button span{min-width:0}
+.universal-search-group small{margin-left:auto;max-width:52%;color:var(--proteus-muted);font-size:11px;text-align:right}

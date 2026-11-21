@@ -6,6 +6,16 @@ creates its parent directories as part of saving. New workspace-only notes live 
 workspace directory, and globally unassigned notes under the Scratchpad root. Existing legacy
 Unassigned folders/files remain in place. User-created folders are merged into the same browser.
 
+New directories use the workspace and project names. New scratches use the note title as the
+filename, with a numbered suffix for a duplicate. Proteus retains the scratch ID in frontmatter
+and its SQLite index. Title changes update the filename with revision checks. For a single legacy
+filename, use **Use title as filename** in the desktop editor. The owner can preview and migrate
+registered legacy workspace/project folders and indexed note filenames in the configured root.
+The migration checks the preview digest, preserves note bytes and IDs, chooses numbered names
+for collisions, and keeps old Scratchpad links readable in Proteus. External apps use the new
+disk paths. On desktop, Super+P searches
+scratch titles and indexed metadata, including scratches with closed tabs.
+
 The workbench redesign uses Markdown only in its UI, with CodeMirror 6 Live Preview/Source and
 the existing read-only Preview. Legacy `format` wire metadata is retained for compatibility; new
 editing uses Markdown and fenced code blocks. Workspace/project selection is separate; project
@@ -15,7 +25,10 @@ search also matches custom frontmatter, tags and filenames inside other active f
 Desktop scratch tabs have independent view identities and a shared Workspace Files browser in
 compact mode. File selection stays inside that tab; image/PDF viewing uses the existing file viewer.
 Attachment reads remain root-bound, reject symlinks and traversal, and enforce bounded payloads.
-Switches flush the outgoing model and reject obsolete reads; cached views preserve CodeMirror undo.
+Switches flush the outgoing model and reject obsolete reads. Returning to a scratch tab restores
+its chosen note or file, preview mode and reading position. The Document size slider beside
+Delete scratch and trackpad pinch scale content from 75% to 200%. Wrap controls line wrapping in
+source and preview. An enlarged image scrolls independently inside its viewer.
 The selected-file title and file-tree highlight update together. Compact controls use the shared
 refresh artwork and theme-readable filter text. Carets use the current palette's ink in both modes.
 These UI reads do not widen captured-project agent access or ordinary device sharing grants.
@@ -34,7 +47,7 @@ Changing roots keeps the old files and root-bound drafts untouched. The new root
 on the background worker; list reads remain available between scan/index batches and rows appear
 as they are indexed. Large roots show progress. Old-root edits and grants cannot target the new root.
 
-Files live in workspace/project directories with stable identity suffixes. Frontmatter contains
+Files live in workspace/project directories with readable names. Frontmatter contains
 `scratch_id`, `title`, `workspace_id`, `project_id`, `format`, `category`, `created` and `updated`.
 Unknown properties and body text survive normalization. Markdown, text and code are presentation
 modes over the same portable Markdown container. Changing a category changes its frontmatter;

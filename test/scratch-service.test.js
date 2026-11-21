@@ -76,7 +76,7 @@ test('switching storage indexes progressively on the worker and preserves the or
  do {status=await f.service.handle({action:'status'});const rows=await f.service.handle({action:'list'});observations.push({running:status.indexing.running,count:rows.items.length});}while(status.indexing.running);
  assert.equal((await f.service.handle({action:'status'})).indexing.added,240);
  assert.ok(observations.some(row=>row.running),'The initial index is a background job, not a blocking configure call');
- assert.ok(fs.existsSync(path.join(oldRoot,'README.md')));assert.ok(fs.readdirSync(path.join(oldRoot,fs.readdirSync(oldRoot).find(name=>name.startsWith('Personal--')))).length);
+ assert.ok(fs.existsSync(path.join(oldRoot,'README.md')));assert.ok(fs.existsSync(path.join(oldRoot,original.relative)));
  await assert.rejects(f.service.handle({action:'read',id:original.id,rootId:oldBinding}),/storage changed/);
  const imported=(await f.service.handle({action:'list'})).items[0];assert.match((await f.service.handle({action:'read',id:imported.id})).body,/Imported only/);
 });

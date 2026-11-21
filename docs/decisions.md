@@ -1,3 +1,45 @@
+## 2026-11-20 — Hold Electron 45 for the main-process crash
+
+Both Build Mac crash stacks point to Electron's native certificate-error dispatch and
+match [upstream issue #55799](https://github.com/electron/electron/issues/55799).
+Use Electron 44.11.5, a maintained patch of the 44.x branch already used by Proteus 0.2.45.
+Certificate verification and trust settings remain unchanged. Revisit Electron 45 after
+the upstream resolution and fresh browser and conference acceptance.
+
+## 2026-11-18 — OpenRouter model discovery and billing
+
+Keep the API key in the executing owner’s protected store and use the established serial tool
+loop with local approval boundaries. Publish compact status in owner state and deliver the full
+catalog only to a requesting picker. Record the reported charge when each generation settles
+and keep a separate attempted-request count so missing usage remains visible after a failure
+or restart. Keep lists of favorite model IDs with the client’s picker preferences.
+
+## 2026-11-18 — macOS screenshot sharing uses an in-memory tray
+
+MacOS can close the screenshot editor after it opens the Share extension.
+Receive images into Proteus before the user chooses a destination. The signed
+extension and containing app use a dedicated App Group for a loopback endpoint
+and random capability. The request carries a replay ID. Images stay in memory
+until explicitly removed or the app quits. Drops go through the existing
+chat composer, document asset or workspace file boundary. Preview and installed
+bundle identities use separate groups.
+
+## 2026-11-18 — Zoom uses standard browser screen sharing
+
+Use the current Chromium browser identity for secure Zoom pages in default site mode.
+Zoom detects the Electron token and selects its own desktop connector, which is absent
+in ordinary Proteus browser tabs. The web capture path uses the existing Proteus
+screen/window picker and requires an explicit selection for each request. Keep site
+identity scoped to the page and honor an explicit mobile preference.
+
+## 2026-11-17 — desktop browser DNS is application-wide
+
+Use the machine resolver for existing and new installations. Electron applies the resolver
+preference before browser views are created, so the setting belongs to the desktop application
+and takes effect at restart. The encrypted option requires a user-supplied HTTPS endpoint and
+uses Chromium secure mode. Treat the operating system and separate provider processes as
+independent resolver owners.
+
 ## 2026-11-16 — share the desktop owner event stream
 
 The per-origin HTTP/1 connection pool can be exhausted by one long-lived event stream per
@@ -3631,3 +3673,44 @@ for its grammar. Language is chosen from the file name, then from content (sheba
 *type* (text versus binary, encoding) is decided from bytes. Unsupported languages stay plain text
 rather than adding grammars. Saving is a human action that needs the Edit-files grant and the
 identity returned by preview.
+
+## Nov 17 Chats operations data
+
+Detailed views show the current turn while it is active or the latest turn after it ends.
+Active runtime uses owner timing and excludes time spent awaiting the user. Usage displays
+provider-reported input and output for that turn when available. Desktop and web keep stable
+row identities and update visible runtime labels independently of list ordering. Disconnected
+rows display the last owner observation and do not contribute to verified status totals.
+
+## Nov 17 captured source recovery
+
+A run's workspace references are part of its execution context and identify the workspace
+for managed account bindings. Refreshing an idle run resolves the same references before
+committing a new source snapshot. The refresh retains the prior snapshot and captured
+execution permissions. Earlier Chat Details refreshes can recover references from the
+original captured run.
+
+Automatic refresh is opt-in per chat or schedule and follows body edits to already selected
+instructions and skills at the next turn or run. It reads only the captured or catalog-selected
+paths, checks source metadata and records the old and new document hashes. The shared catalog
+and authorization checks remain authoritative for discovery, selection, permissions, tools
+and account bindings.
+
+## Nov 17 iOS browser history persistence
+
+Pending local visits require an atomic encrypted write before owner delivery. The
+offline lookup cache can be rebuilt from the owner and uses a separate write cadence.
+On upgrade, keep the embedded pending visits readable until the new journal is durable.
+An existing journal, including an empty one, is authoritative for pending visits. A
+complete owner refresh replaces that owner's offline coverage after revision and
+destination checks.
+
+## Nov 17 iOS tab journal and snapshots
+
+The journal keeps local tab selections, pending edits and their request envelopes. It
+references an encrypted owner snapshot by slot and commit token. A changed snapshot is
+written to the other slot before the journal changes. If replacement fails, the old
+journal and its referenced snapshot still form a complete commit. New readers detect
+the existing embedded snapshot on upgrade and migrate it at the first write. Journal-only
+writes reuse the current reference. Field rollback restores the verified pre-update
+container with its matching app.

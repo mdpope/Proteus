@@ -38,6 +38,37 @@ test('Life Ask first answer has web search, no app/MCP/shell tools, read-only sa
   f.rpc.notice('turn/completed',{turn:{status:'completed'}});await task;
  }finally{await f.provider.close();}
 });
+test('Life Ask executes scoped reminder and scratch operations and only Obsidian reads without prompting',async()=>{
+ const f=fixture(),invoked=[];
+ f.run.schedule.lifeAsk={requestId:'synthetic'};
+ f.args.ask=async()=>assert.fail('routine Life Ask requested approval');
+ f.provider.lifeAskPolicy=()=>({
+  tools:['proteus_reminders','proteus_scratchpad'].map(name=>({
+   name,description:'Fixture',parameters:{type:'object'},handler:async args=>{invoked.push([name,args.action]);return 'Confirmed';},
+  })),
+  servers:{obsidian:{type:'stdio',command:'/synthetic/obsidianMCP',tools:['search_vault']}},
+  assert(){},assertServer:name=>assert.equal(name,'obsidian'),
+ });
+ try{
+  const task=f.provider.run(f.args);await until(()=>f.provider.active?.turnId);
+  const start=f.rpc.calls.find(row=>row.method==='thread/start').params;
+  assert.deepEqual(start.dynamicTools.map(tool=>tool.name),['proteus_reminders','proteus_scratchpad']);
+  assert.deepEqual(start.config.mcp_servers.obsidian.enabled_tools,['search_vault']);
+  const send=(id,method,params)=>f.rpc.emit('request',{id,method,params:{threadId:'thread',turnId:'turn-1',...params}});
+  send(101,'item/tool/call',{tool:'proteus_reminders',arguments:{action:'list.create'}});
+  send(102,'item/tool/call',{tool:'proteus_scratchpad',arguments:{action:'update'}});
+  for(const [id,name] of [[103,'search_vault'],[104,'delete_note']]){
+   send(id,'mcpServer/elicitation/request',{serverName:'obsidian',mode:'form',
+    message:'Allow the obsidian MCP server to run tool "'+name+'"?',
+    _meta:{codex_approval_kind:'mcp_tool_call',tool_params:{query:'Synthetic'}},requestedSchema:{type:'object'}});
+  }
+  await until(()=>f.rpc.responses.length===4);
+  assert.deepEqual(invoked,[['proteus_reminders','list.create'],['proteus_scratchpad','update']]);
+  assert.equal(f.rpc.responses.find(row=>row.id===103).result.action,'accept');
+  assert.equal(f.rpc.responses.find(row=>row.id===104).result.action,'decline');
+  f.rpc.notice('turn/completed',{turn:{status:'completed'}});await task;
+ }finally{await f.provider.close();}
+});
 test('Life Ask refuses a provider that does not acknowledge read-only confinement',async()=>{
  const f=fixture();f.run.schedule.lifeAsk={requestId:'synthetic'};const request=f.rpc.request.bind(f.rpc);
  f.rpc.request=async(method,params)=>{const result=await request(method,params);if(method==='thread/start')result.sandbox={type:'dangerFullAccess'};return result;};
@@ -46,6 +77,45 @@ test('Life Ask refuses a provider that does not acknowledge read-only confinemen
 test('Life Ask follow-up returns to ordinary chat permissions and output',async()=>{
  const f=fixture();f.run.schedule.lifeAsk={requestId:'synthetic'};f.run.events=[{role:'user',text:'First'},{role:'assistant',text:'Answer'},{role:'user',text:'Follow up'}];
  try{const task=f.provider.run(f.args);await until(()=>f.provider.active?.turnId);const turn=f.rpc.calls.find(row=>row.method==='turn/start').params;assert.equal(turn.outputSchema,undefined);assert.equal(f.rpc.calls.find(row=>row.method==='thread/start').params.config.web_search,'disabled');f.rpc.notice('turn/completed',{turn:{status:'completed'}});await task;}finally{await f.provider.close();}
+});
+test('approved Life Ask continuation gets current native Reminders and Scratchpad without selected workspace MCPs',async()=>{
+ const f=fixture(),calls=[],approvals=[];
+ let answer='decline';
+ f.run.providerSessionId='thread';
+ f.run.schedule.lifeAsk={requestId:'synthetic',actionRequestId:'synthetic'};
+ f.run.events=[{role:'user',text:'Original question'},{role:'assistant',text:'Proposed action'},
+  {role:'user',text:'Previously saved approval prompt',data:{inputOrigin:{kind:'life-ask-approved-action',requestId:'synthetic'}}}];
+ f.provider.browser={
+  reminders:async (args,id)=>{calls.push({args,id});return {record:{name:args.input.name}};},
+  scratchpad:async (args,id)=>{calls.push({args,id});return {id:args.id,revision:'saved'};},
+ };
+ f.args.ask=async request=>{approvals.push(request);return answer;};
+ try{
+  const task=f.provider.run(f.args);await until(()=>f.provider.active?.turnId);
+  const resume=f.rpc.calls.find(row=>row.method==='thread/resume').params;
+  assert.match(resume.developerInstructions,/built-in proteus_reminders and proteus_scratchpad tools/);
+  assert.match(resume.developerInstructions,/require no workspace MCP selection/);
+  assert.equal(resume.config.mcp_servers.unselected.enabled,false);
+  const env=resume.config.mcp_servers.proteus_app.env;
+  const bridge=async value=>{
+   const response=await fetch(env.PROTEUS_DOCUMENT_ENDPOINT,{method:'POST',headers:{authorization:env.PROTEUS_DOCUMENT_CAPABILITY},body:JSON.stringify(value)});
+   assert.equal(response.status,200);
+   return response.json();
+  };
+  const catalog=await bridge({action:'list'});
+  assert.equal(catalog.find(tool=>tool.name==='proteus_reminders').inputSchema.properties.input.properties.name.type,'string');
+  assert.match(catalog.find(tool=>tool.name==='proteus_scratchpad').description,/replaces the whole body/);
+  const reminder={action:'list.create',accountId:'account',input:{name:'Shopping List'},operationId:'10000000-0000-4000-8000-000000000001'};
+  const scratch={action:'update',rootId:'root',id:'scratch',expectedRevision:'before',body:'Edited',operationId:'10000000-0000-4000-8000-000000000002'};
+  assert.equal((await bridge({action:'call',name:'proteus_reminders',arguments:reminder})).resultType,'failure');
+  assert.equal(calls.length,0);
+  answer='approve';
+  assert.equal((await bridge({action:'call',name:'proteus_reminders',arguments:reminder})).record.name,'Shopping List');
+  assert.equal((await bridge({action:'call',name:'proteus_scratchpad',arguments:scratch})).revision,'saved');
+  assert.deepEqual(calls,[{args:reminder,id:'run'},{args:scratch,id:'run'}]);
+  assert.deepEqual(approvals.map(request=>request.details.toolName),['proteus_reminders','proteus_reminders','proteus_scratchpad']);
+  f.rpc.notice('turn/completed',{turn:{status:'completed'}});await task;
+ }finally{await f.provider.close();}
 });
 test('Codex preserves native asynchronous question metadata and clears resolved input requests without answering them',async()=>{
  const f=fixture();let requestSignal;

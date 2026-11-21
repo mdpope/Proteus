@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {validateModelOptions} from '../../models/model-catalog.js';
 import {readJSON} from '../../shared/files.js';
+import {LIFE_ASK_LIMITS} from './life-ask.js';
 
 // The admission claim is the chat identity, not a title or a lookup heuristic.
 // A tombstoned or interrupted chat stays that way until the human reviews it.
@@ -46,7 +47,7 @@ export class LifeAskChats {
   async attachAudio(receipt,run){
     if(!this.attachments||run.events[0]?.data?.attachments?.some(item=>item.sha256===receipt.audioSha256))return;
     const file=path.join(this.store.directory(receipt.requestId),'audio.wav'),stat=fs.lstatSync(file);
-    if(!stat.isFile()||stat.isSymbolicLink()||stat.size!==receipt.audioBytes||stat.size>2_100_000)throw Error('Original Life Ask audio is unavailable.');
+    if(!stat.isFile()||stat.isSymbolicLink()||stat.size!==receipt.audioBytes||stat.size>LIFE_ASK_LIMITS.maxAudioBytes)throw Error('Original Life Ask audio is unavailable.');
     const binding={chatId:run.id,deviceId:'life-ask:'+receipt.requestId,messageId:receipt.requestId,providerId:run.schedule.provider};
     const staged=await this.attachments.begin({...binding,name:'Voice request.wav',mediaType:'audio/wav',size:stat.size,sha256:receipt.audioSha256});
     try{

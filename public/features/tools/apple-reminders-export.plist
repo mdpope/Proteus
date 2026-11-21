@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "https://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key>
+    <string>org.proteusapp.review.proteus.apple-reminders-export</string>
+    <key>CFBundleName</key>
+    <string>Proteus Apple Reminders Export</string>
+    <key>NSRemindersFullAccessUsageDescription</key>
+    <string>Read the lists and reminders you choose to export to a local file.</string>
+    <key>NSRemindersUsageDescription</key>
+    <string>Read Reminders to export a local copy.</string>
+</dict>
+</plist>

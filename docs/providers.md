@@ -1,3 +1,36 @@
+## OpenRouter
+
+Open **Engine Room → Providers → OpenRouter** on the executing desktop and save an OpenRouter
+workspace API key. Proteus verifies it against the key endpoint and uses the owner’s protected
+credential storage. A signed-in OpenRouter website session can manage keys and Activity.
+Remote desktop and iOS clients use the provider on the owner they select. Favorites are stored
+per client. The Model dropdown shows favorites, the current selection, and **Browse models…**. The browser searches
+the live chat catalog by name or ID and shows advertised input/output rates per million tokens.
+
+OpenRouter generally deducts pay-as-you-go charges from prepaid workspace credits. Prices and
+rate limits vary by model and inference endpoint. Free variants have their own rate limits.
+A provider can bill replayed history, output, reasoning, cache operations and media. A single turn
+may send several generations while using tools, and a schedule can accumulate charges unattended.
+Set a spend limit on the OpenRouter key to bound workspace exposure.
+
+**Run Details** adds the actual cost OpenRouter reports for each finished generation. The total
+updates during multi-request runs. A zero means OpenRouter reported zero. An interrupted or
+incomplete response may leave the total partial or unavailable. Check OpenRouter Activity for
+the final account record. For bring-your-own-key configurations, the upstream provider can bill
+its own portion separately. Advertised catalog rates and account credit purchase fees are
+independent of the amount shown in Run Details.
+
+OpenRouter routes model input to an inference endpoint. Model input can include selected
+instructions, conversation history, attachments and tool results. Retention depends on
+OpenRouter and the selected endpoint and account controls. Proteus applies file and MCP
+permissions on the executing owner. Models without advertised tool support receive no tool
+definitions. Text and supported image input are available. Steering and host-managed connection
+injection are currently unavailable with OpenRouter.
+
+[Authentication](https://openrouter.ai/docs/api/reference/authentication) ·
+[Routing and privacy controls](https://openrouter.ai/docs/guides/routing/provider-selection) ·
+[Usage accounting](https://openrouter.ai/docs/cookbook/administration/usage-accounting)
+
 ## Nov 2 — owner catalogs and inference location
 
 Mounted model pickers hydrate from current owner state even when the network cache is fresh.

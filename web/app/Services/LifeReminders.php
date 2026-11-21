@@ -72,7 +72,7 @@ class LifeReminders
         return $value + ['workspaceId' => $row->workspace_id ?? null, 'projectId' => $row->project_id ?? null, 'listId' => $row->list_id, 'title' => $row->title, 'notes' => $row->notes ?? '', 'dueKind' => $row->due_kind, 'dueDate' => $row->due_date ? substr($row->due_date, 0, 10) : null, 'dueAt' => $row->due_at ? CarbonImmutable::parse($row->due_at, 'UTC')->toIso8601String() : null, 'timeZone' => $row->time_zone, 'completedAt' => $stamp($row->completed_at), 'alertScheduled' => $row->due_kind === 'datetime' && ! $row->completed_at && ! $row->deleted_at];
     }
 
-    private function change(User $user, string $id, bool $list = false): array
+    public function change(User $user, string $id, bool $list = false): array
     {
         $record = $this->project($this->rows($user, $list)->where('id', $id)->firstOrFail(), $list);
         DB::table('life_reminder_changes')->insert(['user_id' => $user->id, 'kind' => $list ? 'list' : 'reminder', 'record_json' => json_encode($record, JSON_THROW_ON_ERROR)]);

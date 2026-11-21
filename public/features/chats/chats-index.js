@@ -1,16 +1,18 @@
+import {createOperationControls,createOperationList,operationCategory,operationToolbar,clearOperationFilters} from './operations-list.js';
+import {orderedComputers} from '../../services/remote/computer-order.js';
 import {needsAttention} from './attention-state.js';
 import {previewEnabled} from '../../shared/navigation/desktop-preview.js';
 import {chatMembership} from './chat-membership.js';
 import {computerName,countRunningChats} from '../../services/remote/computer-identity.js';
-import {chatTypes,chatType,chatRunOptions} from './chat-types.js';
+import {chatType} from './chat-types.js';
 let context;
-export function selectScheduleChats(name,host='local'){Object.assign(mainSaved,{type:'scheduled',query:'',schedule:name,host,provider:'',status:'',workspace:'',project:'',after:'',before:'',showArchived:false,filtersOpen:true,scroll:0,limit:100});saved=mainSaved;activeView={};}
+export function selectScheduleChats(name,host='local'){Object.assign(mainSaved,{type:'scheduled',query:'',schedule:name,computers:[host],provider:'',categories:[],workspace:'',project:'',after:'',before:'',showArchived:false,filtersOpen:true,scroll:0,limit:100});saved=mainSaved;activeView={};}
 export function selectChatType(type){mainSaved.type=type;saved=mainSaved;activeView={};}
 
 const $ = selector => document.querySelector(selector);
-const mainSaved = { type:'user', query:'', host:'', provider:'', status:'', workspace:'', project:'', schedule:'', after:'', before:'', showArchived:false,filtersOpen:true,scroll:0,limit:100 };
+const mainSaved = { type:'all', query:'', computers:[], provider:'', categories:[], layout:'cards', workspace:'', project:'', schedule:'', after:'', before:'', showArchived:false,filtersOpen:true,scroll:0,limit:100 };
 let saved=mainSaved,activeView={};const workspaceViews=new Map();
-let refreshTimer,detachIndexScroll=null,indexLoaded=false,indexGeneration=0;
+let refreshTimer,mountedIndex,indexLoaded=false,indexGeneration=0;
 const reviewedRows=new Map();
 const rowKey=row=>String(row.hostId||'local')+':'+(row.chatId||row.id);
 export function reconcileIndexedChat(row){indexGeneration++;reviewedRows.set(rowKey(row),{...row});snapshot.items=snapshot.items.map(item=>rowKey(item)===rowKey(row)?{...item,...row}:item);context?.onIndexChanged?.();}
@@ -41,16 +43,16 @@ function lifecycleMenu(row,anchor){
 export function recentChats(localRuns = [],includeArchived = false) {
   const rows = indexLoaded ? snapshot.items : localRuns.filter(run=>includeArchived||!run.archivedAt).map(run => ({
     ...chatMembership(run),projectId:run.projectId,projectName:run.projectName,scheduleName:run.trigger==='chat'?'':run.schedule?.name,provider:run.schedule?.provider,model:run.schedule?.model,reasoningEffort:run.schedule?.reasoningEffort,serviceTier:run.schedule?.serviceTier,trigger:run.trigger,chatType:run.chatType,hostId:'local', chatId:run.id, title:run.title, titleRevision:run.titleRevision, status:run.status,
-    updatedAt:run.updatedAt || run.createdAt,lastActivityAt:run.lastActivityAt,archivedAt:run.archivedAt||null,archived:!!run.archivedAt,destinationName:computerName(context?.state?.data?.hostName), local:true,attentionRequired:run.attentionRequired??needsAttention(run)
+    operation:run.operation,updatedAt:run.updatedAt || run.createdAt,lastActivityAt:run.lastActivityAt,archivedAt:run.archivedAt||null,archived:!!run.archivedAt,destinationName:computerName(context?.state?.data?.hostName), local:true,attentionRequired:run.attentionRequired??needsAttention(run)
   }));
   const localById=new Map(localRuns.map(run=>[run.id,run]));
   const current=rows.map(row=>{
     const live=(row.local||row.hostId==='local')&&localById.get(row.chatId||row.id);
-    if(live)row={...row,scheduleName:live.trigger==='chat'?'':live.schedule?.name,provider:live.schedule?.provider,model:live.schedule?.model,reasoningEffort:live.schedule?.reasoningEffort,serviceTier:live.schedule?.serviceTier,...chatMembership(live),projectId:live.projectId,projectName:live.projectName,title:live.title,titleRevision:live.titleRevision,trigger:live.trigger,chatType:live.chatType,status:live.status,updatedAt:live.updatedAt,lastActivityAt:live.lastActivityAt===undefined?row.lastActivityAt:live.lastActivityAt,archivedAt:live.archivedAt||null,failureEventAt:live.failureEventAt||null,failureReviewedAt:live.failureReviewedAt||null,attentionRequired:live.attentionRequired??needsAttention(live)};
+    if(live)row={...row,operation:live.operation,scheduleName:live.trigger==='chat'?'':live.schedule?.name,provider:live.schedule?.provider,model:live.schedule?.model,reasoningEffort:live.schedule?.reasoningEffort,serviceTier:live.schedule?.serviceTier,...chatMembership(live),projectId:live.projectId,projectName:live.projectName,title:live.title,titleRevision:live.titleRevision,trigger:live.trigger,chatType:live.chatType,status:live.status,updatedAt:live.updatedAt,lastActivityAt:live.lastActivityAt===undefined?row.lastActivityAt:live.lastActivityAt,archivedAt:live.archivedAt||null,failureEventAt:live.failureEventAt||null,failureReviewedAt:live.failureReviewedAt||null,attentionRequired:live.attentionRequired??needsAttention(live)};
     const reviewed=reviewedRows.get(rowKey(row));
     if(reviewed){if(row.failureEventAt&&reviewed.failureEventAt&&row.failureEventAt!==reviewed.failureEventAt&&Date.parse(row.failureEventAt)>Date.parse(reviewed.failureEventAt))reviewedRows.delete(rowKey(row));else if(['failed','interrupted'].includes(row.status)&&(Date.parse(row.updatedAt||0)<=Date.parse(reviewed.updatedAt||0)||(row.failureEventAt&&row.failureEventAt===reviewed.failureEventAt)))row={...row,attentionRequired:reviewed.attentionRequired,failureReviewedAt:reviewed.failureReviewedAt};}
     const host=snapshot.hosts.find(host=>(host.id||host.hostId)===row.hostId);
-    return {...row,destinationName:row.local?computerName(context?.state?.data?.hostName,row.destinationName):computerName(host?.name,row.destinationName),cached:row.cached===true||(!row.local&&row.hostId!=='local'&&host?.online===false),lastSyncAt:row.lastSyncAt||host?.lastSyncAt};
+    return {...row,destinationName:row.local?computerName(context?.state?.data?.hostName,row.destinationName):computerName(host?.name,row.destinationName),cached:row.cached===true||(!row.local&&row.hostId!=='local'&&(host?.online!==true||host?.loading===true)),lastSyncAt:row.lastSyncAt||host?.lastSyncAt,ownerObservedAt:host?.ownerObservedAt,clockOffset:host?.clockOffset};
   });
   return current.filter(row=>includeArchived||!row.archivedAt).slice().sort((a,b) => (Date.parse(b.updatedAt || 0)-Date.parse(a.updatedAt || 0)) ||
     String(a.hostId).localeCompare(String(b.hostId)) || String(a.chatId).localeCompare(String(b.chatId)));
@@ -60,10 +62,10 @@ export function runningChats(localRuns=[]) {
   const hostIds=new Set([...snapshot.hosts.filter(h=>!h.local&&h.id!==context?.state?.data?.hostId).map(h=>h.id),...rows.filter(r=>!r.local&&r.hostId!=='local').map(r=>r.hostId)]);
   return local+[...hostIds].reduce((sum,id)=>{const host=snapshot.hosts.find(h=>h.id===id);if(host?.online===false)return sum;return sum+(Number.isSafeInteger(host?.runningChatCount)?host.runningChatCount:countRunningChats(rows.filter(r=>!r.local&&r.hostId===id)));},0);
 }
-export async function loadChatsIndex() {
+export async function loadChatsIndex({force=false}={}) {
   if (loading) return snapshot;
   loading = true;
-  try {const generation=indexGeneration;const next=await context.api('/api/chats/index'+(saved.showArchived?'?includeArchived=1':''));if(generation===indexGeneration){snapshot=next;if(mainSaved.host==='local'){const own=snapshot.items.find(row=>row.local);if(own)mainSaved.host=own.hostId;}indexLoaded=true;context.onIndexChanged?.();}}
+  try {const generation=indexGeneration;const next=await context.api('/api/chats/index?'+new URLSearchParams({...((saved.showArchived)?{includeArchived:'1'}:{}),...(force?{force:'1'}:{})}));if(generation===indexGeneration){snapshot=next;if(mainSaved.computers.includes('local')){const own=snapshot.hosts.find(host=>host.id===context.state.data.hostId);if(own)mainSaved.computers=mainSaved.computers.map(id=>id==='local'?own.id:id);}indexLoaded=true;context.onIndexChanged?.();}}
   finally { loading = false; }
   return snapshot;
 }
@@ -77,42 +79,106 @@ export async function openIndexedChat(row) {
   }
   context.openRemote(row.hostId, row.chatId || row.id, row.title);
 }
+
 export function renderChatsIndex(attention = false, fetchNow = true, view = {}) {
-  activeView=view;const viewKey=view.scopeKey||(view.workspaceId?view.hostId+':'+view.workspaceId+':'+(view.projectId||''):null);
-  if(viewKey&&!workspaceViews.has(viewKey))workspaceViews.set(viewKey,{...mainSaved,type:'all',query:'',host:'',workspace:'',project:'',scroll:0});saved=viewKey?workspaceViews.get(viewKey):mainSaved;
-  const currentSaved=saved;const main = view.container||$('#main');
-  // One page-level scroll surface: the enclosing #main scroller (or the container itself).
-  const scroller=(view.container||$('#main'))?.closest('#main')||view.container||$('#main');
-  detachIndexScroll?.();detachIndexScroll=null;
-  if ($('#chat-index-rows')&&scroller) saved.scroll = scroller.scrollTop;
-  const allRows=attention?attentionChats(context.state.data.runs):recentChats(context.state.data.runs,saved.showArchived);
-  const rows = view.workspaceId?allRows.filter(r=>r.workspaceId===view.workspaceId&&(r.local?'local':r.hostId)===view.hostId&&(!view.projectId||r.projectId===view.projectId)):view.workspaceOnly?allRows.filter(r=>r.workspaceId):allRows;
-  const hosts = [...new Map(rows.map(row => [row.hostId, row.destinationName || row.hostId])).entries()];
-  const options = (values,current) => values.map(([value,label]) => `<option value="${context.escape(value)}" ${value===current?'selected':''}>${context.escape(label)}</option>`).join('');
-  main.innerHTML = `<section class="chat-index-page"><div class="heading"><div><div class="eyebrow">${view.workspaceId?context.escape(view.workspaceName):attention?'Needs attention':'All connected computers'}</div><h1>${attention?'Ready for your input.':'Chats'}</h1></div><button id="chat-index-refresh">Refresh</button></div>
-    ${!attention?`<div class="chat-type-tabs" role="tablist" aria-label="Chat types">${(view.workspaceId||view.workspaceOnly?[['all','All'],...chatTypes]:chatTypes).map(([id,label])=>`<button role="tab" aria-selected="${saved.type===id}" data-chat-type="${id}">${label}</button>`).join('')}</div>`:''}
-    ${snapshot.partial ? '<p class="banner">Some computers are offline. Cached statuses are unverified and excluded from Needs attention; inspect them in Chats.</p>' : ''}
-    <details class="chat-index-filter-panel" ${saved.filtersOpen?'open':''}><summary>Filters</summary><div class="chat-index-filters"><label>Search<input id="chat-index-query" type="search" value="${context.escape(saved.query)}" placeholder="Search chat titles"></label><label>computer<select id="chat-index-host"><option value="">All computers</option>${options(hosts,saved.host)}</select></label><label>Provider<select id="chat-index-provider"><option value="">All providers</option>${options([...new Set(rows.map(r=>r.provider).filter(Boolean))].map(v=>[v,v]),saved.provider)}</select></label><label>Status<select id="chat-index-status"><option value="">All statuses</option>${options([...new Set(rows.map(r=>r.status).filter(Boolean))].map(v=>[v,v.replaceAll('_',' ')]),saved.status)}</select></label><label>Workspace<select id="chat-index-workspace" ${view.workspaceId?'disabled':''}><option value="">${view.workspaceId?context.escape(view.workspaceName):'All workspaces'}</option>${options([...new Map(rows.filter(r=>r.workspaceId).map(r=>[(r.local?'local':r.hostId)+':'+r.workspaceId,(r.workspaceName||r.workspaceId)+' · '+(r.destinationName||r.hostId)])).entries()],saved.workspace)}</select></label>${previewEnabled(context.state)?`<label>Project<select id="chat-index-project" ${view.projectId?'disabled':''}><option value="">${view.projectId?context.escape(view.projectName):'All projects'}</option>${options([...new Map(rows.filter(r=>r.projectId).map(r=>[r.projectId,r.projectName||r.projectId])).entries()],saved.project||'')}</select></label>`:''}<label>Schedule<select id="chat-index-schedule"><option value="">All schedules</option>${options([...new Set(rows.map(r=>r.scheduleName).filter(Boolean))].map(v=>[v,v]),saved.schedule)}</select></label><label>From date<input id="chat-index-after" type="date" value="${context.escape(saved.after)}"></label><label>Through date<input id="chat-index-before" type="date" value="${context.escape(saved.before)}"></label><label class="archive-switch"><input id="chat-index-show-archived" role="switch" type="checkbox" ${saved.showArchived?'checked':''}><span>Show Archived</span></label></div></details><div id="chat-index-rows" class="chat-index-rows" tabindex="0" aria-label="Chats"></div></section>`;
-  const paint = () => {
-    const query = saved.query.toLocaleLowerCase();
-    const dateKey=value=>{try{return new Intl.DateTimeFormat('en-CA',{timeZone:context.state.data.settings.timezone,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(value));}catch{return '';}};
-    const visible = rows.filter(r => (attention||saved.type==='all'||chatType(r)===saved.type) && (!saved.after || dateKey(r.updatedAt)>=saved.after) && (!saved.before || dateKey(r.updatedAt)<=saved.before) && (!query || [r.title,r.provider,r.destinationName,r.workspaceName,r.scheduleName].some(v=>String(v||'').toLocaleLowerCase().includes(query))) && (!saved.host || r.hostId===saved.host) && (!saved.provider || r.provider===saved.provider) && (!saved.status || r.status===saved.status) && (!saved.workspace || (r.local?'local':r.hostId)+':'+r.workspaceId===saved.workspace) && (!saved.project || r.projectId===saved.project) && (!saved.schedule || r.scheduleName===saved.schedule));
-    const area = $('#chat-index-rows'); area.innerHTML = visible.slice(0,saved.limit).map((row,index) => `<button class="chat-index-row" data-chat-index="${index}" title="${context.escape(row.title||'Chat')}"><strong>${row.status==='running'?'<span class="spinner" role="status" aria-label="Running"></span>':''}${context.escape(row.title||'Chat')}</strong><span class="chat-run-options"><span>${context.escape(chatRunOptions(row).provider)} · ${context.escape(chatRunOptions(row).model)}</span><small>${context.escape(chatRunOptions(row).detail)}</small></span><span class="chat-computer"><span class="pill">${context.escape(row.destinationName||row.hostId||'This computer')}</span><small>${context.escape((row.status||'').replaceAll('_',' '))}</small></span>${previewEnabled(context.state)&&row.projectId?`<span class="chat-index-project-label">${context.escape(row.workspaceName||'')} / ${context.escape(row.projectName||row.projectId)}</span>`:''}${row.archivedAt?'<span class="pill">Archived</span>':''}<time>${context.escape(context.time(row.updatedAt))}</time>${row.cached?'<small>Cached · last synced '+context.escape(context.time(row.lastSyncAt))+'</small>':''}</button>`).join('') || '<p class="empty">No chats match these filters.</p>';
-    area.dataset.more=String(visible.length>saved.limit);
-    area.insertAdjacentHTML('beforeend',visible.length?`<p class="chat-index-status note" role="status">${visible.length>saved.limit?`Showing ${Math.min(saved.limit,visible.length)} of ${visible.length} · scroll for more`:`${visible.length} ${visible.length===1?'chat':'chats'} · end of list`}</p>`:'<p class="chat-index-status note" role="status">No chats match these filters.</p>');
-    area.querySelectorAll('[data-chat-index]').forEach(button => {const row=visible[Number(button.dataset.chatIndex)];button.onclick=()=>(view.onOpen||openIndexedChat)(row);button.oncontextmenu=event=>{event.preventDefault();lifecycleMenu(row,button);};button.onkeydown=event=>{if(event.key==='ContextMenu'||event.key==='F10'&&event.shiftKey){event.preventDefault();lifecycleMenu(row,button);}};});
-  };
-  for(const [id,key] of [['query','query'],['host','host'],['provider','provider'],['status','status'],['workspace','workspace'],['schedule','schedule'],['after','after'],['before','before']]) $('#chat-index-'+id).addEventListener(id==='query'?'input':'change',event=>{saved[key]=event.target.value;paint();});
-  $('#chat-index-project')?.addEventListener('change',event=>{saved.project=event.target.value;paint();});
-  $('#chat-index-show-archived').onchange=async event=>{saved.showArchived=event.target.checked;try{await loadChatsIndex();renderChatsIndex(attention,false,view);}catch(error){context.toast(error.message);}};
-  $('#chat-index-refresh').onclick = async () => { try { await loadChatsIndex(); renderChatsIndex(attention, false,view); } catch(error) { context.toast(error.message); } };
-  main.querySelectorAll('[data-chat-type]').forEach(button=>button.onclick=()=>{saved.type=button.dataset.chatType;saved.scroll=0;renderChatsIndex(attention,false,view);});
-  main.querySelector('.chat-index-filter-panel').ontoggle=event=>{saved.filtersOpen=event.target.open;};
-  // Append the next page when the page scroller nears the end. Appending keeps the current
-  // offset; one listener per rendered view, released on the next render or navigation.
-  const onScroll=()=>{const area=$('#chat-index-rows');if(!area?.isConnected||activeView!==view||saved!==currentSaved){detachIndexScroll?.();detachIndexScroll=null;return;}saved.scroll=scroller.scrollTop;if(area.dataset.more==='true'&&area.getBoundingClientRect().bottom-scroller.getBoundingClientRect().bottom<240){const top=scroller.scrollTop;saved.limit+=100;paint();scroller.scrollTop=top;}};
-  scroller.addEventListener('scroll',onScroll,{passive:true});detachIndexScroll=()=>scroller.removeEventListener('scroll',onScroll);
-  paint(); scroller.scrollTop = saved.scroll;
-  clearTimeout(refreshTimer);const poll=()=>{if(!main.isConnected||activeView!==view||!$('#chat-index-rows'))return;if(document.activeElement?.matches('#main input,#main select')){refreshTimer=setTimeout(poll,5000);return;}const prior=indexSignature();void loadChatsIndex().then(()=>{if(!main.isConnected||activeView!==view||!$('#chat-index-rows'))return;if(indexSignature()===prior){refreshTimer=setTimeout(poll,5000);return;}renderChatsIndex(attention,false,view);}).catch(()=>{refreshTimer=setTimeout(poll,5000);});};refreshTimer=setTimeout(poll,5000);
-  if (fetchNow) void loadChatsIndex().then(() => { if (main.isConnected&&activeView===view&&$('#chat-index-rows')) renderChatsIndex(attention, false,view); }).catch(error => { if ($('#chat-index-rows')) $('#chat-index-rows').insertAdjacentHTML('afterbegin',`<p class="banner">${context.escape(error.message)}</p>`); });
+ activeView=view;
+ const viewKey=view.scopeKey||(view.workspaceId?view.hostId+':'+view.workspaceId+':'+(view.projectId||''):null);
+ if(viewKey&&!workspaceViews.has(viewKey))workspaceViews.set(viewKey,{...mainSaved,type:'all',query:'',computers:[],categories:[],workspace:'',project:'',scroll:0});
+ saved=viewKey?workspaceViews.get(viewKey):mainSaved;
+ const main=view.container||$('#main'),currentSaved=saved;
+ const scope=JSON.stringify([viewKey,attention,!!view.workspaceOnly]);
+ if(mountedIndex?.main===main&&mountedIndex.scope===scope&&mountedIndex.root.isConnected){
+  mountedIndex.view=view;
+  mountedIndex.paint();
+  return;
+ }
+ mountedIndex?.dispose();
+ const scroller=main.closest('#main')||main;
+ const find=selector=>main.querySelector(selector);
+ const e=context.escape;
+ main.innerHTML=`<section class="chat-index-page">${operationToolbar(currentSaved,{attention,workspace:view.workspaceId,project:view.projectId,escape:e})}
+ <div id="chat-index-rows" class="chat-index-rows" tabindex="0" aria-label="Chats"></div></section>`;
+ const root=find('.chat-index-page'),area=find('#chat-index-rows');
+ const list=createOperationList(area,{key:rowKey,scroller,time:context.time,onOpen:row=>(mountedIndex?.view.onOpen||openIndexedChat)(row),
+  onMenu:lifecycleMenu,decorate:(node,row)=>{node.dataset.chatIndex=rowKey(row);}});
+ const controls=createOperationControls(root,currentSaved,()=>paint());
+ const optionSignatures=new Map();
+ const setChoices=(name,label,values)=>{
+  const node=find('#chat-index-'+name),entries=[['',label],...values];
+  const signature=JSON.stringify(entries);
+  if(optionSignatures.get(name)!==signature){
+   node.replaceChildren(...entries.map(([value,label])=>new Option(label,value)));
+   optionSignatures.set(name,signature);
+  }
+  const desired=currentSaved[name]||'';
+  if(node.value!==desired)node.value=desired;
+ };
+ const paint=()=>{
+  const scopeView=mountedIndex.view,filter=currentSaved;
+  const all=attention?attentionChats(context.state.data.runs):recentChats(context.state.data.runs,filter.showArchived);
+  const rows=scopeView.workspaceId?all.filter(row=>row.workspaceId===scopeView.workspaceId&&(row.local?'local':row.hostId)===scopeView.hostId&&(!scopeView.projectId||row.projectId===scopeView.projectId))
+   :scopeView.workspaceOnly?all.filter(row=>row.workspaceId):all;
+  const hosts=new Map(snapshot.hosts.map(host=>[host.id,{id:host.id,label:host.name,online:host.online===true&&!host.loading}]));
+  for(const row of rows)if(!hosts.has(row.hostId))hosts.set(row.hostId,{id:row.hostId,label:row.destinationName||row.hostId,online:row.local});
+  const distinct=key=>[...new Set(rows.map(row=>row[key]).filter(Boolean))].sort().map(value=>[value,value]);
+  const workspaceKey=row=>(row.local?'local':row.hostId)+':'+row.workspaceId;
+  setChoices('provider','All providers',distinct('provider'));
+  setChoices('workspace',scopeView.workspaceName||'All workspaces',[...new Map(rows.filter(row=>row.workspaceId).map(row=>[workspaceKey(row),row.workspaceName||row.workspaceId]))]);
+  setChoices('project',scopeView.projectName||'All projects',[...new Map(rows.filter(row=>row.projectId).map(row=>[row.projectId,row.projectName||row.projectId]))]);
+  setChoices('schedule','All schedules',distinct('scheduleName'));
+  const query=filter.query.toLocaleLowerCase();
+  const formatter=filter.after||filter.before?new Intl.DateTimeFormat('en-CA',{timeZone:context.state.data.settings.timezone,year:'numeric',month:'2-digit',day:'2-digit'}):null;
+  const pool=rows.filter(row=>{
+   if(!attention&&filter.type!=='all'&&chatType(row)!==filter.type)return false;
+   if(filter.computers.length&&!filter.computers.includes(row.hostId))return false;
+   if(filter.provider&&row.provider!==filter.provider||filter.workspace&&workspaceKey(row)!==filter.workspace||
+      filter.project&&row.projectId!==filter.project||filter.schedule&&row.scheduleName!==filter.schedule)return false;
+   if(query&&![row.title,row.provider,row.model,row.destinationName,row.workspaceName,row.projectName,row.scheduleName,row.operation?.action].some(value=>String(value||'').toLocaleLowerCase().includes(query)))return false;
+   if(formatter){
+    const stamp=Date.parse(row.updatedAt||row.createdAt);
+    if(!Number.isFinite(stamp))return false;
+    const date=formatter.format(stamp);
+    if(filter.after&&date<filter.after||filter.before&&date>filter.before)return false;
+   }
+   return true;
+  });
+  const now=Date.now();
+  controls.paint(orderedComputers(hosts.values(),context.state.data.settings?.preferences?.computerOrder,context.state.data.hostId),pool,now);
+  root.querySelectorAll('[data-chat-type]').forEach(button=>button.setAttribute('aria-selected',String(button.dataset.chatType===filter.type)));
+  list.paint(pool.filter(row=>!filter.categories.length||filter.categories.includes(operationCategory(row,now))),{...filter,now});
+ };
+ const onScroll=()=>{
+  if(!root.isConnected)return;
+  currentSaved.scroll=scroller.scrollTop;
+  if(area.dataset.more==='true'&&area.getBoundingClientRect().bottom-scroller.getBoundingClientRect().bottom<240){
+   const top=scroller.scrollTop;currentSaved.limit+=100;paint();scroller.scrollTop=top;
+  }
+ };
+ scroller.addEventListener('scroll',onScroll,{passive:true});
+ const instance={main,root,scope,view,paint,dispose:()=>{
+  controls.dispose();list.dispose();clearTimeout(refreshTimer);scroller.removeEventListener('scroll',onScroll);
+ }};
+ mountedIndex=instance;
+ const reload=async({force=false}={})=>{
+  await loadChatsIndex({force});
+  if(instance===mountedIndex&&root.isConnected)paint();
+ };
+ const read=(force=false)=>void reload({force}).catch(error=>{if(root.isConnected)context.toast(error.message);});
+ for(const key of ['query','provider','workspace','project','schedule','after','before']){
+  find('#chat-index-'+key).addEventListener(key==='query'?'input':'change',event=>{currentSaved[key]=event.target.value;paint();});
+ }
+ find('#chat-index-show-archived').onchange=event=>{currentSaved.showArchived=event.target.checked;paint();read();};
+ find('#chat-index-clear').onclick=()=>{const archived=clearOperationFilters(root,currentSaved);paint();if(archived)read();};
+ find('#chat-index-refresh').onclick=()=>read(true);
+ root.querySelectorAll('[data-chat-type]').forEach(button=>button.onclick=()=>{currentSaved.type=button.dataset.chatType;paint();});
+ find('.chat-index-filter-panel').ontoggle=event=>{currentSaved.filtersOpen=event.target.open;};
+ paint();scroller.scrollTop=currentSaved.scroll;
+ const poll=async()=>{
+  if(instance!==mountedIndex||!root.isConnected)return;
+  const prior=indexSignature();
+  try{await loadChatsIndex();if(instance===mountedIndex&&root.isConnected&&indexSignature()!==prior)paint();}catch{}
+  if(instance===mountedIndex&&root.isConnected)refreshTimer=setTimeout(poll,5000);
+ };
+ refreshTimer=setTimeout(poll,5000);
+ if(fetchNow)read();
 }

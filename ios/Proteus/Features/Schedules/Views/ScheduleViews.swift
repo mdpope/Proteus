@@ -48,6 +48,7 @@ struct ScheduleView: View {
     @State private var serviceTier = ""
     @State private var enabled = false
     @State private var notifyCompletion = false
+    @State private var autoRefreshSources = false
     @State private var selected = Set<String>()
     @State private var agent = ""
     @State private var includeDefaults = true
@@ -56,7 +57,7 @@ struct ScheduleView: View {
     @State private var capabilityMessage = ""
     @State private var busy = false
     @State private var loadedForm: [String] = []
-    private var formValues: [String] { [name, cron, timezone, prompt, provider, model, effort, contextTier, serviceTier, String(enabled), String(notifyCompletion), selected.sorted().joined(separator: ","), agent, String(includeDefaults)] }
+    private var formValues: [String] { [name, cron, timezone, prompt, provider, model, effort, contextTier, serviceTier, String(enabled), String(notifyCompletion), String(autoRefreshSources), selected.sorted().joined(separator: ","), agent, String(includeDefaults)] }
     private var schedule: JSON { store.state["schedules"].array.first { $0["id"].string == id } ?? .null }
     private var managed: Bool { schedule["integration"]["type"].string == "omi" }
     private var owned: Bool { managed || !schedule["source"]["manifest"].string.isEmpty }
@@ -80,6 +81,9 @@ struct ScheduleView: View {
                 if !capabilityMessage.isEmpty { Text(capabilityMessage).font(.caption).foregroundStyle(.secondary) }
             }.disabled(busy || !store.connected || owned && !store.state["capabilities"].array.contains(.string("schedule.access-profile.v1")))
             ContextSelection(selected: $selected, agent: $agent, includeDefaults: $includeDefaults, workspace: schedule["workspace"]).disabled(owned || busy)
+            if !owned && store.state["capabilities"].array.contains(.string("context.auto-refresh.v1")) {
+                Toggle("Refresh instruction and skill edits automatically", isOn: $autoRefreshSources).disabled(busy)
+            }
             Section("Next runs") { ForEach(next, id: \.self) { Text($0.string).font(.caption.monospaced()) }; Button("Preview cron") { preview() }.disabled(busy || !store.connected) }
             Section { Button("Save schedule") { save() }.disabled(busy || !store.connected); Button("Reload latest version") { Task { await store.refresh(); load() } } }
             if !schedule["error"].string.isEmpty { Section { Text(schedule["error"].string).foregroundStyle(.orange) } }
@@ -90,15 +94,40 @@ struct ScheduleView: View {
         let selected = provider
         do { let value = try await store.request("schedule.capabilities", ["id": .string(id), "provider": .string(selected)]); guard provider == selected else { return }; capabilityMessage = value["supported"].bool ? (value["required"]["scopedFilesystem"].bool ? "Verified host sandbox: fixed folder scope, denied network and credential services. Saved grants carry across providers; new access requires explicit consent." : "Saved workflow access carries across providers. New access requires explicit consent.") : "This provider cannot enforce the required restrictions. The previous valid configuration is retained on failed save." } catch { capabilityMessage = error.localizedDescription }
     }
-    private func load() { provider = schedule["provider"].string; model = schedule["model"].string; effort = schedule["reasoningEffort"].string; serviceTier = schedule["serviceTier"].string; contextTier = schedule["contextTier"].string.isEmpty ? "default" : schedule["contextTier"].string; name = schedule["name"].string; cron = schedule["cron"].string; timezone = schedule["timezone"].string; prompt = schedule["prompt"].string; enabled = schedule["enabled"].bool; notifyCompletion = schedule["notifications"]["onCompletion"].bool; expectedRevision = schedule["revision"].string; next = schedule["nextRuns"].array; selected = Set(schedule["contextSelection"]["selectedIds"].array.map(\.string)); agent = schedule["contextSelection"]["agentId"].string; includeDefaults = schedule["contextSelection"]["includeDefaults"] != .bool(false); loadedForm = formValues }
-    private var scheduleDraft: JSON { .object(["name": .string(name), "cron": .string(cron), "timezone": .string(timezone), "prompt": .string(prompt), "provider": .string(provider), "model": .string(model), "effort": .string(effort), "contextTier": .string(contextTier), "serviceTier": .string(serviceTier), "enabled": .bool(enabled), "notifyCompletion": .bool(notifyCompletion), "selected": .array(selected.sorted().map(JSON.string)), "agent": .string(agent), "includeDefaults": .bool(includeDefaults), "revision": .string(expectedRevision)]) }
-    private func restoreDraft(_ value: JSON) { name = value["name"].string; cron = value["cron"].string; timezone = value["timezone"].string; prompt = value["prompt"].string; provider = value["provider"].string; model = value["model"].string; effort = value["effort"].string; contextTier = value["contextTier"].string; serviceTier = value["serviceTier"].string; enabled = value["enabled"].bool; notifyCompletion = value["notifyCompletion"].bool; selected = Set(value["selected"].array.map(\.string)); agent = value["agent"].string; includeDefaults = value["includeDefaults"] != .bool(false); expectedRevision = value["revision"].string }
+    private func load() { provider = schedule["provider"].string; model = schedule["model"].string; effort = schedule["reasoningEffort"].string; serviceTier = schedule["serviceTier"].string; contextTier = schedule["contextTier"].string.isEmpty ? "default" : schedule["contextTier"].string; name = schedule["name"].string; cron = schedule["cron"].string; timezone = schedule["timezone"].string; prompt = schedule["prompt"].string; enabled = schedule["enabled"].bool; notifyCompletion = schedule["notifications"]["onCompletion"].bool; autoRefreshSources = schedule["autoRefreshSources"].bool; expectedRevision = schedule["revision"].string; next = schedule["nextRuns"].array; selected = Set(schedule["contextSelection"]["selectedIds"].array.map(\.string)); agent = schedule["contextSelection"]["agentId"].string; includeDefaults = schedule["contextSelection"]["includeDefaults"] != .bool(false); loadedForm = formValues }
+    private var scheduleDraft: JSON { .object(["name": .string(name), "cron": .string(cron), "timezone": .string(timezone), "prompt": .string(prompt), "provider": .string(provider), "model": .string(model), "effort": .string(effort), "contextTier": .string(contextTier), "serviceTier": .string(serviceTier), "enabled": .bool(enabled), "notifyCompletion": .bool(notifyCompletion), "autoRefreshSources": .bool(autoRefreshSources), "selected": .array(selected.sorted().map(JSON.string)), "agent": .string(agent), "includeDefaults": .bool(includeDefaults), "revision": .string(expectedRevision)]) }
+    private func restoreDraft(_ value: JSON) { name = value["name"].string; cron = value["cron"].string; timezone = value["timezone"].string; prompt = value["prompt"].string; provider = value["provider"].string; model = value["model"].string; effort = value["effort"].string; contextTier = value["contextTier"].string; serviceTier = value["serviceTier"].string; enabled = value["enabled"].bool; notifyCompletion = value["notifyCompletion"].bool; autoRefreshSources = value["autoRefreshSources"].bool; selected = Set(value["selected"].array.map(\.string)); agent = value["agent"].string; includeDefaults = value["includeDefaults"] != .bool(false); expectedRevision = value["revision"].string }
     private func preview() { busy = true; Task { defer { busy = false }; do { next = try await store.request("schedule.preview", ["cron": .string(cron), "timezone": .string(timezone)])["nextRuns"].array } catch { store.error = error.localizedDescription } } }
     private var contextSelection: JSON {
         var value = schedule["contextSelection"].object; var ids = selected; if !agent.isEmpty { ids.insert(agent) }
         value["selectedIds"] = .array(ids.sorted().map(JSON.string)); value["agentId"] = .string(agent); value["includeDefaults"] = .bool(includeDefaults); return .object(value)
     }
     private var notificationSettings: JSON { var value = schedule["notifications"].object; value["onCompletion"] = .bool(notifyCompletion); return .object(value) }
-    private func save() { busy = true; Task { defer { busy = false }; do { _ = try await store.request("schedule.save", ["id": .string(id), "expectedRevision": .string(expectedRevision), "changes": .object(owned ? ["provider": .string(provider), "model": .string(model), "reasoningEffort": .string(effort), "contextTier": .string(contextTier), "serviceTier": .string(serviceTier)] : ["name": .string(name), "provider": .string(provider), "model": .string(!["rehearsal", "local-process"].contains(provider) ? model : ""), "reasoningEffort": .string(effort), "contextTier": .string(contextTier), "serviceTier": .string(serviceTier), "cron": .string(cron), "timezone": .string(timezone), "prompt": .string(prompt), "enabled": .bool(enabled), "notifications": notificationSettings, "contextSelection": contextSelection])]); await store.refresh(); load() } catch { store.error = error.localizedDescription } } }
+    private func save() {
+        busy = true
+        Task {
+            defer { busy = false }
+            var changes: [String: JSON] = [
+                "provider": .string(provider), "model": .string(model), "reasoningEffort": .string(effort),
+                "contextTier": .string(contextTier), "serviceTier": .string(serviceTier)
+            ]
+            if !owned {
+                changes.merge([
+                    "name": .string(name), "cron": .string(cron), "timezone": .string(timezone),
+                    "prompt": .string(prompt), "enabled": .bool(enabled), "notifications": notificationSettings,
+                    "contextSelection": contextSelection
+                ]) { _, new in new }
+                if ["rehearsal", "local-process"].contains(provider) { changes["model"] = .string("") }
+                if store.state["capabilities"].array.contains(.string("context.auto-refresh.v1")) {
+                    changes["autoRefreshSources"] = .bool(autoRefreshSources)
+                }
+            }
+            do {
+                _ = try await store.request("schedule.save", ["id": .string(id), "expectedRevision": .string(expectedRevision), "changes": .object(changes)])
+                await store.refresh()
+                load()
+            } catch { store.error = error.localizedDescription }
+        }
+    }
     private func run() { busy = true; Task { defer { busy = false }; do { let result = try await store.request("schedule.run", ["id": .string(id)]); openRun(result["runId"].string) } catch { store.error = error.localizedDescription } } }
 }

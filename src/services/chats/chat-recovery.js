@@ -25,6 +25,7 @@ export class ChatRecovery {
   const state=this.state(run,expectedFailureEventAt);
   if(run.archivedAt||!['chat','manual','scheduled','schedule'].includes(run.trigger))throw Error('Open an eligible conversation before continuing.');
   if(action==='continue'||action==='active-time-continue-enable'){
+   if(run.schedule.permissionScope?.kind==='schedule')this.engine.describePermissions(run);
    if(action==='active-time-continue-enable'){
     if(!state.activeTimeLimit)throw Error('This failure is not a recoverable active-time limit.');
     run.activeTimeContinuation={...run.activeTimeContinuation,enabled:true,attempts:0,lastFailureEventAt:expectedFailureEventAt};this.engine.persist(run);

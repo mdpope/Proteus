@@ -2,22 +2,22 @@ import SwiftUI
 import UniformTypeIdentifiers
 import PDFKit
 
-private enum LifeSection:String,CaseIterable,Identifiable{
+enum LifeSection:String,CaseIterable,Identifiable{
     case overview,ask,home,reminders,nutrition,garage,fuel,captures,capture,security,connections
     var id:String{rawValue}
     var title:String{switch self{case .overview:"Overview";case .ask:"Ask";case .home:"Smart Home";case .reminders:"Reminders";case .nutrition:"Nutrition";case .garage:"Garage";case .fuel:"Fuel & mileage";case .captures:"Capture inbox";case .capture:"New capture";case .security:"Account";case .connections:"Connections"}}
-    var icon:String{switch self{case .overview:"square.grid.2x2";case .ask:"waveform.bubble";case .home:"house";case .reminders:"checklist";case .nutrition:"fork.knife";case .garage:"car";case .fuel:"fuelpump";case .captures:"tray.full";case .capture:"plus.square";case .security:"person.crop.circle";case .connections:"link"}}
+    var icon:String{switch self{case .overview:"square.grid.2x2";case .ask:"bubble.left.and.bubble.right";case .home:"house";case .reminders:"checklist";case .nutrition:"fork.knife";case .garage:"car";case .fuel:"fuelpump";case .captures:"tray.full";case .capture:"plus.square";case .security:"person.crop.circle";case .connections:"link"}}
+    static var navigation: [Self] { allCases.filter { $0 != .reminders && $0 != .fuel } }
 }
 struct LifeRootView: View {
     @EnvironmentObject var life: LifeStore
-    @Environment(\.horizontalSizeClass) private var sizeClass
+    @EnvironmentObject private var chrome: NativePhoneChrome
     @State private var section: LifeSection?
     @State private var initialized = false
     @AppStorage("nativeLifeSection") private var selectedSection = ""
-    @State private var account = false
     private var sections: [LifeSection] {
         // Fuel & mileage lives under Garage; Reminders has its own feature.
-        LifeSection.allCases.filter { $0 != .reminders && $0 != .fuel }
+        LifeSection.navigation
     }
     private var path: Binding<[LifeSection]> {
         Binding(get: { section.map { [$0] } ?? [] }, set: { section = $0.last })
@@ -31,17 +31,29 @@ struct LifeRootView: View {
             case .ask: LifeAskView()
             default: LifePage(section: item)
             }
-        }.nativeFeaturePage(item.title, persistentHeader: true)
+        }.toolbar(.hidden, for: .navigationBar)
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if NativePhonePreview.enabled && ![.home, .nutrition, .garage].contains(item) {
+                    NativeFeatureStrip(ids: [item.id], selection: item.id) {
+                        NativeFeatureTab(title: item.title, symbol: item.icon, selected: true, action: {}).id(item.id)
+                    }
+                }
+            }
+            .modifier(NativePhoneBackNavigation())
     }
     var body: some View {
         Group {
             if life.signedIn {
-                if sizeClass == .compact {
+                if NativePhonePreview.enabled {
                     NavigationStack(path: path) {
                         List(sections) { item in
-                            NavigationLink(value: item) { Label(item.title, systemImage: item.icon) }
+                            NavigationLink(value: item) {
+                                Label { Text(item.title).foregroundStyle(NativeSidebarStyle.strong) } icon: {
+                                    Image(systemName: item.icon).foregroundStyle(NativeTheme.accent)
+                                }
+                            }.listRowBackground(NativeTheme.surface)
                         }.scrollContentBackground(.hidden).background(NativeTheme.background)
-                            .nativeFeaturePage("Life", persistentHeader: true)
+                            .nativeFeatureTabs("Life", symbol: "heart")
                             .navigationDestination(for: LifeSection.self) { page($0) }
                     }
                 } else {
@@ -50,31 +62,37 @@ struct LifeRootView: View {
                             NativeTabStrip(ids: sections.map(\.id), selection: section?.id ?? "overview") {
                                 HStack(spacing: 0) {
                                     ForEach(sections) { item in
-                                        Button { section = item } label: {
-                                            NativeContentTabLabel(title: item.title, symbol: item.icon).padding(.horizontal, 16).frame(height: 44)
-                                        }.buttonStyle(.plain).background(section == item ? NativeTheme.surface : Color.clear)
-                                        Divider().frame(height: 24)
+                                        NativeFeatureTab(title: item.title, symbol: item.icon, selected: (section ?? .overview) == item, action: { section = item }).id(item.id)
                                     }
                                 }
-                            }.nativeTabBar()
+                            }.scrollIndicators(.hidden).nativeTabBar()
                             Divider()
                             page(section ?? .overview)
                         }
                     }
                 }
-            } else { NavigationStack { LifeAccountView().nativeFeaturePage("Life", persistentHeader: true) } }
+            } else { NavigationStack { LifeAccountView().nativeFeatureTabs("Life", symbol: "heart", showsStrip: NativePhonePreview.enabled) } }
         }
-        .toolbar { ToolbarItem(placement: .primaryAction) { Button { account = true } label: { Image(systemName: "person.crop.circle") }.accessibilityLabel("Life account") } }
-        .sheet(isPresented: $account) { NavigationStack { LifeAccountView() } }
         .task {
             if !initialized { initialized = true; section = LifeSection(rawValue: selectedSection) }
             await life.restore()
+            syncOverview()
         }
+        .onChange(of: life.signedIn) { _, _ in syncOverview() }
+        .onDisappear { chrome.removeFeatureTabs("feature:life:categories") }
         .onChange(of: selectedSection) { _, value in
             let next = LifeSection(rawValue: value)
             if next != section { section = next }
         }
-        .onChange(of: section) { _, value in selectedSection = value?.rawValue ?? "" }
+        .onChange(of: section) { _, value in selectedSection = value?.rawValue ?? ""; syncOverview() }
+    }
+    private func syncOverview() {
+        let group = "feature:life:categories"
+        guard life.signedIn else { chrome.removeFeatureTabs(group); return }
+        let items = sections.map { item in
+            NativePhoneTab(id: group + ":" + item.id, title: item.title, symbol: item.icon, detail: "Life", section: "Life", sectionID: group, preview: nil, select: { section = item })
+        }
+        chrome.replaceFeatureTabs(group, items: items, current: section == .home ? nil : group + ":" + (section?.id ?? "overview"))
     }
 }
 private struct LifeNewCaptureView: View {
@@ -159,9 +177,9 @@ private struct LifePage:View{
     var body:some View{
         ScrollView{
             LazyVStack(alignment:.leading,spacing:18){
-                HStack{VStack(alignment:.leading){Text(section.title).font(.title2.bold());Text("Life · website account").font(.caption).foregroundStyle(.secondary)};Spacer();if busy{ProgressView()}}
+                if busy && value == .null { ProgressView().frame(maxWidth: .infinity) }
                 if let failure{LifeCard("Could not refresh"){Text(failure).foregroundStyle(.orange);Button("Retry"){Task{await load()}}}}
-                if value == .null && !busy{Text("Choose refresh to load your records.").foregroundStyle(.secondary)}
+                if value == .null && !busy{Text("Pull down to refresh your records.").foregroundStyle(.secondary)}
                 switch section{
                 case .ask,.home,.reminders,.capture:EmptyView()
                 case .overview:overview
@@ -174,8 +192,19 @@ private struct LifePage:View{
                 }
                 if value["readOnly"].bool{Text("This account connection is read-only. Changes are unavailable.").font(.footnote).foregroundStyle(.secondary)}
             }.padding().frame(maxWidth:1100,alignment:.leading).frame(maxWidth:.infinity)
-        }.background(NativeTheme.background).navigationTitle(section.title).navigationBarTitleDisplayMode(.inline)
-            .toolbar{ToolbarItem(placement:.primaryAction){Button{Task{await load()}}label:{Image(systemName:"arrow.clockwise")}.disabled(busy).accessibilityLabel("Refresh Life records")}}
+        }.background(NativeTheme.background)
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if section == .nutrition {
+                    lifeSubtabs([("overview", "Overview", "square.grid.2x2"), ("days", "Meal days", "calendar"), ("day", "Daily log", "list.bullet"), ("averages", "Averages", "chart.bar"), ("foods", "Food Library", "books.vertical")], selected: nutritionTab == "versions" ? "foods" : nutritionTab) {
+                        nutritionTab = $0; page = 1; Task { await load() }
+                    }
+                } else if section == .garage {
+                    lifeSubtabs([("overview", "Overview", "square.grid.2x2"), ("vehicles", "Vehicles", "car"), ("fuel", "Fuel & mileage", "fuelpump")], selected: garageTab) {
+                        garageTab = $0; value = .null; vehicleID = ""
+                    }
+                }
+            }
+            .refreshable { await load() }
             .task(id:refreshKey){await load()}
             .onChange(of:section){_,_ in value = .null;query=[:];vehicleID="";captureID="";page=1}
             .sheet(item:$form){sheet in NavigationStack{LifeForm(action:sheet.action,initial:sheet.input,choices:value){await load()}}}
@@ -216,10 +245,25 @@ private struct LifePage:View{
             LifeCard("Recent activity"){auditRows(value["recentAudit"].array)}
         }
     }
+    private func lifeSubtabs(_ tabs: [(String, String, String)], selected: String, select: @escaping (String) -> Void) -> some View {
+        let items = HStack(spacing: 0) {
+            ForEach(tabs, id: \.0) { id, title, symbol in
+                NativeFeatureTab(title: NativePhonePreview.enabled && id == "overview" ? section.title : title, symbol: symbol, selected: selected == id, action: { select(id) }).id(id)
+            }
+        }
+        return Group {
+            if NativePhonePreview.enabled {
+                NativeFeatureStrip(ids: tabs.map(\.0), selection: selected) { items }
+            } else {
+                NativeTabStrip(ids: tabs.map(\.0), selection: selected) { items }
+                    .scrollIndicators(.hidden).nativeTabBar().overlay(alignment: .bottom) { Divider() }
+            }
+        }
+    }
     private var nutrition:some View{
         Group{
-            LifeCard("Nutrition"){
-                ScrollView(.horizontal,showsIndicators:false){HStack(spacing:6){ForEach([("overview","Overview"),("days","Meal days"),("day","Daily log"),("averages","Averages"),("foods","Food Library")],id:\.0){id,title in Button(title){nutritionTab=id}.buttonStyle(.bordered).tint(nutritionTab == id || (id == "foods" && nutritionTab == "versions") ? NativeTheme.accent : .secondary)}}}.onChange(of:nutritionTab){_,_ in page=1;Task{await load()}}
+            LifeCard("Meals and foods"){
+
                 if nutritionTab=="overview"{EmptyView()}
                 if nutritionTab=="day"{DatePicker("Day",selection:$date,displayedComponents:.date)}
                 if ["days","averages"].contains(nutritionTab){DatePicker("From",selection:$from,displayedComponents:.date);DatePicker("Through",selection:$through,displayedComponents:.date)}
@@ -261,7 +305,7 @@ private struct LifePage:View{
     private var vehiclePicker:some View{Picker("Vehicle",selection:$vehicleID){Text("All vehicles").tag("");ForEach(value["vehicles"].array,id:\.self){vehicle in Text(vehicle["name"].string).tag(lifeID(vehicle["id"]))}}.onChange(of:vehicleID){_,_ in Task{await load()}}}
     private var garagePages:some View{
         Group{
-            ScrollView(.horizontal,showsIndicators:false){HStack(spacing:6){ForEach([("overview","Overview"),("vehicles","Vehicles"),("fuel","Fuel & mileage")],id:\.0){id,title in Button(title){garageTab=id;value = .null;vehicleID=""}.buttonStyle(.bordered).tint(garageTab == id ? NativeTheme.accent : .secondary)}}}
+
             switch garageTab{
             case "vehicles":garage
             case "fuel":fuel

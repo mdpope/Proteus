@@ -59,6 +59,14 @@ UTC records in their own timezone and request exact day boundaries, including DS
 `acknowledgedEventIds`. Each visit includes `eventId`, `url`, `title`, `visitedAt`, `profileId`
 and `sourceHostId`, with optional `tabId`/`entryId`. For explicit navigation, `eventId` defaults
 to `operationId`; an outbox retry must preserve that ID, timestamp and assigned owner source ID.
+On iPhone and iPad, local visits are sealed in a separate durable journal before delivery.
+The client can recover pending visits from the earlier combined file until the journal is
+written. An empty durable journal takes precedence over any older pending records. The
+30-day offline lookup cache refreshes once per complete owner sweep. Filtering, sorting
+and comparison run on a utility task, and unchanged coverage skips the encrypted write.
+The iOS app reads and decrypts the offline coverage and pending-visit journal on a
+background task at startup. Tab and history operations wait for the restored state before
+using or replacing it.
 A duplicate ID with a different URL/profile/timestamp/source is rejected. A tombstoned retry is
 acknowledged without resurrection. Disabled recording acknowledges incoming visits as disabled.
 

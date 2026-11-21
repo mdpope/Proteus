@@ -49,6 +49,6 @@ export function trimMtplxHistory(messages,window,output,tools){
   // leave exact image/token accounting to MTPLX's authoritative admission check.
   const cost=items=>{let images=0;const text=JSON.stringify(items,(key,value)=>{if(key==='url'&&typeof value==='string'&&value.startsWith('data:image/')){images++;return '[image]';}return value;});return Buffer.byteLength(text)+toolCost+images*32768;};
   const result=[...messages];let dropped=0;
-  while(cost(result)>budget){let next=-1;for(let i=2;i<result.length;i++)if(result[i].role==='user'){next=i;break;}if(next<0)throw Error('Current selected context, tools and message exceed the conservative MTPLX context budget. Select fewer sources or send smaller attachments.');dropped+=next-1;result.splice(1,next-1);}
+  while(cost(result)>budget){let next=-1;for(let i=2;i<result.length;i++)if(result[i].role==='user'){next=i;break;}if(next<0)throw Error('Current selected context, tools and message exceed the conservative context budget. Select fewer sources or send smaller attachments.');dropped+=next-1;result.splice(1,next-1);}
   return {messages:result,dropped};
 }

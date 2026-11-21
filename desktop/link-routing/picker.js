@@ -1,6 +1,6 @@
 // Keyboard behavior and countdown ported from SafariSelector/UI/SelectorView.swift
 // (SafariSelector contributors, GPL-3.0-or-later).
-let targets=[],external=[],flat=[],filter='',selection=0,selected=false,defaultKey=null,remaining=0,countdown=null,touched=false;
+let targets=[],external=[],flat=[],filter='',selection=0,selected=false,defaultKey=null,remaining=0,countdown=null,touched=false,deadline=0;
 const list=document.querySelector('#targets'),field=document.querySelector('#filter'),timer=document.querySelector('#countdown');
 const choose=(newWindow,automatic=false)=>{const target=automatic?flat.find(item=>item.key===defaultKey)||targets.find(item=>item.key===defaultKey):flat[selection];if(target)window.linkPicker.choose(target.external?{external:target.external}:{key:target.key,newWindow,automatic});};
 // Any interaction cancels an unattended countdown, matching SafariSelector.
@@ -17,10 +17,15 @@ function icon(kind){
 }
 function draw(){
   const query=filter.toLocaleLowerCase();
-  flat=[...external,...targets.filter(t=>[t.workspaceName,t.projectName,t.hostName].join(' ').toLocaleLowerCase().includes(query))];
-  selection=Math.max(0,Math.min(selection,flat.length-1));list.replaceChildren();let group;
+  flat=[...targets.filter(t=>[t.workspaceName,t.projectName,t.hostName].join(' ').toLocaleLowerCase().includes(query)),...external];
+  selection=Math.max(0,Math.min(selection,flat.length-1));list.replaceChildren();let host,group;
   flat.forEach((target,index)=>{
-    const key=JSON.stringify([target.hostId,target.workspaceId]);if(key!==group){group=key;const heading=document.createElement('h2');heading.textContent=target.external?'Open in another browser':target.workspaceName+(target.hostId==='local'?'':' · '+target.hostName);list.append(heading);}
+    if(target.hostId!==host){
+      host=target.hostId;
+      const heading=document.createElement('h2');heading.className='computer-heading';
+      heading.textContent=target.external?'Another browser':target.hostName;list.append(heading);
+    }
+    const key=JSON.stringify([target.hostId,target.workspaceId]);if(key!==group&&!target.external){group=key;const heading=document.createElement('h3');heading.textContent=target.workspaceName;list.append(heading);}
     const row=document.createElement('button');row.className='project';row.type='button';row.dataset.key=target.key;row.setAttribute('role','option');row.setAttribute('aria-selected',String(selection===index));
     const content=document.createElement('span'),title=document.createElement('span'),detail=document.createElement('span'),digit=document.createElement('span');content.className='content';title.className='name';title.textContent=target.projectName;detail.className='detail';detail.textContent=target.workspaceName+(target.hostId&&target.hostId!=='local'&&!target.external?' · '+target.hostName:'');digit.className='digit';digit.textContent=index<9?String(index+1):'';
     if(target.key===defaultKey){const badge=document.createElement('span');badge.className='badge';badge.textContent='Default';title.append(badge);}
@@ -33,16 +38,20 @@ function draw(){
 }
 window.linkPicker.on(value=>{
   targets=value.targets;defaultKey=value.defaultKey||null;document.querySelector('#url').textContent=value.url;
+  const favicon=document.querySelector('#site-icon'),hasIcon=/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(value.siteIcon||'');
+  favicon.hidden=!hasIcon;document.querySelector('#site-icon-fallback').toggleAttribute('hidden',hasIcon);
+  if(hasIcon)favicon.src=value.siteIcon;
   external=value.safariSelector?[{key:'safariselector',external:'safariselector',projectName:'Open in SafariSelector',workspaceName:'Choose a Safari profile and tab group',hostName:'',hostId:'external',workspaceId:'safariselector'}]:[];
   const source=document.querySelector('#source');source.hidden=!value.source?.name;
   if(value.source?.name){document.querySelector('#source-name').textContent='from '+value.source.name;const image=document.querySelector('#source-icon');image.hidden=!/^data:image\/png;base64,/.test(value.source.icon||'');if(!image.hidden)image.src=value.source.icon;}
   const warning=document.querySelector('#warning');warning.textContent=value.warning||'';warning.hidden=!value.warning;
   const palette=value.colors||{};for(const [name,key]of [['--panel','menu'],['--selected','sidebarSelected'],['--muted','menuMuted'],['--edge','menuBorder']])if(/^#[0-9a-f]{6}$/i.test(palette[key]||''))document.documentElement.style.setProperty(name,palette[key]);
   // Start on the default destination so Return also accepts it.
-  const index=[...external,...targets].findIndex(item=>item.key===defaultKey);if(index>=0)selection=index;
+  const index=targets.findIndex(item=>item.key===defaultKey);if(index>=0)selection=index;
   remaining=defaultKey&&Number.isInteger(value.autoSelectSeconds)?Math.max(0,Math.min(60,value.autoSelectSeconds)):0;
   draw();drawCountdown();field.focus();
-  if(remaining>0)countdown=setInterval(()=>{if(touched)return;remaining--;drawCountdown();if(remaining<=0){clearInterval(countdown);countdown=null;choose(false,true);}},1000);
+  deadline=Date.now()+remaining*1000;
+  if(remaining>0)countdown=setInterval(()=>{if(touched)return;remaining=Math.max(0,Math.ceil((deadline-Date.now())/1000));drawCountdown();if(!remaining){clearInterval(countdown);countdown=null;choose(false,true);}},250);
 });
 for(const type of ['mousedown','wheel'])document.addEventListener(type,touch,{capture:true,passive:true});
 document.addEventListener('keydown',event=>{

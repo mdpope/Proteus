@@ -3,3 +3,5 @@
 .rich-text .md-align-right{text-align:right}.rich-text .md-align-center{text-align:center}.rich-text .md-align-left{text-align:left}
 
 .md-properties{border:1px solid var(--line,#526156);border-radius:8px;padding:10px 14px;margin:0 0 18px;font-size:.9em}.md-properties summary{font-weight:600;cursor:pointer}.md-properties dl{display:grid;grid-template-columns:minmax(90px,25%) 1fr;gap:8px 14px;margin:12px 0 0}.md-properties dt{opacity:.75}.md-properties dd{margin:0;overflow-wrap:anywhere;white-space:pre-wrap}
+
+.md-pdf-frame{display:block;width:100%;min-height:26rem;border:0;margin-block:8px}

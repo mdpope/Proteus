@@ -13,6 +13,7 @@ import { agentName, assistantName } from './agent-name.js';
 import {viewResidency} from '../../models/view-residency.js';
 import {savedConversationPosition,trackViewPosition} from '../../shared/navigation/view-position.js';
 import { sentAttachmentPreview, openSentAttachmentPreview, openStoredAttachments } from './chat-attachments.js';
+import {bindDocumentZoom,imageZoomView} from '../../shared/ui/content-zoom.js';
 import { fusionTurnFor, fusionAttributionHTML } from './copilot-fusion.js';
 const escapeHTML=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 // Streaming refreshes re-run this keyed reconciliation several times per second. Write a
@@ -119,6 +120,7 @@ export function conversation(target, run, options) {
       cancelAnimationFrame(view.frames); view.frames = requestAnimationFrame(() => { view.updating = false; });
     };
     view.position = position;
+    view.zoom=bindDocumentZoom(shell,{targets:[messages],label:'Chat size',preference:'conversation',onZoom:ratio=>{view.top=scroll.scrollTop*ratio;position();}});
     const earlier=document.createElement('div');earlier.className='history-status';earlier.setAttribute('role','status');scroll.prepend(earlier);view.earlier=earlier;
     view.loadEarlier=async(manual=false)=>{
       if(view.paging)return manual?view.pagingTask:undefined;
@@ -147,13 +149,14 @@ export function conversation(target, run, options) {
       setHidden(jump, view.following);
     });
     // User input wins even while a streamed update is being laid out.
-    scroll.addEventListener('wheel', event => { if (event.deltaY < 0) {const now=Date.now();if(now-(view.lastHistoryGesture||0)>100){view.historyGestureAvailable=true;view.lastHistoryGesture=now;} view.updating = false; view.following = false; setHidden(jump, false); void view.loadEarlier(); } }, { passive: true });
+    scroll.addEventListener('wheel', event => { if (!event.ctrlKey&&event.deltaY < 0) {const now=Date.now();if(now-(view.lastHistoryGesture||0)>100){view.historyGestureAvailable=true;view.lastHistoryGesture=now;} view.updating = false; view.following = false; setHidden(jump, false); void view.loadEarlier(); } }, { passive: true });
     scroll.addEventListener('touchstart',()=>{view.historyGestureAvailable=true;view.updating=false;view.following=false;},{passive:true});
     scroll.addEventListener('keydown',event=>{if(['ArrowUp','PageUp','Home'].includes(event.key)){view.historyGestureAvailable=true;view.updating=false;view.following=false;void view.loadEarlier();}});
     jump.onclick = () => { view.following = true;view.renderStart=(view.run.eventStart||0)+chatHistoryWindowStart(view.run.events);conversation(view.target,view.run,view.options); };
     view.observer = new ResizeObserver(position); view.observer.observe(messages); view.observer.observe(scroll);
   }
   view.run=run;view.options=options;view.target=target;
+  view.zoom.mountControls(options.zoomControls);
   viewResidency.retain('chat:'+run.id,'chat','conversation',{active:()=>view.shell.isConnected,dispose:()=>forgetConversation(run.id)});
   const transportStart=run.eventStart||0;
   view.renderStart=Math.max(transportStart,view.renderStart??transportStart+chatHistoryWindowStart(run.events));
@@ -275,7 +278,7 @@ export function conversation(target, run, options) {
     if(roleTimer)bindRuntimeTimer(roleTimer,()=>durationText(turnDuration(turn,now(),view.verified))+(turn?.incomplete?' · partial':''),!!turn?.activeSince);
     if(entry.data?.permission&&!entry.data.permission.automatic){let details=node.querySelector('.permission-original');if(!details){details=document.createElement('details');details.className='permission-original';node.append(details);}details.replaceChildren();const summary=document.createElement('summary');summary.textContent=entry.data.permission.intention||'Original approval request';const pre=document.createElement('pre');pre.textContent=entry.data.permission.request||'Original request was not recorded by this version.';details.append(summary,pre);}
     const body=node.querySelector('.text');
-    ProteusMarkdown.mount(body, questionMessageText(entry.text,eventQuestions), { ...options, resize: view.position });
+    ProteusMarkdown.mount(body, questionMessageText(entry.text,eventQuestions), { ...options, zoomImage:imageZoomView, resize: view.position });
     let questionCards=node.querySelector('.user-question-cards');
     if(eventQuestions.length&&options.answerQuestion){if(!questionCards){questionCards=document.createElement('div');questionCards.className='user-question-cards';node.append(questionCards);}for(const question of eventQuestions){let card=[...questionCards.children].find(card=>card.dataset.questionId===question.id);if(!card){card=document.createElement('div');questionCards.append(card);}mountQuestionCard(card,question,{...questionOptions,key:run.id+':'+question.id,showHeading:!questionPromptVisible(question,entry.text,eventQuestions.length)});}}else questionCards?.remove();
     if(run.schedule.provider==='mtplx'&&entry.role==='assistant'&&!entry.streaming)mountSvgPreviews(body,{resize:view.position});

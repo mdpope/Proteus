@@ -3,16 +3,18 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
-import {admissionFromLegacy} from './life-ask.js';
+import {admissionFromLegacy,LIFE_ASK_ENVELOPE_BYTES} from './life-ask.js';
 
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
-function readBounded(file, limit=3_000_000) {
+function readBounded(file, limit=LIFE_ASK_ENVELOPE_BYTES) {
   const fd=fs.openSync(file,fs.constants.O_RDONLY|fs.constants.O_NOFOLLOW|fs.constants.O_NONBLOCK);
   try {
     const stat=fs.fstatSync(fd);
     if(!stat.isFile()||stat.size>limit)throw Error('Life Ask cloud file is unavailable or too large.');
-    const bytes=Buffer.alloc(limit+1),size=fs.readSync(fd,bytes,0,bytes.length,0);
-    if(size>limit)throw Error('Life Ask cloud file is too large.');
+    const bytes=Buffer.alloc(stat.size+1);
+    let size=0,count;
+    while(size<bytes.length&&(count=fs.readSync(fd,bytes,size,bytes.length-size,size))>0)size+=count;
+    if(size!==stat.size)throw Error('Life Ask cloud file changed while reading.');
     return JSON.parse(bytes.subarray(0,size).toString('utf8'));
   } finally {fs.closeSync(fd);}
 }

@@ -30,7 +30,17 @@ async function smoke(candidate){
 }
 const {ownerRequest}=require('./owner-request.cjs');
 async function verifyLive(job,identity){let last=0;return require('./recovery-verification.cjs').verifyRecovery(job,identity,{request:ownerRequest,report:progress=>{const now=Date.now();if(last&&now-last<1000&&!['verified','failed'].includes(progress.stage))return;last=now;writeJob(job.file,{verificationProgress:progress});}});}
-function launch(job){const executable=require('./update-package.cjs').packagePaths(job.installation).executable,log=fs.openSync(path.join(path.dirname(job.file),'launch.log'),'a',0o600),child=spawn(executable,['--user-data-dir='+job.browserHome],{detached:true,stdio:['ignore',log,log],env:environment(job.home,false,{PROTEUS_UPDATE_JOB:job.file})});child.unref();fs.closeSync(log);return child;}
+function launch(job){
+ const args=['--user-data-dir='+job.browserHome];
+ const env=environment(job.home,false,{PROTEUS_UPDATE_JOB:job.file});
+ if(job.platform==='darwin')return require('./macos-relaunch.cjs').relaunchMac(job.installation,args,env);
+ const executable=require('./update-package.cjs').packagePaths(job.installation,job.platform).executable;
+ const log=fs.openSync(path.join(path.dirname(job.file),'launch.log'),'a',0o600);
+ try{
+  const child=spawn(executable,args,{detached:true,stdio:['ignore',log,log],env});
+  child.unref();return child;
+ }finally{fs.closeSync(log);}
+}
 function retire(file,job,{inspect=inspectPackage}={}){
  const inventory=recoveryPolicy(file,job),rows=inventory.generations.slice().sort((a,b)=>a.at.localeCompare(b.at));
  if(rows.length<=2)return inventory;

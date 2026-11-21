@@ -34,6 +34,14 @@ export function installObsidianMarkdown(md) {
     if(!silent){const token=state.push('image','img',0);token.attrSet('src',encodeURI(target.trim()));token.attrSet('alt',alias.join('|')||target);token.children=[];}
     state.pos=end+2;return true;
   });
+  md.inline.ruler.before('image','wiki-pdf',(state,silent)=>{
+    const from=state.pos;if(state.src.slice(from,from+3)!=='![[')return false;
+    const end=state.src.indexOf(']]',from+3);if(end<0||end-from>2048)return false;
+    const target=state.src.slice(from+3,end).trim();
+    if(!/^[^:\\\[\]\r\n]+\.pdf(?:#page=[1-9][0-9]*)?$/i.test(target)||target.startsWith('//'))return false;
+    if(!silent){const token=state.push('pdf_embed','',0);token.content=target;}
+    state.pos=end+2;return true;
+  });
   md.inline.ruler.before('link','wiki-link',(state,silent)=>{
     const from=state.pos;
     if (state.src.slice(from,from+2)!=='[[' || state.linkLevel>0) return false;

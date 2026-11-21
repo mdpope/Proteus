@@ -217,7 +217,6 @@ struct LifeRemindersList: View {
                 if split || detail != nil {
                     if split { Divider() }
                     VStack(spacing: 0) {
-                        if !split { HStack { Button("Items", systemImage: "chevron.left") { backToItems?() }; Spacer() }.padding(12) }
                         if let detail { detail }
                         else { ContentUnavailableView("Choose a reminder", systemImage: "checklist", description: Text("Select an item or add one to this list.")) }
                     }.frame(minWidth: split ? 280 : 0, maxWidth: .infinity)

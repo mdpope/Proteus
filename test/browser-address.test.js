@@ -17,3 +17,11 @@ test('bad-certificate details display only observed fields and escape certificat
  const html=decodeURIComponent(browserErrorDocument('https://consolefixture:8006/','ERR_CERT_AUTHORITY_INVALID',{certificateInformation:{subject:'CN=<script>alert(1)</script>',issuer:'Synthetic issuer',fingerprint:'AA:BB',secret:'not a certificate field'}}).split(',').slice(1).join(','));
  assert.match(html,/View certificate information/);assert.match(html,/CN=&lt;script&gt;alert\(1\)&lt;\/script&gt;/);assert.match(html,/SHA-256 fingerprint/);assert.doesNotMatch(html,/<script>|not a certificate field|data-proteus-certificate-accept/);
 });
+test('custom port TLS failures explain protocol configuration and retry the original address',()=>{
+ const address='https://local-device:8123/';
+ const html=decodeURIComponent(browserErrorDocument(address,'ERR_SSL_PROTOCOL_ERROR').split(',').slice(1).join(','));
+ assert.match(html,/Check which protocol the server uses on this port/);
+ assert.match(html,/<code>http:\/\/<\/code>/);
+ assert.match(html,/href="https:\/\/local-device:8123\/">Retry/);
+ assert.doesNotMatch(html,/href="http:\/\//);
+});

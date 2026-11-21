@@ -54,6 +54,14 @@ export class Scratchpad {
   if (!this.config.root) throw Error('Choose a Scratchpad storage folder on the owning computer first.');
   this.client ??= this.createClient(this.config); return {client: this.client, rootId: this.config.rootId};
  }
+ async migratePaths({action,rootId,digest}) {
+  if(action!=='preview'&&(action!=='apply'||!/^[a-f0-9]{64}$/.test(digest||'')))throw Error('Preview the Scratchpad path migration before applying it.');
+  const binding=this.binding();
+  if(!rootId||rootId!==binding.rootId)throw Error('Scratchpad storage changed. Preview the current root.');
+  const result=await binding.client.request(action==='preview'?'planPaths':'migratePaths',...(action==='apply'?[digest]:[]));
+  if(this.config.rootId!==rootId)throw Error('Scratchpad storage changed during path migration. Inspect the original root.');
+  return result;
+ }
  association({projectId = null, workspaceId = null} = {}, snapshot = this.projects.snapshot()) {
   const {catalog, config} = snapshot;
   const project = projectId ? catalog.projects.find(row => row.id === projectId && !row.deletedAt) : null;
@@ -67,7 +75,7 @@ export class Scratchpad {
  }
  async handle(args, {runId, remote = false} = {}) {
   if (!args || typeof args !== 'object' || Array.isArray(args)) throw Error('Choose a Scratchpad action.');
-  if (Object.keys(args).some(key => !['action','rootId','projectId','workspaceId','id','expectedRevision','operationId','title','body','format','category','path','search','workspaceFilter','sort','offset','deleted','actions','reason'].includes(key))) throw Error('Unsupported Scratchpad field.');
+  if (Object.keys(args).some(key => !['action','rootId','projectId','workspaceId','id','expectedRevision','operationId','title','body','format','category','path','search','workspaceFilter','sort','offset','deleted','actions','reason','data','mediaType'].includes(key))) throw Error('Unsupported Scratchpad field.');
   const agent = !!runId && runId !== 'operator', turn = agent ? scratchTurn(this.engine, runId) : null;
   if (args.action === 'status') return {configured: !!this.config.root, rootId:this.config.rootId, ...(!agent&&this.client?{indexing:await this.client.request('indexStatus')}:{}), ...(agent ? {capturedProjectId: turn.scratchProjectId} : {})};
   if(args.rootId&&args.rootId!==this.config.rootId)throw Error('Scratchpad storage changed. Reopen the note from the current root before editing.');
@@ -75,6 +83,12 @@ export class Scratchpad {
    if (this.config.rootId !== binding.rootId || this.configuring) throw Error('Scratchpad configuration changed. Reload.');
    if (agent && scratchTurn(this.engine, runId) !== turn) throw Error('The requesting chat turn ended.');
   };
+  if(args.action==='paste'){
+   if(agent || !args.rootId)throw Error('Paste attachments from a scratch open in its owning editor.');
+   check();
+   const result=await binding.client.request('paste',{id:args.id,data:args.data,mediaType:args.mediaType});
+   check(); return result;
+  }
   if(['tree','asset'].includes(args.action)){if(agent)throw Error('Use project-scoped Scratchpad list/read actions from chats.');const result=await binding.client.request(args.action,{path:args.path,...(args.action==='tree'?{associations:this.bindingForRebuild().associations}:{})});check();return result;}
   const target = this.association({projectId: Object.hasOwn(args, 'projectId') ? args.projectId : agent ? turn.scratchProjectId : null, workspaceId: args.workspaceId});
   if (args.action === 'request-access') {

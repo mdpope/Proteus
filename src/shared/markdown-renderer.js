@@ -17,6 +17,11 @@ md.renderer.rules.image = (tokens, index) => {
   const label = token.content || 'Image';
   return `<span class="md-image" data-image="${escape(source)}"><button type="button" class="md-load-image">Load image · ${escape(label)}</button><span class="md-image-label">${escape(label)}</span></span>`;
 };
+md.renderer.rules.pdf_embed = (tokens,index) => {
+  const path=tokens[index].content;
+  const source=encodeURI(path);
+  return '<span class="md-pdf" data-pdf="'+escape(source)+'"><button type="button" class="md-load-pdf">Show PDF</button> <a data-link="'+escape(source)+'" href="#">'+escape(path.split('/').pop())+'</a></span>';
+};
 // Streaming re-renders a growing message several times per second. Completed code blocks
 // are unchanged between renders, so reuse their highlighted HTML (bounded LRU).
 const highlights = new Map();
@@ -93,6 +98,20 @@ export function mount(element, text, options = {}) {
     if (target.matches('.md-copy')) {
       try { await options.copy?.(target.closest('.md-code').querySelector('code').textContent); target.textContent = 'Copied'; } catch { target.textContent = 'Copy failed'; }
     }
+    if (target.matches('.md-load-pdf')) {
+      const holder=target.closest('[data-pdf]');
+      if(!options.pdf){options.link?.(holder.dataset.pdf);return;}
+      target.disabled=true;
+      try {
+        const source=await options.pdf(holder.dataset.pdf.split('#')[0]);
+        if(!holder.isConnected)return;
+        if(typeof source!=='string'||!source.startsWith('/api/workspace-explorer/pdf?')&&!source.startsWith('data:application/pdf;base64,'))throw Error('PDF unavailable');
+        const frame=document.createElement('iframe');
+        frame.className='md-pdf-frame';frame.title='Inline PDF';
+        frame.src=source+(holder.dataset.pdf.match(/#page=\d+$/)?.[0]||'');
+        holder.append(frame);target.remove();options.resize?.();
+      } catch {target.disabled=false;target.textContent='PDF unavailable · retry';}
+    }
     if (target.matches('.md-load-image')) await loadImage(target.closest('[data-image]'));
   };
   async function loadImage(holder) {
@@ -108,8 +127,9 @@ export function mount(element, text, options = {}) {
       }
       const img = document.createElement('img'); img.alt = holder.querySelector('.md-image-label').textContent; img.referrerPolicy = 'no-referrer'; img.decoding = 'async';
       img.onload = () => { button.remove(); options.resize?.(); };
-      img.onerror = () => { img.remove(); element._images.delete(source); button.disabled = false; button.textContent = 'Image unavailable · retry'; options.resize?.(); };
-      holder.append(img); img.src = value;
+      const preview=options.zoomImage?.(img)||img;
+      img.onerror = () => { preview.remove(); element._images.delete(source); button.disabled = false; button.textContent = 'Image unavailable · retry'; options.resize?.(); };
+      holder.append(preview); img.src = value;
     } catch { button.disabled = false; button.textContent = 'Image unavailable · retry'; }
     options.resize?.();
   }

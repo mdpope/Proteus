@@ -40,7 +40,7 @@ test('WAV inspection accepts mono 16-bit 8/16 kHz and rejects quiet, long and un
   assert.equal(inspectWav(wav()).sampleRate, 16000);
   assert.equal(inspectWav(wav({ rate: 8000 })).durationMs, 2000);
   assert.throws(() => inspectWav(wav({ amplitude: 10 })), error => error.reason === 'quiet');
-  assert.throws(() => inspectWav(wav({ seconds: 62, rate: 8000 })), error => error.reason === 'too-large');
+  assert.throws(() => inspectWav(wav({ seconds: 121, rate: 8000 })), error => error.reason === 'too-large');
   const stereo = wav(); stereo.writeUInt16LE(2, 22);
   assert.throws(() => inspectWav(stereo), error => error.reason === 'unsupported-format');
   assert.throws(() => inspectWav(Buffer.from('not audio at all, definitely not RIFF data here....')), error => error.reason === 'unsupported-format');
@@ -104,6 +104,26 @@ test('account, host and enablement mismatches reject without storing anything', 
   asks.enabled = () => false;
   assert.equal((await asks.admit(request(hostId))).reason, 'disabled');
   assert.equal(fs.existsSync(path.join(home, 'life-ask')) ? fs.readdirSync(path.join(home, 'life-ask')).length : 0, 0);
+});
+
+test('negotiates 120 seconds and independently bounds samples and clock windows', async t=>{
+ const {store:asks,hostId}=store(t);
+ assert.equal(asks.capabilities().maxSeconds,120);
+ assert.equal(asks.capabilities().maxAudioBytes,3_850_000);
+ const exact=wav({seconds:120});
+ assert.equal(exact.length,3_840_044);
+ const batched=request(hostId,{},exact);
+ assert.equal((await asks.admit(batched)).state,'accepted');
+ assert.equal(asks.read(batched.requestId).durationMs,120_000);
+ for(const rate of [8000,16000]){
+  assert.equal(inspectWav(wav({seconds:120,rate})).durationMs,120_000);
+  assert.throws(()=>inspectWav(wav({seconds:120+1/rate,rate})),error=>error.reason==='too-large');
+ }
+ const outside=request(hostId);
+ outside.times.captureEndedAt=outside.times.captureStartedAt+120_001;
+ assert.equal((await asks.admit(outside)).reason,'too-large');
+ outside.times.captureEndedAt--;
+ assert.equal((await asks.admit(outside)).state,'accepted');
 });
 
 test('a permanent tombstone keeps deduplicating after the audio is retired', async t => {
@@ -184,7 +204,12 @@ test('relay: a life-ask invitation creates a scoped device limited to Life Ask m
   assert.deepEqual({ scope: capabilities.scope, hostID: capabilities.hostID, accountID: capabilities.accountID, v: capabilities.capabilities }, { scope: 'mnemosyne.ask', hostID, accountID: ACCOUNT, v: ['life.ask.v1'] });
   assert.equal((await mnemosyne.request('hello')).scope, 'mnemosyne.ask');
   for (const method of ['sync', 'runs.list', 'chat.start', 'computer.access.get', 'files.list', 'remote.diagnostics']) await assert.rejects(mnemosyne.request(method, {}), /limited to Life Ask/, method);
-  const value = request(hostID), receipt = await mnemosyne.request('life.ask.admit', value);
+  assert.equal(capabilities.maxSeconds,120);assert.equal(capabilities.maxAudioBytes,3_850_000);
+  const long=wav({seconds:120});
+  long.writeInt16LE(4000,44);
+  long.fill(0xff,46); // Slash-heavy legacy JSON audio. The first PCM sample is audible.
+  const value = request(hostID,{},long), receipt = await mnemosyne.request('life.ask.admit', value);
+  assert.equal(asks.read(value.requestId).durationMs,120_000);
   assert.equal(receipt.state, 'accepted'); assert.equal(receipt.audioSha256, value.audio.sha256);
   assert.equal((await mnemosyne.request('life.ask.admit', value)).state, 'duplicate');
   assert.equal((await mnemosyne.request('life.ask.status', { requestIds: [value.requestId] })).items[0].state, 'received');

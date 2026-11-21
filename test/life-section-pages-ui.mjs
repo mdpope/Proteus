@@ -8,10 +8,26 @@ try {
  const page=await app.firstWindow();page.setDefaultTimeout(20000);page.on('pageerror',error=>errors.push(error.message));
  await page.route('**/api/state?*',async route=>{const response=await route.fetch(),data=await response.json();data.life={enabled:true,configured:true,ready:true,identity:{accountId:'synthetic-life'},capabilities:[]};await route.fulfill({json:data});});
  await page.route('**/api/life/data',route=>route.fulfill({json:{identity:{accountId:'synthetic-life'},days:[],periods:[],vehicleCards:[],tasks:[],counts:{},foods:[],entries:[]}}));
- await page.reload();await page.locator('[data-page=life]').click();
+ await page.reload();await page.locator(`[data-preview-workspace="${fixture.studio.id}"]`).click();
+ const projectTab=page.locator('#chat-subtabs [data-preview-page=projects]');
+ await projectTab.waitFor();
+ const canonical=await projectTab.evaluate(button=>{
+  const tab=getComputedStyle(button),bar=getComputedStyle(button.closest('#chat-subtabs'));
+  return [tab.height,tab.paddingInline,tab.fontSize,tab.gap,tab.borderRightWidth,bar.borderBottomWidth,bar.backgroundColor];
+ });
+ await page.locator('[data-page=life]').click();
  const sections=page.locator('#life-section-navigation');await sections.waitFor();
  await sections.getByRole('button',{name:'Nutrition',exact:true}).click();
  const strip=page.locator('#feature-content-navigation');await strip.waitFor();
+ const metrics=locator=>locator.evaluate(button=>{
+  const tab=getComputedStyle(button),item=getComputedStyle(button.parentElement),bar=getComputedStyle(button.closest('nav'));
+  return [tab.height,tab.paddingInline,tab.fontSize,tab.gap,item.borderRightWidth,item.boxShadow,bar.borderBottomWidth];
+ });
+ const nutrition=sections.getByRole('button',{name:'Nutrition',exact:true});
+ const life=await metrics(nutrition);
+ assert.deepEqual(life,await metrics(strip.getByRole('button',{name:'Overview',exact:true})));
+ assert.deepEqual([...life.slice(0,5),life[6],await sections.evaluate(nav=>getComputedStyle(nav).backgroundColor)],canonical);
+ assert.equal(await page.locator('#sidebar [data-life-section=nutrition] path').getAttribute('d'),await nutrition.locator('path').getAttribute('d'));
  assert.deepEqual(await strip.locator('.feature-content-tab').allInnerTexts(),['Overview','Meal days','Daily log','Averages','Food Library']);
  assert.equal(await strip.getByRole('button',{name:'Overview',exact:true}).getAttribute('aria-current'),'page');
  await strip.getByRole('button',{name:'Averages',exact:true}).click();await page.locator('#life-content').waitFor();

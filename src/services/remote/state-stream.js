@@ -3,7 +3,7 @@ import {diffState} from './state-patch.js';
 
 // Run progress changes on every provider event. It is useful within a couple of
 // seconds, but it must not push a whole state snapshot to every client.
-const volatileRunFields=['progress','updatedAt','lastActivityAt'];
+const volatileRunFields=['progress','operation','updatedAt','lastActivityAt'];
 const withoutVolatile=runs=>Array.isArray(runs)?runs.map(run=>{const copy={...run};for(const field of volatileRunFields)delete copy[field];return copy;}):runs;
 
 /**
@@ -43,11 +43,11 @@ export class RemoteStateStream {
  commit(state,sections,changed,fingerprint,now){
   const base=this.version(),previous=this.sections;
   this.sequence++;this.sections=sections;this.material=fingerprint.material;this.at=now;
-  const version=this.version(),cursor=this.cursor(),subscribed=this.peers().filter(peer=>peer.statePatch&&peer.stateVersion!==undefined);
+  const version=this.version(),cursor=this.cursor(),ownerObservedAt=new Date(now).toISOString(),subscribed=this.peers().filter(peer=>peer.statePatch&&peer.stateVersion!==undefined);
   // A peer opting in during this sync has no version yet: its reply carries the state.
   // Every other subscriber should be at `base`. If one is not, it cannot detect that
   // from a patch it never received, so give it the whole state rather than none.
-  const targets=subscribed.filter(peer=>peer.stateVersion===base),full={type:'event',event:'state',data:state,stateVersion:version,cursor};
+  const targets=subscribed.filter(peer=>peer.stateVersion===base),full={type:'event',event:'state',data:state,stateVersion:version,cursor,ownerObservedAt};
   for(const peer of subscribed)if(peer.stateVersion!==base){this.host.send(peer,full);peer.stateVersion=version;}
   if(!targets.length)return;
   const o={},d=[];
@@ -59,7 +59,7 @@ export class RemoteStateStream {
   const patch={...(Object.keys(o).length?{o}:{}),...(d.length?{d}:{})};
   const total=[...sections.values()].reduce((sum,json)=>sum+json.length,0),wasteful=JSON.stringify(patch).length>total*.6;
   for(const peer of targets){
-   this.host.send(peer,wasteful?full:{type:'event',event:'state.patch',data:{base,version,patch},cursor});
+   this.host.send(peer,wasteful?full:{type:'event',event:'state.patch',data:{base,version,patch},cursor,ownerObservedAt});
    peer.stateVersion=version;
   }
  }
@@ -68,7 +68,7 @@ export class RemoteStateStream {
   const elapsed=now-this.legacy.at;
   if(elapsed<(material===this.legacy.material?this.legacyVolatileMs:this.legacyMinMs))return;
   this.legacy={full,material,at:now};
-  const value={type:'event',event:'state',data:state,cursor:this.cursor()};
+  const value={type:'event',event:'state',data:state,cursor:this.cursor(),ownerObservedAt:new Date(now).toISOString()};
   for(const peer of peers)this.host.send(peer,value);
  }
  /** Fields for a `sync` reply. A patch sent here precedes the reply on this transport. */

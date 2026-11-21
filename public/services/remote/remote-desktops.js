@@ -1,9 +1,11 @@
+import {rebaseSchedule} from '../../shared/ui/schedule-conflicts.js';
+import {confirmScheduleDeletion,requestScheduleStart} from '../../shared/ui/schedule-actions.js';
 import {inferenceProviderChoices,modelsForInferenceChoice} from '../../features/chats/provider-choices.js';
 import {viewResidency} from '../../models/view-residency.js';
 import {rememberArtifactPosition,savedArtifactPosition,restoreDocumentView} from '../../shared/navigation/view-position.js';
 import {previewEnabled} from '../../shared/navigation/desktop-preview.js';
 import {bindActiveTimePreference,bindAllowancePreference} from '../../features/chats/allowance-controls.js';
-import {modelPicker,modelControls,modelSelection,applyOwnerModelCatalog} from '../../shared/ui/features.js';
+import {modelPicker,modelControls,modelSelection,applyOwnerModelCatalog,updateModelChoices} from '../../shared/ui/features.js';
 import {bindPermissionSidebar} from '../../shared/navigation/permission-sidebar.js';
 import {previewApprovalChoices} from '../../shared/navigation/preview-permissions.js';
 import {recoverRemoteChat} from './remote-chat-recovery.js';
@@ -12,6 +14,7 @@ import {fileDatesText} from '../../shared/ui/file-dates.js';
 import {sourceKindIcon} from '../../shared/ui/source-icons.js';
 import { workingMessage } from '../../features/chats/chat-working.js';
 import {computerName,computerPlatformLabel} from './computer-identity.js';
+import {demoComputerDestinations,orderedComputers} from './computer-order.js';
 import {remotePreviewOwner} from '../../features/workspaces/workspace-navigation.js';
 import {refreshChatPreviews,isLoopbackPreview,verifyPreview} from '../../features/chats/chat-previews.js';
 import { mergeChatHistory } from '../../features/chats/chat-history.js';
@@ -28,7 +31,8 @@ const call=value=>{if(!window.desktop?.peers)return Promise.reject(new Error('Op
 const request=(hostId,method,args={},options)=>call({action:'request',hostId,method,args:['chat.start','chat.send','chat.reply','chat.answer-question','chat.resume'].includes(method)?{...args,inputOrigin:args.inputOrigin||{client:'remote-desktop',windowId:window.desktop?.windowId||'main'}}:args,options});
 // Reuse the same protocol request ID after an ambiguous timeout; do not duplicate a turn.
 async function mutate(hostId,method,args){if(['chat.start','chat.send','chat.reply','chat.answer-question','chat.resume'].includes(method))args={...args,inputOrigin:args.inputOrigin||{client:'remote-desktop',windowId:window.desktop?.windowId||'main'}};const key=hostId+':'+method+':'+(args.id||'new'),signature=JSON.stringify(args);let op=operations.get(key);if(!op||op.signature!==signature){op={signature,id:crypto.randomUUID(),issuedAt:new Date().toISOString()};operations.set(key,op);}const result=await request(hostId,method,args,{id:op.id,issuedAt:op.issuedAt});if(operations.get(key)===op)operations.delete(key);return result;}
-const providerLabel=id=>({copilot:'Copilot',codex:'Codex',claude:'Claude',rehearsal:'Local rehearsal'}[id]||id);
+import {openRouterCostText} from '../../features/chats/openrouter-models.js';
+const providerLabel=id=>({copilot:'Copilot',codex:'Codex',claude:'Claude',openrouter:'OpenRouter',rehearsal:'Local rehearsal'}[id]||id);
 const hostLabel=id=>peers.find(peer=>peer.hostId===id)?.label||'Paired computer';
 const documentViews=new Map(), dismissedPreviews=new Set();
 let pendingDocumentPosition;
@@ -176,7 +180,7 @@ function remoteChatDialog(hostId,localDialog,draft={}){
     const controls=()=>{$('#dialog-submit').disabled=!(statusProvider===$('#peer-provider').value&&status?.models?.some(m=>m.id===$('#peer-model').value));};
     const modelRoot=()=>root.querySelector('[data-model-picker="'+modelId+'"]');
     const applyCatalog=selected=>{
-      const select=$('#peer-model');select.dataset.selected=selected||'';select.value=selected||'';
+      const select=$('#peer-model');select.dataset.provider=statusProvider;select.dataset.selected=selected||'';select.value=selected||'';
       // Restore saved options for the default provider/model before the shared update.
       const saved=statusProvider===defaults.provider&&selected===defaults.model?defaults:{};
       for(const [key,suffix,empty] of [['reasoningEffort','effort',''],['contextTier','context','default'],['serviceTier','speed','']]){const input=document.getElementById(modelId+'-'+suffix);if(input){input.innerHTML=option(saved[key]||empty,saved[key]||empty,saved[key]||empty);input.value=saved[key]||empty;}}
@@ -216,12 +220,12 @@ export async function renderRemoteRun(tab){if(ui.state.tab!==tab.id)return;const
   const existing=$('#peer-followup');if(existing&&existing.dataset.key===key)drafts.set(key,existing.value);
   if($('#peer-next-model')?.dataset.key===key)nextModels.set(key,{model:$('#peer-next-model').value,...modelSelection('peer-next-model')});
   const existingAnswer=$('#peer-answer');if(existingAnswer?.dataset.key===key&&existingAnswer.dataset.requestId)drafts.set(key+':answer:'+existingAnswer.dataset.requestId,existingAnswer.value);
-  if(!sameConversation)ui.replaceChatContent(`<div class="heading"><div><div class="eyebrow">${esc(hostLabel(tab.hostId))} · Remote chat</div><div class="chat-title-line"><h1 id="peer-run-title">${esc(tab.label)}</h1><button id="peer-chat-rename" class="chat-rename" type="button" aria-label="Rename chat" title="Rename chat">✎</button></div></div><div id="peer-run-actions" class="actions"></div></div><div id="peer-run-content" class="grid chat-grid"><p>Loading this computer…</p></div>`);ui.renderChatSubtabs?.();
+  if(!sameConversation)ui.replaceChatContent(`<div class="heading"><div><div class="eyebrow">${esc(hostLabel(tab.hostId))} · Remote chat</div><div class="chat-title-line"><h1 id="peer-run-title">${esc(tab.label)}</h1><button id="peer-chat-rename" class="chat-rename" type="button" aria-label="Rename chat" title="Rename chat">✎</button></div></div><div class="chat-heading-controls"><div id="peer-run-actions" class="actions"></div><div id="peer-chat-content-size"></div></div></div><div id="peer-run-content" class="grid chat-grid"><p>Loading this computer…</p></div>`);ui.renderChatSubtabs?.();
   try{await loadPeers();if(!peers.some(p=>p.hostId===tab.hostId))throw new Error('This computer is no longer paired. Add a fresh pairing in Connections.');await call({action:'connect',hostId:tab.hostId,automatic:true});if(!attachmentTypes.has(tab.hostId)){const sync=await request(tab.hostId,'sync',{cursor:''});attachmentTypes.set(tab.hostId,sync.state?.attachmentMediaTypes||{});questionAttachmentTypes.set(tab.hostId,sync.state?.questionAttachmentMediaTypes||{});hostCapabilities.set(tab.hostId,sync.state?.capabilities||[]);hostContexts.set(tab.hostId,sync.state?.context||{});hostMcp.set(tab.hostId,!!sync.state?.mcpStatusProviders?.length);}const previous=olderPages.get(key),incoming=await request(tab.hostId,'chat.get',{id:tab.runId,watch:'summary',...(previous?.historyCursor?{historyCursor:previous.historyCursor}:{})});if(!active()||version!==runGeneration)return;const merged=mergeChatHistory(previous,incoming),run=previous?Object.assign(previous,merged):merged;void ui.syncContentTabs?.();olderPages.delete(key);olderPages.set(key,run);viewResidency.retain('chat:peer:'+key,'chat','history',{active,dispose:()=>{olderPages.delete(key);forgetConversation('peer:'+key);}});await acknowledge(tab.hostId);if(!active()||version!==runGeneration)return;$('#peer-connection-status')?.remove();if(!run.storage&&hostCapabilities.get(tab.hostId)?.includes('chat.paths.v1'))run.storage=await request(tab.hostId,'chat.paths',{id:run.id});
     tab.workspaceId=run.schedule?.context?.workspaceId||tab.workspaceId;
     const pending=run.pending,answerDraftKey=key+':answer:'+(pending?.id||'');
     const signature=JSON.stringify([hostLabel(tab.hostId),run.status,run.chatControls,run.runtimeVerified,run.queueReason,run.pending,run.queuedMessages,run.archivedAt,run.chatType,run.title,run.permissionContext,run.permissionRevision,run.schedule,run.nextModelOptions,run.allowanceContinuation,run.allowanceStatus]);
-    const mountConversation=()=>conversation($('#peer-conversation'),{...run,id:'peer:'+key,chatControls:{...run.chatControls,allowanceContinuation:run.chatControls?.allowanceContinuation===true}},{agentPage:(agentId,before)=>request(tab.hostId,'chat.get',{id:run.id,agentId,...(before===undefined?{}:{beforeEvent:before}),watch:'none'}),questionAttachments:{providerId:run.schedule.provider,mediaTypes:questionAttachmentTypes.get(tab.hostId)||{},destination:hostLabel(tab.hostId)+' · '+run.title,chatId:run.id,send:(action,args)=>mutate(tab.hostId,'chat.attachments.'+action,args)},clearQuestion:(hostCapabilities.get(tab.hostId)||[]).includes('chat.questions.clear.v1')?async question=>{await mutate(tab.hostId,'chat.clear-question',{id:run.id,questionId:question.id});await renderRemoteRun(tab);}:undefined,answerQuestion:async(question,answer,messageId,delivery)=>{await mutate(tab.hostId,question.blocking?'chat.reply':'chat.answer-question',{id:run.id,answer,messageId,...delivery,...(question.blocking?{requestId:question.id}:{questionId:question.id})});await renderRemoteRun(tab);},notify:ui.toast,loadEarlier:async()=>{if(!active()||!run.earlier)return;const older=await request(tab.hostId,'chat.get',{id:run.id,watch:'summary',offset:run.eventCount-run.eventStart,beforeEvent:run.eventStart});if(!active())return;Object.assign(run,mergeChatHistory(run,older));olderPages.set(key,run);mountConversation();},time:ui.time,activityTime:value=>ui.time(value,undefined,true),copy:text=>window.desktop.copyText(text),link:source=>void openRemoteLink(tab.hostId,run,source),image:async source=>(await request(tab.hostId,'chat.image',{id:run.id,source})).dataURL,edit:entry=>reuseRemoteMessage(key,entry),...(run.chatControls?.recovery?{readAttachment:(hostCapabilities.get(tab.hostId)||[]).includes('chat.attachments.view.v1')?sha256=>readRemoteAttachment((method,args)=>request(tab.hostId,method,args),run.id,sha256):undefined,recover:async(action,expectedFailureEventAt)=>{await recoverRemoteChat({run,action,expectedFailureEventAt,request:(method,args)=>request(tab.hostId,method,args),mutate:(method,args)=>mutate(tab.hostId,method,args)});await renderRemoteRun(tab);},notify:ui.toast}:{})});
+    const mountConversation=()=>conversation($('#peer-conversation'),{...run,id:'peer:'+key,chatControls:{...run.chatControls,allowanceContinuation:run.chatControls?.allowanceContinuation===true}},{zoomControls:$('#peer-chat-content-size'),agentPage:(agentId,before)=>request(tab.hostId,'chat.get',{id:run.id,agentId,...(before===undefined?{}:{beforeEvent:before}),watch:'none'}),questionAttachments:{providerId:run.schedule.provider,mediaTypes:questionAttachmentTypes.get(tab.hostId)||{},destination:hostLabel(tab.hostId)+' · '+run.title,chatId:run.id,send:(action,args)=>mutate(tab.hostId,'chat.attachments.'+action,args)},clearQuestion:(hostCapabilities.get(tab.hostId)||[]).includes('chat.questions.clear.v1')?async question=>{await mutate(tab.hostId,'chat.clear-question',{id:run.id,questionId:question.id});await renderRemoteRun(tab);}:undefined,answerQuestion:async(question,answer,messageId,delivery)=>{await mutate(tab.hostId,question.blocking?'chat.reply':'chat.answer-question',{id:run.id,answer,messageId,...delivery,...(question.blocking?{requestId:question.id}:{questionId:question.id})});await renderRemoteRun(tab);},notify:ui.toast,reviewScheduleAccess:(hostCapabilities.get(tab.hostId)||[]).includes('schedule.access.review.v1')?values=>mutate(tab.hostId,'schedule.access.review',{id:run.id,...values}):undefined,loadEarlier:async()=>{if(!active()||!run.earlier)return;const older=await request(tab.hostId,'chat.get',{id:run.id,watch:'summary',offset:run.eventCount-run.eventStart,beforeEvent:run.eventStart});if(!active())return;Object.assign(run,mergeChatHistory(run,older));olderPages.set(key,run);mountConversation();},time:ui.time,activityTime:value=>ui.time(value,undefined,true),copy:text=>window.desktop.copyText(text),link:source=>void openRemoteLink(tab.hostId,run,source),image:async source=>(await request(tab.hostId,'chat.image',{id:run.id,source})).dataURL,edit:entry=>reuseRemoteMessage(key,entry),...(run.chatControls?.recovery?{readAttachment:(hostCapabilities.get(tab.hostId)||[]).includes('chat.attachments.view.v1')?sha256=>readRemoteAttachment((method,args)=>request(tab.hostId,method,args),run.id,sha256):undefined,recover:async(action,expectedFailureEventAt)=>{await recoverRemoteChat({run,action,expectedFailureEventAt,request:(method,args)=>request(tab.hostId,method,args),mutate:(method,args)=>mutate(tab.hostId,method,args)});await renderRemoteRun(tab);},notify:ui.toast}:{})});
     if(sameConversation&&main.dataset.peerControlSignature===signature){
       const usage=run.usage||{},details=$('#peer-run-details');
       for(const [attribute,value] of [['input',usage.inputTokens],['output',usage.outputTokens]]){
@@ -231,6 +235,7 @@ export async function renderRemoteRun(tab){if(ui.state.tab!==tab.id)return;const
       const note=details?.querySelector('[data-usage-note]'),approvals=details?.querySelector('[data-auto-approvals]');
       if(note)note.textContent=usage.observed?'Observed provider usage.':'Provider usage unavailable.';
       if(approvals)approvals.textContent=run.automaticApprovals||0;
+      const cost=details?.querySelector('[data-openrouter-cost]');if(cost)cost.textContent=openRouterCostText(run.openRouterCost,run.status);
       mountConversation();return;
     }
     main.dataset.peerControlSignature=signature;
@@ -241,7 +246,7 @@ export async function renderRemoteRun(tab){if(ui.state.tab!==tab.id)return;const
     $('#peer-chat-archive').onclick=async()=>{try{await mutate(tab.hostId,'chat.archive',{id:run.id,archived:!run.archivedAt,expectedUpdatedAt:run.updatedAt,expectedArchivedAt:run.archivedAt||null});await ui.refresh?.(true);if(active())void renderRemoteRun(tab);}catch(error){ui.toast(error.message);}};
     $('#peer-chat-delete').onclick=()=>ui.showDialog(`<h2>Delete ${esc(run.title)}?</h2><p>This removes only the Proteus chat record on ${esc(hostLabel(tab.hostId))}. Generated files and the provider's original session remain untouched. Independent browser and terminal tabs stay open. Running or queued work must finish or be stopped first.</p><button id="close-dialog">Cancel</button><button id="dialog-submit" class="danger">Delete chat</button>`,async()=>{await mutate(tab.hostId,'chat.delete',{id:run.id,expectedUpdatedAt:run.updatedAt,expectedArchivedAt:run.archivedAt||null});ui.onDeleted?.({chatId:run.id,hostId:tab.hostId,local:false});await ui.refresh?.(true);});
     const playbackFocus=document.activeElement?.closest('.message-actions')?{key:document.activeElement.closest('.message').dataset.key,action:document.activeElement.dataset.messageAction,seek:document.activeElement.hasAttribute('data-message-seek')}:null;
-    $('#peer-run-content').innerHTML=`<section class="card chat-pane"><div class="note peer-status">${esc(run.status)} · ${esc(providerLabel(run.schedule?.provider||''))} · ${esc(run.schedule?.model||'Provider default')}</div><div id="peer-conversation"></div><section id="peer-pending" class="pending" ${pending?'':'hidden'}>${pending?`<h2>${pending.type==='permission'?'Approval needed':'Input requested'} on ${esc(hostLabel(tab.hostId))}</h2><pre>${esc(pending.question||JSON.stringify(pending.details||pending,null,2))}</pre>${pending.type==='permission'?`<button data-peer-answer="approve">${pending.details?.kind==='folder-access'?'Add folder to this chat':'Approve once'}</button><button data-peer-answer="deny">Deny</button>${run.permissionContext&&hostCapabilities.get(tab.hostId)?.includes('chat.permissions.pending.v1')?`<button id="peer-pending-autoapprove" ${run.permissionContext.chatMode==='autopilot'?'disabled':''}>Auto-approve this chat and future continuations</button><p class="note">This chat only, using existing granted resources. Workspace settings stay unchanged. Mandatory approvals still require a decision.</p>`:''}<div class="permission-options">${(pending.permissionChoices||[]).map(choice=>`<button data-peer-answer="${esc(choice.value)}">${esc(choice.label)}</button>`).join('')}</div><p class="note">Saved workspace approvals also apply to other chats and schedules with the same configuration, until revoked.</p><p class="note">${esc(pending.permissionReason||'')}</p>`:`<label>Your answer<textarea id="peer-answer" data-key="${esc(key)}" data-request-id="${esc(pending.id)}"></textarea></label><div id="peer-question-attachments"></div><button id="peer-send-answer">Send answer</button>`}`:''}</section>${workingMessage(run)?`<p id="peer-working" class="note" role="status"><span class="spinner" aria-hidden="true"></span>${esc(workingMessage(run))}</p>`:''}${run.status==='queued'?`<p class="note" role="status">${esc(run.queueReason||'Preparing this chat…')}</p>`:''}<form id="peer-reply-form" class="composer"><label class="sr-only" for="peer-followup">Message to ${esc(hostLabel(tab.hostId))}</label><textarea id="peer-followup" data-key="${esc(key)}" rows="2" placeholder="Continue this conversation…">${esc(drafts.get(key)||'')}</textarea><div class="composer-footer"><div id="peer-run-attachments"></div><div id="peer-model-slot" class="composer-models"></div><div class="composer-actions">${['running','awaiting_input','queued'].includes(run.status)?'<button type="button" id="peer-steer" data-steer-mode="'+(run.schedule.provider==='claude'?'interrupt-and-continue':'steer')+'" '+(run.chatControls?.steering?'':'hidden ')+(run.status==='running'?'':'disabled')+'>Steer</button><button type="submit" class="primary" id="peer-send" data-mode="queue">Queue</button><button type="button" id="peer-cancel" class="danger">Stop</button>':'<button type="submit" class="primary" id="peer-send" data-mode="queue">Send ↑</button>'}</div></div>${(run.queuedMessages||[]).map(message=>`<div class="queued-message"><span>${esc(message.prompt)}</span>${run.status==='running'&&run.chatControls?.steering&&(!message.hasAttachments||message.canSteer)?`<button type="button" data-peer-steer-queued="${esc(message.id)}">Steer now</button>`:''}${hostCapabilities.get(tab.hostId)?.includes('chat.queue-edit.v1')?`<button type="button" data-peer-edit-queued="${esc(message.id)}">Edit</button>`:''}<button type="button" data-peer-unqueue="${esc(message.id)}">Remove</button></div>`).join('')}</form></section><div id="peer-run-details" class="stack chat-details">${renderRunDetails(run,{remote:true,permissionHTML:approvalDetails(run.permissionContext,{remote:true,prefix:"peer",desktopPreview:previewEnabled(ui.state)||hostCapabilities.get(tab.hostId)?.includes("chat.permissions.shared.v1"),workspaceName:run.context?.workspaceName}),mcp:hostMcp.get(tab.hostId),mcpID:"peer-mcp-connections",contextID:"peer-refresh-context"})}</div>`;
+    $('#peer-run-content').innerHTML=`<section class="card chat-pane"><div class="note peer-status">${esc(run.status)} · ${esc(providerLabel(run.schedule?.provider||''))} · ${esc(run.schedule?.model||'Provider default')}</div><div id="peer-conversation"></div><section id="peer-pending" class="pending" ${pending?'':'hidden'}>${pending?`<h2>${pending.type==='permission'?'Approval needed':'Input requested'} on ${esc(hostLabel(tab.hostId))}</h2><pre>${esc(pending.question||JSON.stringify(pending.details||pending,null,2))}</pre>${pending.type==='permission'?`<button data-peer-answer="approve">${pending.details?.kind==='folder-access'?'Add folder to this chat':'Approve once'}</button><button data-peer-answer="deny">Deny</button>${run.permissionContext&&!run.permissionContext.scopedCommands&&hostCapabilities.get(tab.hostId)?.includes('chat.permissions.pending.v1')?`<button id="peer-pending-autoapprove" ${run.permissionContext.chatMode==='autopilot'?'disabled':''}>Auto-approve this chat and future continuations</button><p class="note">This chat only, using existing granted resources. Workspace settings stay unchanged. Mandatory approvals still require a decision.</p>`:''}<div class="permission-options">${(pending.permissionChoices||[]).map(choice=>`<button data-peer-answer="${esc(choice.value)}">${esc(choice.label)}</button>`).join('')}</div><p class="note">Saved workspace approvals also apply to other chats and schedules with the same configuration, until revoked.</p><p class="note">${esc(pending.permissionReason||'')}</p>`:`<label>Your answer<textarea id="peer-answer" data-key="${esc(key)}" data-request-id="${esc(pending.id)}"></textarea></label><div id="peer-question-attachments"></div><button id="peer-send-answer">Send answer</button>`}`:''}</section>${workingMessage(run)?`<p id="peer-working" class="note" role="status"><span class="spinner" aria-hidden="true"></span>${esc(workingMessage(run))}</p>`:''}${run.status==='queued'?`<p class="note" role="status">${esc(run.queueReason||'Preparing this chat…')}</p>`:''}<form id="peer-reply-form" class="composer"><label class="sr-only" for="peer-followup">Message to ${esc(hostLabel(tab.hostId))}</label><textarea id="peer-followup" data-key="${esc(key)}" rows="2" placeholder="Continue this conversation…">${esc(drafts.get(key)||'')}</textarea><div class="composer-footer"><div id="peer-run-attachments"></div><div id="peer-model-slot" class="composer-models"></div><div class="composer-actions">${['running','awaiting_input','queued'].includes(run.status)?'<button type="button" id="peer-steer" data-steer-mode="'+(run.schedule.provider==='claude'?'interrupt-and-continue':'steer')+'" '+(run.chatControls?.steering?'':'hidden ')+(run.status==='running'?'':'disabled')+'>Steer</button><button type="submit" class="primary" id="peer-send" data-mode="queue">Queue</button><button type="button" id="peer-cancel" class="danger">Stop</button>':'<button type="submit" class="primary" id="peer-send" data-mode="queue">Send ↑</button>'}</div></div>${(run.queuedMessages||[]).map(message=>`<div class="queued-message"><span>${esc(message.prompt)}</span>${run.status==='running'&&run.chatControls?.steering&&(!message.hasAttachments||message.canSteer)?`<button type="button" data-peer-steer-queued="${esc(message.id)}">Steer now</button>`:''}${hostCapabilities.get(tab.hostId)?.includes('chat.queue-edit.v1')?`<button type="button" data-peer-edit-queued="${esc(message.id)}">Edit</button>`:''}<button type="button" data-peer-unqueue="${esc(message.id)}">Remove</button></div>`).join('')}</form></section><div id="peer-run-details" class="stack chat-details">${renderRunDetails(run,{remote:true,permissionHTML:approvalDetails(run.permissionContext,{remote:true,prefix:"peer",desktopPreview:previewEnabled(ui.state)||hostCapabilities.get(tab.hostId)?.includes("chat.permissions.shared.v1"),workspaceName:run.context?.workspaceName}),mcp:hostMcp.get(tab.hostId),mcpID:"peer-mcp-connections",contextID:"peer-refresh-context"})}</div>`;
     $('#peer-conversation').dataset.linkCwd=run.schedule?.workspace?.cwd||'';
     const pickerKey='remote-run:'+key;mountAttachmentPicker({key:pickerKey,host:$('#peer-run-attachments'),textarea:$('#peer-followup'),provider:()=>run.schedule.provider,mediaTypes:attachmentTypes.get(tab.hostId)||{},notify:ui.toast});
     const currentOptions=run.nextModelOptions||run.schedule,selectedOptions=nextModels.get(key)||currentOptions;
@@ -255,7 +260,7 @@ export async function renderRemoteRun(tab){if(ui.state.tab!==tab.id)return;const
       if(pending?.type==='permission')$('#peer-pending').innerHTML=`<h2>Approval needed on ${esc(hostLabel(tab.hostId))}</h2>`+previewApprovalChoices(pending).replace('id="approve"','data-peer-answer="approve"').replace('id="deny"','data-peer-answer="deny"');
       bindPermissionSidebar(main,{run,request:payload=>mutate(tab.hostId,'chat.permissions',{...payload,id:run.id,scope:'chat'}),reply:(answer,requestId)=>mutate(tab.hostId,'chat.reply',{id:run.id,answer,requestId}),reload:()=>renderRemoteRun(tab),dialog:ui.showDialog,notify:ui.toast,openWorkspace:()=>{const workspaceId=run.context?.workspaceId||run.permissionContext?.workspaceId,workspace=hostContexts.get(tab.hostId)?.workspaces?.find(item=>item.id===workspaceId);if(!workspace){ui.toast('The original workspace is unavailable on its owner.');return;}ui.openWorkspace?.({...workspace,hostId:tab.hostId},'configuration');}});
     }
-    if(run.permissionContext){const p=run.permissionContext;for(const [selector,mode] of [['#peer-chat-autoapprove','autopilot'],['#peer-chat-inherit','inherit'],['#peer-pending-autoapprove','autopilot']])if($(selector))$(selector).onclick=async()=>{const button=$(selector);button.disabled=true;try{await mutate(tab.hostId,'chat.permissions',{id:run.id,scope:'chat',mode,expectedContextId:p.id,expectedChatRevision:p.chatRevision,...(pending?.type==='permission'?{expectedRequestId:pending.id}:{})});void renderRemoteRun(tab);}catch(error){ui.toast(error.message);}finally{if(button.isConnected)button.disabled=mode==='autopilot'?p.chatMode==='autopilot':p.chatMode!=='autopilot';}};}
+    if(run.permissionContext){const p=run.permissionContext;for(const [selector,mode] of [['#peer-chat-autoapprove','autopilot'],['#peer-chat-inherit','inherit'],['#peer-pending-autoapprove','autopilot']])if($(selector))$(selector).onclick=async()=>{const button=$(selector);button.disabled=true;try{await mutate(tab.hostId,'chat.permissions',{id:run.id,scope:'chat',mode,expectedContextId:p.id,expectedChatRevision:p.chatRevision,...(pending?.type==='permission'?{expectedRequestId:pending.id}:{})});void renderRemoteRun(tab);}catch(error){ui.toast(error.message);}finally{if(button.isConnected)button.disabled=mode==='autopilot'?p.chatMode==='autopilot':p.scopedCommands?p.chatMode==='inherit':p.chatMode!=='autopilot';}};}
     if(!sharedPermissions&&previewEnabled(ui.state)){
       const panel=main.querySelector('[data-preview-permissions]');
       if(panel){const note=document.createElement('p');note.className='note';note.textContent='Some permission controls require an update on the executing computer.';panel.append(note);
@@ -283,16 +288,53 @@ export async function renderRemoteRun(tab){if(ui.state.tab!==tab.id)return;const
     $('#peer-cancel')?.addEventListener('click',async()=>{try{await mutate(tab.hostId,'chat.cancel',{id:run.id});refresh();}catch(error){ui.toast(error.message);}});
     mountChatComposer($('#peer-reply-form'),{active:['running','awaiting_input','queued'].includes(run.status),models:$('#peer-model-slot')});
     bindRemotePaths($('#peer-run-details'),{copy:text=>window.desktop.copyText(text),notify:ui.toast});
-    if(hostCapabilities.get(tab.hostId)?.includes('chat.paths.v1')){bindRemoteDetails($('#peer-run-details'),{run,request:(method,args)=>request(tab.hostId,method,args),mutate:(method,args)=>mutate(tab.hostId,method,args),refresh:()=>renderRemoteRun(tab),notify:ui.toast,context:hostContexts.get(tab.hostId)||{}});}
+    if(hostCapabilities.get(tab.hostId)?.includes('chat.paths.v1')){bindRemoteDetails($('#peer-run-details'),{run,autoRefreshSupported:hostCapabilities.get(tab.hostId)?.includes('context.auto-refresh.v1'),request:(method,args)=>request(tab.hostId,method,args),mutate:(method,args)=>mutate(tab.hostId,method,args),refresh:()=>renderRemoteRun(tab),notify:ui.toast,context:hostContexts.get(tab.hostId)||{}});}
     ui.restoreView?.();
   }catch(error){if(active()&&version===runGeneration){setConversationVerified('peer:'+key,false);$('#peer-working')?.remove();delete main.dataset.peerControlSignature;const area=$('#peer-run-content');let banner=$('#peer-connection-status');if(!banner){banner=document.createElement('p');banner.id='peer-connection-status';banner.className='banner';area.before(banner);}banner.textContent=String(error.message).replace(/^Error invoking remote method '[^']+':\s*(?:Error:\s*)?/, '')+' Your draft is preserved. ';const retry=document.createElement('button');retry.id='peer-run-retry';retry.textContent='Retry now';retry.onclick=()=>void call({action:'connect',hostId:tab.hostId}).then(()=>renderRemoteRun(tab)).catch(error=>ui.toast(error.message));banner.append(retry);}}
 }
 export async function renderDesktopDestinations(container,{access}={}){if(!window.desktop?.peers)return;const section=document.createElement('section');section.className='card desktop-destinations';container.append(section);if(access&&ui?.state.data)ui.state.data.computerAccess=access;if(access?.managed){section.innerHTML='<h2>Other desktop computers</h2><p class="note" data-outgoing-blocked>Outgoing computer access is blocked on this managed computer. Incoming management and originating task feedback remain available.</p>';return;}try{await loadPeers();if(!section.isConnected)return;section.innerHTML=`<h2>Other desktop computers</h2><p class="note">To connect to another computer: open Proteus there, go to Engine Room → Computer Connections, and choose Create pairing code. Paste that fresh code here. The relay website does not issue pairing codes, and you do not need to enable incoming access on this computer.</p><p class="note">Pair this desktop separately with each destination. Your new chats start with ${esc(computerName(ui.state.data?.hostName))} selected.</p><p class="note">The destination name comes from that computer’s Connections settings. This pairing lets you manage that computer; it does not let that computer see or control this one. Do not create a reverse pairing for task feedback.</p><div class="desktop-pair-form"><label>Pairing code from the other computer<textarea id="peer-code" rows="3" autocomplete="off" spellcheck="false"></textarea></label><button id="peer-pair">Pair desktop destination</button><p class="note" id="peer-pair-status" role="status"></p></div><div class="desktop-peer-list">${peers.map(peer=>`<div class="device-row"><div class="desktop-peer-summary"><strong>${esc(peer.label)}</strong><p>${computerPlatformLabel(peer)==='Computer'?'':esc(computerPlatformLabel(peer))+' · '}${esc(peer.status)}</p></div><div class="actions desktop-peer-actions">${peer.paused?'<button data-peer-resume="'+esc(peer.hostId)+'">Resume</button>':'<button data-peer-connect="'+esc(peer.hostId)+'">Connect</button><button data-peer-pause="'+esc(peer.hostId)+'">Pause here</button>'}<button data-peer-access="${esc(peer.hostId)}">Computer role…</button><button data-peer-remove="${esc(peer.hostId)}">Forget here</button></div></div>`).join('')}</div><p class="note">Forget removes this computer’s protected credentials. Revoke its device entry on the destination to invalidate that device key there.</p>`;
     const redraw=()=>{section.remove();void renderDesktopDestinations(container,{access});};
+    mountComputerOrder(section,redraw);
     section.querySelectorAll('[data-peer-access]').forEach(button=>button.onclick=async()=>{button.disabled=true;try{const hostId=button.dataset.peerAccess,value=await request(hostId,'computer.access.get',{});ui.showDialog(`<h2>Computer role · ${esc(hostLabel(hostId))}</h2>${computerAccessFields(value,{escape:esc,id:'peer-computer-managed'})}<button id="close-dialog">Cancel</button><button id="dialog-submit">Save computer role</button>`,async()=>{await mutate(hostId,'computer.access.update',{managed:document.querySelector('#peer-computer-managed').checked,expectedRevision:value.revision});ui.toast('Computer role saved on the destination.');});}catch(error){ui.toast(error.message);}finally{if(button.isConnected)button.disabled=false;}});section.querySelector('#peer-pair').onclick=async()=>{const button=section.querySelector('#peer-pair'),input=section.querySelector('#peer-code'),status=section.querySelector('#peer-pair-status'),code=input.value.trim();if(!code){status.textContent='Paste a fresh pairing code from Proteus on the other computer.';input.focus();return;}button.disabled=true;status.textContent='Pairing with the other computer…';try{await call({action:'pair',code,label:''});if(section.isConnected){input.value='';ui.toast('Computer paired.');redraw();}}catch(error){if(section.isConnected)status.textContent=String(error.message).replace(/^Error invoking remote method '[^']+':\s*(?:Error:\s*)?/,'');}finally{if(button.isConnected)button.disabled=false;}};
     for(const action of ['pause','resume'])section.querySelectorAll('[data-peer-'+action+']').forEach(button=>button.onclick=async()=>{try{await call({action,hostId:button.getAttribute('data-peer-'+action)});redraw();}catch(error){ui.toast(error.message);}});
     section.querySelectorAll('[data-peer-connect]').forEach(button=>button.onclick=async()=>{try{await call({action:'connect',hostId:button.dataset.peerConnect});redraw();}catch(error){ui.toast(error.message);}});section.querySelectorAll('[data-peer-remove]').forEach(button=>button.onclick=async()=>{try{await call({action:'remove',hostId:button.dataset.peerRemove});redraw();}catch(error){ui.toast(error.message);}});
   }catch(error){section.textContent=error.message;}}
+
+function mountComputerOrder(section,redraw){
+  const list=section.querySelector('.desktop-peer-list');
+  if(!list)return;
+  const demo=ui.state.data.desktopPreview?.designDemo===true&&!peers.length;
+  const settings=ui.state.data.settings;
+  const computers=demo?orderedComputers(demoComputerDestinations,settings.preferences?.computerOrder):peers;
+  const preference=document.createElement('section');
+  preference.className='computer-order';
+  preference.innerHTML='<h3>Computer order</h3><p class="note">Set the order for other computers in the sidebar, link picker and destination menus. Paired iPhones and iPads receive this order. This computer stays first here.</p>';
+  list.before(preference);
+  if(demo){
+    preference.append(Object.assign(document.createElement('p'),{className:'note',textContent:'Demo computers'}));
+    list.innerHTML=computers.map(peer=>`<div class="device-row"><strong>${esc(peer.label)}</strong><div class="actions desktop-peer-actions"></div></div>`).join('');
+  }
+  Array.from(list.children).forEach((row,index)=>{
+    const actions=row.querySelector('.desktop-peer-actions'),peer=computers[index];
+    if(computers.length<2)return;
+    for(const [offset,label,arrow] of [[-1,'Move up','↑'],[1,'Move down','↓']]){
+      const button=document.createElement('button');
+      button.type='button';button.textContent=arrow;button.title=label+' '+peer.label;button.setAttribute('aria-label',button.title);
+      button.disabled=!computers[index+offset];
+      button.onclick=async()=>{
+        Array.from(list.querySelectorAll('button')).forEach(control=>{control.disabled=true;});
+        const ids=computers.map(peer=>peer.hostId);
+        [ids[index],ids[index+offset]]=[ids[index+offset],ids[index]];
+        try{
+          const saved=await ui.api('/api/settings',{settings:{...settings,preferences:{...settings.preferences,computerOrder:ids}},expectedRevision:settings.revision});
+          ui.state.data.settings=saved;
+        }catch(error){ui.toast(error.message);}
+        if(section.isConnected)redraw();
+      };
+      actions.prepend(button);
+    }
+  });
+}
 
 export async function mountRemoteSchedules(){
   if(!window.desktop?.peers)return;
@@ -305,12 +347,180 @@ export async function mountRemoteSchedules(){
 }
 function editRemoteSchedule(hostId,s,reload,hostState={}){
   const owned=!!s.source?.manifest;let availableScheduleModels=null;
-  ui.showDialog(`<h2>${esc(s.name)} · ${esc(hostLabel(hostId))}</h2><p class="note">${owned?'Repository-owned schedule. Edit its source manifest on this computer.':'Changes are saved on this computer with revision protection.'}</p><label>Name<input id="peer-schedule-name" value="${esc(s.name)}" ${owned?'disabled':''}></label><div class="row"><label>Cron<input id="peer-schedule-cron" value="${esc(s.cron)}" ${owned?'disabled':''}></label><label>Time zone<input id="peer-schedule-timezone" value="${esc(s.timezone)}" ${owned?'disabled':''}></label></div><div class="row"><label>Provider<select id="peer-schedule-provider" ${owned?'disabled':''}>${[...new Set([s.provider,...Object.keys(hostState.providerStatuses||{})])].filter(Boolean).map(id=>option(id,providerLabel(id),s.provider)).join('')}</select></label><label>Model<select id="peer-schedule-model" ${owned?'disabled':''}>${option(s.model||'',s.model||'Provider default',s.model||'')}</select></label></div><div id="peer-schedule-controls" class="row"></div><p id="peer-schedule-catalog" class="note"></p><label>After missed runs<select id="peer-schedule-misfire" ${owned?'disabled':''}>${option('skip','Wait for next time',s.misfire)}${option('coalesce','Catch up once',s.misfire)}</select></label><details><summary>Workspace context on ${esc(hostLabel(hostId))}</summary><label>Workspace<select id="peer-schedule-workspace" ${owned?'disabled':''}>${(hostState.context?.workspaces||[]).map(w=>option(w.id,w.name||w.label||w.id,s.contextSelection?.workspaceId||hostState.context?.defaultWorkspaceId)).join('')}</select></label><label class="checkbox-row"><input id="peer-schedule-defaults" type="checkbox" ${s.contextSelection?.includeDefaults!==false?'checked':''} ${owned?'disabled':''}>Include workspace defaults</label>${(hostState.context?.entries||[]).filter(e=>e.kind!=='agent').map(e=>`<label class="checkbox-row"><input type="checkbox" data-peer-schedule-source="${esc(e.id)}" ${s.contextSelection?.selectedIds?.includes(e.id)?'checked':''} ${owned||e.mode==='disabled'||e.missing?'disabled':''}>${esc(e.name)} · ${esc(e.kind)}</label>`).join('')}</details><label>Instructions<textarea id="peer-schedule-prompt" rows="5" ${owned?'disabled':''}>${esc(s.prompt)}</textarea></label><label class="checkbox-row"><input id="peer-schedule-enabled" type="checkbox" ${s.enabled?'checked':''} ${owned?'disabled':''}>Enabled</label><label class="checkbox-row"><input id="peer-schedule-notify" type="checkbox" ${s.notifications?.onCompletion?'checked':''} ${owned?'disabled':''}>Notify on completion</label><button id="peer-schedule-preview">Preview upcoming times</button><p id="peer-schedule-times" class="note"></p><div class="actions"><button id="close-dialog">Close</button><button id="peer-schedule-run">Run on ${esc(hostLabel(hostId))}</button>${owned?'':'<button id="dialog-submit">Save changes</button>'}</div>`,async()=>{if($('#peer-schedule-provider').value!==s.provider&&!availableScheduleModels?.some(model=>model.id===$('#peer-schedule-model').value))throw new Error('Choose an available model for the selected provider.');await mutate(hostId,'schedule.save',{id:s.id,expectedRevision:s.revision,changes:{provider:$('#peer-schedule-provider').value,model:$('#peer-schedule-model').value,...Object.fromEntries(['reasoningEffort','contextTier','serviceTier'].filter(key=>$('#peer-schedule-'+key)).map(key=>[key,$('#peer-schedule-'+key).value])),misfire:$('#peer-schedule-misfire').value,contextSelection:{...s.contextSelection,...($('#peer-schedule-workspace').value?{workspaceId:$('#peer-schedule-workspace').value}:{}),includeDefaults:$('#peer-schedule-defaults').checked,selectedIds:[...document.querySelectorAll('[data-peer-schedule-source]:checked')].map(input=>input.dataset.peerScheduleSource)},name:$('#peer-schedule-name').value,cron:$('#peer-schedule-cron').value,timezone:$('#peer-schedule-timezone').value,prompt:$('#peer-schedule-prompt').value,enabled:$('#peer-schedule-enabled').checked,notifications:{...s.notifications,onCompletion:$('#peer-schedule-notify').checked}}});void reload();});
+  ui.showDialog(`<h2>${esc(s.name)} · ${esc(hostLabel(hostId))}</h2><p class="note">${owned?'Repository-owned schedule. Edit its source manifest on this computer.':'Changes are saved on this computer with revision protection.'}</p><label>Name<input id="peer-schedule-name" value="${esc(s.name)}" ${owned?'disabled':''}></label><div class="row"><label>Cron<input id="peer-schedule-cron" value="${esc(s.cron)}" ${owned?'disabled':''}></label><label>Time zone<input id="peer-schedule-timezone" value="${esc(s.timezone)}" ${owned?'disabled':''}></label></div><div class="row"><label>Provider<select id="peer-schedule-provider" ${owned?'disabled':''}>${[...new Set([s.provider,...Object.keys(hostState.providerStatuses||{})])].filter(Boolean).map(id=>option(id,providerLabel(id),s.provider)).join('')}</select></label><label>Model<select id="peer-schedule-model" ${owned?'disabled':''}>${option(s.model||'',s.model||'Provider default',s.model||'')}</select></label></div><div id="peer-schedule-controls" class="row"></div><p id="peer-schedule-catalog" class="note"></p><label>After missed runs<select id="peer-schedule-misfire" ${owned?'disabled':''}>${option('skip','Wait for next time',s.misfire)}${option('coalesce','Catch up once',s.misfire)}</select></label><details><summary>Workspace context on ${esc(hostLabel(hostId))}</summary><label>Workspace<select id="peer-schedule-workspace" ${owned?'disabled':''}>${(hostState.context?.workspaces||[]).map(w=>option(w.id,w.name||w.label||w.id,s.contextSelection?.workspaceId||hostState.context?.defaultWorkspaceId)).join('')}</select></label><label class="checkbox-row"><input id="peer-schedule-defaults" type="checkbox" ${s.contextSelection?.includeDefaults!==false?'checked':''} ${owned?'disabled':''}>Include workspace defaults</label>${(hostState.context?.entries||[]).filter(e=>e.kind!=='agent').map(e=>`<label class="checkbox-row"><input type="checkbox" data-peer-schedule-source="${esc(e.id)}" ${s.contextSelection?.selectedIds?.includes(e.id)?'checked':''} ${owned||e.mode==='disabled'||e.missing?'disabled':''}>${esc(e.name)} · ${esc(e.kind)}</label>`).join('')}</details><label>Instructions<textarea id="peer-schedule-prompt" rows="5" ${owned?'disabled':''}>${esc(s.prompt)}</textarea></label><label class="checkbox-row"><input id="peer-schedule-enabled" type="checkbox" ${s.enabled?'checked':''} ${owned?'disabled':''}>Enabled</label><label class="checkbox-row"><input id="peer-schedule-notify" type="checkbox" ${s.notifications?.onCompletion?'checked':''} ${owned?'disabled':''}>Notify on completion</label>${!owned&&hostState.capabilities?.includes('context.auto-refresh.v1')?`<label class="checkbox-row"><input id="peer-schedule-auto-source-refresh" type="checkbox" ${s.autoRefreshSources?'checked':''}> Refresh instruction and skill edits automatically</label>`:''}<button id="peer-schedule-preview">Preview upcoming times</button><p id="peer-schedule-times" class="note"></p><div class="actions"><button id="close-dialog">Close</button><button id="peer-schedule-run">Run on ${esc(hostLabel(hostId))}</button>${!owned&&s.provider!=='local-process'&&hostState.capabilities?.includes('schedule.delete.v1')?'<button id="peer-schedule-delete" class="danger">Delete schedule</button>':''}${owned?'':'<button id="dialog-submit">Save changes</button>'}</div><div data-peer-schedule-error aria-live="polite"></div>`,()=>{});
+  const submitButton = $('#dialog-submit');
+  const saveArea = document.querySelector('[data-peer-schedule-error]');
+  function readDraft() {
+    if ($('#peer-schedule-provider').value !== s.provider && !availableScheduleModels?.some(model => model.id === $('#peer-schedule-model').value)) {
+      throw Error('Choose an available model for the selected provider.');
+    }
+    const sourceInputs = [...document.querySelectorAll('[data-peer-schedule-source]')];
+    const selectedIds = new Set(s.contextSelection?.selectedIds || []);
+    for (const input of sourceInputs) {
+      if (input.disabled) continue;
+      if (input.checked) selectedIds.add(input.dataset.peerScheduleSource);
+      else selectedIds.delete(input.dataset.peerScheduleSource);
+    }
+    const workspaceId = $('#peer-schedule-workspace').value;
+    const contextSelection = {
+      ...s.contextSelection,
+      ...(workspaceId ? {workspaceId} : {}),
+      includeDefaults: $('#peer-schedule-defaults').checked,
+      selectedIds: [...selectedIds],
+    };
+    return {
+      provider: $('#peer-schedule-provider').value,
+      model: $('#peer-schedule-model').value,
+      ...Object.fromEntries(['reasoningEffort','contextTier','serviceTier']
+        .filter(key => $('#peer-schedule-'+key)).map(key => [key,$('#peer-schedule-'+key).value])),
+      misfire: $('#peer-schedule-misfire').value,
+      contextSelection,
+      name: $('#peer-schedule-name').value,
+      cron: $('#peer-schedule-cron').value,
+      timezone: $('#peer-schedule-timezone').value,
+      prompt: $('#peer-schedule-prompt').value,
+      enabled: $('#peer-schedule-enabled').checked,
+      ...($('#peer-schedule-auto-source-refresh')?{autoRefreshSources:$('#peer-schedule-auto-source-refresh').checked}:{}),
+      notifications: {...s.notifications,onCompletion:$('#peer-schedule-notify').checked},
+    };
+  }
+  let saving = false;
+  async function submitSchedule(newest = s, reviewedDraft, refresh = false) {
+    if (saving || !saveArea.isConnected) return;
+    saving = true;
+    submitButton.disabled = true;
+    saveArea.textContent = refresh ? 'Refreshing context and saving…' : 'Saving on the owning computer…';
+    try {
+      const changes = reviewedDraft || readDraft();
+      if (refresh) await mutate(hostId,'context.refresh',{workspaceId:changes.contextSelection?.workspaceId});
+      if (!saveArea.isConnected) return;
+      await mutate(hostId,'schedule.save',{id:s.id,expectedRevision:newest.revision,changes});
+      if (saveArea.isConnected) $('#dialog').close();
+      void reload();
+      ui.toast('Schedule saved.');
+    } catch(error) {
+      if (!saveArea.isConnected) return;
+      saveArea.textContent = error.message;
+      if (/Instructions changed\. Refresh context before starting:/i.test(error.message)) {
+        // The owner settled this rejection before saving. A reviewed retry needs a new operation.
+        operations.delete(hostId+':schedule.save:'+s.id);
+        const retry = document.createElement('button');
+        retry.textContent = 'Refresh context and save';
+        retry.onclick = () => void submitSchedule(newest,reviewedDraft,true);
+        saveArea.append(' ',retry);
+      } else if (/schedule changed|reload before saving/i.test(error.message)) {
+        const review = document.createElement('button');
+        review.textContent = 'Review conflicts';
+        review.onclick = () => void reviewScheduleChanges(review);
+        saveArea.append(' ',review);
+      }
+    } finally {
+      saving = false;
+      submitButton.disabled = false;
+    }
+  }
+  async function reviewScheduleChanges(button) {
+    button.disabled = true;
+    submitButton.disabled = true;
+    const details = document.createElement('p');
+    details.textContent = 'Fetching the latest schedule…';
+    saveArea.append(details);
+    try {
+      const value = await request(hostId,'sync',{cursor:''});
+      if (!saveArea.isConnected) return;
+      const newest = value.state?.schedules?.find(item => item.id === s.id);
+      if (!newest || newest.source?.manifest) throw Error('The saved schedule is no longer editable here.');
+      const draft = readDraft();
+      const project = source => Object.fromEntries(Object.keys(draft).map(key => [key,source[key]]));
+      const base = project(s), latest = project(newest);
+      const {conflicts} = rebaseSchedule(base,draft,latest);
+      if (!conflicts.length) {
+        await submitSchedule(newest,rebaseSchedule(base,draft,latest).value);
+        return;
+      }
+      const review = document.createElement('fieldset');
+      const legend = document.createElement('legend');
+      legend.textContent = 'Review concurrent schedule edits';
+      review.append(legend);
+      const choices = {};
+      for (const conflict of conflicts) {
+        const field = document.createElement('label');
+        field.textContent = conflict.label;
+        const choice = document.createElement('select');
+        choice.required = true;
+        choice.append(new Option('Choose a value',''));
+        for (const [key,label] of [['draft','Keep draft'],['saved','Use saved']]) {
+          const value = typeof conflict[key] === 'string' ? conflict[key] : JSON.stringify(conflict[key]) ?? 'Removed';
+          choice.append(new Option(label+' · '+value,key));
+        }
+        choice.onchange = () => { choices[conflict.key] = choice.value; };
+        field.append(choice);
+        review.append(field);
+      }
+      const apply = document.createElement('button');
+      apply.textContent = 'Apply choices and save';
+      apply.onclick = () => {
+        if ([...review.querySelectorAll('select')].some(choice => !choice.reportValidity())) return;
+        let unchanged = false;
+        try { unchanged = JSON.stringify(readDraft()) === JSON.stringify(draft); } catch {}
+        if (!unchanged) {
+          details.textContent = 'The draft changed during review. Review conflicts again.';
+          button.disabled = false;
+          saveArea.append(button,details);
+          return;
+        }
+        void submitSchedule(newest,rebaseSchedule(base,draft,latest,choices).value);
+      };
+      review.append(apply);
+      saveArea.replaceChildren(review);
+      review.querySelector('select')?.focus();
+    } catch(error) {
+      details.textContent = error.message;
+    } finally {
+      button.disabled = false;
+      submitButton.disabled = false;
+    }
+  }
+  if (submitButton) submitButton.onclick = () => void submitSchedule();
   let catalogVersion=0;
-  const catalog=async()=>{const version=++catalogVersion,provider=$('#peer-schedule-provider').value;availableScheduleModels=null;$('#peer-schedule-model').innerHTML=provider===s.provider?option(s.model||'',s.model||'Provider default',s.model||''):'<option value="">Choose a model</option>';$('#peer-schedule-controls').innerHTML='';try{const status=await request(hostId,'provider.status',{provider,force:false});if(version!==catalogVersion||!$('#peer-schedule-model'))return;const models=(status.models||[]).filter(model=>model.policy?.state!=='disabled');availableScheduleModels=models;if(!models.length){$('#peer-schedule-catalog').textContent=status.error||'Model metadata is unavailable on this computer. Existing settings are preserved.';return;}$('#peer-schedule-catalog').textContent='Model capabilities reported by '+hostLabel(hostId)+'.';$('#peer-schedule-model').innerHTML='<option value="" disabled>Choose a model</option>'+(provider===s.provider&&s.model&&!models.some(m=>m.id===s.model)?option(s.model,s.model+' · saved',s.model):'')+models.map(model=>option(model.id,model.name||model.id,provider===s.provider?s.model:'')).join('');$('#peer-schedule-model').value=provider===s.provider?s.model||'':'';const controls=()=>{const model=models.find(m=>m.id===$('#peer-schedule-model').value);if(!model){$('#peer-schedule-controls').innerHTML='';return;}$('#peer-schedule-controls').innerHTML=[['reasoningEffort','Reasoning','reasoningEfforts'],['contextTier','Context','contextTiers'],['serviceTier','Speed','serviceTiers']].map(([key,label,field])=>`<label>${label}<select id="peer-schedule-${key}"><option value="">Provider default</option>${(model?.controls?.[field]||[]).map(v=>option(typeof v==='string'?v:v.id,typeof v==='string'?(model?.controls?.reasoningEffortLabels?.[v]||v):v.name||v.id,provider===s.provider&&model?.id===s.model?s[key]:'')).join('')}</select></label>`).join('');};$('#peer-schedule-model').onchange=controls;controls();}catch(error){if($('#peer-schedule-catalog'))$('#peer-schedule-catalog').textContent=error.message;}};
+  const catalog=async()=>{const version=++catalogVersion,provider=$('#peer-schedule-provider').value;availableScheduleModels=null;updateModelChoices($('#peer-schedule-model'),null,'');$('#peer-schedule-model').innerHTML=provider===s.provider?option(s.model||'',s.model||'Provider default',s.model||''):'<option value="">Choose a model</option>';$('#peer-schedule-controls').innerHTML='';try{const status=await request(hostId,'provider.status',{provider,force:false});if(version!==catalogVersion||!$('#peer-schedule-model'))return;const models=(status.models||[]).filter(model=>model.policy?.state!=='disabled');availableScheduleModels=models;if(!models.length){$('#peer-schedule-catalog').textContent=status.error||'Model metadata is unavailable on this computer. Existing settings are preserved.';return;}$('#peer-schedule-catalog').textContent='Model capabilities reported by '+hostLabel(hostId)+'.';$('#peer-schedule-model').innerHTML='<option value="" disabled>Choose a model</option>'+(provider===s.provider&&s.model&&!models.some(m=>m.id===s.model)?option(s.model,s.model+' · saved',s.model):'')+models.map(model=>option(model.id,model.name||model.id,provider===s.provider?s.model:'')).join('');$('#peer-schedule-model').value=provider===s.provider?s.model||'':'';$('#peer-schedule-model').dataset.provider=provider;if(provider==='openrouter')updateModelChoices($('#peer-schedule-model'),status,$('#peer-schedule-model').value,models);const controls=()=>{const model=models.find(m=>m.id===$('#peer-schedule-model').value);if(!model){$('#peer-schedule-controls').innerHTML='';return;}$('#peer-schedule-controls').innerHTML=[['reasoningEffort','Reasoning','reasoningEfforts'],['contextTier','Context','contextTiers'],['serviceTier','Speed','serviceTiers']].map(([key,label,field])=>`<label>${label}<select id="peer-schedule-${key}"><option value="">Provider default</option>${(model?.controls?.[field]||[]).map(v=>option(typeof v==='string'?v:v.id,typeof v==='string'?(model?.controls?.reasoningEffortLabels?.[v]||v):v.name||v.id,provider===s.provider&&model?.id===s.model?s[key]:'')).join('')}</select></label>`).join('');};$('#peer-schedule-model').onchange=controls;controls();}catch(error){if($('#peer-schedule-catalog'))$('#peer-schedule-catalog').textContent=error.message;}};
   if(!owned){$('#peer-schedule-provider').onchange=catalog;void catalog();}
   $('#peer-schedule-preview').onclick=async()=>{try{const value=await request(hostId,'schedule.preview',{cron:$('#peer-schedule-cron').value,timezone:$('#peer-schedule-timezone').value});if($('#peer-schedule-times'))$('#peer-schedule-times').textContent=(value.nextRuns||[]).map(date=>ui.time(date,$('#peer-schedule-timezone').value)).join('\n');}catch(error){ui.toast(error.message);}};
-  $('#peer-schedule-run').onclick=async()=>{const button=$('#peer-schedule-run');button.disabled=true;try{const value=await mutate(hostId,'schedule.run',{id:s.id});$('#dialog').close();openPeerRun(hostId,value.runId,s.name);}catch(error){ui.toast(error.message);}finally{button.disabled=false;}};
+  const startButton = $('#peer-schedule-run');
+  const startStatus = document.createElement('p');
+  startStatus.className = 'note';
+  startStatus.setAttribute('role', 'status');
+  startButton.parentElement.before(startStatus);
+  const deleteButton = $('#peer-schedule-delete');
+  if (deleteButton) deleteButton.onclick = async () => {
+    if (deleteButton.disabled) return;
+    deleteButton.disabled = true;
+    try {
+      if (await confirmScheduleDeletion(s,hostId,hostLabel(hostId),args=>mutate(hostId,'schedule.delete',args))) {
+        if (deleteButton.isConnected) $('#dialog').close();
+        await reload();
+      }
+    } catch(error) { if(startStatus.isConnected)startStatus.textContent=error.message;else ui.toast(error.message); }
+    finally { deleteButton.disabled = false; }
+  };
+
+  startButton.onclick = async () => {
+    if (startButton.disabled) return;
+    startButton.disabled = true;
+    startStatus.textContent = 'Starting on ' + hostLabel(hostId) + '…';
+    try {
+      const value = await requestScheduleStart(s,hostId,args=>mutate(hostId,'schedule.run',args));
+      if (startButton.isConnected) {
+        $('#dialog').close();
+        openPeerRun(hostId, value.runId, s.name);
+      } else ui.toast('Schedule run recorded on ' + hostLabel(hostId) + '.');
+    } catch (error) {
+      if (startStatus.isConnected) startStatus.textContent = error.message;
+      else ui.toast(error.message);
+    } finally {
+      startButton.disabled = false;
+    }
+  };
 }
 
 function reuseRemoteMessage(key,entry){const input=$('#peer-followup');if(!input)return;if((input.value.trim()&&input.value!==entry.text||selectedAttachments('remote-run:'+key).length)&&!confirm('Replace the current unsent draft with this message?'))return;input.value=entry.text||'';drafts.set(key,input.value);input.focus();const restored=restoreSentAttachments('remote-run:'+key,entry.data?.delivery?.id);if((entry.data?.attachments?.length||0)>restored)ui.toast('Text restored. Some files are no longer available here; reattach them before sending.');}

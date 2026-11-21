@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src data:">
+<title>Share screen or window</title>
+<style>
+:root{color-scheme:dark;font:15px system-ui;background:var(--panel,#1b261e);color:var(--ink,#edf2ec)}
+*{box-sizing:border-box}body{margin:0;display:grid;grid-template-rows:auto minmax(0,1fr) auto;height:100dvh}
+header,footer{padding:16px 20px}header{border-bottom:1px solid var(--line,#465649)}footer{border-top:1px solid var(--line,#465649);display:flex;justify-content:end;gap:10px}
+h1{font-size:19px;margin:0}h2{font-size:14px;margin:16px 0 8px}p{margin:8px 0;overflow-wrap:anywhere}
+input,button{font:inherit;border:1px solid var(--line,#465649);border-radius:6px;padding:8px 10px;background:var(--panel,#1b261e);color:inherit}input{width:100%}
+main{padding:0 20px 16px;overflow:auto}
+.sources-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,190px),1fr));align-items:start;gap:12px}
+.option{display:grid;grid-template-rows:auto 1fr;gap:8px;min-width:0;padding:8px;border:1px solid var(--line,#465649);border-radius:8px;cursor:pointer}
+.option:hover{border-color:var(--ink,#edf2ec)}
+.option:has(input:checked){border-color:var(--accent,#bee6a5);background:var(--selected,#344837)}
+.option:has(input:focus-visible){outline:2px solid var(--accent,#bee6a5);outline-offset:2px}
+.preview{position:relative;display:grid;place-items:center;aspect-ratio:16/9;overflow:hidden;border-radius:4px;background:color-mix(in srgb,var(--panel,#1b261e),black 24%)}
+.preview img{position:absolute;inset:0;display:block;width:100%;height:100%;object-fit:contain}
+.preview span{font-size:12px;opacity:.75}
+.source-caption{display:flex;align-items:start;gap:7px;min-width:0}
+.source-caption span{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;overflow-wrap:anywhere}
+input[type=radio]{flex:none;width:auto;margin:3px 0 0;accent-color:var(--accent,#bee6a5)}
+button[type=submit]{background:var(--accent,#bee6a5);color:#172519}button:disabled{opacity:.5}
+</style></head>
+<body><header><h1>Share screen or window</h1><p id="site"></p><input id="filter" type="search" aria-label="Filter screens and windows" placeholder="Filter screens and windows"></header>
+<main id="sources"></main><footer><button id="cancel" type="button">Cancel</button><button type="submit" form="choices" disabled>Share</button></footer>
+<script src="screen-source-picker.js"></script></body></html>

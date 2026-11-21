@@ -26,7 +26,26 @@ const fail=profile=>app.evaluate((_,profile)=>globalThis.failNativeNotice(profil
 const notice=()=>app.windows().find(window=>window.url().endsWith('/desktop/features/notifications/notice.html'));
 const visible=()=>app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().filter(window=>window.webContents.getURL().endsWith('/desktop/features/notifications/notice.html')&&window.isVisible()).length);
 try{
- await start();await fail('default');
+ await start();
+ if(process.platform==='darwin'){
+  await app.evaluate(({app})=>{
+   const browser=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser();
+   const host=browser.extensions.profiles.get('default');
+   const native=host.adapter.ctx.router.handlers.get('runtime.sendNativeMessage').callback;
+   const extension={id:'b'.repeat(32),name:'Apple Passwords'};
+   host.adapter.api.permissions.permissionMap.set(extension.id,{permissions:['nativeMessaging'],origins:[]});
+   void native({extension,sender:browser.window.webContents},'com.apple.passwordmanager',{}).catch(error=>{
+    globalThis.applePasswordNoticeCode=error.code;
+   });
+  });
+  for(let i=0;i<50&&await visible()===0;i++)await page.waitForTimeout(100);
+  const popup=notice();assert.ok(popup);
+  await popup.getByRole('status').filter({hasText:'Apple Passwords requires a browser approved by Apple'}).waitFor({timeout:10000});
+  assert.equal(await app.evaluate(()=>globalThis.applePasswordNoticeCode),'APPLE_PASSWORDS_BROWSER_UNSUPPORTED');
+  await popup.getByRole('button',{name:'Dismiss notification'}).click({timeout:10000});
+  console.log('PASS Apple Passwords compatibility notice in isolated Electron');
+ }
+ await fail('default');
  for(let i=0;i<50&&!notice();i++)await page.waitForTimeout(100);
  const popup=notice();assert.ok(popup);await popup.getByRole('status').filter({hasText:'iCloud Passwords could not connect'}).waitFor();assert.equal(await visible(),1);
  await popup.screenshot({path:'/private/tmp/proteus-extension-once-notice.png'});

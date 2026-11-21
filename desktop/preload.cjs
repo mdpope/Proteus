@@ -20,6 +20,8 @@ contextBridge.exposeInMainWorld('desktop', {
   tabActionResult:value=>ipcRenderer.invoke('proteus:tab-action-result',value),
   onCloseCurrentTab:handler=>{const listener=()=>handler();ipcRenderer.on('proteus:close-current-tab',listener);return()=>ipcRenderer.removeListener('proteus:close-current-tab',listener);},
   onOpenChatLink:handler=>{const listener=(_event,url)=>handler(url);ipcRenderer.on('proteus:open-chat-link',listener);return()=>ipcRenderer.removeListener('proteus:open-chat-link',listener);},
+  screenshotShare:value=>ipcRenderer.invoke('proteus:screenshot-share',value),
+  onScreenshotShare:handler=>{const listener=(_event,value)=>handler(value);ipcRenderer.on('proteus:screenshot-share-update',listener);return()=>ipcRenderer.removeListener('proteus:screenshot-share-update',listener);},
   onNotification:handler=>{const listener=(_event,item)=>handler(item);ipcRenderer.on('proteus:notification-open',listener);return()=>ipcRenderer.removeListener('proteus:notification-open',listener);},
   lifeAccount: value => ipcRenderer.invoke('proteus:life-account', value),
   peers: value => ipcRenderer.invoke('proteus:desktop-peers', value),

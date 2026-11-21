@@ -34,3 +34,13 @@ test('effective inherited Auto-approve makes read-only inclusion clear and immut
  const html=approvalDetails({...context,chatMode:'inherit',mode:'autopilot',workspaceMode:'autopilot',readOnlyTools:false},{desktopPreview:true});
  assert.match(html,/including service changes/);assert.match(html,/data-preview-read-only checked disabled/);
 });
+
+test('scoped runs can remove an old override and remember the exact owner-offered command',()=>{
+ const scoped={...context,scopedCommands:true,chatMode:'autopilot'};
+ assert.match(previewChatModeToggle(scoped),/Use schedule permissions/);
+ assert.doesNotMatch(previewChatModeToggle(scoped),/data-preview-chat-mode="autopilot"/);
+ const request={question:'Allow this scoped command? "fixture" "<path>"',details:{kind:'scoped-command'},permissionChoices:[{value:'allow-schedule',label:'Exact command'}]};
+ assert.match(previewApprovalChoices(request),/data-preview-allow-exact-command/);
+ assert.match(previewApprovalChoices(request),/&lt;path&gt;/);
+ assert.doesNotMatch(previewApprovalChoices({...request,permissionChoices:[]}),/data-preview-allow-exact-command/);
+});

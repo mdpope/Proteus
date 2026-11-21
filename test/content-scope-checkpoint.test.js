@@ -116,3 +116,24 @@ test('a scope-exit checkpoint survives restart and sends the unsaved navigation 
   assert.deepEqual(local[0].history.entries,[firstEntry,nextEntry]);
   assert.equal([...values.keys()].some(key=>key.startsWith('proteus.navigation.pending:')),false);
 });
+
+test('pending history recovery saves one unloaded copy and leaves the current selection intact',async()=>{
+  const state={tabs:[],tab:'current'},requests=[];
+  let saved=0;
+  const sandbox={state,crypto:webcrypto,TextEncoder,window:{desktop:{browser:async value=>{
+    requests.push(copy(value));return {id:'recovered',url:value.url,history:value.history,loaded:false};
+  }}},saveWorkspace:async()=>{saved++;},renderTabs(){},renderChatSubtabs(){}};
+  vm.createContext(sandbox);
+  vm.runInContext(section('async function preservePendingBrowserTabs(', '\ninitBrowserNotifications(')+'\nglobalThis.recover=preservePendingBrowserTabs;',sandbox);
+  const scope={scope:'project',id:'original-project'},tab={id:'original',url:nextEntry.url,profileId:'original-profile',history:pendingHistory};
+  await sandbox.recover(scope,[tab]);
+  await sandbox.recover(scope,[tab]);
+  assert.equal(requests.length,1);
+  assert.equal(requests[0].deferLoad,true);
+  assert.equal(requests[0].unloaded,true);
+  assert.equal(requests[0].profileId,tab.profileId);
+  assert.deepEqual(requests[0].history,pendingHistory);
+  assert.equal(state.tabs[0].pendingOpen,true);
+  assert.equal(saved,2);
+  assert.equal(state.tab,'current');
+});

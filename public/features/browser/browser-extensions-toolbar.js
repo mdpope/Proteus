@@ -24,7 +24,7 @@ export function mountBrowserExtensions(bar,info){
    else if(selected?.startsWith('mode:'))await window.desktop.browser({action:'site-mode',id:info.id,mode:selected.slice(5)});
    else if(selected==='autoplay')await window.desktop.browser({action:'media-settings',blockVideoAutoplay:!media.blockVideoAutoplay});
    else if(selected==='devtools')await window.desktop.browser({action:'devtools',id:info.id});
-   else if(selected==='manage')document.dispatchEvent(new CustomEvent('proteus-browser-preferences'));
+   else if(selected==='manage')document.dispatchEvent(new CustomEvent('proteus-browser-preferences',{detail:'profiles'}));
    else if(selected==='install')await window.desktop.browser({action:'extensions-store-install',profileId:info.profileId,url:info.url});
    else if(rows.some(row=>row.id===selected))await window.desktop.browser({action:'extensions-open',profileId:info.profileId,extensionId:selected,x:rect.left,y:rect.bottom});
   }catch(error){document.dispatchEvent(new CustomEvent('proteus-notice',{detail:error.message}));}

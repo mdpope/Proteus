@@ -32,13 +32,15 @@ try {
   const before = await scroll.evaluate(node => node.scrollTop), composer = await input.elementHandle();
   const workload = app.evaluate(async () => {
     const service = process.mainModule.require(process.cwd() + '/test/account-queue-ui-host.cjs').service();
-    for (let i = 0; i < 15; i++) {
-      service.notify();
-      const response = await fetch(service.origin + '/api/state?summaries=1&synthetic=' + i, { headers: { authorization: 'Bearer ' + service.token } });
-      if (!response.ok) throw Error('Concurrent state refresh failed: ' + response.status);
-      await response.arrayBuffer();
-      await new Promise(resolve => setTimeout(resolve, 30));
-    }
+    const activity = setInterval(() => service.notify(), 5);
+    try {
+      for (let i = 0; i < 15; i++) {
+        const response = await fetch(service.origin + '/api/state?summaries=1&synthetic=' + i, { headers: { authorization: 'Bearer ' + service.token } });
+        if (!response.ok) throw Error('Concurrent state refresh failed: ' + response.status);
+        await response.arrayBuffer();
+        await new Promise(resolve => setTimeout(resolve, 30));
+      }
+    } finally { clearInterval(activity); }
     return (await (await fetch(service.origin + '/api/performance/diagnostics', { headers: { authorization: 'Bearer ' + service.token } })).json()).stateProjection;
   });
   // Both promises are observed immediately, including failures during input.

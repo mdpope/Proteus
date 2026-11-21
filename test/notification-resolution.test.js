@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {EventEmitter} from 'node:events';
 import {ActivityStore} from '../src/services/telemetry/activity.js';
+import {initBrowserNotifications} from '../public/features/browser/browser-notifications.js';
 
 function fixture(t, publish) {
  const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-notification-resolution-'));
@@ -16,6 +17,23 @@ function fixture(t, publish) {
  return {store,engine,run};
 }
 async function settled(store){for(let i=0;i<200&&store.flushing;i++)await new Promise(resolve=>setTimeout(resolve,5));assert.equal(store.flushing,false);}
+
+test('a temporary display failure after recovery leaves the browser conflict marked read',async t=>{
+ const {store}=fixture(t,async()=>{}), windowId='fixture-window';
+ const issue=store.browserIssue({kind:'history-conflict',windowId,scope:{scope:'project',id:'social'},title:'Browser history needs attention'});
+ const originalWindow=globalThis.window;
+ t.after(()=>{if(originalWindow===undefined)delete globalThis.window;else globalThis.window=originalWindow;});
+ let receive,completed=false;
+ globalThis.window={desktop:{windowId,onNotification:fn=>{receive=fn;},browserNotification:value=>store.browserIssue(value)}};
+ initBrowserNotifications({api:async(_route,action)=>action?store.read(action.id):store.notifications(),
+  resolve:async()=>{completed=true;},refresh:async()=>{throw Error('State display is temporarily unavailable.');}});
+ receive({browserIssueId:issue.id,issueAction:'open-copy'});
+ await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(completed,true);
+ const notices=store.notifications().items;
+ assert.equal(notices.length,1);
+ assert.ok(notices[0].readAt);
+});
 
 test('resolved approval replaces an offline alert with silent resolved history; completion remains distinct',async t=>{
  const published=[];let online=false;

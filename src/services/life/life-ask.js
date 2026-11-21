@@ -12,12 +12,13 @@ import { atomicJSON, readJSON } from '../../shared/files.js';
 export const LIFE_ASK_VERSION = 1;
 export const LIFE_ASK_SCOPE = 'mnemosyne.ask';
 export const LIFE_ASK_OWNER = 'proteus-life';
-export const LIFE_ASK_LIMITS = Object.freeze({ maxAudioBytes: 2_100_000, sampleRates: [8000, 16000], maxSeconds: 60 });
+export const LIFE_ASK_LIMITS = Object.freeze({ maxAudioBytes: 3_850_000, sampleRates: [8000, 16000], maxSeconds: 120 });
+// Allow legacy Swift JSON with escaped slashes at the iCloud boundary.
+export const LIFE_ASK_ENVELOPE_BYTES = 12_000_000;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const SHA256 = /^[0-9a-f]{64}$/;
 const STATES = new Set(['received', 'transcribing', 'running', 'answered', 'needs-attention', 'rejected']);
-// A capture window is at most 60 s; allow one second of frame/receipt slack.
-const MAX_DURATION_MS = (LIFE_ASK_LIMITS.maxSeconds + 1) * 1000;
+const MAX_DURATION_MS = LIFE_ASK_LIMITS.maxSeconds * 1000;
 const QUIET_PEAK = 64;
 
 class Rejection extends Error { constructor(reason, message) { super(message || reason); this.reason = reason; } }
@@ -35,8 +36,10 @@ export function inspectWav(bytes) {
   }
   if (!format || !data) throw new Rejection('malformed', 'The WAV file has no format or audio data.');
   if (format.audioFormat !== 1 || format.channels !== 1 || format.bitsPerSample !== 16 || !LIFE_ASK_LIMITS.sampleRates.includes(format.sampleRate)) throw new Rejection('unsupported-format', 'Audio must be mono 16-bit PCM at 8 or 16 kHz.');
-  const durationMs = Math.round(data.size / (format.sampleRate * 2) * 1000);
-  if (durationMs > MAX_DURATION_MS) throw new Rejection('too-large', 'Audio exceeds the 60-second request window.');
+  if (data.size % 2 !== 0) throw new Rejection('malformed', 'PCM audio contains an incomplete sample.');
+  const samples = data.size / 2;
+  if (samples > LIFE_ASK_LIMITS.maxSeconds * format.sampleRate) throw new Rejection('too-large', 'Audio exceeds the Life Ask duration limit.');
+  const durationMs = Math.round(samples / format.sampleRate * 1000);
   let peak = 0;
   for (let i = data.offset; i + 1 < data.offset + data.size; i += 2) { const v = Math.abs(bytes.readInt16LE(i)); if (v > peak) { peak = v; if (peak >= QUIET_PEAK) break; } }
   if (peak < QUIET_PEAK) throw new Rejection('quiet', 'The request contains no audible speech.');
@@ -65,6 +68,9 @@ export function validateAdmission(args) {
   for (const key of ['captureStartedAt', 'captureEndedAt', 'finalizedAt', 'sentAt']) if (times[key] !== undefined && ms(times[key]) === null) throw new Rejection('malformed', 'Times must be positive integer epoch milliseconds.');
   const captured = validTimes(Object.fromEntries(['captureStartedAt', 'captureEndedAt', 'finalizedAt', 'sentAt'].map(key => [key, times[key]])));
   if (!captured.captureStartedAt || !captured.captureEndedAt || captured.captureEndedAt < captured.captureStartedAt) throw new Rejection('malformed', 'Capture times are missing or invalid.');
+  // Batched pendant delivery may compress the wall-clock span, so validate it
+  // independently without using it as a substitute for the WAV sample count.
+  if (captured.captureEndedAt - captured.captureStartedAt > MAX_DURATION_MS) throw new Rejection('too-large', 'Capture exceeds the Life Ask request window.');
   if (!['timeout', 'double-tap'].includes(args.endReason)) throw new Rejection(args.endReason === 'interrupted' ? 'interrupted' : 'malformed', 'Only completed requests can be admitted.');
   const device = { id: String(args.device?.id || '').slice(0, 128), name: String(args.device?.name || '').replace(/[\x00-\x1f\x7f]/g, ' ').slice(0, 80) };
   if (!device.id) throw new Rejection('malformed', 'Device identity is missing.');
@@ -144,7 +150,7 @@ export class LifeAskStore {
     fs.mkdirSync(staging, { mode: 0o700 });
     try {
       const admittedAt = this.now();
-      fs.writeFileSync(path.join(staging, 'audio.wav'), Buffer.from(audioBase64, 'base64'), { flag: 'wx', mode: 0o600 });
+      fs.writeFileSync(path.join(staging, 'audio.wav'), request.bytes, { flag: 'wx', mode: 0o600 });
       atomicJSON(path.join(staging, 'request.json'), legacyEnvelope(request, audioBase64));
       const receipt = { schemaVersion: 1, requestId: request.requestId, receiptId: randomUUID(), audioSha256: request.sha256, audioBytes: request.bytes.length, durationMs: request.wav.durationMs, accountID: request.accountID, hostID: request.hostID, device: request.device, endReason: request.endReason, appVersion: request.appVersion, source, deviceId, state: 'received', chatId: null, summary: '', resultRevision: 0, notificationEventId: null, times: { ...request.times, hostReceivedAt, admittedAt } };
       atomicJSON(path.join(staging, 'receipt.json'), receipt);

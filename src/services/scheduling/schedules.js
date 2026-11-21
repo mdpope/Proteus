@@ -24,7 +24,7 @@ export function validateSchedule(value) {
   if (!/^[a-z0-9][a-z0-9-]{0,79}$/.test(value.id || '')) throw new Error('id must be a lowercase filename-safe identifier.');
   for (const key of ['name', 'prompt', 'timezone']) if (typeof value[key] !== 'string' || !value[key].trim()) throw new Error(`${key} is required.`);
   if (typeof value.enabled !== 'boolean') throw new Error('enabled must be true or false.');
-  if (!['rehearsal', 'copilot', 'codex', 'claude', 'mtplx', 'llama-cpp', 'shared-llm', 'local-process'].includes(value.provider)) throw new Error('Choose an installed provider or local rehearsal.');
+  if (!['rehearsal', 'copilot', 'codex', 'claude', 'mtplx', 'llama-cpp', 'shared-llm', 'openrouter', 'local-process'].includes(value.provider)) throw new Error('Choose an installed provider or local rehearsal.');
   if (!['rehearsal', 'local-process'].includes(value.provider) && (typeof value.model !== 'string' || !value.model.trim() || value.model === 'auto')) throw new Error('Choose an explicit provider model.');
   if (!value.workspace || typeof value.workspace.cwd !== 'string' || !path.isAbsolute(value.workspace.cwd)) throw new Error('workspace.cwd must be an absolute directory.');
   if (!Array.isArray(value.workspace.additionalDirectories) || value.workspace.additionalDirectories.some(p => typeof p !== 'string' || !path.isAbsolute(p))) throw new Error('workspace.additionalDirectories must be absolute paths.');
@@ -77,10 +77,38 @@ export class ScheduleStore {
     if (!/^[a-z0-9][a-z0-9-]{0,79}$/.test(id)) throw new Error('Invalid schedule id.');
     return structuredClone(this.readValidated(path.join(this.dir, `${id}.json`)).schedule);
   }
+  remove(id, expectedRevision, operationId, canRemove, onRemoved) {
+    if (!/^[a-z0-9][a-z0-9-]{0,79}$/.test(id) || !/^[a-f0-9]{64}$/.test(expectedRevision) ||
+        !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(operationId)) {
+      throw new Error('Choose an exact schedule, revision and deletion request.');
+    }
+    const file = path.join(this.dir, `${id}.json`);
+    const receiptFile = path.join(this.dir, '.deletions', `${id}.json`);
+    const prior = readJSON(receiptFile, null);
+    const replay = prior?.operationId === operationId;
+    if (replay && prior.expectedRevision !== expectedRevision) throw new Error('This deletion request belongs to another revision.');
+    if (replay && (prior.state === 'deleted' || !fs.existsSync(file))) {
+      if (prior.state !== 'deleted') atomicJSON(receiptFile, { ...prior, state: 'deleted' });
+      return { id, deleted: true, replayed: true };
+    }
+    const current = this.readValidated(file);
+    if (current.revision !== expectedRevision) throw new Error('This schedule changed. Review its current revision before deleting it.');
+    canRemove(current.schedule);
+    const receipt = { operationId, expectedRevision, state: 'pending' };
+    atomicJSON(receiptFile, receipt);
+    fs.unlinkSync(file);
+    this.cache.delete(file);
+    onRemoved();
+    atomicJSON(receiptFile, { ...receipt, state: 'deleted' });
+    return { id, deleted: true, replayed: false };
+  }
   save(value, expectedRevision) {
     const schedule = validateSchedule(structuredClone(value));
     const file = path.join(this.dir, `${schedule.id}.json`);
-    if (fs.existsSync(file) && expectedRevision !== revision(readJSON(file))) throw new Error('This file changed outside the app. Reload before saving.');
+    const exists = fs.existsSync(file);
+    if ((exists && expectedRevision !== revision(readJSON(file))) || (!exists && expectedRevision != null)) {
+      throw new Error('This file changed outside the app. Reload before saving.');
+    }
     for (const key of ['file', 'revision', 'nextRuns', 'error']) delete schedule[key];
     // Pin explicit grants to their resolved destination when the operator saves.
     // Retargeting a selected symlink must not silently authorize a new directory.

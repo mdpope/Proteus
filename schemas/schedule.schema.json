@@ -48,6 +48,7 @@
         "mtplx",
         "llama-cpp",
         "shared-llm",
+        "openrouter",
         "local-process"
       ]
     },

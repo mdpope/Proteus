@@ -6,7 +6,7 @@ try {
  store = new ScratchStore({home: workerData.home, ...workerData.options});
  parentPort.postMessage({ready: true});
 } catch (error) {parentPort.postMessage({startupError: error.message}); parentPort.close();}
-const methods = new Set(['tree','asset','setup', 'directory', 'list', 'row', 'read', 'mutate', 'sync', 'rebuild', 'indexStatus', 'close']);
+const methods = new Set(['tree','asset','paste','setup', 'directory', 'list', 'row', 'read', 'mutate', 'sync', 'rebuild', 'indexStatus', 'planPaths', 'migratePaths', 'close']);
 let indexing = {running:false}, scan;
 async function synchronize(args, associations=[]) {
  if (scan) throw Error('Scratchpad indexing is already running.');
@@ -29,7 +29,7 @@ if (store) parentPort.on('message', async ({id, method, args}) => {
   let result;
   if(method==='indexStatus')result=indexing;
   else if(method==='sync'||method==='rebuild')result=await synchronize(method==='sync'?args[0]:{},method==='rebuild'?args[0]:[]);
-  else {if(scan&&!['list','row','read'].includes(method))await scan;result=store[method](...args);}
+  else {if(scan&&!['list','row','read'].includes(method))await scan;result=await store[method](...args);}
   parentPort.postMessage({id, result});
   if (method === 'close') parentPort.close();
  } catch (error) {parentPort.postMessage({id, error: error.message, code: error.code});}

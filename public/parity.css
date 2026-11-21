@@ -228,7 +228,6 @@ body.sidebar-minimized #sidebar [data-page="team"] .nav-icon,body.sidebar-minimi
 @keyframes notice-enter{from{translate:0 -24px;opacity:0}to{translate:0 0;opacity:1}}
 @media(prefers-reduced-motion:reduce){#toast{animation:none}}
 
-.attention-tabs{margin-bottom:20px}.attention-notifications{display:grid;gap:14px}.attention-notifications .actions{margin-top:14px}
 
 #extension-actions{gap:0;flex-wrap:nowrap}#extension-actions img{width:20px;height:20px}#tabs .extension-action{padding:0 8px}
 
@@ -241,6 +240,24 @@ body.sidebar-minimized:has(#sidebar:hover) #workspace,body.sidebar-minimized:has
 /* Engine Room uses the same rhythm for direct cards and nested preference groups. */
 #engine-content,.engine-card-stack{display:grid;grid-template-columns:minmax(0,1fr);gap:18px;min-width:0;align-content:start}
 #engine-content>.card,.engine-card-stack>.card{margin:0;min-width:0}
+.browser-preference-tabs {
+ display:flex;
+ overflow:auto;
+ border-bottom:1px solid var(--line);
+}
+.browser-preference-tabs button {
+ flex:none;
+ border:0;
+ border-radius:0;
+ border-bottom:2px solid transparent;
+ background:none;
+ padding:10px 14px;
+}
+.browser-preference-tabs button[aria-selected="true"] {
+ border-bottom-color:var(--accent);
+ background:var(--proteus-sidebar-selected);
+}
+.browser-preference-panel[hidden] {display:none}
 .source-library-entry>.heading{flex-wrap:wrap;gap:16px;margin-bottom:0}
 .source-library-entry>.heading>div:first-child{flex:1 1 280px;min-width:0}
 .source-library-entry .filepath{white-space:normal;overflow-wrap:anywhere}
@@ -279,3 +296,7 @@ body.sidebar-minimized:has(#sidebar:hover) #workspace,body.sidebar-minimized:has
 #main:has(>.chat-index-page){overflow:auto;min-height:0}
 
 .banner.error{color:#ffb3a4;background:#352420;border-color:#85483d}
+
+.browser-retained-page{align-self:stretch;flex:1;min-width:0;min-height:0;margin:0;overflow:auto;background:var(--proteus-bg)}
+.browser-retained-page figcaption{position:sticky;top:0;padding:6px 12px;background:var(--proteus-panel);color:var(--proteus-muted);border-bottom:1px solid var(--proteus-line);font-size:12px}
+.browser-retained-page img{display:block;width:100%;height:auto}

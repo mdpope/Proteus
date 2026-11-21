@@ -14,6 +14,11 @@ import {LifeAskChats} from './life-ask-chats.js';
 import {LifeAskPlacement} from './life-ask-placement.js';
 import {LifeReminderIntent} from './life-reminder-intent.js';
 import {LifeAskActions} from './life-ask-actions.js';
+import {reminderCommand,reminderTools} from './reminder-tools.js';
+import {scratchTools} from '../scratchpad/scratch-tools.js';
+
+const obsidianReads=['vault_info','search_vault','search_context','read_note','read_note_path','list_files','get_links','get_backlinks','get_outline','get_properties','list_tags','find_notes_by_tag'];
+const scratchEdits=['status','list','read','create','update','rename'];
 
 export class LifeAskHost {
   constructor(service,{timers=true}={}){
@@ -38,6 +43,60 @@ export class LifeAskHost {
     return {workspaces,projects};
   }
   settings(){return readJSON(this.file,{schemaVersion:1,enabled:false,model:'gpt-6.1-terra',reasoningEffort:'medium'});}
+  toolPolicy(run){
+    const id=run.schedule.lifeAsk.requestId;
+    if(!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(id||''))throw Error('Invalid Life Ask request identity.');
+    const receipt=this.store.read(id);
+    const assert=()=>{
+      if(!receipt||!this.enabled()||this.chat.existing(receipt)!==run)throw Error('This Life Ask tool belongs to a different or unavailable request.');
+      this.chat.assertBound(receipt);
+    };
+    assert();
+    const wrap=handler=>async args=>{assert();const result=await handler(args);assert();return result;};
+    const tools=reminderTools(wrap(args=>reminderCommand(this.service.life,args,run)),run.id);
+    if(this.service.scratchpad){
+      const projectId=this.settings().projectId;
+      const [scratch]=scratchTools(wrap(args=>{
+        const turn=this.service.engine.running.get(run.id);
+        if(!projectId||turn?.scratchProjectId!==projectId||this.settings().projectId!==projectId||
+          !scratchEdits.includes(args.action)||Object.hasOwn(args,'workspaceId')||Object.hasOwn(args,'projectId'))throw Error('This action is outside the captured Ask Scratchpad project.');
+        return this.service.scratchpad.handle(args,{runId:run.id});
+      }),run.id);
+      scratch.description='Read and edit scratches in this Life Ask project. Use status first, preserve the root identity, read the current revision before editing and reuse the operation ID after uncertain delivery.';
+      scratch.parameters.properties.action.enum=scratchEdits;
+      for(const key of ['projectId','workspaceId','actions','reason'])delete scratch.parameters.properties[key];
+      tools.push(scratch);
+    }
+    const selectedSources=()=>{
+      const selected=new Set(this.settings().actionMcpIds||[]),workspaceId=this.placement.state(this.store.binding()).workspaceId;
+      const entries=this.service.context.get().entries.filter(entry=>selected.has(entry.id));
+      if(workspaceId)entries.push(...this.service.context.get(workspaceId).entries.filter(entry=>['universal','workspace'].includes(entry.mode)));
+      return new Map(entries.map(entry=>[entry.id,entry]));
+    };
+    const servers=Object.create(null),sources=new Map();
+    for(const entry of selectedSources().values()){
+      if(entry.kind!=='mcp'||entry.missing||entry.mode==='disabled'||
+        !/^obsidian(?:[-_ ]?mcp)?(?:[-_ ][a-z0-9]+)*$/i.test(entry.name))continue;
+      let def;
+      try{def=this.service.context.resolveMcp(entry);}catch{continue;}
+      // These read operations belong to the ObsidianMCP executable. A similarly
+      // named custom server must keep its ordinary approval workflow.
+      if(!['stdio','local'].includes(def.type)||!/^obsidian(?:[-_]?mcp)(?:\.exe)?$/i.test(path.basename(def.command)))continue;
+      const tools=obsidianReads.filter(name=>!def.tools?.length||def.tools.includes('*')||def.tools.includes(name));
+      if(!tools.length)continue;
+      const name=entry.name.replace(/[^a-zA-Z0-9_-]/g,'-');
+      if(Object.hasOwn(servers,name))throw Error('Use unique names for the selected Ask Obsidian servers.');
+      servers[name]={...def,tools};sources.set(name,entry);
+    }
+    const assertServer=name=>{
+      assert();
+      const source=sources.get(name);
+      const current=selectedSources().get(source?.id);
+      if(!current||current.mode==='disabled'||current.missing||current.hash!==source.hash)throw Error('Ask vault access changed during this request.');
+      this.service.context.resolveMcp(source);
+    };
+    return {tools,servers,assert,assertServer};
+  }
   documentTarget(receipt,filing){
     const settings=this.service.omi.getSettings(),configured=readJSON(settings.configPath)?.agent_requests?.inbox;
     if(typeof configured!=='string'||path.basename(filing.savedPath)!==receipt.requestId+'.md')throw Error('The saved memory reference is invalid.');

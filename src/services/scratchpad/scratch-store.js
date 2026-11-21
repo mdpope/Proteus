@@ -1,12 +1,17 @@
+import {writePastedAsset} from '../../shared/pasted-document-assets.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import {createHash, randomUUID} from 'node:crypto';
 import {DatabaseSync} from 'node:sqlite';
 import {normalizeScratch} from './scratch-format.js';
+import {scratchPathMigrationSchema,planScratchPaths,migrateScratchPaths,recoverScratchPath,resolveMigratedScratchPath} from './scratch-path-migration.js';
 
 const hash = value => createHash('sha256').update(value).digest('hex');
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const name = value => String(value || 'Untitled').normalize('NFKC').replace(/[\x00-\x1f<>:"/\\|?*]/g, '-').replace(/^[. ]+|[. ]+$/g, '').slice(0,70) || 'Untitled';
+function name(value) {
+ const cleaned=Array.from(String(value||'Untitled').normalize('NFKC').replace(/[\x00-\x1f<>:"/\\|?*]/g,'-').replace(/^[. ]+/,'')).slice(0,60).join('').replace(/[. ]+$/,'')||'Untitled';
+ return /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(cleaned)?'_'+cleaned:cleaned;
+}
 const limit = 2 * 1024 * 1024;
 const warning = '# Proteus Scratchpad\n\nThis directory is managed by Proteus. Markdown files remain editable in Obsidian and other editors. Keep scratch_id stable; workspace/project association follows the registered directory, not edited frontmatter. Use Synchronize in Scratchpad after external file changes. There is no automatic filesystem watcher. Do not edit files while their sync/save is in progress. Deleted app items are moved to .Trash; the SQLite search index and command receipts live in Proteus application data.\n';
 
@@ -26,7 +31,8 @@ export class ScratchStore {
    CREATE INDEX IF NOT EXISTS scratch_scope ON scratches(scope,deleted,updated DESC,id);
    CREATE INDEX IF NOT EXISTS scratch_category ON scratches(category,deleted,title,id);
    CREATE TABLE IF NOT EXISTS operations(id TEXT PRIMARY KEY,digest TEXT NOT NULL,status TEXT NOT NULL,payload TEXT,result TEXT);
-  `);
+  ${scratchPathMigrationSchema}`);
+  recoverScratchPath(this);
   for(const suffix of ['', '-wal','-shm'])if(fs.existsSync(file+suffix))fs.chmodSync(file+suffix,0o600);
  }
  close(){this.db.close();}
@@ -70,9 +76,30 @@ export class ScratchStore {
   const scope=projectId?'project:'+projectId:workspaceId?'workspace:'+workspaceId:'unassigned';
   const prior=this.db.prepare('SELECT * FROM directories WHERE scope=?').get(scope);
   if(prior){if(prior.workspace!==workspaceId||prior.project!==projectId)throw Error('Project association changed. Reconcile its directory first.');if(!projectId&&prior.relative.endsWith('/Unassigned')){prior.relative=prior.relative.slice(0,-11);this.db.prepare('UPDATE directories SET relative=? WHERE scope=?').run(prior.relative,scope);}return prior;}
-  const relative=workspaceId?name(workspaceName)+'--'+workspaceId+(projectId?'/'+name(projectName)+'--'+projectId:''):'';
+  const parent=projectId?this.directory({workspaceId,workspaceName}).relative:'';
+  const relative=workspaceId?this.availablePath(parent,name(projectId?projectName:workspaceName),''):'';
   this.db.prepare('INSERT INTO directories VALUES(?,?,?,?)').run(scope,relative,workspaceId,projectId);return {scope,relative,workspace:workspaceId,project:projectId};
  }
+ availablePath(parent,stem,extension,previous=null,reserved=[]){
+  const folded=value=>value.normalize('NFKC').toLowerCase();
+  const occupied=new Set();
+  try{for(const entry of fs.readdirSync(this.file(parent)))occupied.add(folded(entry));}
+  catch(error){if(error.code!=='ENOENT')throw error;}
+  const remember=relative=>{
+   if(relative!==previous&&path.posix.dirname(relative)===(parent||'.'))occupied.add(folded(path.posix.basename(relative)));
+  };
+  for(const {relative} of this.db.prepare('SELECT relative FROM directories UNION SELECT relative FROM scratches').iterate())remember(relative);
+  for(const {relative} of this.db.prepare("SELECT json_extract(payload, '$.relative') AS relative FROM operations WHERE status='pending'").iterate())remember(relative);
+  for(const relative of reserved)remember(relative);
+  for(let suffix=1;;suffix++){
+   const basename=stem+(suffix===1?'':' ('+suffix+')')+extension;
+   const relative=parent?parent+'/'+basename:basename;
+   if(previous&&folded(relative)===folded(previous))return previous;
+   if(!occupied.has(folded(basename)))return relative;
+  }
+ }
+ planPaths(){return planScratchPaths(this);}
+ migratePaths(digest){return migrateScratchPaths(this,digest);}
  index(value,relative,directory,revision,deleted=0){
   this.db.prepare('INSERT INTO scratch_metadata VALUES(?,?) ON CONFLICT(id) DO UPDATE SET text=excluded.text').run(value.id,value.text.slice(0,value.text.length-value.body.length));
   this.db.prepare(`INSERT INTO scratches VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET relative=excluded.relative,scope=excluded.scope,title=excluded.title,category=excluded.category,format=excluded.format,created=excluded.created,updated=excluded.updated,revision=excluded.revision,deleted=excluded.deleted`).run(value.id,relative,directory.scope,value.title,value.category,value.format,value.created,value.updated,revision,deleted);
@@ -86,7 +113,10 @@ export class ScratchStore {
  }
 
  tree({associations=[]}={}){
-  for(const association of associations)this.directory(association);
+  const destinations=new Map(associations.map(association=>{
+   const directory=this.directory(association);
+   return [directory.relative,{workspaceId:directory.workspace,projectId:directory.project}];
+  }));
   const rows=[];const walk=(relative,depth=0)=>{if(depth>32||rows.length>=10000)return;for(const entry of fs.readdirSync(this.file(relative),{withFileTypes:true})){if(entry.name.startsWith('.')||entry.isSymbolicLink())continue;const child=(relative?relative+'/':'')+entry.name;if(entry.isDirectory()){rows.push({path:child,kind:'directory'});walk(child,depth+1);}else{const scratch=this.db.prepare('SELECT id,title FROM scratches WHERE relative=? AND deleted=0').get(child);rows.push({path:child,kind:'file',scratchId:scratch?.id,scratchTitle:scratch?.title});}if(rows.length>=10000)break;}};walk('');
   // Registered destinations are UI paths until the first atomic note save.
   // Merge them with real user folders without creating anything on disk.
@@ -95,9 +125,20 @@ export class ScratchStore {
    const parts=directory.relative.split('/').filter(Boolean);
    for(let i=1;i<=parts.length;i++){const path=parts.slice(0,i).join('/');if(!paths.has(path)){rows.push({path,kind:'directory',virtual:true});paths.add(path);}}
   }
-  return {items:rows};
+  return {items:rows.map(row=>row.kind==='directory'&&destinations.has(row.path)
+   ? {...row,association:destinations.get(row.path)}:row)};
+ }
+ async paste({id,data,mediaType}){
+  const note=this.row(id);
+  if(note.deleted)throw Error('Reopen a saved scratch before pasting.');
+  this.read({id});
+  const directory=this.file('Scratch Attachments');
+  try{fs.mkdirSync(directory,{mode:0o700});}catch(error){if(error.code!=='EEXIST')throw error;}
+  const result=await writePastedAsset({data,mediaType},name=>this.file('Scratch Attachments/'+name));
+  return {...result,name:'Scratch Attachments/'+result.name};
  }
  asset({path:relative}){
+  relative=resolveMigratedScratchPath(this,relative);
   if(/\.(md|markdown)$/i.test(relative||'')){const file=this.readFile(relative);return {path:relative,mediaType:'text/markdown',content:file.text};}
   const type={'.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.gif':'image/gif','.webp':'image/webp','.pdf':'application/pdf','.mp3':'audio/mpeg','.mp4':'video/mp4'}[path.extname(relative||'').toLowerCase()];if(!type)throw Error('Choose an indexed Markdown scratch or a supported image, PDF, audio or video.');
   const fd=fs.openSync(this.file(relative),fs.constants.O_RDONLY|fs.constants.O_NOFOLLOW);
@@ -126,7 +167,8 @@ export class ScratchStore {
   const source=args.body!==undefined&&action!=='create'?first.text.slice(0,first.text.length-first.body.length)+args.body:first.text;
   const value=normalizeScratch(source,{id:first.id,workspaceId:directory.workspace,projectId:directory.project,changes:{...(args.title!==undefined?{title:args.title}:{}),...(args.category!==undefined?{category:args.category}:{}),...(args.format!==undefined?{format:args.format}:{}),updated:new Date().toISOString()}});
   if(Buffer.byteLength(value.text)>limit)throw Error('Scratch exceeds the 2 MiB text limit.');
-  const relative=action==='delete'?'.Trash/'+value.id+'--'+args.operationId+'.md':action==='update'?row.relative:(directory.relative?directory.relative+'/':'')+name(value.title)+'--'+value.id+'.md';
+  const rename=!row||directory.scope!==row.scope||value.title!==row.title||action==='rename'&&row.relative.endsWith('--'+row.id+'.md');
+  const relative=action==='delete'?'.Trash/'+value.id+'--'+args.operationId+'.md':rename?this.availablePath(directory.relative,name(value.title),'.md',row?.relative):row.relative;
   const payload={value,directory,relative,oldRelative:row?.relative??null,oldRevision:before?.revision??null,deleted:action==='delete'?1:0};
   this.db.prepare('INSERT INTO operations VALUES(?,?,?, ?,NULL)').run(args.operationId,digest,'pending',JSON.stringify(payload));return this.apply(args.operationId,payload);
  }

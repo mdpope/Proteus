@@ -61,6 +61,7 @@ struct MarkdownView: UIViewRepresentable {
     @Binding var height: CGFloat
     var onDocumentLink: ((String) -> Void)? = nil
     var documentAssetURLs: [String: String]? = nil
+    var resolveDocumentAsset: ((String, Bool) async throws -> String)? = nil
     var allFileLinks = false
     var onResize: () -> Void = {}
     var search: NativePageSearch? = nil
@@ -196,8 +197,20 @@ struct MarkdownView: UIViewRepresentable {
                     else if ["md", "html", "htm"].contains(url.pathExtension.lowercased()) || ["md", "html", "htm"].contains((value as NSString).pathExtension.lowercased()) { if let onDocumentLink = parent.onDocumentLink { onDocumentLink(value) } else { UIPasteboard.general.string = value; parent.store.error = "This file path was copied. Open it on \(parent.store.displayName)." } }
                     else { UIPasteboard.general.string = value.removingPercentEncoding ?? value; parent.store.error = "File path copied. Open it on \(parent.store.displayName): \(value.removingPercentEncoding ?? value)" }
                 }
-            case "image":
+            case "image", "pdf":
                 guard let source = body["source"] as? String, let id = body["id"] as? String else { return }
+                let pdf = body["type"] as? String == "pdf"
+                if let resolve = parent.resolveDocumentAsset, pdf || parent.documentAssetURLs == nil {
+                    Task { [weak web] in
+                        let value = (try? await resolve(source, pdf)) ?? ""
+                        web?.callAsyncJavaScript("window.imageResult(id, dataURL)", arguments: ["id": id, "dataURL": value], in: nil, in: .page) { _ in }
+                    }
+                    return
+                }
+                if pdf {
+                    web.callAsyncJavaScript("window.imageResult(id, dataURL)", arguments: ["id": id, "dataURL": ""], in: nil, in: .page) { _ in }
+                    return
+                }
                 if let approved = parent.documentAssetURLs {
                     web.callAsyncJavaScript("window.imageResult(id, dataURL)", arguments: ["id": id, "dataURL": approved[source] ?? ""], in: nil, in: .page) { _ in }
                     return

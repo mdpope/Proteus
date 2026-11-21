@@ -11,7 +11,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { createDesktopSnapshot, createProvenance, verifyDesktopMetadata, fileDigest as digest, desktopPackageIgnore } from './desktop-build.mjs';
+import { prepareScreenshotShare, screenshotShareInputs, isShareSubcode } from './package-screenshot-share.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const electronVersion=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8')).devDependencies.electron;
 const gitHead=execFileSync('git',['rev-parse','--short=12','HEAD'],{cwd:root,encoding:'utf8'}).trim();
 const unsigned=process.env.PROTEUS_MAC_UNSIGNED==='1';
 const desktopPreview=process.env.PROTEUS_DESKTOP_PREVIEW==='1';
@@ -21,6 +23,7 @@ if(appleReview&&desktopPreview)throw new Error('Choose Apple review or design pr
 const appBundleId=desktopPreview?'org.proteusapp.proteus.design-preview':appleReview?'org.proteusapp.review.proteus.desktop':'org.proteusapp.proteus.desktop';
 const appName=desktopPreview?'Proteus Design Preview':'Proteus';
 const signingIdentity = process.env.PROTEUS_MAC_SIGN_IDENTITY || '-';
+const includeScreenshotShare = !unsigned && signingIdentity !== '-';
 if (process.platform !== 'darwin') throw new Error('Build the Mac application on macOS.');
 if (!unsigned) {
   const {state} = JSON.parse(execFileSync('python3', [path.join(root, 'scripts/apple-session.py')], {encoding: 'utf8'}));
@@ -44,7 +47,7 @@ for (const size of [16, 32, 128, 256, 512]) for (const scale of [1, 2]) {
 const icon = path.join(output.directory, 'Proteus.icns');
 execFileSync('iconutil', ['-c', 'icns', iconset, '-o', icon]);
 await import('./build-terminal.mjs');
-const buildInputPaths=['package.json','package-lock.json','scripts/package-mac.mjs','scripts/apple-session.py','scripts/desktop-build.mjs','scripts/desktop-package-output.mjs','scripts/build-cache-lock.mjs','scripts/build-terminal.mjs','scripts/prepare-pty.mjs','scripts/prepare-extensions.mjs','ios/Proteus/Assets.xcassets/AppIcon.appiconset/AppIcon.png'];
+const buildInputPaths=['package.json','package-lock.json','scripts/package-mac.mjs','scripts/apple-session.py','scripts/desktop-build.mjs','scripts/desktop-package-output.mjs','scripts/build-cache-lock.mjs','scripts/build-terminal.mjs','scripts/prepare-pty.mjs','scripts/prepare-extensions.mjs','ios/Proteus/Assets.xcassets/AppIcon.appiconset/AppIcon.png',...screenshotShareInputs];
 const {runtimeFiles,buildInputs,verifySource,verifyCopied}=createDesktopSnapshot(root,buildInputPaths);
 const dirty=Boolean(execFileSync('git',['status','--porcelain','--',...Object.keys(runtimeFiles),...buildInputPaths],{cwd:root,encoding:'utf8'}).trim());
 const sourceIdentity=createProvenance({runtimeFiles,buildInputs,gitHead,dirty,appBundleId});
@@ -52,9 +55,10 @@ const {sourceFingerprint}=sourceIdentity;
 const buildRevision=`${gitHead}+${dirty?'dirty.':'src.'}${sourceFingerprint.slice(0,12)}`;
 const provenance={...sourceIdentity,buildRevision};
 verifySource();
+let screenshotShare;
 const bundles = await packager({ dir: root, out: output.directory, overwrite: true,
   name: appName, executableName: appName, appBundleId,
-  platform: 'darwin', arch: process.arch, icon, asar: false,
+  platform: 'darwin', arch: process.arch, electronVersion, icon, asar: false,
   extendInfo: bundleInfo.browserBundleInfo({preview:!!desktopPreview}),
   // Rebuild only our PTY in the copied app. Preserve source Node ABI and vendor signatures.
   afterCopy: [async ({buildPath, electronVersion, arch}) => {
@@ -69,10 +73,14 @@ const bundles = await packager({ dir: root, out: output.directory, overwrite: tr
     await rebuild({buildPath, electronVersion, arch, onlyModules:['node-pty'], force:true});
     preparePty(buildPath);
     prepareExtensions(buildPath);
+    if(includeScreenshotShare)screenshotShare=prepareScreenshotShare({bundle:path.resolve(buildPath,'../../..'),root,arch,identity:signingIdentity,appBundleId,version:metadata.version,directory:output.directory});
   }],
   // Keep runtime files and dependencies; never ship tests, worktrees or local configuration.
   ignore: desktopPackageIgnore,
-  osxSign: unsigned?undefined:{ ignore: file => vendorFiles.some(relative => file.endsWith('/' + relative)), identity: signingIdentity, identityValidation: false, preAutoEntitlements: false, gatekeeperAssess: false, optionsForFile: () => ({ hardenedRuntime: false, signatureFlags: '0', timestamp: 'none' }) },
+  osxSign: unsigned?undefined:{ ignore: file => isShareSubcode(file)||vendorFiles.some(relative => file.endsWith('/' + relative)), identity: signingIdentity, identityValidation: false, preAutoEntitlements: false, gatekeeperAssess: false, optionsForFile: file => ({
+    hardenedRuntime: false, signatureFlags: '0', timestamp: 'none',
+    ...(screenshotShare&&file.endsWith('/'+appName+'.app')?{entitlements:screenshotShare.appEntitlements}:{}),
+  }) },
 });
 for (const directory of bundles) {
   const bundle = path.join(directory, appName+'.app');
@@ -91,7 +99,7 @@ for (const directory of bundles) {
     if (!fs.readFileSync(vendorPath).equals(fs.readFileSync(path.join(root, relative)))) throw new Error('Packaging modified a vendor-signed Copilot binary: ' + relative);
     if(!unsigned)execFileSync('codesign', ['--verify', '--strict', '-R', vendorRequirement, vendorPath], { stdio: 'pipe' });
   }
-  console.log(JSON.stringify({signingStatus:unsigned?'unsigned staging; vendor bytes preserved, signatures unchecked':'signed',bundle,buildRevision,sourceFingerprint,dirty,runtimeFiles:Object.keys(runtimeFiles).length}));
+  console.log(JSON.stringify({signingStatus:unsigned?'unsigned staging; vendor bytes preserved, signatures unchecked':'signed',bundle,buildRevision,sourceFingerprint,dirty,runtimeFiles:Object.keys(runtimeFiles).length,screenshotShare:!!screenshotShare}));
 }
 output.complete({sourceFingerprint, buildRevision});
 } finally { output.release(); }

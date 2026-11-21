@@ -133,6 +133,14 @@ It preserves current enabled state, unknown fields and all prior runs. Reuse ide
 arguments after uncertain delivery; conflicting current state requires review. Existing native
 service protections remain. Do not point exportPath at credential files.
 
+### Follow edits to selected instructions and skills
+
+Enable **Refresh instruction and skill edits automatically** in an owner-editable schedule.
+Repository-owned schedules can set the top-level `"autoRefreshSources": true` field in their
+source configuration and apply it through source reconciliation. The schedule records the
+revisions captured for each new run. Select sources and review permission or connector changes
+through the normal owner workflow.
+
 ### Configure scoped Codex commands
 
 Add this explicit field to the existing future-run executionPermissions object:

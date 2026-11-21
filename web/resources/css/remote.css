@@ -1,3 +1,6 @@
+@import "../../../public/features/chats/operations-list.css";
+@import "../../../public/shared/ui/content-zoom.css";
+@import "../../../public/features/chats/openrouter-models.css";
 @import "../../../public/features/chats/chat-attachments.css";
 @import "../../../public/features/chats/user-questions.css";
 .remote-heading,.remote-destinations,.remote-tabs,.remote-chat-title{display:flex;align-items:center;gap:1rem;justify-content:space-between}

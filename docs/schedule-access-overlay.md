@@ -50,6 +50,11 @@ varying commands within the same reviewed OS policy and source identity. It is n
 an old shell rule or folder grant. Dynamic planning can use this explicit bounded authority; it
 does not imply network, credential-service or arbitrary filesystem access.
 
+Scoped runs require the schedule's saved approval mode. When an older chat override blocks
+continuation, open Chat Details, choose **Use schedule permissions**, then choose **Continue**.
+The desktop approval prompt offers **Remember exact command for schedule** when the owner offers
+that approval for the current request.
+
 Receipts retain a hash of arguments and bounded output, not raw arguments or environment.
 A repeated completed operation returns its receipt. An uncertain invocation is not rerun under
 another ID automatically. Tools expire with their active turn. Revoking a dependent overlay grant

@@ -58,8 +58,11 @@ struct NativeTextDocument: View {
     let content: String
     let editable: Bool
     let save: (String) async throws -> Void
+    var paste: (([String: JSON]) async throws -> JSON)? = nil
+    var draftStore: Binding<String?>? = nil
     let markdown: () -> AnyView
     @State private var editing = false
+    @State private var editCommand: ScratchEditCommand?
     @State private var draft = ""
     @State private var saving = false
     @State private var status = ""
@@ -74,12 +77,15 @@ struct NativeTextDocument: View {
                     Text(status.isEmpty ? (dirty ? "Unsaved changes" : "") : status).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                     Spacer()
                     if editing {
-                        Button("Discard") { editing = false; status = "" }.buttonStyle(.bordered).disabled(saving)
+                        if isMarkdown, paste != nil { Button("Paste image or PDF", systemImage: "clipboard") { pasteDocumentAsset() }.labelStyle(.iconOnly).disabled(saving) }
+                        Button("Discard") { editing = false; draftStore?.wrappedValue = nil; status = "" }.buttonStyle(.bordered).disabled(saving)
                         Button { Task { await commit() } } label: { HStack(spacing: 5) { LifeFloppyDisk().frame(width: 16, height: 16); Text("Save") } }.buttonStyle(.borderedProminent).tint(NativeTheme.accent).disabled(!dirty || saving)
                     } else if editable { Button("Edit", systemImage: "pencil") { draft = content; editing = true; status = "" }.buttonStyle(.bordered).accessibilityIdentifier("file-edit") }
                 }.padding(.horizontal, 12).padding(.vertical, 8).font(.callout)
                 Divider()
-                if editing {
+                if editing && isMarkdown {
+                    NativeScratchMarkdownEditor(text: $draft, source: true, command: editCommand).frame(minHeight: 420)
+                } else if editing {
                     // An invisible copy of the text sizes the editor to its content, so the page (not the editor) scrolls.
                     ZStack(alignment: .topLeading) {
                         Text(draft + "\n").font(.system(.body, design: .monospaced)).padding(.horizontal, 5).padding(.vertical, 8).opacity(0).accessibilityHidden(true)
@@ -92,9 +98,23 @@ struct NativeTextDocument: View {
                 }
             }.frame(maxWidth: .infinity, alignment: .topLeading)
         }.scrollDismissesKeyboard(.interactively).background(NativeTheme.surface)
+            .onAppear { if editable, let saved = draftStore?.wrappedValue { draft = saved; editing = true } }
+            .onChange(of: draft) { _, next in if editing { draftStore?.wrappedValue = next == content ? nil : next } }
+    }
+    private func pasteDocumentAsset() {
+        guard let paste else { return }
+        NativeAttachmentPaste.read(limit: 1) { item in
+            Task {
+                do {
+                    let file = try await paste(NativeAttachmentPaste.markdownAsset(item.get()))
+                    guard editing else { return }
+                    editCommand = ScratchEditCommand(before: "![[" + file["name"].string + "]]\n", after: "", replace: true)
+                } catch { status = error.localizedDescription }
+            }
+        }
     }
     private func commit() async {
         saving = true; defer { saving = false }
-        do { try await save(draft); editing = false; status = "Saved" } catch { status = "Not saved · " + error.localizedDescription }
+        do { try await save(draft); editing = false; draftStore?.wrappedValue = nil; status = "Saved" } catch { status = "Not saved · " + error.localizedDescription }
     }
 }

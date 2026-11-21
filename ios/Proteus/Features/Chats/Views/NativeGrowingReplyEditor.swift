@@ -16,6 +16,25 @@ final class NativeReplyTextView: UITextView {
     private var lastWindowHeight: CGFloat = 0
     private var lastBoundsHeight: CGFloat = 0
     private var lastContentHeight: CGFloat = 0
+    private var caretRevealPending = false
+    private var wrapMeasurement: (text: String, width: CGFloat, font: UIFont?, insets: UIEdgeInsets, padding: CGFloat, height: CGFloat)?
+    func scheduleCaretReveal() {
+        guard !caretRevealPending else { return }
+        caretRevealPending = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.caretRevealPending = false
+            if self.isFirstResponder { self.revealCaret() }
+        }
+    }
+    func wrappedContentHeight(at width: CGFloat) -> CGFloat {
+        let text = self.text ?? "", insets = textContainerInset, padding = textContainer.lineFragmentPadding
+        if let cached = wrapMeasurement, cached.text == text, cached.width == width,
+           cached.font == font, cached.insets == insets, cached.padding == padding { return cached.height }
+        let height = sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude)).height
+        wrapMeasurement = (text, width, font, insets, padding, height)
+        return height
+    }
     func revealCaret() {
         guard let range = selectedTextRange else { return }
         if contentSize.height <= bounds.height + 0.5 { if contentOffset.y != 0 { setContentOffset(.zero, animated: false) }; return }
@@ -101,7 +120,15 @@ final class NativeReplyTextView: UITextView {
 
 func nativeTextAttachmentRequired(_ value: String) -> Bool {
     if value.utf8.count > 256 * 1024 { return true }
-    return value.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n").components(separatedBy: "\n").count > 200
+    var breaks = 0, afterCR = false
+    for byte in value.utf8 {
+        if byte == 13 || (byte == 10 && !afterCR) {
+            breaks += 1
+            if breaks >= 200 { return true }
+        }
+        afterCR = byte == 13
+    }
+    return false
 }
 struct NativeGrowingReplyEditor: UIViewRepresentable {
     @Binding var text: String
@@ -160,25 +187,29 @@ struct NativeGrowingReplyEditor: UIViewRepresentable {
         #endif
         let width = max(1, proposal.width ?? 320)
         // Measure actual TextKit wrapping at the proposed width, including Dynamic Type.
-        let content = uiView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
-        return CGSize(width: width, height: NativeReplyEditorLayout.height(contentHeight: content.height,
+        let height = uiView.wrappedContentHeight(at: width)
+        return CGSize(width: width, height: NativeReplyEditorLayout.height(contentHeight: height,
             screenHeight: screenHeight, chromeHeight: chromeHeight))
     }
     final class Coordinator: NSObject, UITextViewDelegate {
         var parent: NativeGrowingReplyEditor
         init(_ parent: NativeGrowingReplyEditor) { self.parent = parent }
         func textViewDidChange(_ view: UITextView) {
+            let text = view.text ?? ""
+            // Hardware/command insertions may use the fallback delegate call as
+            // well as UIKit's own callback. Publish and lay out each edit once.
+            guard parent.text != text else { return }
+            parent.text = text
             view.invalidateIntrinsicContentSize()
-            DispatchQueue.main.async { [weak view] in (view as? NativeReplyTextView)?.revealCaret() }
-            if parent.text != view.text { parent.text = view.text }
-            (view as? NativeReplyTextView)?.placeholder.isHidden = !view.text.isEmpty
+            (view as? NativeReplyTextView)?.scheduleCaretReveal()
+            (view as? NativeReplyTextView)?.placeholder.isHidden = !text.isEmpty
         }
         func textViewDidBeginEditing(_ textView: UITextView) { if !parent.isFocused { parent.focusChanged(true) } }
         func textViewDidEndEditing(_ textView: UITextView) { if parent.isFocused { parent.focusChanged(false) } }
         func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
             if textView.markedTextRange == nil, nativeTextAttachmentRequired(text), parent.attachLargeText?(text) == true {
                 textView.text = (textView.text as NSString).replacingCharacters(in: range, with: "[Attached: Pasted text.txt]")
-                parent.text = textView.text
+                textViewDidChange(textView)
                 return false
             }
             if text == "\n", parent.submitOnReturn, textView.markedTextRange == nil,

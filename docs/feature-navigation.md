@@ -35,6 +35,12 @@ instead of copying a feature-specific variation. Platform differences must prese
   dimensions or separator geometry; verify root as well as nested strips with pixel measurements.
 - Strips are flush with their parent navigation/content edges. Put margins inside page contents.
   Retain the global header/sidebar control, and restore each project's last selected view.
+- Desktop workspace/project and feature strips use the shared metrics in
+  `public/shared/navigation/feature-tabs.css`. Life uses that same geometry for
+  both levels and shares its section icons with the sidebar. On iOS use the
+  native controls and section metadata for tab and sidebar icons, with the native
+  list and form palette for content panels. The Chats dashboard scope strip is a
+  Chats-only presentation.
 
 ## Feature surfaces and editing
 
@@ -52,6 +58,8 @@ instead of copying a feature-specific variation. Platform differences must prese
   have a computer label. Show seven initially, reveal four more per More action, and reset
   expansion on feature changes. Closing a tab retains the recent entry. History is metadata only,
   bound to its account/owner/storage root; opening still checks current resource access.
+  A section without recents takes no extra space. Fetch and observe its data from the feature
+  row or container so the list only allocates rows for visible items.
 - Reminders belong to the Life account on the server. Desktop, browser and native clients keep
   local SQLite replicas of its revisioned change feed, including tombstones. Local caches grant
   no authority and never independently commit an effect. Scratchpad belongs to a computer's

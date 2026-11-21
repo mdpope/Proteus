@@ -6,6 +6,16 @@ const element=(tag,className)=>Object.assign(document.createElement(tag),{classN
 const button=(title,action,className='')=>{const item=element('button',className);item.type='button';item.textContent=title;item.onclick=action;return item;};
 export const tabCloseIcon='<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8"/></svg>';
 
+export function featureTabTitle(title,icon,selected,select){
+ const item=element('div','feature-content-tab'+(selected?' selected':''));
+ const open=button('',select);
+ const glyph=element('span','preview-tab-icon');glyph.innerHTML=icon;
+ open.append(glyph,Object.assign(element('span'),{textContent:title}));
+ if(selected)open.setAttribute('aria-current','page');
+ item.append(open);
+ return {item,open};
+}
+
 // Feature masters and resource tabs share one strip. Resource adapters retain
 // their existing owner, session and access checks; closing a note tab is local.
 export function createFeatureWorkspaceTabs({title,label=title+' tabs',tabs,selected,select,close,resources}){
@@ -15,6 +25,7 @@ export function createFeatureWorkspaceTabs({title,label=title+' tabs',tabs,selec
  // The owner supplies order, including in-place New Tab conversion. Do not
  // maintain a second ordering cache that can disagree with its placement.
  const entries=()=>[...tabs(),...(resources?.items()||[])];
+ const tabIcon=row=>row.glyph||(row.icon==='browser'?browserTabIcon(row.browserInfo):'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">'+(addTabIcons[row.icon||(title==='Reminders'?'reminder':'markdown')]||addTabIcons.markdown)+'</svg>');
  const current=()=>resources?.selected()||selected();
  const fail=error=>{if(resources)resources.error(error.message);else alert(error.message);};
  function choose(row){if(row.resource)void resources.select(row.id);else{resources?.activateMaster();select(row.id);}render();}
@@ -28,9 +39,10 @@ export function createFeatureWorkspaceTabs({title,label=title+' tabs',tabs,selec
   const scroll=bar.querySelector('.feature-tab-list')?.scrollLeft||0;cleanupEdges?.();bar.replaceChildren();const list=element('div','feature-tab-list');
   list.ondblclick=event=>{if(event.button===0&&event.target===list){event.preventDefault();event.stopPropagation();add();}};
   for(const row of rows){
-   const item=element('div','feature-content-tab'+(row.id===current()?' selected':''));item.dataset.featureTab=row.id;if(row.resource)item.dataset.tabContainer=row.id;
-   const open=button('',()=>choose(row));open.dataset.tabHint=row.title;open.dataset.tabUrl=row.url||'';const icon=element('span','preview-tab-icon');icon.innerHTML=row.icon==='browser'?browserTabIcon(row.browserInfo):'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">'+(addTabIcons[row.icon|| (title==='Reminders'?'reminder':'markdown')]||addTabIcons.markdown)+'</svg>';open.append(icon,Object.assign(element('span'),{textContent:row.title}));if(row.id===current())open.setAttribute('aria-current','page');if(row.scratchId)open.dataset.scratchId=row.scratchId;if(row.reminderId)open.dataset.reminderTab=row.reminderId;
-   item.append(open);if(row.closable){const dismiss=button('',()=>{void Promise.resolve().then(()=>row.resource?resources.close(row.id):close(row.id)).then(render).catch(fail);},'tabclose');dismiss.innerHTML=tabCloseIcon;dismiss.setAttribute('aria-label','Close '+row.title);item.append(dismiss);}list.append(item);
+   const {item,open}=featureTabTitle(row.title,tabIcon(row),row.id===current(),()=>choose(row));
+   item.dataset.featureTab=row.id;if(row.resource)item.dataset.tabContainer=row.id;
+   open.dataset.tabHint=row.title;open.dataset.tabUrl=row.url||'';if(row.scratchId)open.dataset.scratchId=row.scratchId;if(row.reminderId)open.dataset.reminderTab=row.reminderId;
+   if(row.closable){const dismiss=button('',()=>{void Promise.resolve().then(()=>row.resource?resources.close(row.id):close(row.id)).then(render).catch(fail);},'tabclose');dismiss.innerHTML=tabCloseIcon;dismiss.setAttribute('aria-label','Close '+row.title);item.append(dismiss);}list.append(item);
   }
   const actions=element('div','tab-actions');const all=button('',async()=>{if(resources?.overview){resources.overview();return;}await resources?.capturePreview?.();if(!overview){overview=element('dialog','feature-tabs-dialog');overview.onclose=()=>{overview.remove();overview=null;};document.body.append(overview);}drawOverview();overview.showModal();},'universal-tab-overview');all.innerHTML=tabOverviewIcon;all.setAttribute('aria-label',title+' tab overview');actions.append(all);
   if(resources){const create=button('',add,'universal-new-tab');create.innerHTML=tabAddIcon;create.setAttribute('aria-label','Add '+title+' tab');actions.append(create);}

@@ -5,7 +5,7 @@ import { StateResponseCache } from '../src/services/state/state-response-cache.j
 
 const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; };
 
-test('windows share one projection; owner changes discard in-flight results and cached permission displays', async () => {
+test('windows share one projection; owner changes prevent caching the captured display', async () => {
   let revision = 1, calls = 0, now = 0;
   const cache = new StateResponseCache({ stamp: () => revision, clock: () => now });
   const gate = deferred();
@@ -13,24 +13,28 @@ test('windows share one projection; owner changes discard in-flight results and 
   const first = cache.get('summaries', produce), second = cache.get('summaries', produce);
   assert.equal(calls, 1);
   revision++; gate.resolve('stale');
-  assert.deepEqual(await Promise.all([first, second]), ['new', 'new']); assert.equal(calls, 2);
+  assert.deepEqual(await Promise.all([first, second]), ['stale', 'stale']); assert.equal(calls, 1);
+  assert.equal(cache.cache.size, 0);
   assert.equal(await cache.get('summaries', produce), 'new'); assert.equal(calls, 2);
   revision++; await cache.get('summaries', produce); assert.equal(calls, 3);
   now = 301; await cache.get('summaries', produce); assert.equal(calls, 4);
 });
 
-test('repeated mutations and overloaded refreshes terminate with bounded retry, retaining no failed result', async () => {
+test('continuous chat changes still return coherent snapshots, and a failed worker does not poison newer requests', async () => {
   let revision = 1, calls = 0;
   const cache = new StateResponseCache({ stamp: () => revision, maxPending: 1 });
-  await assert.rejects(cache.get('moving', async () => { calls++; revision++; return 'obsolete'; }), /changed/);
+  const produce = async () => { calls++; const captured=revision; revision++; return captured; };
+  assert.equal(await cache.get('moving', produce), 1);
+  assert.equal(await cache.get('moving', produce), 2);
   assert.equal(calls, 2); assert.equal(cache.cache.size, 0);
   const gate = deferred(), first = cache.get('one', () => gate.promise);
   revision++;
-  const newer=cache.get('one', async () => 'new');const newerRejected=assert.rejects(newer,/worker failure/);
+  const newer=cache.get('one', async () => 'new');
   await assert.rejects(cache.get('two', async () => 'new'), /busy/);
-  const rejected = assert.rejects(first, /worker failure/); gate.reject(Error('worker failure')); await rejected;await newerRejected;
+  const rejected = assert.rejects(first, /worker failure/); gate.reject(Error('worker failure')); await rejected;
+  assert.equal(await newer, 'new');
   assert.equal(cache.active.size, 0); assert.equal(cache.pending.size, 0);
-  assert.equal(await cache.get('one', async () => 'recovered'), 'recovered');
+  assert.equal(await cache.get('one', async () => 'recovered'), 'new');
   cache.clear(); assert.equal(cache.cache.size, 0);
 });
 
@@ -39,7 +43,8 @@ test('different generations of the same view coalesce before a fresh snapshot',a
  const produce=()=>{calls++;return calls===1?gate.promise:Promise.resolve('current');};
  const first=cache.get('view',produce);revision++;
  const followers=Array.from({length:20},()=>cache.get('view',produce));assert.equal(calls,1);
- gate.resolve('obsolete');assert.deepEqual(await Promise.all([first,...followers]),Array(21).fill('current'));assert.equal(calls,2);
+ gate.resolve('obsolete');assert.equal(await first,'obsolete');
+ assert.deepEqual(await Promise.all(followers),Array(20).fill('current'));assert.equal(calls,2);
 });
 
 // N11-23: draft saves, follow positions and other state-neutral POSTs must not make a state

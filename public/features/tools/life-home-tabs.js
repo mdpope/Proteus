@@ -1,3 +1,20 @@
+import {lifeSectionIcon} from './life-icons.js';
+import {featureTabTitle} from '../../shared/navigation/feature-workspace-tabs.js';
+
+export function lifeSectionStrip(sections,selected,choose){
+ const navigation=document.createElement('nav');
+ navigation.className='feature-tab-bar feature-workspace-tabs project-tab-strip';
+ navigation.setAttribute('aria-label','Life sections');
+ const list=document.createElement('div');
+ list.className='feature-tab-list';
+ for(const [id,title] of sections){
+  const {item,open}=featureTabTitle(title,lifeSectionIcon(id),id===selected,()=>choose(id));
+  open.dataset.lifeSection=id;
+  list.append(item);
+ }
+ navigation.append(list);
+ return navigation;
+}
 // The Life section bar (Overview, Ask, Smart Home, ...). Section pages and their
 // content tabs (Smart Home, Nutrition, Garage) are ordinary feature strips owned by the
 // shared feature-content workspaces, so Life follows the same tab conventions as Projects.
@@ -15,10 +32,12 @@ export function createLifeHomeTabs(ui){
   const signature=JSON.stringify([ui.account(),shown]);
   let navigation=document.querySelector('#life-section-navigation');
   if(navigation&&navigation.dataset.signature===signature)return;
+  const scroll=navigation?.firstElementChild.scrollLeft||0;
   removeBar();
-  navigation=document.createElement('nav');navigation.id='life-section-navigation';navigation.dataset.signature=signature;navigation.className='feature-tab-bar';navigation.setAttribute('aria-label','Life sections');
-  for(const [id,title] of ui.sections){const button=document.createElement('button');button.type='button';button.textContent=title;if(id===shown)button.setAttribute('aria-current','page');button.onclick=()=>ui.openSection(id);navigation.append(button);}
+  navigation=lifeSectionStrip(ui.sections,shown,ui.openSection);
+  navigation.id='life-section-navigation';navigation.dataset.signature=signature;
   main.before(navigation);
+  navigation.firstElementChild.scrollLeft=scroll;
  }
  // Smart Home keeps one Home Assistant tab per Life account, created on demand.
  async function openAssistant(url){

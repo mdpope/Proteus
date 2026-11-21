@@ -34,6 +34,18 @@ export class BrowserProfiles {
   async handle(value={}){
     if(value.action==='list')return this.list();
     if(value.action==='refresh')return this.refresh();
+    if(value.action==='notification-permission'){
+      const profile=this.get(value.id);
+      const url=new URL(value.origin);
+      if(url.username||url.password||!['http:','https:'].includes(url.protocol))throw Error('Enter an HTTP or HTTPS website without credentials.');
+      const {origin,permission}=validateBrowserSettings({notifications:[{origin:url.origin,permission:value.permission}]}).notifications[0];
+      const settings=profile.settings||{};
+      const notifications=(settings.notifications||[]).filter(item=>item.origin!==origin);
+      if(permission!=='ask')notifications.push({origin,permission});
+      const saved=await this.handle({action:'settings',id:profile.id,settings:{...settings,notifications}});
+      this.onNotificationPermission?.(profile.id);
+      return saved;
+    }
     if(value.action==='enable'){if(typeof value.enabled!=='boolean')throw new Error('Choose whether profile sync is enabled.');if(value.enabled&&!this.identity())throw new Error('Sign in to your Proteus account first.');const previous=this.data;this.data={...previous,enabled:value.enabled};try{if(value.enabled)await this.refresh();else{this.verified=false;atomicJSON(this.file,this.data);}}catch(error){this.data=previous;throw error;}return this.list();}
     if(value.action==='settings'){const profile=this.get(value.id),settings=validateBrowserSettings(value.settings);if(profile.id==='default'){const next={...this.data,defaultSettings:settings};atomicJSON(this.file,next);this.data=next;return this.list();}return this.handle({action:'save',id:profile.id,name:profile.name,settings,expectedRevision:profile.revision});}
     if(value.id==='default')throw new Error('Default is a local profile and cannot be renamed or removed.');

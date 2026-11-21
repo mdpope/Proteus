@@ -1,6 +1,7 @@
 // Disposable native Chromium pages/profiles only; no production account or browsing data.
 import {_electron as electron} from 'playwright';
 import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import http from 'node:http';import assert from 'node:assert/strict';
+import {closeTestElectron} from './electron-cleanup.mjs';
 const home=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'proteus-background-link-'))),hits=[];
 fs.writeFileSync(path.join(home,'settings.json'),JSON.stringify({schemaVersion:1,provider:'rehearsal',timezone:'UTC',workspace:{cwd:home,additionalDirectories:[]},skillDirectories:[],mcpServers:{}}));
 let releaseSlow;
@@ -9,7 +10,9 @@ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const origin='h
 const until=async(fn,label)=>{for(let i=0;i<200;i++){if(await fn())return;await new Promise(resolve=>setTimeout(resolve,50));}throw Error('Timeout: '+label);};
 let app;const errors=[];
 try{
- app=await electron.launch({args:['.','--use-mock-keychain','--user-data-dir='+path.join(home,'electron')],env:{...process.env,PROTEUS_HOME:home,PORT:'0'},timeout:60000});const page=await app.firstWindow();page.on('pageerror',error=>errors.push(error.message));page.setDefaultTimeout(15000);
+ const executablePath=process.env.PROTEUS_TEST_EXECUTABLE;
+ const args=[...(executablePath?[]:['.']),'--use-mock-keychain','--user-data-dir='+path.join(home,'electron')];
+ app=await electron.launch({executablePath,args,env:{...process.env,PROTEUS_HOME:home,PORT:'0'},timeout:60000});const page=await app.firstWindow();page.on('pageerror',error=>errors.push(error.message));page.setDefaultTimeout(15000);
  await page.locator('#topbar-home').waitFor();
  await page.route('**/api/team/lists',route=>route.fulfill({json:{identity:{accountId:'fixture',workspaceId:'1'},teamLists:[]}}));
  await page.route('**/app.js',async route=>{const response=await route.fetch();await route.fulfill({response,body:(await response.text())+'\nwindow.backgroundFixture={state,openTab,selectTeamBrowser,teamState,navigate,get ready(){return workspaceReady&&!workspaceRestoring;}};'});});
@@ -61,6 +64,6 @@ try{
  await until(()=>page.evaluate(url=>backgroundFixture.teamState().tabs.some(tab=>tab.url===url&&tab.loaded),origin+'/team-background'),'Team background registered');
  const teamResult=await page.evaluate(({active,url})=>{const team=backgroundFixture.teamState(),sourceIndex=team.tabs.findIndex(tab=>tab.id===active),tab=team.tabs[sourceIndex+1];return {active:team.active,after:tab.url===url,loaded:tab.loaded,profile:tab.profileId};},{active:teamActive,url:origin+'/team-background'});
  assert.deepEqual(teamResult,{active:teamActive,after:true,loaded:true,profile:named});assert.equal(await form.evaluate(node=>node.isConnected),true);assert.equal(await native(main=>main.getBrowser().active),team.id);
- await page.screenshot({path:'/private/tmp/proteus-background-link.png'});assert.deepEqual(errors,[]);
+ assert.deepEqual(errors,[]);
  console.log('PASS background link: ordered native menu; loaded/unhidden same local profile and project; adjacent placement; preserved selection, focus and draft; late loading preserves newer selection and address-bar focus/draft; Team stays mounted; foreground/unloaded unchanged.');
-}finally{releaseSlow?.();if(app){const timeout=setTimeout(()=>app.process().kill('SIGKILL'),8000);try{await app.close();}finally{clearTimeout(timeout);}}server.closeAllConnections();await new Promise(resolve=>server.close(resolve));fs.rmSync(home,{recursive:true,force:true});}
+}finally{releaseSlow?.();await closeTestElectron(app);server.closeAllConnections();await new Promise(resolve=>server.close(resolve));fs.rmSync(home,{recursive:true,force:true});}

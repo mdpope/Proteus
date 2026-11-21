@@ -25,6 +25,13 @@ export function bindPermissionSidebar(root,{run,request,reply,reload,dialog,pick
  $('[data-preview-read-only-inherit]')?.addEventListener('click',()=>void update({action:'set-chat-read-only',enabled:null}));
  root.querySelectorAll('[data-preview-revoke-rule]').forEach(button=>button.onclick=()=>void update({action:'revoke-chat-rule',ruleId:button.dataset.previewRevokeRule}));
  $('[data-preview-workspace-permissions]')?.addEventListener('click',()=>void openWorkspace?.());
+ const exactCommand=$('[data-preview-allow-exact-command]');
+ if(exactCommand)exactCommand.onclick=async()=>{
+  exactCommand.disabled=true;
+  try{await reply('allow-schedule',run.pending.id);await reload();}
+  catch(error){notify(error.message);}
+  finally{exactCommand.disabled=false;}
+ };
  $('[data-preview-remember]')?.addEventListener('click',()=>{
   const pending=run.pending;if(pending?.type!=='permission')return;
   dialog(previewRememberDialog(pending),async()=>{await reply(global('[data-preview-remember-choice][aria-pressed=true]').dataset.previewRememberChoice,pending.id);void Promise.resolve(reload()).catch(error=>notify(error.message));});

@@ -10,6 +10,37 @@ export function showMoveMenu({showDialog,escape,groups,current,id='tab-destinati
  const update=()=>buttonElement.disabled=!select.value||select.value===current;select.onchange=update;update();
  return select;
 }
+
+export async function pickBrowserMoveDestination({groups,current,anchor}) {
+ const rect=anchor?.getBoundingClientRect();
+ const position={x:rect?.left??12,y:rect?.bottom??52};
+ const choices=[
+  {tab:{id:'main',label:'Application tabs'}},
+  {tab:{id:'team',label:'Team Tools'}},
+  ...groups.map(group=>({group})),
+ ];
+ const label=tab=>String(tab.label||'Untitled').slice(0,78)+(tab.id===current?' · Current location':'');
+ const pick=async (rows,format)=>{
+  const pageSize=24;
+  for(let offset=0;offset>=0&&offset<rows.length;){
+   const items=rows.slice(offset,offset+pageSize).map((row,index)=>({id:'choice-'+index,...format(row)}));
+   if(offset>0)items.push({id:'previous',label:'Previous destinations'});
+   if(offset+pageSize<rows.length)items.push({id:'next',label:'More destinations'});
+   const choice=await window.desktop.browser({action:'popup-menu',items,...position});
+   if(choice==='previous')offset-=pageSize;
+   else if(choice==='next')offset+=pageSize;
+   else return items.some(item=>item.id===choice&&item.enabled!==false) ? rows[offset+Number(choice.slice(7))] : null;
+  }
+  return null;
+ };
+ const choice=await pick(choices,row=>row.tab
+  ? {label:label(row.tab),enabled:row.tab.id!==current}
+  : {label:String(row.group.label||'Workspace').slice(0,90)+' ›',enabled:row.group.tabs.length>0});
+ if(choice?.tab)return choice.tab.id;
+ if(!choice?.group)return null;
+ const target=await pick(choice.group.tabs,tab=>({label:label(tab),enabled:!tab.disabled&&tab.id!==current}));
+ return target?.id??null;
+}
 /** Group a single owner's complete project catalog, including unopened destinations. */
 export function projectMoveGroups(workspaces,projects,{workspaceOnly=false}={}){
  return workspaces.map(workspace=>({label:workspace.name,tabs:workspaceOnly?[{id:workspace.id,label:workspace.name}]:projects.filter(project=>project.workspaceId===workspace.id).map(project=>({id:project.id,label:project.name}))}));

@@ -1,11 +1,64 @@
 Unscheduled ideas and known gaps live in [the parking lot](parking-lot.md); they are not part of any release until moved into a plan.
 
-## Nov 17 — planning only; do not build
+## Nov 17 — 0.2.46 open
 
-The operator requested [a Nov 17 release plan](2026-11-17-release-plan.md). These requests are
-queued, not implemented, and authorize no build or rollout. Nov 15 is closed at 0.2.45;
-the Nov 17 version is not yet reserved.
+The operator authorized implementation of the [Nov 17 release plan](2026-11-17-release-plan.md)
+after Nov 15 closed at 0.2.45, with packaging after source acceptance and rollout limited to
+Build Mac, iPhone and iPad. Track completion in the [implementation record](releases/2026-11-17/implementation.md).
 
+- **N17-31 — OpenRouter:** signed-in owner setup, live chat-model catalog, favorites and search in the standard Model dropdown, and reported per-run charges. See [provider setup](providers.md#openrouter).
+- **N17-32 — Needs Attention notification filters:** use counted category buttons, search and
+  computer filters on desktop, web and iOS where each client has that scope. Keep browser-history
+  recovery on the owning desktop. Include this before the Build Mac field update.
+- **N17-33 — Browser history recovery:** reuse the history entry on automatic same-address reloads,
+  keep unrelated draft tabs syncing, and identify the scope blocking an update.
+- **N17-34 — macOS application menu:** keep the incoming-link picker from switching Proteus to
+  accessory mode. Verify secondary-window closing separately from the menu regression.
+- **N17-35 — Chats dashboard:** keep verified computer rows stable during background refreshes,
+  move old failed, interrupted and waiting chats to Recently finished as Stale, and add a card-size
+  slider and brighter Finished cards. Field-test on Build Mac.
+- **N17-36 — Document navigation and zoom:** open Scratchpad README, restore selection and reading
+  position, and add document sizing, wrapping, pinch and scrollable image zoom. Diagnose custom-port TLS.
+- **N17-37 — Scratchpad names:** migrate registered legacy paths on Build Mac and verify note
+  IDs, revisions and bytes against a private recovery copy.
+- **N17-38 — Teams web sign-in:** use Chromium’s web identity for the original and cloud
+  Teams HTTPS origins. Keep background navigation and page-opened tabs from taking input focus.
+- **N17-39 — Engine Room links:** use the computer's browser preference for settings links.
+  Open in-app links as top-level tabs in the initiating window.
+- **N17-40 — New-chat display errors:** return coherent owner display snapshots during concurrent
+  changes and refresh again after an overlapping owner notification.
+- **N17-41 — Reminders import:** guide Mac users through exporting Apple Reminders and preview
+  each account and list before a bulk import. Support the same file format for a converted export.
+- **N17-42 — Chat context recovery:** refresh sources for the next turn and keep the scheduled
+  chat's referenced workspaces and managed account binding.
+- **N17-43 — Scoped command continuation:** prevent incompatible chat approval overrides,
+  expose recovery for existing runs, and show the exact command approval in the desktop prompt.
+- **N17-44 — Automatic source refresh:** opt in per chat or schedule to follow body edits in
+  already-selected instructions and skills before execution. Capture the revisions and retain
+  review for source scope and configuration changes.
+- **N17-45 — Stable browser traversal:** reconcile Back and Forward by entry ID and
+  history revision across iOS and desktop. Retain the selected entry through delayed
+  responses and device-local redirects.
+- **N17-46 — iPhone typing and cache stalls:** use device diagnostics and a live trace
+  where available. Isolate visit journal writes from offline history coverage, reduce
+  editor layout work, and verify responsiveness and draft retention with sync traffic.
+- **N17-47 — iOS startup and streaming:** restore document-tab and browser-history files
+  off the main thread. Apply current streaming updates directly to the latest chat page.
+- **N17-48 — iPhone tab writes and runtime timer:** separate retry records from owner tab
+  snapshots and avoid rebuilding runtime intervals on each tick. Verify the updated iPhone
+  in place and compare a repeat USB typing and scrolling trace.
+- **N17-49 — macOS Local Network after update:** use LaunchServices for update and rollback
+  relaunches. Preserve the data home and browser profile and check the reported HTTP route.
+- **N17-50 — Visible zoom and reset:** put Chat size below the chat actions and share the
+  live percentage and 100% reset across zoomable desktop views.
+- **N17-51 — Desktop crash investigation:** prevent macOS from repeatedly launching the
+  Apple-restricted Passwords helper. Collect the Linux crash evidence separately before
+  attributing either app crash to a browser extension. The helper correction is source-only.
+- **N17-52 — Electron rollback:** pin 44.11.5, validate Build Mac first, and then update
+  Work Mac and Linux. Hold the Electron 45 upgrade pending resolution of upstream issue #55799.
+- **N17-53 — Windows background-tab focus:** recheck native keyboard focus when the hidden
+  view finishes its initial load. Verify the selected page and an active address draft in
+  the same foreground window against the packaged Windows release.
 - **N17-01 — Move tab menu:** the menu blocks the browser window view; reuse the menu
   treatment already implemented elsewhere.
 - **N17-02 — Workspace rename:** the sidebar retains the old workspace name after renaming;
@@ -56,12 +109,49 @@ the Nov 17 version is not yet reserved.
 - **N17-17 — Recurring trackpad scroll stutter:** a brief hitch about once a second affects
   desktop chats and embedded websites. Correlate physical-trackpad frame gaps with Electron
   main-process, renderer and compositor traces, fix the measured cause, and verify both surfaces
-  on the affected desktop.
+  on the affected desktop. The installed baseline reproduced the hitch during a physical session.
+  The measured synthetic improvement still needs candidate verification on both surfaces.
 - **N17-18 — Live Chats operations dashboard:** apply the accepted revision 5 design across
   chat-list surfaces, with computer filters, counted status buttons, responsive Cards/Table views, live
-  run metrics and clearly marked offline caches. Verify owner state and coordinate incremental
-  rendering and physical-trackpad acceptance with N17-17. See the
+  run metrics and clearly marked offline caches. Keep iOS Table compact and retain its filter
+  expander. Offer detailed Cards primarily for iPad, with one column on iPhone. Verify owner
+  state and coordinate incremental rendering and physical-trackpad acceptance with N17-17. See the
   [dashboard plan](2026-11-17-release-plan.md#n17-18--live-chats-operations-dashboard-across-proteus).
+- **N17-19 — Mnemosyne Ask audio and routine tools:** negotiate up to 120 seconds on the Mac
+  owner. Use scoped routine tools in the initial request and preserve protected approval for
+  sensitive actions. Supply explicit Reminders and Scratchpad guidance in ordinary and approved
+  turns as well. Verify the retained request through the existing iCloud intake after its approved
+  checksum is reconciled and intake resumes.
+
+- **N17-20 — Shared iOS feature navigation:** consolidate feature chrome into project-style tabs,
+  make lists pull to refresh and review the iPhone and iPad simulators before physical iOS rollout.
+- **N17-21 — Tab overview scope and resource residency:** include app tabs above workspace and
+  project groups. Include unloaded tabs for the current feature and release detached editor views.
+- **N17-22 — File browser tab placement and layout:** place opened files beside the initiating tab,
+  align the file toolbar, separate divider dragging and show readable Scratchpad breadcrumbs.
+- **N17-23 — Attachment and Markdown editing:** step through chat attachments using buttons or
+  arrow keys. Paste images and PDFs into Scratchpad and Markdown editors through their owner.
+
+- **N17-24 — Universal search:** Super+P opens the current-window overlay with ranked,
+  grouped results and readable paths. Review in the Proteus demo before Build Mac rollout.
+- **N17-25 — Scratchpad names and discovery:** use readable paths for new scratches,
+  offer a rename for existing files with generated suffixes, and find saved scratches with Super+P.
+- **N17-26 — Clicked-link picker and computer order:** emphasize workspace headings, restore
+  cached site icons, pin local workspaces first, and use the Engine Room computer order across menus.
+- **N17-27 — Conference calls and browser permissions:** support microphone, camera and explicit
+  screen sharing in desktop website tabs. Restore Ask from each saved rule in Browser Preferences
+  and use the Chromium screen picker in Zoom. Live Zoom sender sharing passed in Design Preview
+  with Request desktop site. The built-in picker now has thumbnails verified with synthetic
+  screen and window sources. Verify the real source previews, receiving view and packaged Mac build.
+- **N17-28 — Life and iPad navigation:** align Life icons, keep the app strip visible,
+  standardize both desktop Life tab rows, explain Home Assistant setup, and show iOS sidebar
+  recents across connected computers without reserving space for empty results.
+- **N17-29 — macOS screenshot sharing:** receive images from **Send to Proteus** in a
+  floating tray and drop them into a chat, workspace folder, scratch or Markdown editor.
+  Verify receipt through Apple’s Share menu with no chat selected.
+- **N17-30 — Offline website view:** retain the last successful view during a failed desktop
+  tab reload or restore, and post the failure in Notifications.
+
 
 ## Nov 15 release — November 16 continuation authorized (0.2.45 unchanged)
 

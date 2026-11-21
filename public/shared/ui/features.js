@@ -1,6 +1,7 @@
 import {sourceKindIcon} from './source-icons.js';
 import {workspaceCatalog} from '../../features/workspaces/workspace-ui.js';
 import { uniqueModels, modelControlVisible, optionsForModelChange } from '../../features/chats/model-choices.js';
+import {bindOpenRouterModelBrowse, openRouterQuickModels, showOpenRouterModels} from '../../features/chats/openrouter-models.js';
 import {modelsForInferenceChoice} from '../../features/chats/provider-choices.js';
 import { contextPlan } from '../../features/workspaces/context-plan.js';
 import { browserSurfaceIdentity } from '../../features/browser/browser-toolbar.js';
@@ -109,11 +110,18 @@ export function bindContextPicker(prefix = 'chat', options = {}) {
     try { const context = workspaceCatalog(catalog(),workspace()?.id||root.dataset.workspaceId); accept(await u.api('/api/context', { workspaceId:context.workspaceId,action: 'favorite', id: button.dataset.favorite, enabled: !context.favorites?.includes(button.dataset.favorite), expectedRevision: context.revision })); rebuild(); }
     finally { button.disabled = false; }
   }));
-  root.querySelector('[data-refresh-picker]').onclick = () => act(async () => { accept(await u.api('/api/context/refresh', {workspaceId:workspace()?.id||root.dataset.workspaceId})); rebuild(); });
+  root.refreshSources = async () => {
+    const value = await u.api('/api/context/refresh', {workspaceId:workspace()?.id||root.dataset.workspaceId});
+    if (!root.isConnected) return;
+    accept(value);
+    rebuild();
+  };
+  root.querySelector('[data-refresh-picker]').onclick = () => act(root.refreshSources);
   update();
 }
-function modelOptions(models, selected) {
+function modelOptions(models, selected, openrouter=false) {
   models=uniqueModels(models);
+  if(openrouter)models=openRouterQuickModels(models,selected);
   const missing = selected && !models.some(model => model.id === selected);
   return '<option value="">Choose a model</option>' + (missing ? `<option value="${esc(selected)}" selected>${esc(selected)} · ${models.length ? 'unavailable' : 'catalog not loaded'}</option>` : '') + models.map(model => `<option value="${esc(model.id)}" ${model.id === selected ? 'selected' : ''}>${esc(model.name || model.id)}</option>`).join('');
 }
@@ -122,7 +130,7 @@ export const contextSize = tier => `${tier.promptTokens ? tokenSize(tier.promptT
 export function modelSelection(id) { return { ...($('#'+id+'-mode')?.dataset.supported==='true'?{reasoningMode:$('#'+id+'-mode').value}:{}), reasoningEffort: $('#' + id + '-effort').value, contextTier: $('#' + id + '-context').value, serviceTier: $('#' + id + '-speed').value }; }
 const catalogFor = provider => u.state.data.providerStatuses?.[provider] || (provider === 'copilot' ? u.state.data.providerStatus : null);
 export function modelPicker(id, selected, provider = 'copilot', catalog=catalogFor(provider)) {
-  return `<select id="${id}" data-selected="${esc(selected)}" data-provider="${esc(provider)}" aria-label="Model">${modelOptions(catalog?.models || [], selected)}</select>`;
+  return `<select id="${id}" data-selected="${esc(selected)}" data-provider="${esc(provider)}" aria-label="Model">${modelOptions(catalog?.models || [], selected, provider==='openrouter')}</select>`;
 }
 export function modelControls(id, options = {}, compact = false) {
   return `<div class="model-controls ${compact ? 'compact-model-controls' : ''}" data-model-picker="${id}"><div hidden><label for="${id}-mode">Reasoning</label><select id="${id}-mode"><option value="${esc(options.reasoningMode || '')}">${esc(options.reasoningMode || 'Provider default')}</option></select></div><div><label for="${id}-effort">Thinking effort</label><select id="${id}-effort"><option value="${esc(options.reasoningEffort || '')}">${esc(options.reasoningEffort || 'Provider default')}</option></select></div><div><label for="${id}-context">Context size</label><select id="${id}-context"><option value="${esc(options.contextTier || 'default')}">${esc(options.contextTier || 'default')}</option></select></div><div><label for="${id}-speed">Speed / service tier</label><select id="${id}-speed"><option value="${esc(options.serviceTier || '')}">${esc(options.serviceTier || 'Provider default')}</option></select></div><p class="note" id="${id}-capabilities" aria-live="polite"></p></div>`;
@@ -157,12 +165,20 @@ function updateModelControls(id, providerId, ownerCatalog) {
       input.title = label + ' · applies to your next turn. Steering keeps the running turn’s settings.'; input.setAttribute('aria-label', label);
     }
   }
+  if (!compact && provider === 'openrouter') {
+    effort.parentElement.hidden = !modelControlVisible(controls,'reasoningEffort',effort.value);
+    context.parentElement.hidden = !modelControlVisible(controls,'contextTier',context.value);
+    speed.parentElement.hidden = !modelControlVisible(controls,'serviceTier',speed.value);
+  } else if (!compact) {
+    for (const field of [effort, context, speed]) field.parentElement.hidden = false;
+  }
   select.disabled = local; effort.disabled = local || mode?.value==='off'; context.disabled = local; speed.disabled = local;
   $('#' + id + '-capabilities').textContent = local ? 'Local rehearsal uses no model.' : [
     !select.value ? 'Choose a model.' : !model ? 'Selected model is unavailable or the catalog has not loaded.' : model.fusion ? 'Copilot Fusion routes each prompt across models; the effort sets how deeply. Billed per model used.'+(controls?.unavailableReasoningEfforts?.length?' Unavailable: '+controls.unavailableReasoningEfforts.map(item=>item.label+' — '+item.message).join('; '):'') : !efforts.length ? (controls?.reasoningSupported === false ? 'This model does not support thinking effort.' : 'Thinking effort choices are not reported.') : '',
     controls?.maxOutputTokens ? 'Maximum output: ' + tokenSize(controls.maxOutputTokens) + ' tokens. Context size is the prompt budget; output is separate.' : 'Context capacity is not advertised by this catalog; actual usage appears during a run.',
     provider === 'codex' ? 'Uses the executing computer’s Codex sign-in. Selected instructions and skills are supplied; editor-specific agent tool filters are not supported. MCP servers require a grant for all their selected tools.' : '',
     provider === 'copilot' ? data?.fusion?.note || '' : '',
+    provider === 'openrouter' ? data?.connectionError || (data?.credentialConfigured ? 'OpenRouter account credits. Actual charges appear in Run Details.' : 'Connect OpenRouter in Engine Room → Providers on the executing computer.') : '',
     data?.checkedAt ? 'Catalog checked ' + new Date(data.checkedAt).toLocaleTimeString() + '. Refreshes every five minutes.' : 'Catalog has not been checked.',
     data?.stale ? 'Using last known choices. Refresh failed: ' + data.error : ''
   ].filter(Boolean).join(' ');
@@ -174,11 +190,28 @@ function resetModelControls(id,controls){
  const values=optionsForModelChange(controls,Object.fromEntries(Object.entries(inputs).map(([key,input])=>[key,input.value])));
  for(const [key,input]of Object.entries(inputs))input.value=values[key];
 }
+export function updateModelChoices(select, catalog, selected, models=catalog?.models||[]) {
+  const isOpenRouter=select.dataset.provider==='openrouter';
+  select.innerHTML=modelOptions(models,selected,isOpenRouter);
+  select.value=selected;
+  bindOpenRouterModelBrowse(select,isOpenRouter&&models.length ? selected=>showOpenRouterModels({
+    models,selected,
+    onChoose:model=>{
+      if(!select.isConnected||select.dataset.provider!=='openrouter')return;
+      updateModelChoices(select,catalog,model.id,models);
+      select.dispatchEvent(new Event('change',{bubbles:true}));
+    },
+    onFavorites:()=>{
+      if(select.isConnected&&select.dataset.provider==='openrouter')updateModelChoices(select,catalog,select.value,models);
+    },
+  }):null);
+}
 export function applyOwnerModelCatalog(id,catalog) {
  const select=$('#'+id);if(!select)return;
  select.dataset.modelOwner='remote';
  const current=select.value||select.dataset.selected||'';
- select.innerHTML=modelOptions(catalog?.models||[],current);select.value=current;
+ if(catalog?.provider)select.dataset.provider=catalog.provider;
+ updateModelChoices(select,catalog,current);
  select.onchange=()=>{select.dataset.selected=select.value;resetModelControls(id,catalog?.models?.find(model=>model.id===select.value)?.controls);updateModelControls(id,null,catalog);};
  updateModelControls(id,null,catalog);
 }
@@ -187,7 +220,7 @@ export async function refreshModels(id, providerId, force = false) {
   const provider = $('#' + providerId)?.value || 'copilot';
   select.dataset.providerId = providerId;
   if (select.dataset.provider !== provider) {
-    select.dataset.provider = provider; select.dataset.selected = ''; select.innerHTML = modelOptions(catalogFor(provider)?.models || [], '');
+    select.dataset.provider = provider; select.dataset.selected = ''; updateModelChoices(select,catalogFor(provider),'');
     if($('#'+id+'-mode'))$('#'+id+'-mode').value=''; $('#' + id + '-effort').value = ''; $('#' + id + '-context').value = 'default'; $('#' + id + '-speed').value = '';
   }
   select.onchange = () => {
@@ -201,11 +234,11 @@ export async function refreshModels(id, providerId, force = false) {
   // State sync can refresh the host catalog while a focused form stays mounted.
   // A fresh cache must still hydrate its DOM; TTL only suppresses network reads.
   const current=select.value||select.dataset.selected||'';
-  select.innerHTML=modelOptions(modelsForInferenceChoice(catalogFor(provider)?.models||[],select.dataset),current);select.value=current;
+  updateModelChoices(select,catalogFor(provider),current,modelsForInferenceChoice(catalogFor(provider)?.models||[],select.dataset));
   updateModelControls(id, providerId); if (['rehearsal','local-process'].includes(provider)) return;
   const requestGeneration=select.dataset.catalogGeneration=String(Number(select.dataset.catalogGeneration||0)+1);
   const old = catalogFor(provider), checked = old?.attemptedAt || old?.checkedAt;
-  if (!force && checked && Date.now() - Date.parse(checked) < (old.refreshIntervalMs || 300_000)) return;
+  if (!force && checked && (provider!=='openrouter'||Array.isArray(old.models)||!old.available) && Date.now() - Date.parse(checked) < (old.refreshIntervalMs || 300_000)) return;
   select.disabled = true;
   try {
     const data = await u.api('/api/provider', { force, provider });
@@ -214,7 +247,7 @@ export async function refreshModels(id, providerId, force = false) {
     if (provider === 'copilot') u.state.data.providerStatus = data;
     document.querySelectorAll('[data-model-picker]').forEach(root => {
       const input = $('#' + root.dataset.modelPicker); if (input.dataset.modelOwner==='remote'||input.dataset.provider !== provider) return;
-      const current = input.value || input.dataset.selected || ''; input.innerHTML = modelOptions(modelsForInferenceChoice(data.models || [],input.dataset), current); input.value = current;
+      const current = input.value || input.dataset.selected || ''; updateModelChoices(input,data,current,modelsForInferenceChoice(data.models || [],input.dataset));
       updateModelControls(input.id, input.dataset.providerId);
     });
   } catch (error) { u.toast(error.message); }
@@ -229,6 +262,14 @@ export function sessionDetails(run) {
 export function bindSessionDetails(run) {
   bindPaths();
   document.querySelectorAll('[data-export]').forEach(button => button.onclick = () => act(async () => { const result = await u.api('/api/export', { runId: run.id, format: button.dataset.export }); if (window.desktop) await window.desktop.openPath(result.file); u.toast('Exported ' + result.file); }));
+  $('[data-refresh-current-sources]').onclick = event => act(async () => {
+    const button = event.currentTarget;
+    button.disabled = true;
+    try {
+      await u.api('/api/run-context', { runId: run.id });
+      u.toast('Sources refreshed for the next turn.');
+    } finally { button.disabled = false; }
+  });
   $('#refresh-run-context').onclick = () => act(async () => {
     const scoped=await u.api('/api/context/refresh', {workspaceId:run.schedule.context?.workspaceId}); await u.refresh();u.state.data.context=scoped;
     u.showDialog(`<h2>Refresh chat context</h2>${contextPicker(run.schedule.context?.selectedIds || [], 'run', run.schedule.context || {})}<p class="note">Source changes and current universal selections apply to the next turn. Older context remains in conversation history.</p><div class="actions"><button id="close-dialog">Cancel</button><button class="primary" id="dialog-submit">Apply context</button></div>`, async () => { await u.api('/api/run-context', { runId: run.id, ...contextSelection('run') }); });

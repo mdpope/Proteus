@@ -17,7 +17,7 @@ Source Library roots and per-device workspace file viewing; notification links c
 The unchanged Mnemosyne v1 answer decoder tolerates the additive metadata and still receives plain
 Markdown `answer`. Its ingress-only pairing does not gain MCP, Home control or document access.
 
-- A pendant double-tap request is up to 60 s of audio; a second double-tap ends it early. The
+- A pendant double-tap request is up to 120 s of audio on an owner advertising the new limits; a second double-tap ends it early. The
   phone sends it straight to the paired home desktop (Build Mac) through the existing
   proteus.example relay. The iCloud and archive jobs are not on the fast path.
 - The Proteus owner is the **only executor** while `life.ask.v1` is in use. It handles local ASR,
@@ -75,8 +75,8 @@ both chats.
 ## Capability detection
 
 After `auth`, `life.ask.capabilities({})` returns `{capabilities: ["life.ask.v1"], version: 1,
-hostID, hostName, accountID, accountConnected, enabled, maxAudioBytes: 2100000,
-sampleRates: [8000, 16000], maxSeconds: 60}`. If the capability
+hostID, hostName, accountID, accountConnected, enabled, maxAudioBytes: 3850000,
+sampleRates: [8000, 16000], maxSeconds: 120}`. If the capability
 is missing, the device is not scoped, or the owner is offline, the request goes to the
 **fallback** described below.
 
@@ -107,8 +107,11 @@ This is the existing envelope with the audio moved into `audio`. The host return
 
 Retrying after an uncertain response (timeout or disconnect) uses the identical payload and
 `requestId`. The phone keeps a durable outbox until it holds an `accepted` or `duplicate`
-receipt. Audio over the 8 MB relay frame limit cannot occur, because 60 s at 16 kHz/16-bit is
-about 1.92 MB raw.
+receipt. A normal 120-second 16 kHz mono PCM16 WAV is 3,840,044 bytes. Mnemosyne
+uses the negotiated duration and byte limit, retains the 60-second fallback for earlier owners,
+and emits both nested JSON layers without escaping slashes to stay under the existing 8 MB
+encrypted relay limit. The owner checks the sample count and clock span independently.
+The Mac accepts iCloud and frozen envelopes up to 12 MB, including legacy slash escapes.
 
 ### `life.ask.status`
 
@@ -143,8 +146,8 @@ The device removes its own pairing, for example from "Forget home desktop" in Mn
   is `gpt-6.1-terra`, with medium reasoning taken from refreshed provider metadata and
   configurable in Life settings. The quick-answer instructions are concise, cite research where
   needed, record tasks and memories, and take no external action the user didn't ask for. The
-  turn has web search, no shell and no write tools. The first message carries the transcript and
-  the audio as an attachment.
+  turn has web search and the scoped Life tools described below. Shell and arbitrary file writes
+  remain disabled. The first message carries the transcript and the audio as an attachment.
 - The model returns the existing structured result (research, task, memory or clarification).
   Proteus applies the optional private notes filing through Omi's create-only verb
   `agent-request file --request-id <uuid> --intent <file> --json`, and records the effect
@@ -234,6 +237,26 @@ and `... file --request <same> --result <JSON>`.
 - **Envelope:** both verbs require the queued v1 envelope with `executionOwner`, `accountID` and
   `hostID`. Proteus freezes the exact normalized `request.json` at admission, and retries reuse
   that file unchanged.
+
+## Routine Ask tools
+
+The initial Mnemosyne request can use Life Reminders, built-in web search, or find and edit
+scratches in its captured Ask project without a per-request approval. The same applies to
+the supported read methods of ObsidianMCP sources already enabled in the Life workspace
+or explicitly selected for Ask. The account and host binding, project scope and revisions
+still apply to each action. Other service actions use the protected proposal and continuation.
+
+For a new reminder item, the initial Ask turn returns a structured reminder for the owner to
+commit once. For list management and changes to existing reminders, it uses `proteus_reminders`.
+It lists first and uses the returned account, item or list ID and current revision. For scratch
+edits, `proteus_scratchpad` supplies the captured project and storage identity, then the note's
+current body and revision. An update replaces the full body, so the agent preserves unrelated
+text. The model reports a write after an owner result or readback confirms it.
+
+Regular chats and approved continuations receive this guidance through Proteus core guidance.
+The built-in tools require no workspace MCP selection. A resumed Codex turn uses the current
+`proteus_app` catalog when present. Each operation keeps the ordinary app permission policy.
+External services remain limited to explicitly selected MCPs and their own approvals.
 
 ## Implementation status (Proteus)
 

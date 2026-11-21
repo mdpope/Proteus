@@ -1,5 +1,5 @@
 const local=new Set(['mtplx','llama-cpp']);
-const names={copilot:'Copilot',codex:'Codex',claude:'Claude',mtplx:'MTPLX','llama-cpp':'llama.cpp',rehearsal:'Local rehearsal'};
+const names={copilot:'Copilot',codex:'Codex',claude:'Claude',openrouter:'OpenRouter',mtplx:'MTPLX','llama-cpp':'llama.cpp',rehearsal:'Local rehearsal'};
 export function inferenceProviderChoices(statuses={}, {ownerLabel='This computer',ownerId='',selected=''}={}) {
   const choices=[];
   for(const [provider,catalog] of Object.entries(statuses)) {

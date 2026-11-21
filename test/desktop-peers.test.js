@@ -130,6 +130,34 @@ function namingFixture(t){
   const peers=new DesktopPeers(home,{safeStorage,clientFactory:host=>client=new NamingClient(host)});
   t.after(()=>{peers.close();fs.rmSync(home,{recursive:true,force:true});});return {home,peers,get client(){return client;}};
 }
+test('refreshing the chat index keeps verified rows live on the same connection',async t=>{
+  const {peers}=namingFixture(t);
+  await peers.connect(record.hostId);
+  const session=peers.sessions.get(record.hostId);
+  const row={id:'refresh-fixture',title:'Synthetic refresh',status:'failed',workspaceId:'workspace',workspaceName:'Workspace',projectId:'project',projectName:'Project'};
+  session.client.request=async()=>[row];
+  assert.equal((await peers.index({force:true})).hosts[0].loading,false);
+  await until(()=>peers.indexPending===null);
+  const index=peers.lastIndex;
+  peers.reconcileProjects(record.hostId,{projects:[],memberships:{[row.id]:row}});
+  assert.equal(peers.lastIndex,index,'unchanged membership keeps the verified index');
+  let finish;
+  session.client.request=()=>new Promise(resolve=>{finish=resolve;});
+  peers.reconcileProjects(record.hostId,{projects:[],memberships:{[row.id]:{...row,projectName:'Renamed'}}});
+  const refreshing=await peers.index();
+  assert.equal(refreshing.items[0].projectName,'Renamed');
+  assert.equal(refreshing.hosts[0].online,true);
+  assert.equal(refreshing.hosts[0].loading,false);
+  await until(()=>Boolean(finish));
+  const settled=peers.index({force:true});finish([row]);
+  assert.equal((await settled).hosts[0].loading,false);
+  await until(()=>peers.indexPending===null);
+  await peers.disconnect(record.hostId);
+  const offline=await peers.index();
+  assert.equal(offline.hosts[0].online,false);
+  assert.equal(offline.items[0].id,row.id,'offline rows remain available in the cache');
+  await peers.indexPending;
+});
 test('authenticated host names update labels without changing pairing identity and survive encrypted restart',async t=>{
   const f=namingFixture(t),{peers}=f;peers.load();const identity={...peers.records.get(record.hostId)};delete identity.label;
   await peers.connect(record.hostId);assert.equal(peers.list()[0].label,'Host-owned name');assert.equal(peers.cache.get(record.hostId).items[0].destinationName,'Host-owned name');

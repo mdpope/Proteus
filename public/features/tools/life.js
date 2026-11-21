@@ -1,3 +1,4 @@
+import {lifeSectionStrip} from './life-home-tabs.js';
 import {mountReminders} from './life-reminders.js';
 import {mountHome} from './life-home.js';
 let ui;let remindersView,documentView;
@@ -39,12 +40,20 @@ const meta = () => ui.state.data?.life || {};
 const act = fn => async event => { event?.preventDefault(); try { await fn(event); } catch(error) { ui.toast(error.message); } };
 export function initLife(value) { ui=value; }
 export function currentLifeSection(){return local().section;}
+export function releaseLifeViews(){
+ homeView?.destroy();homeView=null;
+ remindersView?.destroy();remindersView=null;
+ documentView?.dispose();documentView=null;
+ const owner=local();
+ if(owner.evidenceUrl){URL.revokeObjectURL(owner.evidenceUrl);delete owner.evidenceUrl;}
+ owner.cache={};
+}
 export async function openLifeDestination(target){
  const owner=local();if(target.accountId!==owner.identity?.accountId)throw Error('Sign in to the Life account that received this confirmation.');
  if(target.kind==='reminder'&&!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(target.reminderId||''))throw Error('This confirmation has no valid reminder destination.');
  if(target.kind==='reminder'){if(ui.openReminder){await ui.openReminder(target);return;}owner.section='reminders';owner.reminderTarget=target.reminderId;const host=document.querySelector('#life-content');if(host)delete host.dataset.reminderOwner;draw();return;}
  if(target.kind==='document'){
-  remindersView?.destroy();documentView?.dispose?.();owner.section='document';const host=document.querySelector('#life-content');host.textContent='Opening saved memory…';
+  remindersView?.destroy();documentView?.dispose?.();owner.section='document';owner.documentTarget=target;const host=document.querySelector('#life-content');host.textContent='Opening saved memory…';
   try{const ref=await ui.api('/api/life/document-reference',{documentId:target.documentId,accountId:target.accountId});requireOwner(owner);
    const request=(action,args)=>ui.api('/api/workspace-explorer/'+action,{...ref,...args});const value=await request('preview',{});requireOwner(owner);
    const {mountFileDocument}=await import('../workspaces/file-browser.js');if(owner.section!=='document')return;
@@ -58,8 +67,8 @@ export function selectLifeSection(section){
 export function renderLife() {
   const main=document.querySelector('#main'); if(!main)return;
   if(!main.querySelector('#life-page')){
-    main.innerHTML=`<div id="life-page"><div class="heading"><div><div class="eyebrow">Personal records</div><h1>Life</h1><p class="muted">Meals, maintenance and the original details.</p></div><button id="life-refresh">Refresh records</button></div><div id="life-connection-state" class="note"></div><nav class="feature-tab-bar" aria-label="Life sections">${sections.map(([id,name])=>`<button data-life-section="${id}">${name}</button>`).join('')}</nav><div id="life-content"></div></div>`;
-    main.querySelectorAll('[data-life-section]').forEach(button=>button.onclick=()=>{selectLifeSection(button.dataset.lifeSection);});
+    main.innerHTML=`<div id="life-page"><div class="heading"><div><div class="eyebrow">Personal records</div><h1>Life</h1><p class="muted">Meals, maintenance and the original details.</p></div><button id="life-refresh">Refresh records</button></div><div id="life-connection-state" class="note"></div><div id="life-content"></div></div>`;
+    main.querySelector('#life-content').before(lifeSectionStrip(sections,local().section,selectLifeSection));
     main.querySelector('#life-refresh').onclick=act(async()=>{local().cache={};local().errors={};draw();});draw();
   }
   const access=JSON.stringify([meta().enabled,meta().configured,meta().connection?.readOnly,meta().capabilities,meta().identity]);if(local().access!==access){local().access=access;local().cache={};local().errors={};draw();}
@@ -85,11 +94,15 @@ function frame(resource,params,render) {
 function draw() {
   const host=document.querySelector('#life-content');if(!host)return;
   if(local().section!=='home'){homeView?.destroy();homeView=null;delete host.dataset.homeOwner;}
-  document.querySelectorAll('[data-life-section]').forEach(b=>{b.classList.toggle('active',b.dataset.lifeSection===local().section);b.setAttribute('aria-current',b.dataset.lifeSection===local().section?'page':'false');});
+  document.querySelectorAll('#life-page nav[aria-label="Life sections"] [data-life-section]').forEach(button=>{
+    const selected=button.dataset.lifeSection===local().section;
+    button.parentElement.classList.toggle('selected',selected);
+    button.setAttribute('aria-current',selected?'page':'false');
+  });
   if(meta().enabled===false||!meta().configured){host.innerHTML='<section class="card life-empty"><h2>Your records, when you want them</h2><p>Life is optional. Sign in to your website account from Setup.</p><button id="life-open-settings">Open Life setup</button></section>';document.querySelector('#life-open-settings').onclick=()=>ui.openSettings?.();return;}
   if(local().section!=='document'){documentView?.dispose?.();documentView=null;}
   if(local().section==='reminders'){const owner=local();if(host.dataset.reminderOwner!==owner.identityKey){remindersView?.destroy();host.dataset.reminderOwner=owner.identityKey;remindersView=mountReminders(host,{scopes:ui.reminderScopes,linkFor:ui.reminderLink,selectedId:owner.reminderTarget||null,isCurrent:()=>sameOwner(owner)&&owner.section==='reminders',read:query=>ui.api('/api/life/data',{section:'reminders',query}),write:(action,input,idempotencyKey)=>ui.api('/api/life/action',{action:'reminders.'+action,input,idempotencyKey,identity:owner.identity})});owner.reminderTarget=null;}return;}
-  if(local().section==='document')return;
+  if(local().section==='document'){if(!documentView&&local().documentTarget&&host.textContent!=='Opening saved memory…')void openLifeDestination(local().documentTarget).catch(error=>ui.toast(error.message));return;}
   delete host.dataset.reminderOwner;remindersView?.destroy();remindersView=null;
   if(local().section==='home'){const owner=local();if(host.dataset.homeOwner!==owner.identityKey){homeView?.destroy();host.dataset.homeOwner=owner.identityKey;homeView=mountHome(host,{configure:true,isCurrent:()=>sameOwner(owner)&&owner.section==='home',request:args=>ui.api('/api/life/home',args),openWebsite:url=>ui.openHomeWebsite(url)});}return;}
   if(local().section==='ask'){const owner=local();void import('./life-ask.js').then(module=>{if(sameOwner(owner)&&owner.section==='ask')module.renderLifeAsk(host,{ui,owner,isCurrent:()=>sameOwner(owner)});}).catch(error=>ui.toast(error.message));}

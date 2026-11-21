@@ -20,7 +20,7 @@ struct LifeHomeView: View {
     @State private var showService = false
 
     var body: some View {
-        List {
+        NativeList {
             Section {
                 Text("Control any device or service exposed by Home Assistant. New devices are discovered when you refresh or make a Life Ask request.")
                 TextField("Search devices", text: $search).textInputAutocapitalization(.never).autocorrectionDisabled()
@@ -57,7 +57,7 @@ struct LifeHomeView: View {
                     }
                 }
             }
-        }.scrollContentBackground(.hidden).background(NativeTheme.background)
+        }
             .sheet(isPresented: $showService) { serviceEditor }
             .task(id: life.accountIdentity) { values = [:]; errors = [:]; pending = [:]; await load() }
             .onDisappear { generation = UUID(); values = [:]; errors = [:] }

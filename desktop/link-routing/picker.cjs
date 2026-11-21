@@ -2,13 +2,15 @@ const {BrowserWindow,ipcMain,screen}=require('electron');
 const path=require('node:path');
 /** One keyboard-first, sandboxed picker per incoming-link queue. No page privileges. */
 class LinkPicker{
-  async choose({url,targets,warning,colors,safariSelector=false,source=null,defaultKey=null,autoSelectSeconds=0}){
+  async choose({url,targets,warning,colors,safariSelector=false,source=null,siteIcon=null,defaultKey=null,autoSelectSeconds=0}){
     if(this.pending)throw Error('A link picker is already open.');
     const display=screen.getDisplayNearestPoint(screen.getCursorScreenPoint()),area=display.workArea;
     const width=Math.min(867,area.width-32),groups=new Set(targets.map(t=>[t.hostId,t.workspaceId].join(':'))).size;
-    const height=Math.min(area.height-48,Math.max(260,176+(source?45:0)+Math.min(792,targets.length*60+groups*30+8)));
+    const height=Math.min(area.height-48,Math.max(260,176+(source?45:0)+Math.min(792,targets.length*60+groups*38+new Set(targets.map(t=>t.hostId)).size*35+8)));
     const panel=this.window=new BrowserWindow({show:false,width,height,x:Math.round(area.x+(area.width-width)/2),y:Math.round(area.y+(area.height-height)/2+area.height*.06),frame:false,transparent:true,hasShadow:true,resizable:false,alwaysOnTop:true,minimizable:false,maximizable:false,fullscreenable:false,skipTaskbar:true,backgroundColor:'#00000000',webPreferences:{preload:path.join(__dirname,'picker-preload.cjs'),sandbox:true,contextIsolation:true,nodeIntegration:false}});
-    panel.setVisibleOnAllWorkspaces(true,{visibleOnFullScreen:true});
+    // Keep the picker available across Spaces without converting the entire app
+    // to an accessory and losing the main windows' macOS menu.
+    panel.setVisibleOnAllWorkspaces(true,{visibleOnFullScreen:true,skipTransformProcessType:true});
     panel.webContents.setWindowOpenHandler(()=>({action:'deny'}));panel.webContents.on('will-navigate',event=>event.preventDefault());
     const result=new Promise(resolve=>{this.pending=resolve;});
     const finish=value=>{const resolve=this.pending;if(!resolve)return;this.pending=null;ipcMain.removeListener('proteus:link-picker-choice',listener);if(!panel.isDestroyed())panel.destroy();this.window=null;resolve(value);};
@@ -24,7 +26,7 @@ class LinkPicker{
     // a choice. Keep the selector until the human chooses/cancels. Only an
     // untouched, explicitly configured default may accept blur automatically.
     panel.on('blur',()=>{if(defaultKey&&!touched)finish({dismissed:true,touched});});
-    try{await panel.loadFile(path.join(__dirname,'picker.html'));if(this.pending){panel.webContents.send('proteus:link-picker',{url,targets,warning,colors,safariSelector,source,defaultKey,autoSelectSeconds});panel.show();panel.focus();}}catch(error){finish(null);throw error;}
+    try{await panel.loadFile(path.join(__dirname,'picker.html'));if(this.pending){panel.webContents.send('proteus:link-picker',{url,targets,warning,colors,safariSelector,source,siteIcon,defaultKey,autoSelectSeconds});panel.show();panel.focus();}}catch(error){finish(null);throw error;}
     return result;
   }
   close(){this.window?.close();}

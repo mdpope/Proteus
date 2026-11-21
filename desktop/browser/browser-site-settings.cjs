@@ -27,6 +27,14 @@ class BrowserSiteSettings{
  flush({strict=false}={}){clearTimeout(this.timer);if(!this.file)return;const temporary=this.file+'.tmp';try{const json=JSON.stringify(this.data);if(Buffer.byteLength(json)>8*1024*1024)throw Error('Website settings exceed their storage limit.');fs.mkdirSync(path.dirname(this.file),{recursive:true});fs.writeFileSync(temporary,json,{mode:0o600});fs.chmodSync(temporary,0o600);atomicRename(temporary,this.file);}catch(error){try{fs.unlinkSync(temporary);}catch{}if(strict)throw Error('Website scale could not be saved: '+error.message);}}
 
 }
-function siteUserAgent(mode,base,chromeVersion){const version=chromeVersion||'144.0.0.0';if(mode==='mobile')return `Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${version} Mobile Safari/537.36`;return base.replace(/\s(?:Electron|Proteus)\/[^\s]+/gi,'');}
+function siteUserAgent(mode,base,chromeVersion,url){
+ const version=chromeVersion||'144.0.0.0';
+ if(mode==='mobile')return `Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${version} Mobile Safari/537.36`;
+ const origin=siteOrigin(url);
+ // These web clients route Electron into native-app resources. An embedded
+ // website uses the Chromium web client, including its normal login and media.
+ const webConference=origin?.startsWith('https://')&&/(^|\.)(zoom\.us|teams\.microsoft\.com|teams\.cloud\.microsoft)$/i.test(new URL(origin).hostname);
+ return mode==='desktop'||webConference?base.replace(/\s(?:Electron|Proteus)\/[^\s]+/gi,''):base;
+}
 function presentationURL(value,mode){const url=new URL(value);if(mode==='desktop'&&url.hostname==='m.youtube.com')url.hostname='www.youtube.com';return url.href;}
 module.exports={BrowserSiteSettings,siteOrigin,scaleDomain,safeIcon,siteUserAgent,presentationURL};

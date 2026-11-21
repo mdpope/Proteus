@@ -28,6 +28,17 @@ test('native adapter uses exact fixed helpers and immutable request/filing inten
  await assert.rejects(f.adapter.file(f.receipt,{...intent,item:'changed'}),/intent changed/);
  assert.equal(f.calls.length,3);
 });
+test('native helper accepts a frozen request larger than the previous 3 MB envelope limit',async t=>{
+ const f=fixture(t),file=path.join(f.directory,'request.json'),value=JSON.parse(fs.readFileSync(file));
+ f.receipt.audioBytes=3_840_044;
+ value.audioDigest.bytes=f.receipt.audioBytes;
+ value.audio='A'.repeat(Math.ceil(f.receipt.audioBytes/3)*4);
+ fs.writeFileSync(file,JSON.stringify(value));
+ assert.equal((await f.adapter.transcribe(f.receipt)).transcript,'Synthetic question');
+ fs.truncateSync(file,12_000_001);
+ await assert.rejects(f.adapter.transcribe(f.receipt),/envelope is unavailable/);
+ assert.equal(f.calls.length,1);
+});
 test('native adapter rejects foreign helper output and account changes during ASR',async t=>{
  const f=fixture(t);
  f.adapter.execute=async()=>({stdout:JSON.stringify({requestId:randomUUID(),audioSha256:f.receipt.audioSha256,transcript:'wrong'})});

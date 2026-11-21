@@ -1066,6 +1066,38 @@ final class RemoteUITests: XCTestCase {
     }
 
     override func setUp() { super.setUp(); continueAfterFailure = false }
+    @MainActor func testChatsOperationsLayoutKeepsCompactTableAndOpensCards() {
+        let app = nativeFixtureApplication()
+        app.launchArguments = ["--reset-pairing", "--synthetic-destinations", "--synthetic-nav-counts"]
+        app.launch()
+        let drawer = app.buttons["phone-app-navigation"]
+        if drawer.waitForExistence(timeout: 5) {
+            drawer.tap()
+            let chats = app.buttons["phone-nav-Chats"]
+            XCTAssertTrue(chats.waitForExistence(timeout: 10))
+            chats.tap()
+        } else {
+            let sidebar = app.buttons["sidebar-Chats"]
+            let chats = sidebar.exists ? sidebar : app.tabBars.buttons["Chats"]
+            XCTAssertTrue(chats.waitForExistence(timeout: 10))
+            chats.tap()
+        }
+        XCTAssertTrue(app.buttons["All computers"].waitForExistence(timeout: 10))
+        let rows = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", "chat-row-"))
+        let cards = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", "chat-operation-card-"))
+        XCTAssertTrue(rows.firstMatch.waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertFalse(cards.firstMatch.exists)
+        let filters = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Working ")).firstMatch
+        XCTAssertTrue(filters.exists)
+        let cardsButton = app.buttons["Cards"].firstMatch
+        XCTAssertTrue(cardsButton.exists)
+        cardsButton.tap()
+        XCTAssertTrue(cards.firstMatch.waitForExistence(timeout: 10))
+        XCTAssertFalse(rows.firstMatch.exists)
+        app.buttons["Table"].firstMatch.tap()
+        XCTAssertTrue(rows.firstMatch.waitForExistence(timeout: 10), app.debugDescription)
+    }
+
     @MainActor func testGreenDesignPreviewAndChatsListStability() {
         let app = nativeFixtureApplication()
         app.launchArguments = ["--reset-pairing", "--synthetic-destinations", "--synthetic-long-chat", "--synthetic-browser-workspace", "--synthetic-life"]
@@ -3132,19 +3164,89 @@ final class TabletDesignPreviewUITests: XCTestCase {
         XCTAssertTrue(addTab.waitForExistence(timeout: 10))
         XCTAssertEqual(app.textFields["browser-address"].value as? String, nativeFixtureHTTPOrigin + "/browser/phone-preview?section=ipad-preview")
     }
+    @MainActor func testNotificationFiltersFindBrowserHistoryByComputerAndText() {
+        let app = nativeFixtureApplication()
+        app.launchArguments = ["--reset-pairing", "--synthetic-clean-navigation", "--native-design-preview", "--synthetic-destinations", "--native-app-fixture", "--synthetic-attention-filters"]
+        app.launch()
+        let phone = UIDevice.current.userInterfaceIdiom == .phone
+        if phone { let sidebar = app.buttons["phone-app-navigation"]; XCTAssertTrue(sidebar.waitForExistence(timeout: 15)); sidebar.tap() }
+        let attention = app.buttons[(phone ? "phone-nav-" : "sidebar-") + "Needs Attention"]
+        XCTAssertTrue(attention.waitForExistence(timeout: 15)); attention.tap()
+        let notifications = app.buttons["Notifications"]
+        XCTAssertTrue(notifications.waitForExistence(timeout: 10)); notifications.tap()
+        let browser = app.buttons["Browser 1"]
+        XCTAssertTrue(browser.waitForExistence(timeout: 10)); browser.tap()
+        let conflict = app.staticTexts["General · Browser history needs attention"]
+        XCTAssertTrue(conflict.waitForExistence(timeout: 10))
+        XCTAssertFalse(app.staticTexts["Synthetic completed operation"].exists)
+        XCTAssertTrue(app.staticTexts["Resolve this history conflict on Alpha Mac."].exists)
+        let search = app.textFields["attention-notification-search"]
+        search.tap(); search.typeText("missing")
+        XCTAssertTrue(app.staticTexts["No matching notifications."].waitForExistence(timeout: 10))
+        app.buttons["Clear filters"].tap()
+        XCTAssertTrue(conflict.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Synthetic completed operation"].exists)
+        let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Counted notification filters"; shot.lifetime = .keepAlways; add(shot)
+    }
+    @MainActor func testSharedLifeFeatureTabStrip() {
+        let app = nativeFixtureApplication()
+        app.launchArguments = ["--reset-pairing", "--native-design-preview", "--synthetic-destinations", "--native-app-fixture", "--synthetic-life"]
+        app.launch()
+        let phone = UIDevice.current.userInterfaceIdiom == .phone
+        let sidebar = phone ? app.buttons["phone-app-navigation"] : app.buttons["project-sidebar-toggle"]
+        for title in ["Reminders", "Scratchpad", "Chats", "Internet Searches", "Needs Attention"] {
+            if phone {
+                XCTAssertTrue(sidebar.waitForExistence(timeout: 15))
+                sidebar.tap()
+            }
+            let area = app.buttons[(phone ? "phone-nav-" : "sidebar-") + title]
+            XCTAssertTrue(area.waitForExistence(timeout: 15), title)
+            area.tap()
+            XCTAssertTrue(sidebar.waitForExistence(timeout: 10), title)
+            let overview = phone ? app.buttons["Tab overview"] : app.buttons["main-tab-overview-button"]
+            XCTAssertTrue(overview.waitForExistence(timeout: 10), title)
+            XCTAssertLessThan(sidebar.frame.minX, overview.frame.minX)
+            XCTAssertEqual(sidebar.frame.midY, overview.frame.midY, accuracy: 2)
+            if !phone {
+                XCTAssertTrue(app.buttons["new-main-browser-tab"].exists, title)
+                if ["Chats", "Internet Searches", "Needs Attention"].contains(title) {
+                    XCTAssertFalse(app.buttons["Tab overview"].exists, title)
+                }
+            }
+            XCTAssertFalse(app.staticTexts["feature-page-label"].exists)
+            XCTAssertFalse(app.buttons["Refresh"].exists)
+        }
+        if phone { sidebar.tap() }
+        let life = app.buttons[(phone ? "phone-nav-" : "sidebar-") + "Life"]
+        XCTAssertTrue(life.waitForExistence(timeout: 10)); life.tap()
+        let home = app.buttons["Smart Home"].firstMatch
+        XCTAssertTrue(home.waitForExistence(timeout: 15))
+        home.tap()
+        XCTAssertTrue(app.buttons["life-home-tab-smart"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["life-home-add-tab"].waitForExistence(timeout: 8))
+        XCTAssertFalse(app.buttons["Refresh Life records"].exists)
+        app.buttons["life-home-tab-assistant"].tap()
+        XCTAssertTrue(app.buttons["Open Smart Home"].waitForExistence(timeout: 12))
+        app.buttons["Open Smart Home"].tap()
+        app.buttons["Tab overview"].tap()
+        XCTAssertTrue(app.otherElements["phone-tab-overview"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.buttons["phone-tab-feature:life:categories:home"].exists)
+    }
+
     @MainActor func testTabletHeadersTeamToolsAndServiceLinks() {
         let app = nativeFixtureApplication()
         app.launchArguments = ["--reset-pairing", "--native-design-preview", "--phone-preview-fixture", "--synthetic-browser-workspace", "--native-app-fixture"]
         app.launch()
         XCTAssertTrue(app.buttons["sidebar-Chats"].waitForExistence(timeout: 20)); app.buttons["sidebar-Chats"].tap()
-        let newChat = app.buttons["new-chat"]
-        XCTAssertTrue(newChat.waitForExistence(timeout: 10))
-        let search = app.textFields["Search"].firstMatch
-        XCTAssertTrue(search.exists)
-        XCTAssertGreaterThan(search.frame.minY, 30)
-        XCTAssertLessThan(abs(search.frame.midY - newChat.frame.midY), 35)
-        XCTAssertGreaterThan(search.frame.minX, newChat.frame.minX)
-        XCTAssertFalse(app.buttons["phone-app-navigation"].exists)
+        let addTab = app.buttons["new-main-browser-tab"]
+        let sidebar = app.buttons["project-sidebar-toggle"]
+        XCTAssertTrue(addTab.waitForExistence(timeout: 10))
+        XCTAssertTrue(sidebar.exists)
+        XCTAssertLessThan(sidebar.frame.maxX, addTab.frame.minX)
+        XCTAssertEqual(addTab.frame.height, 44, accuracy: 1)
+        XCTAssertTrue(app.textFields["Search"].firstMatch.exists)
+        XCTAssertFalse(app.buttons["new-chat"].exists)
+        XCTAssertFalse(app.staticTexts["feature-page-label"].exists)
         app.buttons["sidebar-Team"].tap(); app.buttons["team-section-overview"].tap()
         let tabs = app.otherElements["team-navigation-tabs"]
         let header = app.otherElements["team-feature-header"]
@@ -3211,8 +3313,8 @@ final class PhoneFeaturePreviewUITests: XCTestCase {
         app.launchArguments = ["--reset-pairing", "--native-design-preview", "--phone-preview-fixture", "--synthetic-browser-workspace", "--native-app-fixture"]
         app.launch()
         XCTAssertTrue(app.buttons["phone-app-navigation"].waitForExistence(timeout: 20)); app.buttons["phone-app-navigation"].tap(); app.buttons["phone-nav-Chats"].tap()
-        XCTAssertTrue(app.buttons["new-chat"].waitForExistence(timeout: 10))
-        XCTAssertTrue(app.buttons["phone-new-tab"].exists)
+        XCTAssertTrue(app.buttons["phone-new-tab"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["new-chat"].exists)
         let search = app.textFields["Search"].firstMatch
         XCTAssertTrue(search.exists); XCTAssertGreaterThan(search.frame.minY, app.frame.height * 0.65)
         let titles = app.staticTexts.matching(NSPredicate(format: "label == 'Chats'"))
@@ -3437,29 +3539,32 @@ final class NativeReleaseParityUITests: XCTestCase {
         XCTAssertTrue(app.buttons["browser-tab-overview"].waitForExistence(timeout: 12))
         let navigation = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "workspace-child-tab-"))
         let navigationCount = navigation.count
-        let selectedID = navigation.matching(NSPredicate(format: "value == %@", "1")).firstMatch.identifier.replacingOccurrences(of: "workspace-child-tab-", with: "")
+        let selectedID = navigation.matching(NSPredicate(format: "value == %@", "Selected")).firstMatch.identifier.replacingOccurrences(of: "workspace-child-tab-", with: "")
         XCTAssertEqual(navigationCount, 4)
         app.buttons["browser-tab-overview"].tap()
         let overview = app.otherElements["phone-tab-overview"]
         XCTAssertTrue(overview.waitForExistence(timeout: 8))
-        let cards = overview.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "phone-tab-"))
-        XCTAssertEqual(overview.staticTexts["overview-tab-count"].label, "6 tabs", "Four project children, workspace browser and sibling browser; homes are not counted")
-        XCTAssertTrue(overview.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Sibling-only browser")).firstMatch.exists)
-        let workspaceHeader = overview.staticTexts["Native icon rehearsal"].firstMatch
-        let projectHeader = overview.staticTexts["Restore project"].firstMatch
-        let siblingHeader = overview.staticTexts["Sibling project"].firstMatch
-        XCTAssertLessThan(workspaceHeader.frame.minY, projectHeader.frame.minY)
-        XCTAssertLessThan(projectHeader.frame.minY, siblingHeader.frame.minY)
+        XCTAssertEqual(overview.staticTexts["overview-tab-count"].label, "7 tabs", "Top-level workspace, four project children, workspace browser and sibling browser; homes are not counted")
         let active = overview.buttons["phone-tab-browser:" + selectedID]
-        XCTAssertTrue(active.isHittable, "Selected tab remains visible despite workspace tabs being placed above it")
+        XCTAssertTrue(active.isHittable, "Selected tab remains visible with higher-level tabs above it")
         XCTAssertLessThan(abs(active.frame.midY - overview.frame.midY), 190, "Selected tile starts near the center")
+        let scroll = overview.scrollViews.firstMatch
+        let appTabs = overview.staticTexts["Top-level tabs"]
+        for _ in 0..<4 where !appTabs.isHittable { scroll.swipeDown() }
+        XCTAssertTrue(appTabs.isHittable)
+        let sibling = overview.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Sibling-only browser")).firstMatch
+        for _ in 0..<7 where !sibling.isHittable { scroll.swipeUp() }
+        XCTAssertTrue(sibling.isHittable)
         for title in ["Hidden fixture browser", "Hidden fixture chat", "Orphan cached browser"] {
             XCTAssertFalse(overview.buttons.matching(NSPredicate(format: "label CONTAINS %@", title)).firstMatch.exists, title)
         }
         app.buttons["Done"].tap()
+        let dismissed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: overview)
+        XCTAssertEqual(XCTWaiter.wait(for: [dismissed], timeout: 5), .completed)
         app.buttons["project-pinned-tab"].tap()
-        let tabs = app.buttons["Tabs"]
-        XCTAssertTrue(tabs.waitForExistence(timeout: 8)); tabs.tap()
+        let projectPages = app.segmentedControls["workspace-files"]
+        XCTAssertTrue(projectPages.waitForExistence(timeout: 10))
+        projectPages.buttons["Tabs"].tap()
         XCTAssertTrue(app.buttons["workspace-managed-title-hidden-browser"].waitForExistence(timeout: 8))
         XCTAssertTrue(app.buttons["workspace-managed-title-chat:hidden-chat"].exists)
     }

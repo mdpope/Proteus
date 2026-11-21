@@ -338,6 +338,11 @@ runner and must not execute model turns or contend for the live app-data writer 
 helper itself needs a separate verified transition. A future independent host service can reduce
 UI-only interruptions, but full runner updates still require the same durable handoff.
 
+On macOS the helper opens the exact installed bundle through LaunchServices on both update
+and rollback. Pass the existing allowlisted owner environment and Chromium profile argument.
+Record the PID returned by NSWorkspace so recovery checks observe and stop the actual app.
+This follows the normal macOS launch path for Local Network permission attribution.
+
 Before shutdown, atomically persist a versioned private update job containing:
 
 - Update ID, owner/installation target, source fingerprint, immutable staged artifact hash/signing

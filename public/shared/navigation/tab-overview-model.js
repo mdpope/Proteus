@@ -6,12 +6,11 @@ export function tabOverviewGroups({tabs,catalog,scope='main',selectedId,topId,te
  const eligible=tab=>visible(tab)&&ancestors(tab).every(visible);
  const selected=byId.get(selectedId),selectedChain=ancestors(selected);
  const scopeTab=byId.get(scope),scoped=ancestors(scopeTab).find(tab=>tab.type==='workspace')||scopeTab||selectedChain.find(tab=>tab.type==='workspace');
- if(scope.startsWith('feature:'))return featureGroups.filter(group=>group.id===scope.slice(8)).map(group=>({id:group.id,title:group.title,selectedId,home:group.home,tabs:group.ids.map(id=>byId.get(id)).filter(tab=>tab&&eligible(tab))}));
- if(scope==='main'){
-  const grouped=new Set(featureGroups.flatMap(group=>group.ids));
-  return [{id:'main',title:'Top-level tabs',tabs:tabs.filter(tab=>eligible(tab)&&!grouped.has(tab.id)&&!tab.parentId&&!tab.projectId&&!features.has(tab.type)),selectedId:topId||selectedId},...featureGroups.map(group=>({id:group.id,title:group.title,selectedId,home:group.home,tabs:group.ids.map(id=>byId.get(id)).filter(tab=>tab&&eligible(tab))}))];
- }
- if(scope==='team')return [{id:'team',title:'Team Tools',team:true,tabs:team.tabs.filter(visible),selectedId:team.active}];
+ const grouped=new Set(featureGroups.flatMap(group=>group.ids));
+ const root={id:'main',title:'Top-level tabs',tabs:tabs.filter(tab=>eligible(tab)&&!grouped.has(tab.id)&&!tab.parentId&&!tab.projectId&&!features.has(tab.type)),selectedId:scope==='main'?topId||selectedId:selectedId};
+ if(scope==='main')return [root];
+ if(scope.startsWith('feature:'))return [root,...featureGroups.filter(group=>group.id===scope.slice(8)).map(group=>({id:group.id,title:group.title,selectedId:group.selectedId??selectedId,home:group.home,tabs:group.ids.map(id=>byId.get(id)).filter(tab=>tab&&eligible(tab))}))];
+ if(scope==='team')return [root,{id:'team',title:'Team Tools',team:true,tabs:team.tabs.filter(visible),selectedId:team.active}];
  const host=scoped?.hostId||'local',workspaceId=scoped?.workspaceId;
  if(workspaceId){
   const projectOf=tab=>ancestors(tab).find(row=>row.type==='workspace'&&row.projectId&&row.workspaceId===workspaceId&&(row.hostId||'local')===host);
@@ -24,7 +23,7 @@ export function tabOverviewGroups({tabs,catalog,scope='main',selectedId,topId,te
   const direct=tabs.filter(tab=>eligible(tab)&&tab.type!=='workspace'&&ancestors(tab).some(row=>row.type==='workspace'&&!row.projectId&&row.workspaceId===workspaceId&&(row.hostId||'local')===host)&&!projectOf(tab));
   const legacyRoot=tabs.find(tab=>tab.type==='workspace'&&!tab.projectId&&tab.workspaceId===workspaceId&&(tab.hostId||'local')===host);
   if(direct.length)groups.unshift({id:'workspace:'+host+':'+workspaceId,title:legacyRoot?.workspaceName||legacyRoot?.label||scoped.workspaceName||'Workspace',selectedId,tabs:direct});
-  return groups;
+  return [root,...groups];
  }
  const parent=byId.get(scope);return parent?[{id:parent.id,title:parent.label||'Chat',selectedId,tabs:[parent,...tabs.filter(tab=>eligible(tab)&&tab.parentId===parent.id)].filter(eligible)}]:[];
 }

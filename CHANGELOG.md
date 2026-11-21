@@ -1,3 +1,97 @@
+## Nov 17
+
+- Pin desktop builds to Electron 44.11.5 while Electron investigates a native crash in its
+  certificate-error dispatch.
+- Keep keyboard focus in the current page or address bar when a background tab finishes loading.
+- Add OpenRouter for chats and schedules with protected API-key setup, a searchable catalog and favorites in the Model dropdown, and provider-reported cost in Run Details.
+
+- Match the reviewed Chats filters, table headers, status counts, and leading card highlights.
+- Keep connected computers’ Chats rows stable during refresh. Move failed, interrupted, and
+  waiting chats into Recently finished as Stale after 72 hours. Brighten Finished cards and add a
+  card-size slider that scales their layout and text.
+- Open Scratchpad’s README and retain the selected document and reading position across tab switches.
+- Scale documents and chats with a pinch, adjust Scratchpad text with Document size and Wrap, and
+  pan enlarged images inside their viewers. Migrate legacy Scratchpad paths to readable names.
+- Show a Chat size slider below the chat actions and add a live percentage and 100% reset
+  to chat, document, Scratchpad, dashboard, and image zoom controls.
+- Relaunch the installed macOS app through LaunchServices after supervised updates and
+  rollbacks to preserve the system’s normal Local Network permission attribution.
+- On macOS, explain the Apple Passwords browser requirement and stop repeated launches
+  of the restricted native helper.
+- Explain HTTP and TLS mismatches on custom ports in the browser error page.
+- Open Microsoft Teams in its web client by default and reach Microsoft sign-in.
+- Keep the Teams web client through Microsoft’s cloud-domain redirect.
+- Keep input focused when a background website navigates or opens a new tab.
+- Open Engine Room website links in the selected browser. In-app links open at the top level.
+- Keep state refreshes available while new chats and other owner updates are coming in.
+- Refresh a chat's current sources directly from Chat Details. Scheduled chats retain their
+  referenced workspaces and managed connection bindings across a refresh.
+- Opt in to automatic instruction and skill edits for a chat or schedule. The next turn or
+  scheduled run captures the updated text and records the source revisions.
+- Keep browser Back and Forward on the selected entry across desktop and iOS, including when
+  older loads finish late or a history entry redirects.
+- Reduce iPhone typing and navigation work by avoiding duplicate editor layout and moving
+  history processing and computer-switch cache writes off the main thread. Save pending visits
+  separately from the offline history cache.
+- Read and decrypt saved iOS document tabs and browser history off the main thread during
+  startup. Apply small streaming chat patches without rebuilding older history pages.
+- Reuse unchanged iOS owner tab snapshots when saving pending edits and retry receipts.
+  Prepare chat runtime intervals when timing data changes, so each tick only computes the
+  time display.
+- Keep scoped schedule runs on their saved approval mode. Chat Details can clear an older
+  incompatible override, and the desktop approval prompt can remember an exact scoped command.
+- Guide Mac users through exporting Apple Reminders and previewing a bulk Life Reminders import.
+- Filter Needs Attention notifications by category and computer where available, search their
+  titles and details, and find browser-history recovery actions on the owning Mac.
+- Align desktop Life tabs with project navigation and use the native palette and sidebar icons in Life on iOS.
+
+- Keep the last saved desktop website view visible when its server is unreachable or returns an error.
+- Keep automatic same-address reloads in a single history entry. Keep unrelated chat drafts syncing during recovery, save recovered histories in unloaded tabs, and name the tab group that blocks an update.
+- Keep the macOS application menu available after opening the incoming-link picker.
+
+- Open browser tab move destinations in the existing native popup, keeping the embedded page visible.
+- Refresh the workspace sidebar and open labels after saving a workspace name.
+- Insert tabs opened from native browser links beside their source on first display, and use
+  shared Back, Forward, Downloads and Go icons across desktop operating systems.
+- Desktop Browser Preferences default to machine DNS and offer encrypted DNS through an explicit
+  HTTPS resolver. Changes apply after restarting Proteus.
+- Delete schedules through their owner while retaining past runs. Local and remote schedule
+  editors can refresh selected sources and resolve concurrent edits before saving. Run now
+  reports admission and allows safe retry. Interrupted schedule chats can review saved access.
+- Set website notification permissions by exact origin in Browser Preferences and from browser
+  chrome. Reuse installed extension packages with separate permissions for each browser profile.
+- Drag a scratch into an authorized workspace or project folder to change its association.
+- Use a closeable browser tab for named website popups in the opener's profile.
+- Use live Cards and Table views for Chats on desktop and web. iOS keeps compact Table and its
+  filter expander and offers detailed Cards on demand. Disconnected rows show cached state.
+- Decode and encode desktop peer messages with native byte conversion to reduce
+  main-thread stalls during large state deliveries.
+- Accept up to 120 seconds of Mnemosyne Ask audio on the Mac owner and expose routine
+  reminder, scratch, web search and Obsidian lookup actions in the original Ask request.
+- Teach agents to use the built-in Reminders and Scratchpad tools in regular chats and approved
+  Life Ask follow-ups, with current record revisions and a verified result for writes.
+
+- Use shared iPhone and iPad feature tabs for Life, Reminders, Scratchpad, Chats and Team Tools.
+  Add top-level tabs to project overview and include the current feature’s unloaded browsers.
+- Open workspace files beside the Files tab, align file controls, and use readable Scratchpad
+  breadcrumbs. Paste images or PDF embeds in Markdown and use arrow keys to preview chat attachments.
+
+- Search browser tabs, chats, files, saved scratches, projects, workspaces, features and settings from Super+P.
+- Save new Scratchpad files and directories under readable names. Existing generated filenames can
+  be changed from the editor while retaining the scratch ID.
+- Group clicked-link destinations by computer with larger workspace headings and show the
+  cached site icon. Order paired computers from Engine Room → Computer Connections.
+- Organize Browser Preferences into tabs. Manage microphone, camera and notifications by website and
+  profile, request macOS device access, and choose a screen or window before sharing.
+- Restore Ask from the X beside a saved site permission and queue separate microphone and camera requests.
+- Use Chromium’s screen-sharing path in the Zoom web client, with explicit screen or window selection.
+- Show screen and window thumbnails in the built-in sharing picker, with taller previews for portrait sources.
+- Send macOS screenshots to a tray and drag them into chat drafts, workspace folders, scratches, or Markdown files.
+- Share Life tab geometry across both desktop navigation rows and show iOS sidebar recents without empty rows.
+- Keep the iPad app tab strip above all features. Match desktop Life icons to mobile, show
+  Home Assistant setup help, and combine Scratchpad sidebar recents across connected computers.
+
+
 ## Nov 15 continuation — Team editing and link destinations
 
 - Windows Scratchpad saves retain the file-data flush while omitting the unsupported directory

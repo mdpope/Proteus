@@ -6,6 +6,8 @@ import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {atomicJSON,readJSON} from '../../shared/files.js';
 
+import {LIFE_ASK_ENVELOPE_BYTES} from './life-ask.js';
+
 const run = promisify(execFile);
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 const roundedTimes = value => Object.fromEntries(Object.entries(value || {}).flatMap(([key,time]) =>
@@ -19,7 +21,7 @@ export class LifeAskNative {
     if(!binding.accountID||binding.accountID!==receipt.accountID||binding.hostID!==receipt.hostID)throw Error('Life Ask account binding changed.');
     const file=path.join(this.store.directory(receipt.requestId),'request.json');
     const stat=fs.lstatSync(file);
-    if(!stat.isFile()||stat.isSymbolicLink()||stat.size>3_000_000)throw Error('Frozen Life Ask envelope is unavailable.');
+    if(!stat.isFile()||stat.isSymbolicLink()||stat.size>LIFE_ASK_ENVELOPE_BYTES)throw Error('Frozen Life Ask envelope is unavailable.');
     const value=readJSON(file);
     if(value.id!==receipt.requestId||value.accountID!==receipt.accountID||value.hostID!==receipt.hostID||value.executionOwner!=='proteus-life'||value.audioDigest?.sha256!==receipt.audioSha256||value.audioDigest?.bytes!==receipt.audioBytes)throw Error('Frozen Life Ask envelope binding differs.');
     return file;

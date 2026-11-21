@@ -1,3 +1,5 @@
+import {PASTED_ASSET_REQUEST_LIMIT} from './shared/pasted-document-assets.js';
+import {operationTiming} from './services/chats/run-timing.js';
 import {desktopSetupStatus, startDesktopSetup} from "./services/remote/desktop-setup.js";
 import {ownerSelectionUpdate,clearOwnerSelection} from './services/scheduling/source-selection-overrides.js';
 import {qualifyScopedCommandRuntime} from './services/scheduling/host-scoped-executor.js';
@@ -9,7 +11,7 @@ import {clearQuestionFromQueue} from './services/chats/user-questions.js';
 import {localInputOrigin} from './services/chats/input-origin.js';
 import {attachmentDates} from './services/chats/attachment-dates.js';
 import {attachmentPrompt} from './services/chats/attachment-prompt.js';
-import {resolveScheduleContext} from './services/scheduling/schedule-context.js';
+import {refreshRunSources,resolveScheduleContext,sourceRefreshEvent} from './services/scheduling/schedule-context.js';
 import { StateProjectionClient } from './services/state/state-projection-client.js';
 import { StateResponseCache } from './services/state/state-response-cache.js';
 import { permissionDisplaySchedule } from './services/state/state-projection.js';
@@ -36,7 +38,7 @@ import {ManagedConnectionOwner} from './services/integrations/managed-connection
 import { IntegrationHealth } from './services/integrations/integrations.js';
 import { ActivityStore } from './services/telemetry/activity.js';
 import { AppAccount } from './services/remote/app-account.js';
-import { ModelCatalog, chatModelOptions, validateModelOptions } from './models/model-catalog.js';
+import { ModelCatalog, chatModelOptions, validateModelOptions, providerCatalogSummaries } from './models/model-catalog.js';
 import http from 'node:http';
 import { contextPlan } from '../public/features/workspaces/context-plan.js';
 import {chatMembership} from '../public/features/chats/chat-membership.js';
@@ -81,11 +83,14 @@ import { ProjectFollow } from './services/workspaces/project-follow.js';
 import { fileStamp } from './shared/file-stamp.js';
 import { ChatAttachmentStore, chatAttachmentLimits } from './services/chats/chat-attachments.js';
 import { ProviderAuthManager } from './providers/provider-auth.js';
+import { OpenRouterCredentials, OpenRouterProvider } from './providers/openrouter.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const assets=publicAssets(path.join(root,'public'));
 assets['/remote.js']=['services/remote/remote.js','text/javascript'];
 assets['/features.js']=['shared/ui/features.js','text/javascript'];
+assets['/apple-reminders-export.swift']=['features/tools/apple-reminders-export.swift','text/plain; charset=utf-8'];
+assets['/apple-reminders-export.plist']=['features/tools/apple-reminders-export.plist','text/plain; charset=utf-8'];
 assets['/terminal/ghostty-vt.wasm']=['terminal/ghostty-vt.wasm','application/wasm'];
 export function seed(home, cwd = root) {
   const file = path.join(home, 'schedules', 'workspace-pulse.json');
@@ -135,7 +140,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   context.deferRefresh = true;
   const standup = new StandupStore(home, settings.get().timezone);
   const copilot = new SessionProvider(() => new CopilotProvider({}, { browser, context, settings }));
-  const codex = new SessionProvider(() => new CodexProvider(desktopPreview ? { permissionControls:true, desktopPreview:true, env: {...process.env,CODEX_HOME:previewCodexHome} } : {permissionControls:true}, { browser, context }));
+  const codex = new SessionProvider(() => new CodexProvider(desktopPreview ? { permissionControls:true, desktopPreview:true, env: {...process.env,CODEX_HOME:previewCodexHome} } : {permissionControls:true}, { browser, context, lifeAskPolicy:run=>service.lifeAskHost?.toolPolicy(run) }));
   if (desktopPreview) codex.options = codex.metadata.options;
   const claude = new SessionProvider(() => new ClaudeProvider({}, { browser, context }));
   const omi = new OmiIntegration(home);
@@ -152,7 +157,9 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   let sharedInference;
   const sharedModels=new SessionProvider(()=>new SharedLlmProvider({manager:()=>sharedInference},{context,browser}));
   const llamaCpp=new SessionProvider(()=>new LlamaCppProvider({}, {context,browser}));
-  const adapters = { ...(providers || (desktopPreview ? { codex, mtplx } : { copilot, codex, claude, 'llama-cpp':llamaCpp, 'shared-llm':sharedModels, ...(process.platform==='darwin'?{mtplx}:{}) })), ...(!desktopPreview ? {'local-process': omi.provider()} : {}) };
+  const openRouterCredentials=new OpenRouterCredentials(home,lifeOptions.managedSafeStorage??lifeOptions.safeStorage);
+  const openrouter=new SessionProvider(()=>new OpenRouterProvider({credentials:openRouterCredentials,catalog:()=>catalogs.openrouter.get()},{context,browser}));
+  const adapters = { ...(providers || (desktopPreview ? { codex, mtplx, openrouter } : { copilot, codex, claude, openrouter, 'llama-cpp':llamaCpp, 'shared-llm':sharedModels, ...(process.platform==='darwin'?{mtplx}:{}) })), ...(!desktopPreview ? {'local-process': omi.provider()} : {}) };
   const engine = new Engine(home, adapters, undefined, {permissionControls:true,recoveryBarrier:updateRecovery});
   const designReminders=desktopPreview&&process.env.PROTEUS_DESIGN_DEMO==='1'?demoReminders(path.join(home,'demo-reminders.json')):null;
   const scratchpad = new Scratchpad(home, {projects:preview, engine, memoryLocations:()=>{
@@ -206,6 +213,17 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
     captureScratchProject(engine,preview,run);
     preview?.assertAvailable(run.schedule.context);
     const old = run.schedule.context;
+    if(old&&run.schedule.autoRefreshSources===true){
+      const snapshot=context.refreshCapturedText(old);
+      if(snapshot!==old){
+        run.initialSchedule??=structuredClone(run.schedule);
+        (run.contextHistory??=[]).push(old);
+        run.schedule={...run.schedule,context:snapshot};
+        const event=sourceRefreshEvent(snapshot,engine.now());
+        engine.event(run,event.role,event.text,event.data);
+      }
+      return;
+    }
     if (!old?.workspaceId || !old.followsWorkspace || !old.configurationRevision) return;
     const profile = context.executionScope(old.workspaceId);
     if(profile.deletedAt){run.schedule.context={...old,followsWorkspace:false};return;}
@@ -227,9 +245,9 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
     const resolved=resolveScheduleContext(schedule,context,engine.permissions),snapshot=resolved.context;
     return { ...schedule, context: snapshot, workspace: snapshot.workspace,...(resolved.executionPermissions?{executionPermissions:resolved.executionPermissions}:{}) };
   };
-  const catalogs = Object.fromEntries(Object.entries(adapters).filter(([id, adapter]) => id !== 'local-process' && adapter.status).map(([id, adapter]) => [id, new ModelCatalog(() => adapter.status())]));
+  const catalogs = Object.fromEntries(Object.entries(adapters).filter(([id, adapter]) => id !== 'local-process' && adapter.status).map(([id, adapter]) => [id, new ModelCatalog(() => adapter.status(), {reportConnection:id==='openrouter'})]));
   const catalog = (desktopPreview ? catalogs.codex : catalogs.copilot) || new ModelCatalog(() => desktopPreview ? codex.status() : copilot.status());
-  const providerStatuses = () => Object.fromEntries(Object.entries(catalogs).map(([id, catalog]) => [id, catalog.value]));
+  const providerStatuses = () => providerCatalogSummaries(catalogs);
   const permissionPreviews = new Map();
   function permissionSchedule(schedule, catalog) {
     // A saved run's permissions belong to its captured context, even when its
@@ -336,7 +354,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       if (req.headers.host !== new URL(origin).host) return json(403, { error: 'Invalid host.' });
       res.setHeader('Cache-Control', 'no-store'); res.setHeader('Referrer-Policy', 'no-referrer');
       res.setHeader('X-Content-Type-Options', 'nosniff');
-      res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'nonce-"+styleNonce+"'; img-src 'self' data: blob: https: http:; connect-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'none'");
+      res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'nonce-"+styleNonce+"'; img-src 'self' data: blob: https: http:; connect-src 'self'; frame-src 'self' data: blob:; frame-ancestors 'none'; object-src 'none'; base-uri 'none'");
       const url = new URL(req.url, origin);
       if (url.pathname === '/' && url.searchParams.get('token') === token) {
         res.setHeader('Set-Cookie', `proteus=${token}; HttpOnly; SameSite=Strict; Path=/`);
@@ -436,9 +454,16 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       if (url.pathname === '/api/chats/index' && req.method === 'GET') {
         const info=remote.info(),lastSyncAt=new Date().toISOString();
         const includeArchived=url.searchParams.get('includeArchived')==='1',projectCatalog=preview?.read();
-        const local=engine.visibleRuns(includeArchived).slice(0,1000).map(r=>({id:r.id,chatId:r.id,hostId:info.hostId,local:true,title:r.title,titleRevision:r.titleRevision,trigger:r.trigger,chatType:r.chatType,provider:r.schedule.provider,model:r.schedule.model,reasoningEffort:r.schedule.reasoningEffort,serviceTier:r.schedule.serviceTier,status:r.status,createdAt:r.createdAt,updatedAt:r.updatedAt,lastActivityAt:chatActivityAt(r),archivedAt:r.archivedAt||null,archived:!!r.archivedAt,unansweredQuestionCount:(r.userQuestions||[]).filter(q=>q.status==='pending').length,attentionRequired:needsAttention(r),failureEventAt:['failed','interrupted'].includes(r.status)?r.failureEventAt||r.updatedAt:null,failureReviewedAt:r.failureReviewedAt||null,...chatMembership(r),...(preview?preview.membership(r,projectCatalog):{}),scheduleName:r.trigger==='chat'?'':r.schedule.name,destinationName:info.label}));
-        const peer=service.peers?await service.peers.index():{items:[],hosts:[],partial:false};
-        const items=[...local,...peer.items.filter(item=>includeArchived||!item.archivedAt)].sort((a,b)=>String(b.updatedAt).localeCompare(String(a.updatedAt))||a.hostId.localeCompare(b.hostId)||a.chatId.localeCompare(b.chatId));
+        const normalize=value=>String(value??'').toLowerCase().normalize('NFKD').replace(/\p{Diacritic}/gu,'');
+        const words=normalize((url.searchParams.get('query')||'').slice(0,160)).trim().split(/\s+/).filter(Boolean);
+        const matches=fields=>{const values=fields.map(normalize);return words.every(word=>values.some(value=>value.includes(word)));};
+        const runs=engine.visibleRuns(includeArchived);
+        const local=(words.length?runs.filter(run=>{
+          const membership={...chatMembership(run),...(preview?preview.membership(run,projectCatalog):{})};
+          return matches([run.title,membership.workspaceName,membership.projectName,run.schedule?.provider,run.schedule?.model,run.schedule?.name,run.archivedAt?'Archived':'']);
+        }):runs).slice(0,1000).map(r=>({id:r.id,chatId:r.id,hostId:info.hostId,local:true,title:r.title,titleRevision:r.titleRevision,trigger:r.trigger,chatType:r.chatType,provider:r.schedule.provider,model:r.schedule.model,reasoningEffort:r.schedule.reasoningEffort,serviceTier:r.schedule.serviceTier,status:r.status,createdAt:r.createdAt,updatedAt:r.updatedAt,lastActivityAt:chatActivityAt(r),operation:operationTiming(r),archivedAt:r.archivedAt||null,archived:!!r.archivedAt,unansweredQuestionCount:(r.userQuestions||[]).filter(q=>q.status==='pending').length,attentionRequired:needsAttention(r),failureEventAt:['failed','interrupted'].includes(r.status)?r.failureEventAt||r.updatedAt:null,failureReviewedAt:r.failureReviewedAt||null,...chatMembership(r),...(preview?preview.membership(r,projectCatalog):{}),scheduleName:r.trigger==='chat'?'':r.schedule.name,destinationName:info.label}));
+        const peer=service.peers?await service.peers.index({force:url.searchParams.get('force')==='1'}):{items:[],hosts:[],partial:false};
+        const items=[...local,...peer.items.filter(item=>(includeArchived||!item.archivedAt)&&(!words.length||matches([item.title,item.workspaceName,item.projectName,item.provider,item.model,item.scheduleName,item.destinationName,item.archivedAt?'Archived':'',item.cached?'Offline':''])))].sort((a,b)=>String(b.updatedAt).localeCompare(String(a.updatedAt))||a.hostId.localeCompare(b.hostId)||a.chatId.localeCompare(b.chatId));
         return json(200,{items,hosts:[{id:info.hostId,name:info.label,online:true,lastSyncAt},...peer.hosts],partial:peer.partial});
       }
       if (url.pathname === '/api/chat-view') {
@@ -465,7 +490,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         return {
         hostName:remote.info().label,hostId:remote.info().hostId,computerAccess:service.computerAccess.get(),
         workspaceProjects,
-        ...(desktopPreview?{desktopPreview:workspaceProjects}:{}),
+        ...(desktopPreview?{desktopPreview:{...workspaceProjects,designDemo:!!designReminders}}:{}),
         attention:service.desktopAttention(),updates:service.updates?.status()||null,
         schedules, runs: runs.map(run => url.searchParams.has('summaries') ? {...runSummary(run),...workspaceProjects.memberships[run.id],trigger:run.trigger,usage:run.usage,schedule:{id:run.schedule.id,name:run.schedule.name,provider:run.schedule.provider,model:run.schedule.model,workspace:run.schedule.workspace}} : ({ ...run, ...workspaceProjects.memberships[run.id], storage: storagePaths(home, run) })), providerSteeringMediaTypes:Object.fromEntries(Object.entries(engine.providers).map(([id,provider])=>[id,provider.acceptedSteeringMediaTypes||[]])),providerSteering:Object.fromEntries(Object.entries(engine.providers).map(([id,provider])=>[id,typeof provider.steer==='function'])),providerStatus: catalog.value, providerStatuses: providerStatuses(),questionAttachmentMediaTypes:Object.fromEntries(Object.keys(adapters).map(id=>[id,questionAttachmentMediaTypes.filter(type=>adapters[id]?.acceptedMediaTypes?.includes(type))])),attachmentMediaTypes:Object.fromEntries(Object.keys(adapters).map(id=>[id,adapters[id]?.acceptedMediaTypes||[]])),mcpStatusProviders:Object.keys(adapters).filter(id=>typeof adapters[id]?.mcpStatus==='function'),mcpLoginProviders:['copilot','codex','claude'].filter(id=>typeof adapters[id]?.mcpLogin==='function'),
         permissions: engine.permissions.get(),
@@ -478,7 +503,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         return performanceDiagnostics.measure('http.state.project',()=>performanceDiagnostics.measureSync('http.state.transfer',()=>stateProjection.serialize({...projection,state})));
         }); }
         catch(error) {
-          const codes=['STATE_PROJECTION_FAILED','STATE_WORKER_UNAVAILABLE','STATE_PROJECTION_BUSY','STATE_PROJECTION_TIMEOUT','STATE_WORKER_ERROR','STATE_WORKER_EXIT','STATE_CACHE_BUSY','STATE_CHANGED'];
+          const codes=['STATE_PROJECTION_FAILED','STATE_WORKER_UNAVAILABLE','STATE_PROJECTION_BUSY','STATE_PROJECTION_TIMEOUT','STATE_WORKER_ERROR','STATE_WORKER_EXIT','STATE_CACHE_BUSY'];
           const code=codes.includes(error.code)?error.code:'STATE_ASSEMBLY_FAILED';
           stateDisplayFailure={code,at:new Date().toISOString(),activeProjections:stateProjection.pending.size,activeSnapshots:stateCache.active.size};
           activity.log('warning','state.display-failed','State display projection failed.',stateDisplayFailure);
@@ -520,7 +545,8 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       }
       if(url.pathname==='/api/scratchpad/settings'&&req.method==='GET')return json(200,scratchpad.settings());
       if(url.pathname==='/api/scratchpad/settings'&&req.method==='POST')return json(200,await scratchpad.configure(await body(req)));
-      if(url.pathname==='/api/scratchpad'&&req.method==='POST')return json(200,await scratchpad.handle(await body(req)));
+      if(url.pathname==='/api/scratchpad/migrate-paths'&&req.method==='POST')return json(200,await scratchpad.migratePaths(await body(req)));
+      if(url.pathname==='/api/scratchpad'&&req.method==='POST')return json(200,await scratchpad.handle(await body(req,PASTED_ASSET_REQUEST_LIMIT)));
       if(url.pathname==='/api/life/document-reference'&&req.method==='POST'){const value=await body(req);return json(200,service.lifeAskHost.documentReference(value.documentId,value.accountId,context.config().workspaces.map(w=>w.id)));}
       if(url.pathname==='/api/life/workspace'&&req.method==='POST'){const value=await body(req);if(value.action==='ensure')return json(200,service.lifeAskHost.ensureLifeProject(value.kind));if(value.action==='set-folder')return json(200,service.lifeAskHost.setWorkspaceFolder(value.folder));throw Error('Unknown Life workspace action.');}
       if(url.pathname==='/api/life/ask'&&req.method==='POST'){const value=await body(req);return json(200,await service.lifeAskHost.save(value.settings,value.expectedRevision));}
@@ -532,10 +558,10 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         const bytes=workspaceExplorer.pdf(Object.fromEntries(url.searchParams));res.setHeader('Content-Security-Policy',"default-src 'none'; frame-ancestors 'self'; object-src 'self'");res.writeHead(200,{'Content-Type':'application/pdf','Content-Length':bytes.length,'Cache-Control':'no-store'});return res.end(bytes);
       }
       if (url.pathname.startsWith('/api/workspace-explorer/') && req.method === 'POST') {
-        const value=await body(req),action=url.pathname.split('/').at(-1);
-        if(!['roots','browse','preview','mutate','resolve-link','save'].includes(action))throw Error('Unknown file browser action.');
+        const action=url.pathname.split('/').at(-1),value=await body(req,['paste','import-image'].includes(action)?PASTED_ASSET_REQUEST_LIMIT:undefined);
+        if(!['roots','browse','preview','mutate','resolve-link','save','paste','import-image'].includes(action))throw Error('Unknown file browser action.');
         const controller=new AbortController();res.once('close',()=>controller.abort());
-        return json(200,await workspaceExplorer[action==='resolve-link'?'resolveLink':action](value,{signal:controller.signal}));
+        return json(200,await workspaceExplorer[{'resolve-link':'resolveLink','import-image':'importImage'}[action]||action](value,{signal:controller.signal}));
       }
       if (url.pathname === '/api/workspace-files/roots' && req.method === 'GET') return json(200, workspaceFiles.roots());
       if (url.pathname === '/api/workspace-files/list' && req.method === 'POST') return json(200, workspaceFiles.list(await body(req)));
@@ -552,6 +578,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
           validateModelOptions(options,model);
         }
         const saved = settings.save(value.settings, value.expectedRevision);
+        if(JSON.stringify(old.preferences?.computerOrder)!==JSON.stringify(saved.preferences?.computerOrder)){notify();remote.changed();}
         engine.historyCache.configure(saved.resources);
         if (JSON.stringify(old.workspace) !== JSON.stringify(saved.workspace)) {
           const config = context.config();
@@ -626,15 +653,23 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       }
       if (url.pathname === '/api/run-context' && req.method === 'POST') {
         const value = await body(req); const run = engine.getRun(value.runId);
-        if (['running', 'queued', 'awaiting_input'].includes(run.status)) throw new Error('Wait for this turn to finish before changing context.');
-        await context.refreshAsync({ workspaceId: run.schedule.context?.workspaceId });
-        const old = run.schedule.context;
-        const snapshot = context.capture({ workspaceId: old?.workspaceId, ...(old?.followsWorkspace ? {} : { workspace: old?.baseWorkspace || run.schedule.workspace }), selectedIds: value.selectedIds ?? old?.selectedIds ?? [], agentId: value.agentId === undefined ? old?.agentId : value.agentId, includeDefaults: value.includeDefaults ?? old?.includeDefaults ?? true });
-        run.initialSchedule ??= structuredClone(run.schedule);
-        run.contextHistory ??= []; if (old) run.contextHistory.push(old);
-        for (const event of run.events) if (event.role === 'assistant' && !event.agentName) event.agentName = agentName(run);
-        run.schedule = { ...run.schedule, context: snapshot, workspace: snapshot.workspace };
-        engine.event(run, 'system', 'Workspace context refreshed for the next turn. Existing conversation history is retained.');
+        if(value.action==='set-auto-refresh'){
+          if(typeof value.enabled!=='boolean')throw Error('Choose whether to refresh sources automatically.');
+          if(!run.schedule.context||['queued','running','awaiting_input'].includes(run.status)||engine.running.has(run.id))throw Error('Choose an idle chat with captured sources.');
+          if(value.expectedUpdatedAt!==run.updatedAt)throw Error('Chat changed. Reload Chat Details before saving.');
+          if(run.schedule.autoRefreshSources!==value.enabled){
+            run.schedule={...run.schedule,autoRefreshSources:value.enabled};
+            engine.event(run,'system',value.enabled?'Automatic source refresh enabled for future turns.':'Automatic source refresh disabled for future turns.');
+          }
+          return json(200,{ok:true,enabled:value.enabled});
+        }
+        await refreshRunSources({engine,context},run,{selection:value,apply(snapshot,old){
+          run.initialSchedule ??= structuredClone(run.schedule);
+          run.contextHistory ??= []; if (old) run.contextHistory.push(old);
+          for (const event of run.events) if (event.role === 'assistant' && !event.agentName) event.agentName = agentName(run);
+          run.schedule = { ...run.schedule, context: snapshot, workspace: snapshot.workspace };
+          engine.event(run, 'system', 'Workspace context refreshed for the next turn. Existing conversation history is retained.');
+        }});
         return json(200, { ok: true });
       }
       // One action for a provider that rejected selected agents before starting:
@@ -685,6 +720,13 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       if(url.pathname==='/api/schedule-selection'&&req.method==='POST'){const value=await body(req);try{const current=engine.schedules.get(value.scheduleId);if(value.action!=='clear-owner-override')throw Error('Choose a provider override action.');const next=clearOwnerSelection(current);await service.scheduleControl.preflight(next);const saved=engine.schedules.save(next,value.expectedRevision);engine.emit('change');return json(200,{...saved,revision:revision(saved)});}catch(error){activity.scheduleError({scheduleId:value.scheduleId,action:'clear-provider-override',code:error.code});throw error;}}
       if(url.pathname==='/api/schedule-capabilities'&&req.method==='POST'){const schedule=await body(req),result=resolveExecutionCapabilities(schedule);if(result.supported&&schedule.executionPermissions?.sandboxedCommands)result.runtime=await qualifyScopedCommandRuntime();return json(200,result);}
       if(url.pathname==='/api/schedule-access/revoke'&&req.method==='POST'){const value=await body(req);try{const current=engine.schedules.get(value.scheduleId);const saved=engine.schedules.save(revokeScheduleAccess(current,value.grantId),value.expectedRevision);engine.recheckPermissions();engine.emit('change');return json(200,{...saved,revision:revision(saved)});}catch(error){activity.scheduleError({scheduleId:value.scheduleId,action:'revoke-access',code:error.code});throw error;}}
+      if (url.pathname === '/api/schedule-access/review' && req.method === 'POST') {
+        return json(200,engine.scheduleAccessReview(await body(req,4000)));
+      }
+      if (url.pathname === '/api/schedules' && req.method === 'GET' && url.searchParams.has('id')) {
+        const schedule=engine.schedules.get(url.searchParams.get('id'));
+        return json(200,{...schedule,revision:revision(schedule)});
+      }
       if (url.pathname === '/api/schedules' && req.method === 'POST') {
         const { schedule:requested, expectedRevision } = await body(req);
         let schedule=requested;
@@ -701,6 +743,9 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
           throw error;
         }
       }
+      if (url.pathname === '/api/schedules/delete' && req.method === 'POST') {
+        return json(200, engine.deleteSchedule(await body(req, 4000)));
+      }
       if (url.pathname === '/api/import' && req.method === 'POST') {
         const { schedules } = await body(req); if (!Array.isArray(schedules)) throw new Error('Expected an array of schedules.');
         const existing = new Set(engine.schedules.list().map(s => s.id)); const seen = new Set();
@@ -712,7 +757,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       }
       if(url.pathname==='/api/subagents'&&req.method==='GET'){const run=engine.getRun(url.searchParams.get('id')),agentId=url.searchParams.get('agentId'),before=url.searchParams.has('before')?Number(url.searchParams.get('before')):undefined;return json(200,run.subagents?.some(row=>row.id===agentId)?subagentPage(run,agentId,before):engine.delegation.page(run.id,agentId,before));}
       if(url.pathname==='/api/shared-draft'&&req.method==='POST'){const value=await body(req);if(!['get','save'].includes(value.action))throw Error('Choose a draft action.');return json(200,value.action==='save'?await service.sharedDrafts.save(value):service.sharedDrafts.get(value));}
-      if (url.pathname === '/api/run' && req.method === 'POST') { const { id } = await body(req); return json(200, engine.createRun(engine.schedules.get(id))); }
+      if (url.pathname === '/api/run' && req.method === 'POST') return json(200, engine.runSchedule(await body(req)));
       if (url.pathname === '/api/chat-title' && req.method === 'POST') {
         const value = await body(req);
         return json(200, engine.renameChat(value.id, value.title, value.expectedTitleRevision));
@@ -853,6 +898,14 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       }
       if (url.pathname === '/api/usage' && req.method === 'POST') return json(200, await usage.get((await body(req)).force === true));
       if (url.pathname === '/api/provider' && req.method === 'POST') { const value = await body(req); const selectedCatalog = value.provider ? catalogs[value.provider] : catalog; if (!selectedCatalog) throw new Error('Provider catalog is unavailable.'); const result = await selectedCatalog.get(value.force !== false); if(desktopPreview&&selectedCatalog===catalogs.codex)preview.initializeProviderDefaults(settings,result); notify(); remote.changed(); return json(200, result); }
+      if (url.pathname === '/api/openrouter/connection' && req.method === 'POST') {
+        if (adapters.openrouter!==openrouter) return json(404,{error:'OpenRouter is unavailable on this owner.'});
+        if (openrouter.sessions.size) throw Error('Wait for OpenRouter work to finish before changing its connection.');
+        await openRouterCredentials.configure(await body(req,4096));
+        await catalogs.openrouter.pending;
+        const result=await catalogs.openrouter.get(true);
+        notify();remote.changed();return json(200,result);
+      }
       if (url.pathname === '/api/provider-auth' && req.method === 'POST') return json(200, await providerAuth.handle(await body(req)));
       if (url.pathname === '/api/chat-image' && req.method === 'POST') {
         const value = await body(req);
@@ -884,7 +937,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   origin = `http://127.0.0.1:${server.address().port}`;
   atomicJSON(path.join(home, 'connection.json'), { origin, token, pid: process.pid });
   const timer = timers ? setInterval(() => { void performanceDiagnostics.measure('scheduler.tick', () => engine.tick()).catch(error => engine.emit('scheduler-error', { error: error.message, at: new Date().toISOString() })); }, 1000) : null;
-  const service = { readChatAttachment, mnemosyne:new MnemosyneOperations({omi,engine}), desktopControl,workspaceProjects:preview, desktopPreview:desktopPreview?preview:null, performanceDiagnostics, notify, desktopAttention:()=>[...(service.browserAttention?.()||[]),...remote.documents.list().filter(item=>!item.approvedAt).map(item=>({id:'document:'+item.requestId,kind:'document',title:item.deviceName+' requests '+item.title,requestId:item.requestId,path:item.path,at:new Date(Date.parse(item.expiresAt)-600000).toISOString()})),...service.attention()], attention:()=>[...integrations.consumers().filter(item=>['needs-auth','failed'].includes(item.connection)).map(item=>({id:'integration:'+item.id,kind:'connection',title:(item.profile.label||item.server)+' needs attention',section:'integrations',at:item.checkedAt})),...activity.notifications().items.filter(item=>!item.readAt).map(item=>({id:'notification:'+item.id,notificationId:item.id,kind:'notification',title:item.title,body:item.body,chatId:item.chatId,destination:item.destination,silent:item.silent===true,...(item.browserIssue?{browserIssue:item.browserIssue,silent:item.silent===true}:{}),at:item.createdAt}))], browserProfiles, integrations, engine, settings, context, standup, omi, life, account, activity, workspaceFiles, workspaceExplorer, attachments, buildChatSchedule, usage, catalog, catalogs, origin, token, home, url: `${origin}/?token=${token}`, async close() {
+  const service = { readChatAttachment, mnemosyne:new MnemosyneOperations({omi,engine}), desktopControl,workspaceProjects:preview, designDemo:!!designReminders, desktopPreview:desktopPreview?preview:null, performanceDiagnostics, notify, desktopAttention:()=>[...(service.browserAttention?.()||[]),...remote.documents.list().filter(item=>!item.approvedAt).map(item=>({id:'document:'+item.requestId,kind:'document',title:item.deviceName+' requests '+item.title,requestId:item.requestId,path:item.path,at:new Date(Date.parse(item.expiresAt)-600000).toISOString()})),...service.attention()], attention:()=>[...integrations.consumers().filter(item=>['needs-auth','failed'].includes(item.connection)).map(item=>({id:'integration:'+item.id,kind:'connection',title:(item.profile.label||item.server)+' needs attention',section:'integrations',at:item.checkedAt})),...activity.notifications().items.filter(item=>!item.readAt).map(item=>({id:'notification:'+item.id,notificationId:item.id,kind:'notification',notificationType:item.type,title:item.title,body:item.body,chatId:item.chatId,destination:item.destination,requestId:item.requestId,requestKind:item.requestKind,silent:item.silent===true,...(item.browserIssue?{browserIssue:item.browserIssue,silent:item.silent===true}:{}),at:item.createdAt}))], browserProfiles, integrations, engine, settings, context, standup, omi, life, account, activity, workspaceFiles, workspaceExplorer, attachments, buildChatSchedule, usage, catalog, catalogs, origin, token, home, url: `${origin}/?token=${token}`, async close() {
     await service.lifeAskHost?.close();
     clearInterval(managedTimer);lifeOptions.powerMonitor?.removeListener?.('resume',managedWake);await service.managedConnections?.close();
     await stateProjection.close();await service.updates?.close();await service.scheduleControl?.close();await service.chatControl?.close();await desktopControl?.close();

@@ -50,7 +50,7 @@ export function renderEngineRoom(section='resources',force=false){
         const name=await window.desktop?.defaultBrowser?.().catch(()=>null);if(!active())return;const settings=ui.state.data.settings;
         $('#engine-content').innerHTML=`<section class="card"><h2>Browser links</h2><label>Open clicked links in<select id="clicked-link-browser"><option value="in-app">In-app browser</option><option value="system">System browser${name?' ('+ui.escape(name)+')':''}</option></select></label><p class="note">Applies on this computer. In-app chat links stay with their chat. Agent browser tools retain their controllable in-app browser.</p><p id="preference-status" class="note" role="status"></p></section>`;
         $('#clicked-link-browser').value=settings.preferences?.clickedLinks||'in-app';$('#clicked-link-browser').onchange=async event=>{const select=event.target;select.disabled=true;try{const current=ui.state.data.settings;const saved=await ui.api('/api/settings',{settings:{...current,preferences:{...current.preferences,clickedLinks:select.value}},expectedRevision:current.revision});ui.state.data.settings=saved;$('#preference-status').textContent='Saved for this computer.';}catch(error){ui.toast(error.message);select.value=ui.state.data.settings.preferences?.clickedLinks||'in-app';}finally{select.disabled=false;}};
-        const profiles=document.createElement('div');$('#engine-content').append(profiles);void renderBrowserPreferences(ui,profiles).catch(error=>ui.toast(error.message));
+        const profiles=document.createElement('div');profiles.browserLinks=mounted.firstElementChild;profiles.dataset.browserPreferenceTab=ui.state.browserPreferenceTab||'general';delete ui.state.browserPreferenceTab;mounted.append(profiles);void renderBrowserPreferences(ui,profiles).catch(error=>ui.toast(error.message));
       } else if(section==='resources'){
         await mountResources(mounted,ui,active);
       } else if(section==='usage'){
@@ -80,7 +80,7 @@ export function renderEngineRoom(section='resources',force=false){
         if(active()&&ui.state.data.life?.identity){const accountHost=document.createElement('div');mounted.append(accountHost);try{const account=await ui.api('/api/app');if(!active())return;const localIDs=new Set((await ui.api('/api/logs?limit=100')).items.map(item=>item.id));const items=(account.logs||[]).filter(item=>!localIDs.has(item.eventId||item.id));await mountLogPanel(accountHost,{title:'Account events',note:'Shared event metadata. Full diagnostics remain on their owning computer.',list:query=>Promise.resolve(pagedAccountLogs(items,query)),detail:item=>Promise.resolve(item),escape:ui.escape,time:ui.time,active});}catch(error){if(active())accountHost.textContent='Account events unavailable: '+error.message;}}
       } else if(section==='account'){
         $('#engine-content').innerHTML='<section class="card"><h2>Account & Security</h2><p>Manage your profile, timezone, passkeys, authenticator and sessions in your secure website account.</p><button id="engine-account-open">Open account settings ↗</button></section>';
-        $('#engine-account-open').onclick=()=>ui.openAccount();
+        $('#engine-account-open').onclick=async()=>{try{await ui.openAccount();}catch(error){ui.toast(error.message);}};
       }
     }catch(error){if(active())$('#engine-content').innerHTML=`<p class="banner">${ui.escape(error.message)}</p>`;}
   };

@@ -113,6 +113,7 @@ struct TeamBrowserView: View {
     // A containing project/chat/main strip owns its selected child. Render that
     // identity directly rather than waiting for a second scoped-selection value.
     var tabID: String? = nil
+    var featureChrome = false
     var onBackToList: (() -> Void)? = nil
     var newTabOptions: [NativeNewTabAction] = []
     @FocusState private var homeAddressFocused: Bool
@@ -190,7 +191,7 @@ struct TeamBrowserView: View {
                 Divider()
             }
             if let id = selectedID, let date = shared.browserSavedPages[id] {
-                HStack { Text("Saved copy · " + date.formatted(date: .abbreviated, time: .shortened)); Spacer(); Button("Refresh") { shared.refreshBrowser(id) } }.font(.caption).padding(8).background(NativeTheme.surface).accessibilityIdentifier("browser-saved-copy")
+                HStack { Text("Saved copy · " + date.formatted(date: .abbreviated, time: .shortened)); Spacer(); if !featureChrome { Button("Refresh") { shared.refreshBrowser(id) } } }.font(.caption).padding(8).background(NativeTheme.surface).accessibilityIdentifier("browser-saved-copy")
             }
             if let notice = shared.downloadNotice {
                 HStack { Button(notice) { showDownloads = true }; Spacer(); Button("Dismiss", systemImage: "xmark") { shared.downloadNotice = nil }.labelStyle(.iconOnly) }
@@ -203,7 +204,7 @@ struct TeamBrowserView: View {
                     .gesture(MagnifyGesture().onChanged { value in if NativeDesignPreview.enabled, value.magnification < 0.98 { phoneChrome.pinch(value.magnification) } }.onEnded { value in
                         let committed = value.magnification < 0.75
                         if NativeDesignPreview.enabled { phoneChrome.finishPinch(committed: committed) } else if committed { showOverview() }
-                    }) } else { NativeBrowser(tab: tab, onOverview: { showOverview() }, onChromeToggle: NativePhonePreview.enabled ? { addressFocused = false; phoneChrome.toggleControls() } : nil, onChromeVisibility: NativePhonePreview.enabled ? { hidden in if hidden { addressFocused = false }; phoneChrome.setControlsHidden(hidden) } : nil, onPinchChanged: NativeDesignPreview.enabled ? { phoneChrome.pinch($0) } : nil, onPinchEnded: NativeDesignPreview.enabled ? { phoneChrome.finishPinch(committed: $0) } : nil).id(tab.id) } }
+                    }) } else { NativeBrowser(tab: tab, pullToRefresh: featureChrome, onOverview: { showOverview() }, onChromeToggle: NativePhonePreview.enabled && !featureChrome ? { addressFocused = false; phoneChrome.toggleControls() } : nil, onChromeVisibility: NativePhonePreview.enabled && !featureChrome ? { hidden in if hidden { addressFocused = false }; phoneChrome.setControlsHidden(hidden) } : nil, onPinchChanged: NativeDesignPreview.enabled ? { phoneChrome.pinch($0) } : nil, onPinchEnded: NativeDesignPreview.enabled ? { phoneChrome.finishPinch(committed: $0) } : nil).id(tab.id) } }
                 else { home.simultaneousGesture(MagnificationGesture().onEnded { scale in if scale < 0.75 { showOverview() } }) }
             // WebKit's own edge swipe (Safari's page-image animation) handles pages in its
             // back/forward list where the page meets the screen edge. This content-edge swipe
@@ -211,13 +212,13 @@ struct TeamBrowserView: View {
             // once history is exhausted it returns to the previous screen (the project home).
             }.modifier(NativePageSwipe(enabled: !NativePhonePreview.enabled || onBackToList != nil, phone: onBackToList != nil, blockBack: onBackToList == nil && !(selectedID.map { shared.hasBrowserHistory($0, back: true) } ?? false), blockForward: !(selectedID.map { shared.hasBrowserHistory($0, back: false) } ?? false), back: {
                 guard let id = selectedID, !shared.isTwoFingerNavigation(id) else { return }
-                if !shared.browserHistory(id, back: true).isEmpty { shared.goBack(id) } else { onBackToList?() }
+                if shared.hasBrowserHistory(id, back: true) { shared.goBack(id) } else { onBackToList?() }
             }, forward: {
-                guard let id = selectedID, !shared.isTwoFingerNavigation(id), !shared.browserHistory(id, back: false).isEmpty else { return }
+                guard let id = selectedID, !shared.isTwoFingerNavigation(id), shared.hasBrowserHistory(id, back: false) else { return }
                 shared.goForward(id)
             }, backPreview: {
                 guard let id = selectedID else { return nil }
-                if !shared.browserHistory(id, back: true).isEmpty { return shared.adjacentPageImage(id, back: true) }
+                if shared.hasBrowserHistory(id, back: true) { return shared.adjacentPageImage(id, back: true) }
                 return backPreviewKey.flatMap(NativeScreenMemory.image)
             }, forwardPreview: { selectedID.flatMap { shared.adjacentPageImage($0, back: false) } }))
         }.safeAreaInset(edge: .bottom, spacing: 0) {
@@ -353,6 +354,7 @@ struct TeamBrowserView: View {
     }
     private var phoneBrowserControls: some View {
         HStack(spacing: 0) {
+            if !featureChrome {
             Button { if let id = selectedID { shared.goBack(id) } } label: { Image(systemName: "chevron.left").frame(maxWidth: .infinity).frame(height: 38).contentShape(Rectangle()) }
                 .disabled(!navigation.canGoBack).accessibilityLabel("Back").accessibilityIdentifier("browser-back")
                 .highPriorityGesture(LongPressGesture(minimumDuration: 0.45).onEnded { _ in historyDirection = true })
@@ -360,14 +362,17 @@ struct TeamBrowserView: View {
                 .disabled(!navigation.canGoForward).accessibilityLabel("Forward").accessibilityIdentifier("browser-forward")
                 .highPriorityGesture(LongPressGesture(minimumDuration: 0.45).onEnded { _ in historyDirection = false })
             Button { if let id = selectedID { navigation.isLoading ? shared.stopBrowser(id) : shared.refreshBrowser(id) } } label: { Image(systemName: navigation.isLoading ? "xmark" : "arrow.clockwise").frame(maxWidth: .infinity).frame(height: 38).contentShape(Rectangle()) }.disabled(selectedTab?.url == nil).accessibilityLabel(navigation.isLoading ? "Stop loading" : "Refresh page").accessibilityIdentifier("browser-refresh")
+            }
             Button { if let tab = selectedTab { shared.webView(tab).findInteraction?.presentFindNavigator(showingReplace: false) } } label: { Image(systemName: "magnifyingglass").frame(maxWidth: .infinity).frame(height: 38).contentShape(Rectangle()) }.disabled(selectedTab?.url == nil).accessibilityLabel("Find in page").accessibilityIdentifier("browser-find")
             Menu {
                 pageOptions
                 Button("Navigation history", systemImage: "clock.arrow.circlepath") { historyDirection = true }.accessibilityIdentifier("browser-navigation-history")
                 Button("Downloads", systemImage: "arrow.down.circle") { showDownloads = true }
+                if !featureChrome {
                 Button(phoneChrome.controlsHidden ? "Show top controls" : "Hide top controls", systemImage: "rectangle.topthird.inset.filled") { addressFocused = false; phoneChrome.toggleControls() }
                 Button("App navigation", systemImage: "sidebar.left") { phoneChrome.drawer = true }
                 ForEach(shared.browserProfiles, id: \.self) { profile in Button("New browser tab · " + profile["name"].string, systemImage: "plus") { shared.open(nil, scope: scope, profileId: profile["id"].string) } }
+                }
                 if let tab = selectedTab {
                     NativeBrowserDuplicateActions(id: tab.id)
                     if !tab.incognito { Button(tab.persist ? "Do not persist tab" : "Persist tab", systemImage: "pin") { shared.persistBrowser(tab.id, enabled: !tab.persist) } }
@@ -375,7 +380,7 @@ struct TeamBrowserView: View {
                     Button("Close tab", systemImage: "xmark") { shared.close(tab.id) }
                 }
             } label: { Image(systemName: "ellipsis.circle").frame(maxWidth: .infinity).frame(height: 38).contentShape(Rectangle()) }.accessibilityLabel("More browser options").accessibilityIdentifier("phone-browser-more")
-            Button { showOverview() } label: { NativeTabOverviewIcon().frame(maxWidth: .infinity).frame(height: 38).contentShape(Rectangle()) }.accessibilityLabel("Tab overview").accessibilityIdentifier("browser-tab-overview")
+            if !featureChrome { Button { showOverview() } label: { NativeTabOverviewIcon().frame(maxWidth: .infinity).frame(height: 38).contentShape(Rectangle()) }.accessibilityLabel("Tab overview").accessibilityIdentifier("browser-tab-overview") }
         }.nativeAdjacentTabSwipe(fallback: stepBrowserTab).buttonStyle(.plain).font(.system(size: 19)).foregroundStyle(NativeTheme.accent).background(NativeTheme.rail.ignoresSafeArea(edges: .bottom)).overlay(alignment: .top) { Divider() }
     }
     @ViewBuilder private var pageOptions: some View {
@@ -395,6 +400,7 @@ struct TeamBrowserView: View {
         let control = colorScheme == .dark ? Color(red: 167 / 255, green: 182 / 255, blue: 172 / 255) : Color(red: 78 / 255, green: 102 / 255, blue: 85 / 255)
         return HStack(spacing: 2) {
             if !NativePadPreview.enabled { Button { showDownloads = true } label: { Image(systemName: shared.downloads.isEmpty ? "arrow.down.circle" : "arrow.down.circle.fill").frame(minWidth: 44, minHeight: 44) }.accessibilityLabel("Downloads") }
+            if !featureChrome {
             Button { if let id = selectedID { shared.goBack(id) } } label: { Image(systemName: "chevron.left").frame(minWidth: 44, minHeight: 44) }
                 .frame(width: 44, height: 44).contentShape(Rectangle()).disabled(!navigation.canGoBack).accessibilityLabel("Back").accessibilityIdentifier("browser-back")
                 .highPriorityGesture(LongPressGesture(minimumDuration: 0.45).onEnded { _ in historyDirection = true })
@@ -402,6 +408,7 @@ struct TeamBrowserView: View {
                 .frame(width: 44, height: 44).contentShape(Rectangle()).disabled(!navigation.canGoForward).accessibilityLabel("Forward").accessibilityIdentifier("browser-forward")
                 .highPriorityGesture(LongPressGesture(minimumDuration: 0.45).onEnded { _ in historyDirection = false })
             Button { if let id = selectedID { navigation.isLoading ? shared.stopBrowser(id) : shared.refreshBrowser(id) } } label: { Image(systemName: navigation.isLoading ? "xmark" : "arrow.clockwise").frame(minWidth: 44, minHeight: 44) }.frame(width: 44, height: 44).contentShape(Rectangle()).disabled(selectedTab?.url == nil).accessibilityLabel(navigation.isLoading ? "Stop loading" : "Refresh page").accessibilityIdentifier("browser-refresh")
+            }
             TextField("Search or enter URL", text: $text).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL).submitLabel(.go).focused($nativeAddressFocused)
                 .modifier(NativeAddressGhost(text: $text, sites: addressSites, focused: addressFocused, submit: { navigate() }))
                 .font(.system(size: 14)).foregroundStyle(colorScheme == .dark ? Color.white : Color.primary).padding(.horizontal, 10).frame(height: 34).background(field, in: RoundedRectangle(cornerRadius: 6)).accessibilityIdentifier("browser-address")
@@ -410,7 +417,7 @@ struct TeamBrowserView: View {
             if NativePadPreview.enabled {
                 Menu { pageOptions; Button("Downloads", systemImage: "arrow.down.circle") { showDownloads = true }; Button("Navigation history", systemImage: "clock.arrow.circlepath") { historyDirection = true }.accessibilityIdentifier("browser-navigation-history") } label: { Image(systemName: "ellipsis.circle").frame(width: 44, height: 44) }.accessibilityLabel("More browser options").accessibilityIdentifier("browser-more")
             } else { Button { historyDirection = true } label: { Image(systemName: "clock.arrow.circlepath") }.frame(width: 44, height: 44).accessibilityLabel("Navigation history").accessibilityIdentifier("browser-navigation-history") }
-            Button { showOverview() } label: { NativeTabOverviewIcon() }.frame(width: 44, height: 44).contentShape(Rectangle()).accessibilityLabel("Tab overview").accessibilityIdentifier("browser-tab-overview")
+            if !featureChrome { Button { showOverview() } label: { NativeTabOverviewIcon() }.frame(width: 44, height: 44).contentShape(Rectangle()).accessibilityLabel("Tab overview").accessibilityIdentifier("browser-tab-overview") }
         }.buttonStyle(.plain).foregroundStyle(control).font(.system(size: 14, weight: .medium))
             .padding(.horizontal, 4).padding(.vertical, 2)
             .frame(minHeight: 44).background { if colorScheme == .dark { chrome } else { Rectangle().fill(.bar) } }
@@ -598,17 +605,19 @@ struct NativeBrowser: UIViewRepresentable {
     @EnvironmentObject var life: LifeStore
     @EnvironmentObject var destinations: DestinationStore
     let tab: BrowserDescriptor
+    var pullToRefresh = false
     var onOverview: () -> Void = {}
     var onChromeToggle: (() -> Void)? = nil
     var onChromeVisibility: ((Bool) -> Void)? = nil
     var onPinchChanged: ((CGFloat) -> Void)? = nil
     var onPinchEnded: ((Bool) -> Void)? = nil
     func makeCoordinator() -> Coordinator { Coordinator(shared: shared, life: life, destinations: destinations, id: tab.id, onOverview: onOverview) }
-    func makeUIView(context: Context) -> WKWebView { let view = shared.webView(tab); view.navigationDelegate = context.coordinator; view.uiDelegate = context.coordinator; context.coordinator.attachPinch(to: view); if let linkView = view as? NativeLinkWebView { linkView.linkActions = { [weak coordinator = context.coordinator, weak view] url in guard let coordinator, let view else { return [] }; return coordinator.linkMenuActions(url, in: view) } }; return view }
+    func makeUIView(context: Context) -> WKWebView { let view = shared.webView(tab); view.navigationDelegate = context.coordinator; view.uiDelegate = context.coordinator; context.coordinator.attachPinch(to: view); if pullToRefresh { context.coordinator.installRefresh(on: view) }; if let linkView = view as? NativeLinkWebView { linkView.linkActions = { [weak coordinator = context.coordinator, weak view] url in guard let coordinator, let view else { return [] }; return coordinator.linkMenuActions(url, in: view) } }; return view }
     func updateUIView(_ view: WKWebView, context: Context) { context.coordinator.onOverview = onOverview; context.coordinator.onChromeToggle = onChromeToggle; context.coordinator.onChromeVisibility = onChromeVisibility; context.coordinator.onPinchChanged = onPinchChanged; context.coordinator.onPinchEnded = onPinchEnded }
     static func dismantleUIView(_ view: WKWebView, coordinator: Coordinator) {
         if view.navigationDelegate === coordinator { view.navigationDelegate = nil }
         if view.uiDelegate === coordinator { view.uiDelegate = nil }
+        coordinator.detachRefresh(from: view)
         coordinator.detachPinch()
     }
     @MainActor final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, UIGestureRecognizerDelegate {
@@ -628,6 +637,23 @@ struct NativeBrowser: UIViewRepresentable {
         private var beganAtMinimumZoom = false
         private var initialPageZoom: CGFloat?
         private var activeNavigation: WKNavigation?
+        private var refresh: UIRefreshControl?
+        func installRefresh(on view: WKWebView) {
+            let control = UIRefreshControl()
+            control.tintColor = UIColor(NativeTheme.accent)
+            control.addTarget(self, action: #selector(refreshPage), for: .valueChanged)
+            view.scrollView.refreshControl = control
+            refresh = control
+        }
+        func detachRefresh(from view: WKWebView) {
+            if let refresh, view.scrollView.refreshControl === refresh { view.scrollView.refreshControl = nil }
+            refresh = nil
+        }
+        @objc private func refreshPage() {
+            shared.refreshBrowser(id)
+            refresh?.endRefreshing()
+        }
+
         init(shared: SharedAppStore, life: LifeStore, destinations: DestinationStore, id: String, onOverview: @escaping () -> Void = {}) { self.shared = shared; self.life = life; self.destinations = destinations; self.id = id; self.onOverview = onOverview }
         func attachPinch(to view: WKWebView) { self.view = view; initialPageZoom = view.scrollView.zoomScale; let recognizer = UIPinchGestureRecognizer(target: self, action: #selector(observedPinch(_:))); recognizer.delegate = self; recognizer.cancelsTouchesInView = false; recognizer.delaysTouchesEnded = false; view.scrollView.addGestureRecognizer(recognizer); pinch = recognizer
             if NativePhonePreview.enabled {
@@ -734,12 +760,12 @@ struct NativeBrowser: UIViewRepresentable {
                 return actions
         }
         func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) { guard shared.isCurrentBrowserView(webView, id: id) else { return }; activeNavigation = navigation }
-        func webView(_ webView: WKWebView, didReceiveServerRedirectForProvisionalNavigation navigation: WKNavigation!) { guard shared.isCurrentBrowserView(webView, id: id) else { return }; shared.markBrowserRedirect(id, url: webView.url) }
+        func webView(_ webView: WKWebView, didReceiveServerRedirectForProvisionalNavigation navigation: WKNavigation!) { guard shared.isCurrentBrowserView(webView, id: id), activeNavigation == nil || activeNavigation === navigation else { return }; shared.markBrowserRedirect(id, url: webView.url) }
         /// N11-25: iOS reclaims web content processes of background apps. Recover the same tab
         /// (saved snapshot or live reload, keeping its reading position) instead of a blank page.
         func webViewWebContentProcessDidTerminate(_ webView: WKWebView) { shared.browserContentTerminated(id, view: webView) }
-        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { guard shared.isCurrentBrowserView(webView, id: id) else { return }; if let activeNavigation, activeNavigation !== navigation { return }; activeNavigation = nil; initialPageZoom = webView.scrollView.zoomScale; shared.restoreBrowserReadingPosition(id); shared.captureBrowserPreview(id); if shared.browserSavedPages[id] != nil { return }; shared.captureBrowserPage(id); Task { await shared.captureBrowserFavicon(id) }; guard let url = webView.url else { return }; shared.completeBrowserNavigation(url, title: webView.title ?? url.host ?? "Browser", in: id, nativePosition: webView.backForwardList.backList.count); if shared.browserTabs.first(where: { $0.id == id })?.profileId == "default" { Task { await shared.record(url, title: webView.title ?? url.host ?? "Browser", life: life) } } }
-        private func failed(_ navigation: WKNavigation?, view: WKWebView, error: Error) { guard shared.isCurrentBrowserView(view, id: id) else { return }; if (error as NSError).code == NSURLErrorCancelled { return }; if let activeNavigation, activeNavigation !== navigation { return }; activeNavigation = nil; shared.failBrowserNavigation(id, currentURL: view.url) }
+        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { guard shared.isCurrentBrowserView(webView, id: id) else { return }; if let activeNavigation, activeNavigation !== navigation { return }; activeNavigation = navigation; initialPageZoom = webView.scrollView.zoomScale; shared.restoreBrowserReadingPosition(id); shared.captureBrowserPreview(id); if shared.browserSavedPages[id] != nil { return }; shared.captureBrowserPage(id); Task { await shared.captureBrowserFavicon(id) }; guard let url = webView.url else { return }; shared.completeBrowserNavigation(url, title: webView.title ?? url.host ?? "Browser", in: id, nativePosition: webView.backForwardList.backList.count); if shared.browserTabs.first(where: { $0.id == id })?.profileId == "default" { Task { await shared.record(url, title: webView.title ?? url.host ?? "Browser", life: life) } } }
+        private func failed(_ navigation: WKNavigation?, view: WKWebView, error: Error) { guard shared.isCurrentBrowserView(view, id: id) else { return }; if (error as NSError).code == NSURLErrorCancelled { return }; if let activeNavigation, activeNavigation !== navigation { return }; activeNavigation = navigation; shared.failBrowserNavigation(id, currentURL: view.url) }
         func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) { failed(navigation, view: webView, error: error) }
         func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) { failed(navigation, view: webView, error: error) }
         func webView(_ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse, decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) { decisionHandler(navigationResponse.canShowMIMEType ? .allow : shared.isIncognito(id) ? .cancel : .download) }
@@ -959,22 +985,16 @@ private struct NativeTeamDesignView: View {
     }
     private var heading: some View {
         HStack(spacing: 8) {
-            if NativePhonePreview.enabled { NativeSidebarButton() }
             NativeFeatureHeading(title: section == "Standup" ? "Standup" : "Team Tools")
             Spacer(minLength: 8)
             if section == "Standup" && list != .null {
                 Button { editingList = TeamListEditorItem(id: list["id"].string, original: list) } label: { Image(systemName: "pencil").frame(width: 44, height: 44) }.contentShape(Rectangle()).accessibilityLabel("Edit standup list").accessibilityIdentifier("standup-edit-list")
-                if NativePadPreview.enabled && !docked { Button { docked = true } label: { Image(systemName: "sidebar.left").frame(width: 44, height: 44) }.contentShape(Rectangle()).accessibilityLabel("Dock standup").accessibilityIdentifier("standup-dock") }
+                if NativePadPreview.enabled && !docked { Button { docked = true; section = "Overview" } label: { Image(systemName: "sidebar.left").frame(width: 44, height: 44) }.contentShape(Rectangle()).accessibilityLabel("Dock standup").accessibilityIdentifier("standup-dock") }
             }
-            if section != "Standup" || NativePadPreview.enabled { Button { Task { await shared.refresh(life) } } label: { Image(systemName: "arrow.clockwise").frame(width: 44, height: 44) }.accessibilityLabel("Refresh Team lists") }
-            Menu {
-                if section == "Standup" { Button("Open standup", systemImage: "rectangle.portrait.and.arrow.right") { popout = true } }
-                Button("Refresh Team lists", systemImage: "arrow.clockwise") { Task { await shared.refresh(life) } }
-                Button("Create team list", systemImage: "plus") { editingList = TeamListEditorItem(id: "new", original: .null) }; Button("Website account", systemImage: "person.crop.circle") { showAccount = true }
-                ForEach(shared.browserProfiles, id: \.self) { profile in Button("Browser · " + profile["name"].string, systemImage: "globe") { shared.open(nil, scope: "team", profileId: profile["id"].string); section = shared.selectedBrowser ?? "Overview" } }
-                Button("Reorder Team tabs", systemImage: "arrow.left.arrow.right") { reorderTabs = true }.disabled(shared.tabs(in: "team").count < 2)
-            } label: { Image(systemName: "ellipsis.circle").frame(width: 44, height: 44) }.accessibilityLabel("Team Tools options")
-            if NativePhonePreview.enabled { NativeMainTabAdd() }
+            if section == "Standup" && NativePadPreview.enabled {
+                Button { popout = true } label: { Image(systemName: "rectangle.portrait.and.arrow.right").frame(width: 44, height: 44) }
+                    .accessibilityLabel("Open Standup separately")
+            }
             if NativePadPreview.enabled { HStack { Image(systemName: "magnifyingglass"); TextField("Search", text: $query) }.font(.subheadline).padding(10).frame(minWidth: 100, maxWidth: 220).background(NativeTheme.surface, in: Capsule()) }
         }.buttonStyle(.plain).padding(.horizontal, NativePhonePreview.enabled ? 8 : 20).padding(.vertical, NativePhonePreview.enabled ? 0 : 12).background(NativeTheme.background).accessibilityElement(children: .contain).accessibilityIdentifier("team-feature-header")
     }
@@ -988,6 +1008,8 @@ private struct NativeTeamDesignView: View {
                     listPicker
                     Button("Edit team list", systemImage: "pencil") { editingList = TeamListEditorItem(id: list["id"].string, original: list) }
                         .accessibilityIdentifier("team-edit-list")
+                    Button("Create team list", systemImage: "list.bullet.rectangle") { editingList = TeamListEditorItem(id: "new", original: .null) }
+                    Button("Website account", systemImage: "person.crop.circle") { showAccount = true }
                     Text("Shared lists and links · website service").font(.caption).foregroundStyle(.secondary)
                 }
                 Section {
@@ -998,7 +1020,7 @@ private struct NativeTeamDesignView: View {
                 Section { Button("Open Standup", systemImage: "slider.horizontal.3") { section = "Standup" } }
             } else { emptyTeamState }
             if let error = shared.error { Text(error).foregroundStyle(.orange) }
-        }
+        }.refreshable { await shared.refresh(life) }
     }
     private var emptyTeamState: some View {
         Section {
@@ -1008,7 +1030,7 @@ private struct NativeTeamDesignView: View {
                 Button("Website account", systemImage: "person.crop.circle") { showAccount = true }
             } else if shared.error != nil {
                 Text("Team lists could not be refreshed. Your saved lists have not been removed.")
-                Button("Refresh Team lists", systemImage: "arrow.clockwise") { Task { await shared.refresh(life) } }
+                Button("Retry") { Task { await shared.refresh(life) } }
             } else {
                 Text("No team lists are available for this website account.")
                 Button("Create team list", systemImage: "plus") { editingList = TeamListEditorItem(id: "new", original: .null) }
@@ -1035,7 +1057,7 @@ private struct NativeTeamDesignView: View {
     }
     private var standupDock: some View {
         VStack(spacing: 0) {
-            HStack { Text("Standup").font(.headline); Spacer(); Button { docked = false } label: { Image(systemName: "xmark").frame(width: 44, height: 44) }.accessibilityLabel("Close docked standup").accessibilityIdentifier("standup-close-dock") }.padding(.leading, 16).padding(.trailing, 4)
+            HStack { Text("Standup").font(.headline); Spacer(); Button { docked = false; section = "Standup" } label: { Image(systemName: "xmark").frame(width: 44, height: 44) }.accessibilityLabel("Close docked standup").accessibilityIdentifier("standup-close-dock") }.padding(.leading, 16).padding(.trailing, 4)
             ScrollView { VStack(alignment: .leading, spacing: 14) { StandupView(showListPicker: false, showLinks: false) }.frame(maxWidth: .infinity, alignment: .leading).padding(16) }
         }.background(NativeTheme.background).accessibilityElement(children: .contain).accessibilityIdentifier("standup-docked-list")
     }
